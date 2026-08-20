@@ -7,6 +7,8 @@ from rich.console import Console
 from rich.table import Table
 
 from alpha_squad.config.settings import get_settings
+from alpha_squad.identity.canonical import build_identity
+from alpha_squad.identity.exceptions import list_exceptions
 from alpha_squad.sources.base import SourceError, SourceHealth, SourceStatus, utcnow
 from alpha_squad.sources.registry import all_adapters
 from alpha_squad.storage.db import get_connection, init_db
@@ -14,7 +16,9 @@ from alpha_squad.storage.snapshots import record_health, record_snapshot
 
 app = typer.Typer(help="Alpha Squad — fantasy football market-inefficiency intelligence system")
 sources_app = typer.Typer(help="Data source operations")
+identity_app = typer.Typer(help="Canonical player identity operations")
 app.add_typer(sources_app, name="sources")
+app.add_typer(identity_app, name="identity")
 console = Console()
 
 # Datasets that vary by NFL season vs. ones that are a single current/whole-history file.
@@ -167,6 +171,53 @@ def sources_ingest(
         )
     console.print(table)
     console.print(f"Summary: {counts}")
+    con.close()
+
+
+@identity_app.command("build")
+def identity_build() -> None:
+    """Build/refresh the canonical player identity spine and crosswalk from the latest
+    stored snapshots (run `sources ingest` first if none exist). Idempotent: safe to
+    re-run after new snapshots land."""
+    settings = get_settings()
+    con = get_connection(settings)
+    init_db(con)
+    try:
+        report = build_identity(con, settings)
+    except RuntimeError as e:
+        console.print(f"[red]{e}[/red]")
+        con.close()
+        raise typer.Exit(code=1) from e
+
+    console.print(f"players upserted: [green]{report.players_upserted}[/green]")
+    table = Table(title="ID mappings")
+    for col in ("id_type", "inserted", "collisions_quarantined"):
+        table.add_column(col)
+    for m in report.mapping_results:
+        table.add_row(m.id_type, str(m.inserted), str(m.collisions_quarantined))
+    console.print(table)
+    console.print(f"identity exceptions on file: [yellow]{report.exceptions_recorded}[/yellow]")
+    con.close()
+
+
+@identity_app.command("exceptions")
+def identity_exceptions(
+    status: str = typer.Option(None, help="Filter by status: PENDING, RESOLVED, UNSUPPORTED"),
+) -> None:
+    """List quarantined identity mappings awaiting resolution."""
+    settings = get_settings()
+    con = get_connection(settings)
+    init_db(con)
+    rows = list_exceptions(con, status=status)
+    table = Table(title=f"Identity exceptions{f' ({status})' if status else ''}")
+    for col in ("exception_id", "exception_type", "status", "subject", "detected_at"):
+        table.add_column(col)
+    for r in rows:
+        table.add_row(
+            r["exception_id"], r["exception_type"], r["status"], r["subject"], str(r["detected_at"])
+        )
+    console.print(table)
+    console.print(f"total: {len(rows)}")
     con.close()
 
 

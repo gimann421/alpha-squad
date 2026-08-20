@@ -83,7 +83,49 @@ silently assumed.
 synthetic data (same columns/types as real sources, invented values), never a copy of a real
 snapshot — this also keeps the test suite fast and network-independent.
 
-## D10 — Agents are deterministic services, not LLM calls
+## D11 — Canonical spine is nflverse `players`; orphan draft/combine rows are quarantined, not minted as new players
+Verified against real data: nflverse `players` has 25,046 rows, 100% populated and unique
+`gsis_id` — a clean spine key. `draft_picks` and `combine` go back further (draft_picks to
+1936) and include players who never made an NFL roster after being drafted, or combine
+invitees who were never drafted; `combine` in particular carries **no `gsis_id` at all**
+(verified against real data — only `pfr_id`/`cfb_id`). 229 of 12,927 `draft_picks` rows
+reference a `gsis_id` not present in the `players` spine.
+
+**Decision:** `players` (nflverse) is the single minting authority for `player_id`. A
+`draft_picks`/`combine` row that cannot be matched to the spine via `gsis_id` or `pfr_id` is
+recorded as an `identity_exceptions` row (`unmapped_draft_pick` / `unmapped_combine_prospect`)
+rather than becoming a second, parallel ID-minting path. This keeps `player_id` minting
+single-sourced and avoids two independently-generated ID spaces that could later collide.
+Rookie modeling (M7) still gets full value from matched rows — 7,990 `cfb_player_id` and
+6,131 `cfb_id` mappings were captured on first build — historically remote/unrostered
+draftees are the ones quarantined, not the current/recent draft classes that matter for
+rookie projection.
+
+## D12 — DynastyProcess CSV exports use the literal string "NA" for missing values in every column, including ID columns
+Verified against real data: `db_playerids.csv`'s `gsis_id` column has 4,483 rows with the
+literal 3-character string `"NA"` (not a real null) — an R/readr export artifact that appears
+across essentially every column, string and numeric alike (`sleeper_id` alone has 6,108). A
+naive load would treat `"NA"` as a real (if bogus) ID value; since no real player has that ID,
+a join would just silently fail to match rather than corrupt anything, but it's still wrong to
+store `"NA"` in the crosswalk as if it were meaningful. Handled by passing
+`nullstr=['NA']` to DuckDB's `read_csv_auto` for every CSV read in `identity/canonical.py`'s
+`reader_expr()`.
+
+## D13 — DynastyProcess's own crosswalk sometimes disagrees with itself
+Verified against real data: `db_playerids.csv` contains real duplicate `gsis_id` values whose
+other columns conflict — e.g. `gsis_id` `00-0031320` is mapped to both "Fred Williams" and
+"Kevin Smith" on different rows; `00-0030653` ("Ray Agnew") appears twice with two different
+`mfl_id` values and two different positions. This is a data-quality issue in the source
+itself, not an artifact of joining it to something else.
+
+**Decision:** any `gsis_id` that appears more than once in the DynastyProcess export is
+treated as internally inconsistent and every row for it is excluded from the crosswalk
+entirely (recorded as `ambiguous_source_mapping`) — never "pick whichever row loaded first."
+The affected canonical player still exists (from the nflverse spine) and simply has no
+DynastyProcess-derived IDs (sleeper_id, mfl_id, etc.) until a human resolves the exception.
+28 such conflicts were found on first build, out of 12,472 crosswalk rows.
+
+## D14 — Agents are deterministic services, not LLM calls
 `ARCHITECTURE.md` §6: "The project orchestrator is an engineering orchestration layer, not itself
 the source of fantasy truth." Agents in `src/alpha_squad/agents/` are typed Python
 functions/classes producing `AGENT_CONTRACTS.md`-shaped results, orchestrated by a DAG scheduler.
