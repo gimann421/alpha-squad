@@ -17,6 +17,7 @@ from alpha_squad.models.baselines.run import run_baselines
 from alpha_squad.models.established.season_level import run_season_level_established_ml
 from alpha_squad.models.established.train import run_established_ml
 from alpha_squad.models.report import write_evaluation_report
+from alpha_squad.models.rookie.train import run_rookie_models
 from alpha_squad.models.uncertainty.run import run_uncertainty
 from alpha_squad.sources.base import SourceError, SourceHealth, SourceStatus, utcnow
 from alpha_squad.sources.registry import all_adapters
@@ -274,6 +275,8 @@ def features_build(
     console.print(
         f"player panel rows with team features attached: [green]{report.player_panel_team_attached}[/green]"
     )
+    console.print(f"combine_results upserted: [green]{report.combine_results_upserted}[/green]")
+    console.print(f"rookie_features upserted: [green]{report.rookie_features_upserted}[/green]")
     con.close()
 
 
@@ -434,7 +437,9 @@ def train_uncertainty(
     season_start: int = typer.Option(2020, help="First target season to walk-forward evaluate"),
     season_end: int = typer.Option(2025, help="Last target season to walk-forward evaluate"),
     min_train_season: int = typer.Option(2015, help="Earliest season usable for training data"),
-    report_path: str = typer.Option("reports/calibration_report.md", help="Markdown report output path"),
+    report_path: str = typer.Option(
+        "reports/calibration_report.md", help="Markdown report output path"
+    ),
 ) -> None:
     """Walk-forward split-conformal uncertainty: p10-p90 + top-12/24 probabilities per
     player/season/position, with out-of-sample calibration diagnostics (did the intervals
@@ -446,14 +451,24 @@ def train_uncertainty(
     run_report = run_uncertainty(con, season_start, season_end, min_train_season)
 
     table = Table(title="Calibration diagnostics (out-of-sample coverage)")
-    for col in ("season", "position", "n", "coverage_10_90 (target 0.80)", "coverage_25_75 (target 0.50)", "mean_width"):
+    for col in (
+        "season",
+        "position",
+        "n",
+        "coverage_10_90 (target 0.80)",
+        "coverage_25_75 (target 0.50)",
+        "mean_width",
+    ):
         table.add_column(col)
     for row in run_report.calibration_rows:
         if row.get("n", 0) == 0:
             continue
         table.add_row(
-            str(row["season"]), row["position"], str(row["n"]),
-            f"{row['coverage_10_90']:.2f}", f"{row['coverage_25_75']:.2f}",
+            str(row["season"]),
+            row["position"],
+            str(row["n"]),
+            f"{row['coverage_10_90']:.2f}",
+            f"{row['coverage_25_75']:.2f}",
             f"{row['mean_interval_width_10_90']:.1f}",
         )
     console.print(table)
@@ -483,6 +498,57 @@ def train_uncertainty(
     Path(report_path).parent.mkdir(parents=True, exist_ok=True)
     Path(report_path).write_text("\n".join(lines) + "\n")
     console.print(f"report written to [green]{report_path}[/green]")
+    con.close()
+
+
+@train_app.command("rookie")
+def train_rookie(
+    class_start: int = typer.Option(2018, help="First draft class to walk-forward evaluate"),
+    class_end: int = typer.Option(2025, help="Last draft class to walk-forward evaluate"),
+    min_train_class: int = typer.Option(2000, help="Earliest draft class usable for training data"),
+) -> None:
+    """Walk-forward rookie regression (rookie-year PPR points) and breakout classification
+    (top-24-at-position), strictly by draft class. Feature set is draft capital + combine +
+    landing spot only — no college production bridge exists yet (docs/DECISIONS.md D20).
+    Requires `features build` to have already populated rookie_features."""
+    settings = get_settings()
+    con = get_connection(settings)
+    init_db(con)
+
+    run_report = run_rookie_models(con, class_start, class_end, min_train_class)
+
+    table = Table(title="Rookie regression (ALL positions per class)")
+    for col in ("model", "class", "n", "mae", "rmse", "spearman"):
+        table.add_column(col)
+    for m in run_report.regression_metrics:
+        table.add_row(
+            m.model_name,
+            str(m.season),
+            str(m.n),
+            f"{m.mae:.2f}" if m.mae == m.mae else "-",
+            f"{m.rmse:.2f}" if m.rmse == m.rmse else "-",
+            f"{m.spearman:.3f}" if m.spearman == m.spearman else "-",
+        )
+    console.print(table)
+
+    table2 = Table(title="Rookie breakout classification (per position/class)")
+    for col in ("model", "class", "position", "n", "brier", "accuracy", "base_rate"):
+        table2.add_column(col)
+    for c in run_report.classification_metrics:
+        if c.n == 0:
+            continue
+        table2.add_row(
+            c.model_name,
+            str(c.cohort),
+            c.position,
+            str(c.n),
+            f"{c.brier_score:.3f}",
+            f"{c.accuracy:.2f}",
+            f"{c.base_rate:.2f}",
+        )
+    console.print(table2)
+    if run_report.skipped:
+        console.print(f"[yellow]skipped: {run_report.skipped}[/yellow]")
     con.close()
 
 

@@ -179,3 +179,52 @@ def evaluate_and_record(
         results.append(m_pos)
 
     return results
+
+
+@dataclass
+class ClassificationMetrics:
+    model_name: str
+    cohort: int
+    position: str
+    n: int
+    brier_score: float
+    accuracy: float
+    base_rate: float
+
+
+def evaluate_classification(
+    model_name: str,
+    cohort: int,
+    position: str,
+    predicted_prob: dict[str, float],
+    actual_label: dict[str, bool],
+) -> ClassificationMetrics:
+    """Brier score (PRODUCT_SPEC.md's explicit evaluation metric for probabilistic
+    classifiers — measures calibration and discrimination together) + accuracy + the
+    positive-class base rate, since these labels (e.g. rookie breakout) are typically
+    imbalanced and accuracy alone would be misleading without it."""
+    common = sorted(set(predicted_prob) & set(actual_label))
+    n = len(common)
+    nan = float("nan")
+    if n == 0:
+        return ClassificationMetrics(model_name, cohort, position, 0, nan, nan, nan)
+
+    probs = np.array([predicted_prob[p] for p in common])
+    labels = np.array([1.0 if actual_label[p] else 0.0 for p in common])
+    brier = float(np.mean((probs - labels) ** 2))
+    accuracy = float(np.mean((probs >= 0.5).astype(float) == labels))
+    base_rate = float(np.mean(labels))
+    return ClassificationMetrics(model_name, cohort, position, n, brier, accuracy, base_rate)
+
+
+def record_classification(con: duckdb.DuckDBPyConnection, m: ClassificationMetrics) -> None:
+    con.execute(
+        """
+        INSERT INTO classification_results (model_name, cohort, position, n, brier_score, accuracy, base_rate, evaluated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT (model_name, cohort, position) DO UPDATE SET
+            n = excluded.n, brier_score = excluded.brier_score, accuracy = excluded.accuracy,
+            base_rate = excluded.base_rate, evaluated_at = excluded.evaluated_at
+        """,
+        [m.model_name, m.cohort, m.position, m.n, m.brier_score, m.accuracy, m.base_rate, utcnow()],
+    )

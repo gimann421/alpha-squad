@@ -3,7 +3,7 @@
 Living summary of what is implemented, validated, and outstanding. Updated at the end of every
 milestone. See `docs/TRACEABILITY.md` for the acceptance-criteria-level mapping.
 
-## Status: M6 complete, M7 next
+## Status: M7 complete, M8 next
 
 | Milestone | Status | Notes |
 |---|---|---|
@@ -14,6 +14,7 @@ milestone. See `docs/TRACEABILITY.md` for the acceptance-criteria-level mapping.
 | M4 Baselines + evaluation | DONE | 3 baselines (previous-year, weighted-2yr, ECR-implied) walk-forward evaluated 2018-2025 against 21,421 real player-seasons and 210,730 real market snapshots; shared evaluation harness (MAE/RMSE/R²/Spearman/top-N hit rate/tier accuracy) reused by every later milestone; 65 offline + 10 network tests passing. **One number in this milestone's report was wrong and got corrected in M5 — see D19.** |
 | M5 Established-player ML | DONE | Position-specific Ridge/CatBoost/XGBoost + opportunity-only + team-environment-only + ensemble, both weekly (in-season) and season-level (preseason, apples-to-apples vs M4); team_week_stats/features extend the M3 panel; model_registry tracks version/validation; 70 offline + 12 network tests passing. One real evaluation-harness bug found and fixed (D19), affecting M4's reports too. |
 | M6 Uncertainty + calibration | DONE | Split-conformal p10/p25/median/p75/p90 + Monte Carlo top-12/24 probabilities on the M5 season-level CatBoost model; walk-forward 3-way split (train/calibrate/target) so calibration is genuinely out-of-sample; real measured coverage_10_90 mostly 0.72-0.90 (target 0.80) across 2019-2025/QB-RB-WR-TE — legitimately well-calibrated, not just plausible-looking; 82 offline + 13 network tests passing |
+| M7 Rookie/prospect intelligence | DONE | Draft capital + combine + prior-season landing-spot features (college production LIMITED — no verified ID bridge to cfbfastR exists, D20); CatBoost regression (rookie-year PPR) + classifier (top-24 breakout, Brier-scored) walk-forward by draft class; nearest-neighbor historical comps; 1,077 real rookie-seasons, 88 offline + 15 network tests passing; two real bugs found and fixed (combine height stored as "6-0" string, comps dtype crash) |
 | M2 Canonical identity | NOT STARTED | |
 | M3 As-of features + leakage | NOT STARTED | |
 | M4 Baselines + evaluation | NOT STARTED | |
@@ -184,9 +185,48 @@ milestone. See `docs/TRACEABILITY.md` for the acceptance-criteria-level mapping.
   data, not asserted.
 - 3,120 real predictions written on the full 2019-2025 run.
 
+## M7 summary
+- `combine_results` (7,031 rows): athletic testing bridged via `pfr_id` through
+  `player_id_map`, same pattern as M3's snap counts.
+- `rookie_features` (1,077 real rookie-seasons, 2016-2025 shown at ~90-103/class): draft
+  capital (direct from `players`), combine testing, and landing spot (drafting team's
+  *prior*-season pass rate/plays — never the rookie's own season, to avoid a look-ahead).
+  breakout_top24 derived from actual within-position season rank, not a hardcoded points
+  threshold.
+- College production is LIMITED: cfbfastR-data's college identifiers are numeric ESPN-style
+  IDs with no verified bridge to the nflverse-derived identity graph, and its "player_stats"
+  dataset is raw play-by-play, not aggregated season totals — building both a fuzzy-match
+  bridge and touchdown-attribution aggregation was judged a materially larger undertaking
+  than this milestone's budget justified, especially since draft capital already
+  substantially proxies for it (D20). Not fabricated via a shaky join; documented as a real
+  gap with a defensible fallback.
+- CatBoostRegressor (rookie-year PPR points) + CatBoostClassifier (top-24 breakout,
+  Brier-scored) walk-forward strictly by draft class (train on classes < C, predict C).
+  Real results: regression Spearman mostly 0.4-0.8 (rookie prediction is inherently noisier
+  than established-player prediction — no prior NFL data exists), breakout Brier scores
+  mostly 0.02-0.12 against base rates of 2-27%.
+- Historical comps (nearest-neighbor on standardized draft capital + combine, never drawing
+  from the target's own or a later class): spot-checked against real 2023 RB rookies —
+  Jahmyr Gibbs' and Bijan Robinson's top comps were plausible past first-round backs
+  (Ezekiel Elliott, Clyde Edwards-Helaire).
+- Two real bugs found and fixed during this milestone's review:
+  1. Combine's `ht` column is a feet-inches string (`"6-0"`), not a number — a direct
+     `CAST(... AS DOUBLE)` failed outright. Fixed by parsing `split_part` into inches.
+  2. The comps nearest-neighbor crashed with a dtype error (`'float' object has no
+     attribute 'sqrt'`) because the query-target row's integer columns came back as pandas
+     nullable Int64 (bypassing `load_rookie_class_data`'s imputation), producing an
+     object-dtype array `np.linalg.norm` couldn't handle. Fixed with an explicit
+     `.astype(float)` after concatenation.
+
 ## Known limitations (see docs/DECISIONS.md for full reasoning)
 - Sleeper, FantasyPros API, CollegeFootballData, KeepTradeCut, ESPN direct APIs are
   `BLOCKED_BY_POLICY` in this environment. Verified open-data substitutes are wired in instead
   (docs/DATA_SOURCES.md). Adapters for the blocked sources are implemented but inert.
 - Per-expert accuracy weighting: LIMITED to source-level weighting (D4).
 - Automated news/social evidence ingestion: LIMITED to structured official signals (D5).
+- ADP-implied baseline: LIMITED to the ECR-implied substitute; no independent ADP series is
+  reachable (D16).
+- Rookie college production: LIMITED — no verified ID bridge from cfbfastR-data's numeric
+  ESPN-style player IDs to the rest of the identity graph, and its "player_stats" dataset is
+  raw play-by-play, not aggregated season totals (D20). Rookie model v1 uses draft capital +
+  combine + landing spot, all cleanly identity-linked.

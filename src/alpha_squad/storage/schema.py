@@ -340,7 +340,84 @@ M6_UNCERTAINTY_DDL = [
     """,
 ]
 
-# M7+ DDL is appended here as later milestones are implemented.
+M7_ROOKIE_DDL = [
+    # Combine carries no gsis_id (verified in M2) — bridged via pfr_id -> player_id_map,
+    # same pattern as M3's snap counts.
+    """
+    CREATE TABLE IF NOT EXISTS combine_results (
+        player_id VARCHAR PRIMARY KEY,
+        draft_year INTEGER,
+        position VARCHAR,
+        forty DOUBLE,
+        bench DOUBLE,
+        vertical DOUBLE,
+        broad_jump DOUBLE,
+        cone DOUBLE,
+        shuttle DOUBLE,
+        height DOUBLE,
+        weight DOUBLE,
+        school VARCHAR,
+        source_snapshot_id VARCHAR
+    )
+    """,
+    # College production is not included here — no verified ID bridge to cfbfastR-data
+    # exists (docs/DECISIONS.md D20). Draft capital + combine + landing spot are the v1
+    # rookie feature set; all cleanly identity-linked, no fuzzy matching.
+    """
+    CREATE TABLE IF NOT EXISTS rookie_features (
+        player_id VARCHAR PRIMARY KEY,
+        draft_class INTEGER NOT NULL,
+        position VARCHAR NOT NULL,
+        draft_round INTEGER,
+        draft_pick INTEGER,
+        forty DOUBLE,
+        bench DOUBLE,
+        vertical DOUBLE,
+        broad_jump DOUBLE,
+        cone DOUBLE,
+        shuttle DOUBLE,
+        height DOUBLE,
+        weight DOUBLE,
+        landing_team_prior_pass_rate DOUBLE,
+        landing_team_prior_plays DOUBLE,
+        rookie_year_ppr_points DOUBLE NOT NULL,
+        rookie_year_games INTEGER,
+        breakout_top24 BOOLEAN NOT NULL,
+        built_at TIMESTAMP NOT NULL
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS rookie_predictions (
+        prediction_id VARCHAR PRIMARY KEY,
+        player_id VARCHAR NOT NULL,
+        draft_class INTEGER NOT NULL,
+        position VARCHAR NOT NULL,
+        model_version VARCHAR NOT NULL,
+        predicted_rookie_points DOUBLE,
+        breakout_probability DOUBLE,
+        predicted_at TIMESTAMP NOT NULL,
+        UNIQUE (player_id, draft_class, model_version)
+    )
+    """,
+    # Generic classification scoring surface (rookie breakout classifier now; anything
+    # binary-labeled later reuses it rather than getting bolted onto the regression-shaped
+    # evaluation_results table).
+    """
+    CREATE TABLE IF NOT EXISTS classification_results (
+        model_name VARCHAR NOT NULL,
+        cohort INTEGER NOT NULL,
+        position VARCHAR NOT NULL,
+        n INTEGER NOT NULL,
+        brier_score DOUBLE,
+        accuracy DOUBLE,
+        base_rate DOUBLE,
+        evaluated_at TIMESTAMP NOT NULL,
+        PRIMARY KEY (model_name, cohort, position)
+    )
+    """,
+]
+
+# M8+ DDL is appended here as later milestones are implemented.
 ALL_DDL: list[str] = [
     *M1_SNAPSHOTS_DDL,
     *M2_IDENTITY_DDL,
@@ -349,4 +426,5 @@ ALL_DDL: list[str] = [
     *M5_ESTABLISHED_ML_DDL,
     *M5_PANEL_EXTENSION_DDL,
     *M6_UNCERTAINTY_DDL,
+    *M7_ROOKIE_DDL,
 ]

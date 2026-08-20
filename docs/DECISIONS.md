@@ -194,6 +194,34 @@ that a future capability might legitimately need; the fix lives in the evaluatio
 where the fantasy-relevance judgment actually belongs. All M4/M5 evaluation reports were
 regenerated after this fix. Regression-tested in tests/unit/test_evaluate.py.
 
+## D20 — College production (cfbfastR) has no verified ID bridge to the rest of the identity graph; rookie model v1 scopes to draft capital + combine + landing spot
+Verified against real data while building M7: `player_college_bridge.cfb_player_id`
+(nflverse `draft_picks`) and `.cfb_id` (nflverse `combine`) are slug-style strings
+(`"clifton-abraham-1"`, `"kendall-blanton-1"`). cfbfastR-data's play-by-play player columns
+(`rush_player_id`, `reception_player_id`, `target_player_id`, etc.) are numeric ESPN-style IDs
+(`"4685522"`) — a completely different namespace, with no shared key. Separately,
+cfbfastR-data's `player_stats` dataset (despite the name) is raw play-by-play, not
+pre-aggregated season totals — turning it into per-player college season production would
+require both solving the ID-bridge problem *and* building touchdown-attribution logic
+(touchdown events are a separate column not directly tied to the rush/reception row).
+
+**Decision:** rather than bridge college production via a name+school+season fuzzy match
+(the only fallback available, and a materially larger undertaking — proposing candidates into
+the same `identity_exceptions` quarantine used elsewhere, at real engineering cost for a
+signal that draft capital already substantially proxies for), rookie model v1 uses the
+signals that are already cleanly ID-linked and required no new bridge: **draft capital**
+(round/pick/team — already gsis_id-linked, direct columns on `players`), **combine athletic
+testing** (forty/bench/vertical/broad_jump/cone/shuttle — bridged via `player_id_map`'s
+`pfr_id`, the same path M3 used for snap counts), and **landing spot** (the drafting team's
+*prior-season* pass rate/play volume from `team_week_features` — using prior season only,
+never the rookie's own season, to avoid a leakage look-ahead). This is not a corner cut
+silently: draft capital is well-established in fantasy analytics as the single strongest
+individual predictor of rookie outcomes, precisely because it encodes the NFL's own
+evaluation of college production, athletic testing, and landing-spot fit. College production
+is marked LIMITED, not fabricated via a shaky join; cfbfastR-data remains verified reachable
+(docs/DATA_SOURCES.md) and the play-by-play is available in full for a future session to
+build the aggregation + fuzzy-match bridge properly.
+
 ## D14 — Agents are deterministic services, not LLM calls
 `ARCHITECTURE.md` §6: "The project orchestrator is an engineering orchestration layer, not itself
 the source of fantasy truth." Agents in `src/alpha_squad/agents/` are typed Python
