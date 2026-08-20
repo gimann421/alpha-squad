@@ -222,6 +222,56 @@ is marked LIMITED, not fabricated via a shaky join; cfbfastR-data remains verifi
 (docs/DATA_SOURCES.md) and the play-by-play is available in full for a future session to
 build the aggregation + fuzzy-match bridge properly.
 
+## D21 — EDGE uses 'rsf' (redraft-superflex, horizon-matched to the single-season model); evidence_score is a disclosed neutral placeholder pending M9; the gating rule requires agreeing rank+points edges and a confidence floor
+Real data verified while building M8: DynastyProcess's `fp_ecr_history` carries several
+`ecr_type` series (`ro`, `do`, `rsf`, `dsf`, plus a few not used here), all of them overall
+(cross-position) ranks, not per-position ranks. `rsf` (redraft-superflex/2QB) genuinely differs
+from `ro` (redraft 1QB): real 2026 preseason data shows QBs occupying most of the top overall
+`rsf` slots (rank 1-6 are QBs, then the first non-QB at rank 7), which is exactly what a 2QB
+league should look like and `ro` does not produce. `rsf` history only goes back to 2021 in this
+snapshot (verified: 2021-2026 preseason coverage, ~550-900 distinct ids/year), which caps how
+many seasons can be walk-forward validated.
+
+**Decision 1 — market series:** EDGE compares the M6 uncertainty model's single-season
+point/top24-probability predictions against `rsf`, not `dsf` (dynasty-superflex) or
+`dynasty_values.value_2qb`. The model predicts one season of points; `dsf`/dynasty value price
+in a multi-year outlook (age curves, draft capital trajectory, etc.) the model was never asked
+to produce. Comparing them would produce "edges" dominated by a horizon mismatch (e.g. a
+rookie WR with modest year-1 production but high dynasty value would look like a false "market
+undervalues" signal) rather than genuine model-vs-market disagreement. A dynasty-horizon EDGE,
+blending `dsf`/`value_2qb` with real age curves, is left to M10's trade/roster logic, which is
+the layer that actually reasons about multi-year value. `dynasty_values` (normalized from
+`values-players.csv`, 97.6% real identity coverage) is built and stored now specifically so
+M10 has it ready.
+
+**Decision 2 — evidence_score:** M9 (the evidence engine) does not exist yet. Rather than omit
+the field (breaking the `AGENT_CONTRACTS.md` Edge contract shape) or hard-code a value that
+could silently gate every action once evidence scoring is real, `evidence_score` is fixed at a
+disclosed neutral placeholder (0.5), reported in every `edge_snapshot` row and echoed in its
+`reasons` for transparency, and explicitly excluded from the BUY/SELL/HOLD/WATCH gate. When M9
+ships, it only needs to start writing a real score into the same column — no schema or contract
+change required.
+
+**Decision 3 — the hard gating rule** (`ACCEPTANCE_CRITERIA.md`: "a raw ranking discrepancy
+cannot alone produce a strong EDGE"): `classify_action` in `market/edge.py` requires the rank
+edge AND the points edge to agree in direction, AND both to clear a materiality threshold
+(rank ≥ 15, points ≥ 15 PPR), AND model confidence (M6's real interval-width-derived
+`confidence`, not a placeholder) to clear a 0.5 floor, before BUY/SELL. A rank gap with no
+corroborating points gap, or a rank/points disagreement, or insufficient confidence, is capped
+at WATCH; near-zero edges are HOLD (explicit "market and model agree," distinct from WATCH's
+"edge exists but not actionable"). Literally regression-tested in
+`tests/unit/test_edge.py::TestClassifyActionGatingRule`, and re-verified against real stored
+`edge_snapshot` output in the live network test.
+
+**Result, honestly reported either way (real data, `rsf`, 2022-2025 — 2021 has no training
+season yet since `rsf` history itself starts in 2021):** the BUY cohort's mean outperformance
+vs. market-implied points was positive in all 4 scored seasons (+25.7, +21.8, +16.9, +0.33 PPR;
+n=35-47/season) — a genuine out-of-sample signal that the gated EDGE is finding real,
+actionable market inefficiency, not noise. The SELL cohort was mixed: correct direction
+(negative outperformance, i.e. the sold-off player really did underperform market expectation)
+in 2022/2023, wrong direction in 2024/2025 (small n=10-18/season). This is reported as-is in
+`docs/PROJECT_STATE.md`'s M8 summary, not suppressed or cherry-picked.
+
 ## D14 — Agents are deterministic services, not LLM calls
 `ARCHITECTURE.md` §6: "The project orchestrator is an engineering orchestration layer, not itself
 the source of fantasy truth." Agents in `src/alpha_squad/agents/` are typed Python

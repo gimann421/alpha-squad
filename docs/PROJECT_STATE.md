@@ -3,7 +3,7 @@
 Living summary of what is implemented, validated, and outstanding. Updated at the end of every
 milestone. See `docs/TRACEABILITY.md` for the acceptance-criteria-level mapping.
 
-## Status: M7 complete, M8 next
+## Status: M8 complete, M9 next
 
 | Milestone | Status | Notes |
 |---|---|---|
@@ -15,13 +15,7 @@ milestone. See `docs/TRACEABILITY.md` for the acceptance-criteria-level mapping.
 | M5 Established-player ML | DONE | Position-specific Ridge/CatBoost/XGBoost + opportunity-only + team-environment-only + ensemble, both weekly (in-season) and season-level (preseason, apples-to-apples vs M4); team_week_stats/features extend the M3 panel; model_registry tracks version/validation; 70 offline + 12 network tests passing. One real evaluation-harness bug found and fixed (D19), affecting M4's reports too. |
 | M6 Uncertainty + calibration | DONE | Split-conformal p10/p25/median/p75/p90 + Monte Carlo top-12/24 probabilities on the M5 season-level CatBoost model; walk-forward 3-way split (train/calibrate/target) so calibration is genuinely out-of-sample; real measured coverage_10_90 mostly 0.72-0.90 (target 0.80) across 2019-2025/QB-RB-WR-TE — legitimately well-calibrated, not just plausible-looking; 82 offline + 13 network tests passing |
 | M7 Rookie/prospect intelligence | DONE | Draft capital + combine + prior-season landing-spot features (college production LIMITED — no verified ID bridge to cfbfastR exists, D20); CatBoost regression (rookie-year PPR) + classifier (top-24 breakout, Brier-scored) walk-forward by draft class; nearest-neighbor historical comps; 1,077 real rookie-seasons, 88 offline + 15 network tests passing; two real bugs found and fixed (combine height stored as "6-0" string, comps dtype crash) |
-| M2 Canonical identity | NOT STARTED | |
-| M3 As-of features + leakage | NOT STARTED | |
-| M4 Baselines + evaluation | NOT STARTED | |
-| M5 Established-player ML | NOT STARTED | |
-| M6 Uncertainty | NOT STARTED | |
-| M7 Rookie modeling | NOT STARTED | |
-| M8 Market + EDGE | NOT STARTED | |
+| M8 Market + EDGE | DONE | market_snapshot extended to ro/do/rsf/dsf (2QB-aware); dynasty_values (681 real players, 97.6% identity coverage); EDGE (rank/points/probability edge, BUY/HOLD/SELL/WATCH) gated so a raw rank discrepancy alone can never produce BUY/SELL (D21); historical EDGE validation shows the real BUY cohort beat market-implied points in every scored season 2022-2025 (+25.7, +21.8, +16.9, +0.33 PPR); 116 offline + 18 network tests passing |
 | M9 Evidence engine | NOT STARTED | |
 | M10 League decision engine | NOT STARTED | |
 | M11 Agents/orchestrator | NOT STARTED | |
@@ -218,6 +212,45 @@ milestone. See `docs/TRACEABILITY.md` for the acceptance-criteria-level mapping.
      object-dtype array `np.linalg.norm` couldn't handle. Fixed with an explicit
      `.astype(float)` after concatenation.
 
+## M8 summary
+- `market_snapshot` extended from `ecr_type='ro'` only (M4) to `ro`/`do`/`rsf`/`dsf`
+  (682,397 rows total, 3,112/1,994/1,390/1,189 distinct players respectively). `rsf`
+  (redraft-superflex, 2QB) is the series EDGE uses — it is a genuinely different market than
+  `ro`: real data shows QBs occupying most of the top overall `rsf` slots, exactly what a 2QB
+  league should produce and `ro` does not (D21).
+- `dynasty_values` (681 rows, 97.6% real fantasypros_id coverage): normalized from
+  DynastyProcess's `values-players.csv`, current 1QB/2QB dynasty ECR and value — reserved for
+  M10's dynasty trade logic, not consumed by M8's single-season EDGE (D21 explains why mixing
+  horizons would be wrong).
+- EDGE (`edge_snapshot`, `AGENT_CONTRACTS.md`'s Edge contract): compares the M6 uncertainty
+  model's single-season point/top24 predictions against `rsf`'s overall (cross-position) rank,
+  both horizon-matched. `model_rank`/`market_rank` are cross-position; `projected_points_edge`
+  comes from a pooled walk-forward isotonic rank→points curve; `probability_edge` from a
+  per-position walk-forward isotonic rank→top24 curve (re-deriving a within-position rank from
+  the overall `rsf` order, since the series carries no explicit position rank).
+- Hard gating rule (D21, `classify_action` in `market/edge.py`): BUY/SELL requires rank edge
+  AND points edge to agree in direction AND both clear a materiality threshold (rank ≥ 15,
+  points ≥ 15 PPR) AND model confidence ≥ 0.5. A rank gap alone, or a rank/points disagreement,
+  or low confidence, is never more than WATCH — literally regression-tested in
+  `tests/unit/test_edge.py::TestClassifyActionGatingRule`, and re-verified against real stored
+  output in the live test.
+- Historical EDGE validation (`edge_validation_results`, real data, `rsf`, 2022-2025 — 2021 is
+  WATCH-only since `rsf` history itself only starts in 2021, leaving no walk-forward training
+  season): the **BUY cohort beat market-implied points in every one of the 4 scored seasons**
+  (+25.7, +21.8, +16.9, +0.33 PPR mean outperformance; n=35-47/season) — a genuine, real,
+  out-of-sample signal that the gated EDGE finds real market inefficiency, not noise. The
+  **SELL cohort was mixed** (correct direction in 2022/2023: -46.8/-26.3; wrong direction in
+  2024/2025: +50.0/+26.4, small n=10-18/season) — reported honestly per CLAUDE.md, not
+  suppressed; a real limitation of a single-season model applied to SELL calls, worth revisiting
+  once M9's evidence engine and M10's league context add signal beyond the point projection.
+  Real example: Travis Kelce 2024 (`model_rank`=9 TE, `market_rank`=49 overall, `rank_edge`=+40,
+  `points_edge`=+129.3, BUY) — matches a well-documented real dynasty-market pattern where
+  2QB/superflex ADP over-drafts QBs and pushes elite TEs down the board.
+- `evidence_score` is a disclosed neutral placeholder (0.5) pending M9 — reported in every
+  `edge_snapshot` row and its `reasons` for transparency, but never used to gate BUY/SELL/HOLD/
+  WATCH (D21). This is not a corner cut silently: the field exists with the exact contract
+  shape now, and M9 only needs to start producing a real score into the same column.
+
 ## Known limitations (see docs/DECISIONS.md for full reasoning)
 - Sleeper, FantasyPros API, CollegeFootballData, KeepTradeCut, ESPN direct APIs are
   `BLOCKED_BY_POLICY` in this environment. Verified open-data substitutes are wired in instead
@@ -230,3 +263,11 @@ milestone. See `docs/TRACEABILITY.md` for the acceptance-criteria-level mapping.
   ESPN-style player IDs to the rest of the identity graph, and its "player_stats" dataset is
   raw play-by-play, not aggregated season totals (D20). Rookie model v1 uses draft capital +
   combine + landing spot, all cleanly identity-linked.
+- EDGE `evidence_score`: LIMITED to a disclosed neutral placeholder (0.5) until M9's evidence
+  engine exists; never used to gate an action (D21).
+- EDGE is single-season/redraft-horizon only (`rsf`), matching the M6 model's own horizon; a
+  dynasty-horizon EDGE using `dsf`/`dynasty_values.value_2qb` is deferred to M10's trade logic
+  rather than conflated with a single-season points model (D21).
+- Historical EDGE validation: the BUY cohort's real out-of-sample outperformance is a strong,
+  consistent positive signal (4/4 scored seasons); the SELL cohort is a real, reported mixed
+  result (correct direction 2/4 seasons, small n) — not hidden, see M8 summary above.

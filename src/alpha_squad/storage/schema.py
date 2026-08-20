@@ -417,7 +417,72 @@ M7_ROOKIE_DDL = [
     """,
 ]
 
-# M8+ DDL is appended here as later milestones are implemented.
+M8_MARKET_EDGE_DDL = [
+    # Current dynasty value snapshot from DynastyProcess's values-players.csv (verified
+    # 97.6% fantasypros_id coverage — docs/DECISIONS.md D21). Not a time series like
+    # market_snapshot: this file is re-scraped in place, so one row per player, replaced
+    # on each `market build-dynasty-values` run rather than accumulated.
+    """
+    CREATE TABLE IF NOT EXISTS dynasty_values (
+        player_id VARCHAR PRIMARY KEY,
+        scrape_date DATE,
+        team VARCHAR,
+        age DOUBLE,
+        ecr_pos DOUBLE,
+        ecr_1qb DOUBLE,
+        ecr_2qb DOUBLE,
+        value_1qb DOUBLE,
+        value_2qb DOUBLE,
+        source_snapshot_id VARCHAR,
+        updated_at TIMESTAMP NOT NULL
+    )
+    """,
+    # Mirrors AGENT_CONTRACTS.md's Edge contract. ecr_type is part of the key because
+    # rank/points/probability edge are only meaningful against a specific,
+    # horizon-matched market series (D21: 'rsf' redraft-superflex for this single-season
+    # model; a dynasty-horizon variant using dsf/dynasty_values is future M10 scope).
+    """
+    CREATE TABLE IF NOT EXISTS edge_snapshot (
+        edge_id VARCHAR PRIMARY KEY,
+        player_id VARCHAR NOT NULL,
+        season INTEGER NOT NULL,
+        position VARCHAR NOT NULL,
+        ecr_type VARCHAR NOT NULL,
+        model_version VARCHAR NOT NULL,
+        model_rank INTEGER NOT NULL,
+        market_rank INTEGER NOT NULL,
+        rank_edge INTEGER NOT NULL,
+        projected_points_edge DOUBLE,
+        probability_edge DOUBLE,
+        evidence_score DOUBLE NOT NULL,
+        confidence DOUBLE,
+        action VARCHAR NOT NULL,
+        reasons_json VARCHAR NOT NULL,
+        prediction_id VARCHAR,
+        built_at TIMESTAMP NOT NULL,
+        UNIQUE (player_id, season, ecr_type, model_version)
+    )
+    """,
+    # Answers ACCEPTANCE_CRITERIA.md's "Historical EDGE performance is evaluated": for each
+    # action cohort (BUY/SELL/HOLD/WATCH), did real outcomes actually beat what the market
+    # implied at the time? Published either way, per CLAUDE.md's no-hidden-failure rule.
+    """
+    CREATE TABLE IF NOT EXISTS edge_validation_results (
+        model_version VARCHAR NOT NULL,
+        ecr_type VARCHAR NOT NULL,
+        season INTEGER NOT NULL,
+        action VARCHAR NOT NULL,
+        n INTEGER NOT NULL,
+        mean_actual_points DOUBLE,
+        mean_market_implied_points DOUBLE,
+        mean_outperformance_vs_market DOUBLE,
+        evaluated_at TIMESTAMP NOT NULL,
+        PRIMARY KEY (model_version, ecr_type, season, action)
+    )
+    """,
+]
+
+# M9+ DDL is appended here as later milestones are implemented.
 ALL_DDL: list[str] = [
     *M1_SNAPSHOTS_DDL,
     *M2_IDENTITY_DDL,
@@ -427,4 +492,5 @@ ALL_DDL: list[str] = [
     *M5_PANEL_EXTENSION_DDL,
     *M6_UNCERTAINTY_DDL,
     *M7_ROOKIE_DDL,
+    *M8_MARKET_EDGE_DDL,
 ]

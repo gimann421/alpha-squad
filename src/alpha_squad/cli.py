@@ -13,6 +13,13 @@ from alpha_squad.features.build import build_features
 from alpha_squad.identity.canonical import build_identity
 from alpha_squad.identity.exceptions import list_exceptions
 from alpha_squad.market.consensus import build_market_snapshot
+from alpha_squad.market.dynasty_values import build_dynasty_values
+from alpha_squad.market.edge import (
+    DEFAULT_ECR_TYPE,
+    evaluate_historical_edge,
+    run_edge_build,
+    write_edge_validation_report,
+)
 from alpha_squad.models.baselines.run import run_baselines
 from alpha_squad.models.established.season_level import run_season_level_established_ml
 from alpha_squad.models.established.train import run_established_ml
@@ -31,12 +38,14 @@ features_app = typer.Typer(help="As-of feature store operations")
 market_app = typer.Typer(help="Market consensus operations")
 evaluate_app = typer.Typer(help="Baseline/model evaluation operations")
 train_app = typer.Typer(help="Model training operations")
+edge_app = typer.Typer(help="Model-vs-market EDGE operations")
 app.add_typer(sources_app, name="sources")
 app.add_typer(identity_app, name="identity")
 app.add_typer(features_app, name="features")
 app.add_typer(market_app, name="market")
 app.add_typer(evaluate_app, name="evaluate")
 app.add_typer(train_app, name="train")
+app.add_typer(edge_app, name="edge")
 console = Console()
 
 # Datasets that vary by NFL season vs. ones that are a single current/whole-history file.
@@ -283,7 +292,7 @@ def features_build(
 @market_app.command("build")
 def market_build() -> None:
     """Build market_snapshot from the stored DynastyProcess fp_ecr_history snapshot
-    (redraft-overall/1QB ECR)."""
+    (redraft/dynasty, 1QB and 2QB-superflex ECR series: ro/do/rsf/dsf)."""
     settings = get_settings()
     con = get_connection(settings)
     init_db(con)
@@ -294,6 +303,23 @@ def market_build() -> None:
         con.close()
         raise typer.Exit(code=1) from e
     console.print(f"market_snapshot rows upserted: [green]{n}[/green]")
+    con.close()
+
+
+@market_app.command("build-dynasty-values")
+def market_build_dynasty_values() -> None:
+    """Normalize DynastyProcess's values-players.csv (current 1QB/2QB dynasty value and ECR)
+    into dynasty_values."""
+    settings = get_settings()
+    con = get_connection(settings)
+    init_db(con)
+    try:
+        n = build_dynasty_values(con, settings)
+    except RuntimeError as e:
+        console.print(f"[red]{e}[/red]")
+        con.close()
+        raise typer.Exit(code=1) from e
+    console.print(f"dynasty_values rows upserted: [green]{n}[/green]")
     con.close()
 
 
@@ -549,6 +575,80 @@ def train_rookie(
     console.print(table2)
     if run_report.skipped:
         console.print(f"[yellow]skipped: {run_report.skipped}[/yellow]")
+    con.close()
+
+
+@edge_app.command("build")
+def edge_build(
+    season_start: int = typer.Option(2021, help="First target season to build EDGE for"),
+    season_end: int = typer.Option(2025, help="Last target season to build EDGE for"),
+    ecr_type: str = typer.Option(
+        DEFAULT_ECR_TYPE, help="Market series to compare against (rsf=redraft-superflex/2QB)"
+    ),
+) -> None:
+    """Build model-vs-market EDGE (rank/points/probability edge, BUY/HOLD/SELL/WATCH) for
+    each season, gated so a raw ranking discrepancy alone can never produce BUY/SELL
+    (ACCEPTANCE_CRITERIA.md). Requires `market build` and `train uncertainty` to have already
+    run for the relevant seasons."""
+    settings = get_settings()
+    con = get_connection(settings)
+    init_db(con)
+
+    report = run_edge_build(con, season_start, season_end, ecr_type)
+
+    table = Table(title=f"EDGE actions built (ecr_type={ecr_type})")
+    for col in ("season", "action", "n"):
+        table.add_column(col)
+    action_counts = con.execute(
+        """
+        SELECT season, action, count(*) FROM edge_snapshot
+        WHERE ecr_type = ? AND season BETWEEN ? AND ?
+        GROUP BY 1, 2 ORDER BY 1, 2
+        """,
+        [ecr_type, season_start, season_end],
+    ).fetchall()
+    for season, action, n in action_counts:
+        table.add_row(str(season), action, str(n))
+    console.print(table)
+    console.print(f"edges written: [green]{report.edges_written}[/green] across seasons {report.seasons}")
+    if report.skipped:
+        console.print(f"[yellow]skipped: {report.skipped}[/yellow]")
+    con.close()
+
+
+@edge_app.command("validate")
+def edge_validate(
+    season_start: int = typer.Option(2021, help="First season to validate"),
+    season_end: int = typer.Option(2025, help="Last season to validate"),
+    ecr_type: str = typer.Option(DEFAULT_ECR_TYPE, help="Market series EDGE was built against"),
+    report_path: str = typer.Option(
+        "reports/edge_validation.md", help="Markdown report output path"
+    ),
+) -> None:
+    """Historically validate EDGE: did BUY/SELL cohorts actually beat market expectation?
+    Published either way. Requires `edge build` to have already run for these seasons."""
+    settings = get_settings()
+    con = get_connection(settings)
+    init_db(con)
+
+    results = evaluate_historical_edge(con, season_start, season_end, ecr_type)
+
+    table = Table(title="Historical EDGE validation")
+    for col in ("season", "action", "n", "mean_actual_pts", "mean_market_implied_pts", "mean_outperformance"):
+        table.add_column(col)
+    for r in results:
+        table.add_row(
+            str(r["season"]),
+            r["action"],
+            str(r["n"]),
+            f"{r['mean_actual_points']:.2f}" if r["mean_actual_points"] is not None else "-",
+            f"{r['mean_market_implied_points']:.2f}" if r["mean_market_implied_points"] is not None else "-",
+            f"{r['mean_outperformance_vs_market']:.2f}" if r["mean_outperformance_vs_market"] is not None else "-",
+        )
+    console.print(table)
+
+    write_edge_validation_report(con, Path(report_path))
+    console.print(f"report written to [green]{report_path}[/green]")
     con.close()
 
 

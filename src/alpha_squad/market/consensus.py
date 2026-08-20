@@ -2,7 +2,9 @@
 for the blocked FantasyPros API — docs/DECISIONS.md D3), identity-joined via `fantasypros_id`
 (verified 93.8% coverage on `ecr_type='ro'` — D16). M4 only needs the 'ro' (redraft-overall,
 1QB) series for a general-purpose ECR-implied baseline; M8 extends this with the 2QB-aware
-series (`rsf`/`dsf`) and dynasty values that the target league (D7) actually needs."""
+series (`rsf`/`dsf`) the target league's EDGE calculation actually needs (D21) — both are
+overall, cross-position ranks, verified against real data, capturing exactly how a 2QB
+league values QBs differently than 'ro' does."""
 
 from __future__ import annotations
 
@@ -11,7 +13,7 @@ import duckdb
 from alpha_squad.config.settings import Settings
 from alpha_squad.identity.canonical import reader_expr, require_snapshot
 
-DEFAULT_ECR_TYPES = ("ro",)
+DEFAULT_ECR_TYPES = ("ro", "do", "rsf", "dsf")
 
 
 def build_market_snapshot(
