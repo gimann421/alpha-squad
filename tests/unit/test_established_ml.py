@@ -104,3 +104,73 @@ class TestSeasonLevelWalkForward:
         _seed_season(con, "p1", 2023, 110.0, position="WR")
         df = load_season_level_data(con, "WR", 2015, 2023)
         assert (df["preseason_ecr_rank"] == 999.0).all()
+
+
+class TestReproducibility:
+    """CLAUDE.md: 'no untested claims' -- every MODEL_SPECS entry in models/established/train.py
+    already sets a fixed random_state/random_seed=42, but that guarantee had never actually
+    been exercised end to end. Runs the real CatBoost/XGBoost/Ridge fit-predict path (not a
+    reimplementation of it) twice against identical small synthetic data and diffs the
+    persisted evaluation_results, rather than trusting the presence of a seed kwarg alone."""
+
+    @pytest.fixture(autouse=True)
+    def _seed(self, con):
+        # 4 players x 14 weeks of 2020 = 56 rows, enough to clear MIN_TRAINING_ROWS=50 for
+        # WR; QB/RB/TE get zero rows and are skipped by run_established_ml, keeping this cheap.
+        for i, player_id in enumerate(["wr_a", "wr_b", "wr_c", "wr_d"]):
+            for week in range(1, 15):
+                con.execute(
+                    "INSERT INTO players (player_id, gsis_id) VALUES (?, ?) ON CONFLICT DO NOTHING",
+                    [player_id, f"00-test-{player_id}"],
+                )
+                _seed_week_feature_row(
+                    con,
+                    player_id,
+                    2020,
+                    week,
+                    "WR",
+                    fp_ppr_avg_last3=6.0 + i * 2.0 + (week % 4),
+                    targets_avg_last3=4.0 + i + (week % 3),
+                    target_fantasy_points_ppr=8.0 + i * 2.0 + (week % 3),
+                )
+            _seed_week_feature_row(
+                con,
+                player_id,
+                2021,
+                1,
+                "WR",
+                fp_ppr_avg_last3=6.0 + i * 2.0,
+                targets_avg_last3=4.0 + i,
+                target_fantasy_points_ppr=9.0 + i,
+            )
+            _seed_season(con, player_id, 2021, 150.0 + i * 10, position="WR")
+        self.con = con
+
+    def test_same_input_data_produces_identical_evaluation_results(self):
+        from alpha_squad.models.established.train import run_established_ml
+
+        query = (
+            "SELECT model_name, season, position, n, mae, rmse, spearman FROM evaluation_results "
+            "WHERE season = 2021 AND n > 0 ORDER BY model_name, position"
+        )
+
+        def normalized(rows):
+            # NaN != NaN under plain equality (e.g. spearman on a model whose predictions
+            # happen to be constant across this tiny synthetic set); a real reproducibility
+            # check must not let that mask a genuine mismatch elsewhere in the same row, so
+            # only NaN-vs-NaN is treated as equal, via a shared sentinel.
+            return [
+                tuple("NaN" if isinstance(v, float) and v != v else v for v in row) for row in rows
+            ]
+
+        run_established_ml(self.con, season_start=2021, season_end=2021, min_train_season=2020)
+        first = normalized(self.con.execute(query).fetchall())
+        assert first, "expected at least the WR models to have trained and been evaluated"
+
+        run_established_ml(self.con, season_start=2021, season_end=2021, min_train_season=2020)
+        second = normalized(self.con.execute(query).fetchall())
+
+        assert first == second, (
+            "training on identical data twice must produce bit-identical evaluation metrics "
+            "given every model's fixed random_state/random_seed=42"
+        )

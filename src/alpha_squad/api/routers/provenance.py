@@ -34,6 +34,10 @@ def get_provenance(
         cols = [r[0] for r in con.execute(f"DESCRIBE {table}").fetchall()]
         row = con.execute(f"SELECT * FROM {table} WHERE {id_col} = ?", [entity_id]).fetchone()
         if row is not None:
-            record = {k: (str(v) if v is not None else None) for k, v in zip(cols, row, strict=True)}
-            return ProvenanceResponse(entity_type=entity_type, entity_id=entity_id, found=True, record=record)
+            record = {
+                k: (str(v) if v is not None else None) for k, v in zip(cols, row, strict=True)
+            }
+            return ProvenanceResponse(
+                entity_type=entity_type, entity_id=entity_id, found=True, record=record
+            )
     return ProvenanceResponse(entity_type="unknown", entity_id=entity_id, found=False)

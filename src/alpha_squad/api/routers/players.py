@@ -35,8 +35,12 @@ def list_players(
     ).fetchall()
     return [
         PlayerSummary(
-            player_id=r[0], display_name=r[1], position=r[2], college_name=r[3],
-            draft_year=r[4], status=r[5],
+            player_id=r[0],
+            display_name=r[1],
+            position=r[2],
+            college_name=r[3],
+            draft_year=r[4],
+            status=r[5],
         )
         for r in rows
     ]

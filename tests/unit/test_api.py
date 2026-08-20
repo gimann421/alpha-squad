@@ -53,7 +53,9 @@ class TestPlayers:
 
     def test_get_player_returns_real_stored_fields_and_id_map(self, con, client):
         _seed_player(con, "p1", "Test Player", "WR")
-        con.execute("INSERT INTO player_id_map (id_type, id_value, player_id, source) VALUES ('pfr_id', 'TestP01', 'p1', 'test')")
+        con.execute(
+            "INSERT INTO player_id_map (id_type, id_value, player_id, source) VALUES ('pfr_id', 'TestP01', 'p1', 'test')"
+        )
         r = client.get("/players/p1")
         assert r.status_code == 200
         body = r.json()
@@ -168,7 +170,9 @@ class TestLeague:
         assert r.status_code == 200
         assert r.json()["need"]["QB"] > 0  # only 1 of 2 required QB slots filled
 
-    def test_draft_endpoint_calls_the_real_recommend_draft_pick_and_persists_a_decision(self, con, client):
+    def test_draft_endpoint_calls_the_real_recommend_draft_pick_and_persists_a_decision(
+        self, con, client
+    ):
         _seed_player(con, "p1", "Draft Target", "QB")
         con.execute(
             "INSERT INTO uncertainty_predictions (prediction_id, player_id, season, position, "
@@ -184,7 +188,9 @@ class TestLeague:
         assert body["recommendation"] == "p1"
         assert body["reasons"]
 
-        stored = con.execute("SELECT recommendation FROM decisions WHERE decision_id = ?", [body["decision_id"]]).fetchone()
+        stored = con.execute(
+            "SELECT recommendation FROM decisions WHERE decision_id = ?", [body["decision_id"]]
+        ).fetchone()
         assert stored[0] == "p1"
 
     def test_draft_endpoint_422s_when_no_evaluable_candidates(self, client):
@@ -228,6 +234,8 @@ class TestHealth:
         )
         r = client.get("/health/sources")
         assert r.status_code == 200
-        rows = [row for row in r.json() if row["source"] == "nflverse" and row["dataset"] == "players"]
+        rows = [
+            row for row in r.json() if row["source"] == "nflverse" and row["dataset"] == "players"
+        ]
         assert len(rows) == 1
         assert rows[0]["status"] == "AVAILABLE"

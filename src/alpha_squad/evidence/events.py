@@ -103,7 +103,11 @@ _SKILL_ABB = ("QB", "RB", "WR", "TE")
 
 
 def _depth_chart_entering(
-    con: duckdb.DuckDBPyConnection, season: int, week: int, week_starts: dict[int, str], table_name: str
+    con: duckdb.DuckDBPyConnection,
+    season: int,
+    week: int,
+    week_starts: dict[int, str],
+    table_name: str,
 ) -> str | None:
     """Materializes a temp table `table_name` with columns (gsis_id, team, pos_abb,
     pos_rank) for the depth chart as known *entering* `week` (never later), restricted to
@@ -135,7 +139,9 @@ def _depth_chart_entering(
         )
     else:
         if week - 1 < 1:
-            con.execute(f"CREATE OR REPLACE TEMP TABLE {table_name} AS SELECT NULL::VARCHAR AS gsis_id, NULL::VARCHAR AS team, NULL::VARCHAR AS pos_abb, NULL::INTEGER AS pos_rank WHERE FALSE")
+            con.execute(
+                f"CREATE OR REPLACE TEMP TABLE {table_name} AS SELECT NULL::VARCHAR AS gsis_id, NULL::VARCHAR AS team, NULL::VARCHAR AS pos_abb, NULL::INTEGER AS pos_rank WHERE FALSE"
+            )
             return snap["snapshot_id"]
         con.execute(
             f"""
@@ -362,7 +368,9 @@ def build_evidence_events(
         report.skipped.append(f"{season}/week{week}: no games table entry")
         return report
 
-    report.bump("depth_chart_promotion/demotion", detect_depth_chart_moves(con, season, week, week_starts))
+    report.bump(
+        "depth_chart_promotion/demotion", detect_depth_chart_moves(con, season, week, week_starts)
+    )
     report.bump("injury_events", detect_injury_events(con, season, week, week_starts))
     report.bump("roster_transaction", detect_roster_transactions(con, season, week, week_starts))
     report.bump("usage_share_shift", detect_usage_share_shifts(con, season, week, week_starts))
@@ -374,7 +382,9 @@ def build_evidence_events_range(
 ) -> EvidenceBuildReport:
     total = EvidenceBuildReport()
     for season in range(season_start, season_end + 1):
-        max_week = con.execute("SELECT max(week) FROM games WHERE season = ?", [season]).fetchone()[0]
+        max_week = con.execute("SELECT max(week) FROM games WHERE season = ?", [season]).fetchone()[
+            0
+        ]
         if max_week is None:
             total.skipped.append(f"{season}: no games ingested")
             continue

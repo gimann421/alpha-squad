@@ -39,11 +39,16 @@ def get_league_context(league_id: str) -> dict:
 
 @router.get("/{league_id}/roster")
 def get_roster_need(
-    league_id: str, roster_positions: str = Query("", description="Comma-separated positions, e.g. 'QB,RB,RB'")
+    league_id: str,
+    roster_positions: str = Query("", description="Comma-separated positions, e.g. 'QB,RB,RB'"),
 ) -> dict:
     league = _league_or_404(league_id)
     positions = [p.strip() for p in roster_positions.split(",") if p.strip()]
-    return {"league_id": league_id, "roster_positions": positions, "need": roster_need(league, positions)}
+    return {
+        "league_id": league_id,
+        "roster_positions": positions,
+        "need": roster_need(league, positions),
+    }
 
 
 @router.post("/{league_id}/draft", response_model=DecisionResponse)
@@ -58,18 +63,36 @@ def post_draft(
         available = set(projections)
     try:
         rec = recommend_draft_pick(
-            con, league, body.season, body.roster_positions, available,
-            body.next_pick_overall, body.ecr_type, body.top_n,
+            con,
+            league,
+            body.season,
+            body.roster_positions,
+            available,
+            body.next_pick_overall,
+            body.ecr_type,
+            body.top_n,
         )
     except RuntimeError as e:
         raise HTTPException(status_code=422, detail=str(e)) from e
     decision_id = record_decision(
-        con, "draft_pick", league.league_id, body.season, rec.recommendation, rec.alternatives,
-        rec.expected_value, rec.confidence, rec.reasons, {"source": "api"},
+        con,
+        "draft_pick",
+        league.league_id,
+        body.season,
+        rec.recommendation,
+        rec.alternatives,
+        rec.expected_value,
+        rec.confidence,
+        rec.reasons,
+        {"source": "api"},
     )
     return DecisionResponse(
-        decision_id=decision_id, recommendation=rec.recommendation, alternatives=rec.alternatives,
-        expected_value=rec.expected_value, confidence=rec.confidence, reasons=rec.reasons,
+        decision_id=decision_id,
+        recommendation=rec.recommendation,
+        alternatives=rec.alternatives,
+        expected_value=rec.expected_value,
+        confidence=rec.confidence,
+        reasons=rec.reasons,
     )
 
 
@@ -85,12 +108,23 @@ def post_waiver(
     except RuntimeError as e:
         raise HTTPException(status_code=422, detail=str(e)) from e
     decision_id = record_decision(
-        con, "waiver_bid", league.league_id, body.season, rec.player_id, [],
-        rec.recommended_bid, rec.meaningful_role_probability, rec.reasons, {"source": "api"},
+        con,
+        "waiver_bid",
+        league.league_id,
+        body.season,
+        rec.player_id,
+        [],
+        rec.recommended_bid,
+        rec.meaningful_role_probability,
+        rec.reasons,
+        {"source": "api"},
     )
     return DecisionResponse(
-        decision_id=decision_id, recommendation=rec.player_id, alternatives=[],
-        expected_value=rec.recommended_bid, confidence=rec.meaningful_role_probability,
+        decision_id=decision_id,
+        recommendation=rec.player_id,
+        alternatives=[],
+        expected_value=rec.recommended_bid,
+        confidence=rec.meaningful_role_probability,
         reasons=rec.reasons,
     )
 
@@ -102,10 +136,22 @@ def post_trade(
     league = _league_or_404(league_id)
     rec = recommend_dynasty_trade(con, body.player_id, body.season, body.ecr_type)
     decision_id = record_decision(
-        con, "dynasty_trade", league.league_id, body.season, rec.player_id, [],
-        rec.age_adjusted_value, None, rec.reasons, {"source": "api"},
+        con,
+        "dynasty_trade",
+        league.league_id,
+        body.season,
+        rec.player_id,
+        [],
+        rec.age_adjusted_value,
+        None,
+        rec.reasons,
+        {"source": "api"},
     )
     return DecisionResponse(
-        decision_id=decision_id, recommendation=rec.player_id, alternatives=[],
-        expected_value=rec.age_adjusted_value, confidence=None, reasons=rec.reasons,
+        decision_id=decision_id,
+        recommendation=rec.player_id,
+        alternatives=[],
+        expected_value=rec.age_adjusted_value,
+        confidence=None,
+        reasons=rec.reasons,
     )

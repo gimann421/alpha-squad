@@ -79,7 +79,9 @@ def recommend_dynasty_trade(
     if dynasty_value is not None:
         reasons.append(f"current dynasty value (2QB): {dynasty_value:.0f}")
     if not edge_row:
-        reasons.append(f"no EDGE on record for this player/season/{ecr_type}; action defaults to WATCH")
+        reasons.append(
+            f"no EDGE on record for this player/season/{ecr_type}; action defaults to WATCH"
+        )
 
     return TradeRecommendation(
         player_id=player_id,

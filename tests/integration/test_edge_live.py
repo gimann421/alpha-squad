@@ -81,7 +81,9 @@ def test_edge_build_produces_gated_actions_on_real_players(con_ready):
             assert abs(points_edge) >= 15.0
             assert abs(rank_edge) >= 15
             assert confidence is not None and confidence >= 0.5
-            same_direction = (rank_edge > 0 and points_edge > 0) or (rank_edge < 0 and points_edge < 0)
+            same_direction = (rank_edge > 0 and points_edge > 0) or (
+                rank_edge < 0 and points_edge < 0
+            )
             assert same_direction, "BUY/SELL action stored with disagreeing rank/points edges"
 
 

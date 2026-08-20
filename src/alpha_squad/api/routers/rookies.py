@@ -39,8 +39,13 @@ def get_rookies(
     ).fetchall()
     return [
         RookieRow(
-            player_id=r[0], display_name=r[1], position=r[2], draft_class=r[3],
-            predicted_rookie_points=r[4], breakout_probability=r[5], model_version=r[6],
+            player_id=r[0],
+            display_name=r[1],
+            position=r[2],
+            draft_class=r[3],
+            predicted_rookie_points=r[4],
+            breakout_probability=r[5],
+            model_version=r[6],
         )
         for r in rows
     ]

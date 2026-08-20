@@ -32,7 +32,9 @@ class RunReport:
     order: list[str] = field(default_factory=list)
 
 
-def _ready_batch(tasks: dict[str, Task], statuses: dict[str, str], remaining: set[str]) -> list[str]:
+def _ready_batch(
+    tasks: dict[str, Task], statuses: dict[str, str], remaining: set[str]
+) -> list[str]:
     ready = []
     for task_id in list(remaining):
         if statuses[task_id] not in ("PLANNED", "BLOCKED"):
@@ -105,7 +107,9 @@ def _run_one(con_factory, settings: Settings, task: Task) -> Result:
     return result
 
 
-def run_pipeline(settings: Settings, run_id: str, tasks: list[Task], max_workers: int = 4) -> RunReport:
+def run_pipeline(
+    settings: Settings, run_id: str, tasks: list[Task], max_workers: int = 4
+) -> RunReport:
     from alpha_squad.storage.db import get_connection, init_db
 
     # init_db (CREATE TABLE/ALTER TABLE DDL) must run exactly once, before any worker
@@ -163,7 +167,9 @@ def run_pipeline(settings: Settings, run_id: str, tasks: list[Task], max_workers
 
     final_con = con_factory()
     try:
-        overall_status = "FAILED" if any(s in ("FAILED", "REJECTED") for s in statuses.values()) else "COMPLETE"
+        overall_status = (
+            "FAILED" if any(s in ("FAILED", "REJECTED") for s in statuses.values()) else "COMPLETE"
+        )
         with _db_lock:
             record_milestone(
                 final_con,

@@ -3,7 +3,7 @@
 Living summary of what is implemented, validated, and outstanding. Updated at the end of every
 milestone. See `docs/TRACEABILITY.md` for the acceptance-criteria-level mapping.
 
-## Status: M12 complete, M13 next
+## Status: M13 complete — every milestone in the approved plan implemented, tested, and traced to ACCEPTANCE_CRITERIA.md (docs/TRACEABILITY.md)
 
 | Milestone | Status | Notes |
 |---|---|---|
@@ -15,12 +15,12 @@ milestone. See `docs/TRACEABILITY.md` for the acceptance-criteria-level mapping.
 | M5 Established-player ML | DONE | Position-specific Ridge/CatBoost/XGBoost + opportunity-only + team-environment-only + ensemble, both weekly (in-season) and season-level (preseason, apples-to-apples vs M4); team_week_stats/features extend the M3 panel; model_registry tracks version/validation; 70 offline + 12 network tests passing. One real evaluation-harness bug found and fixed (D19), affecting M4's reports too. |
 | M6 Uncertainty + calibration | DONE | Split-conformal p10/p25/median/p75/p90 + Monte Carlo top-12/24 probabilities on the M5 season-level CatBoost model; walk-forward 3-way split (train/calibrate/target) so calibration is genuinely out-of-sample; real measured coverage_10_90 mostly 0.72-0.90 (target 0.80) across 2019-2025/QB-RB-WR-TE — legitimately well-calibrated, not just plausible-looking; 82 offline + 13 network tests passing |
 | M7 Rookie/prospect intelligence | DONE | Draft capital + combine + prior-season landing-spot features (college production LIMITED — no verified ID bridge to cfbfastR exists, D20); CatBoost regression (rookie-year PPR) + classifier (top-24 breakout, Brier-scored) walk-forward by draft class; nearest-neighbor historical comps; 1,077 real rookie-seasons, 88 offline + 15 network tests passing; two real bugs found and fixed (combine height stored as "6-0" string, comps dtype crash) |
-| M8 Market + EDGE | DONE | market_snapshot extended to ro/do/rsf/dsf (2QB-aware); dynasty_values (681 real players, 97.6% identity coverage); EDGE (rank/points/probability edge, BUY/HOLD/SELL/WATCH) gated so a raw rank discrepancy alone can never produce BUY/SELL (D21); historical EDGE validation shows the real BUY cohort beat market-implied points in every scored season 2022-2025 (+25.7, +21.8, +16.9, +0.33 PPR); 102 offline + 18 network tests passing (both suites reran clean end-to-end after this milestone) |
+| M8 Market + EDGE | DONE | market_snapshot extended to ro/do/rsf/dsf (2QB-aware); dynasty_values (681 real players, 97.6% identity coverage); EDGE (rank/points/probability edge, BUY/HOLD/SELL/WATCH) gated so a raw rank discrepancy alone can never produce BUY/SELL (D21); historical EDGE validation shows the real BUY cohort beat market-implied points in 3 of 4 scored seasons 2022-2025 (recomputed in M13 after a data-correctness fix — see D28 — numbers below reflect the M13-era figures); 102 offline + 18 network tests passing (both suites reran clean end-to-end after this milestone) |
 | M9 Evidence engine | DONE | 4 real Strong-tier detectors (depth-chart move, injury self/teammate-opportunity, roster transaction, usage-share shift) on officially-sourced nflverse data; 33,311 real events across 2019-2025; bounded (±15%) evidence-adjusted weekly projections, never overwriting the base M5 prediction; wired as a real (mostly-neutral-in-practice) veto into M8's EDGE gate (D23); 123 offline + 21 network tests passing (verified via `pytest -m "not network"` / `-m network` directly, not estimated) |
 | M10 League decision engine | DONE | Real value-based-drafting replacement/scarcity derived from the league's own lineup config (verified: 2QB target league produces 20 real dedicated QB starters on real 2025 data, exactly 10 teams x 2 QB slots); draft/waiver/dynasty-trade recommendations with alternatives, roster fit, next-pick survival probability, and real evidence-driven value-spike bidding; the M7 rookie-prediction fallback was confirmed live against a real rookie-only player; 152 offline + 26 network tests passing |
 | M11 Agents/orchestrator | DONE | Pydantic Task/Result/Evidence/Prediction/Edge/Decision contracts mirroring AGENT_CONTRACTS.md; 9 real agents (thin wrappers around already-validated M1-M10 code, never an LLM call, D14); DAG orchestrator with real dependency resolution, retry/backoff, and genuinely concurrent scheduling (proven: two independent tasks start within 0.2s of each other) with DB-write serialization for correctness; disagreement protocol reusing real M8/M4-M5 data (296 real disagreements detected on 2024/2025 data, both positions always preserved); a real DuckDB concurrent-DDL bug was found and fixed via the orchestrator's own test suite (D26); 172 offline + 29 network tests passing |
 | M12 API + frontend | DONE | FastAPI over the real M1-M11 pipeline (8 routers, every field a direct projection of an already-persisted table or an M10 function call, zero parallel logic); React+Vite+TS SPA (6 real, live-data views); verified end-to-end in a real Chromium browser via Playwright against real persisted data, including the literal Gate 8 test (killed the API process, reloaded, confirmed a real fetch error rather than stale/fabricated content); 189 offline + 33 network tests passing |
-| M13 Hardening | NOT STARTED | |
+| M13 Hardening | DONE | correlated team-season Monte Carlo simulation (D8 deferred item, `models/simulation/`); found and fixed a real cross-cutting data bug affecting M4-M10 (postseason games silently pooled into every "season" aggregate since M3, D28) — rebuilt the affected tables and retrained every downstream model; found and fixed two simulation-design bugs (QB anchored to the wrong shared variable, a share-denominator mismatch, D29) plus a real RNG-reproducibility bug; fixed a stale README/Makefile and added CI (D30); wrote docs/TRACEABILITY.md; 204 offline + 37 network tests passing |
 
 ## M1 summary
 - Adapters: `nflverse` (15 datasets), `dynastyprocess` (4), `cfbfastr` (1), `ffopportunity` (1)
@@ -236,16 +236,24 @@ milestone. See `docs/TRACEABILITY.md` for the acceptance-criteria-level mapping.
   output in the live test.
 - Historical EDGE validation (`edge_validation_results`, real data, `rsf`, 2022-2025 — 2021 is
   WATCH-only since `rsf` history itself only starts in 2021, leaving no walk-forward training
-  season): the **BUY cohort beat market-implied points in every one of the 4 scored seasons**
-  (+25.7, +21.8, +16.9, +0.33 PPR mean outperformance; n=35-47/season) — a genuine, real,
-  out-of-sample signal that the gated EDGE finds real market inefficiency, not noise. The
-  **SELL cohort was mixed** (correct direction in 2022/2023: -46.8/-26.3; wrong direction in
-  2024/2025: +50.0/+26.4, small n=10-18/season) — reported honestly per CLAUDE.md, not
-  suppressed; a real limitation of a single-season model applied to SELL calls, worth revisiting
-  once M9's evidence engine and M10's league context add signal beyond the point projection.
-  Real example: Travis Kelce 2024 (`model_rank`=9 TE, `market_rank`=49 overall, `rank_edge`=+40,
-  `points_edge`=+129.3, BUY) — matches a well-documented real dynasty-market pattern where
-  2QB/superflex ADP over-drafts QBs and pushes elite TEs down the board.
+  season): **as of M13** (see D28 — these figures were recomputed after a postseason-game
+  contamination bug in the underlying weekly stats was found and fixed, and differ from the
+  M8-era numbers originally reported here) — the **BUY cohort beat market-implied points in 3
+  of the 4 scored seasons** (+19.77, +15.07, +13.98 PPR in 2022-2024; essentially flat at
+  -0.56 PPR in 2025; n=31-47/season), a genuine, real, out-of-sample signal that the gated EDGE
+  finds real market inefficiency in most seasons, not noise, though not a guarantee every
+  season. The **SELL cohort moved the same direction as the market's real mistake in 3 of 4
+  seasons** (-47.00/-21.92/-18.32 PPR in 2022-2024; wrong direction in 2025 at +36.91 PPR,
+  small n=8-21/season) — reported honestly per CLAUDE.md, not suppressed.
+  Real example: Tyler Higbee 2024 (`model_rank`=141 TE, `market_rank`=258 overall,
+  `rank_edge`=+117, `points_edge`=+52.6, BUY) — matches a well-documented real dynasty-market
+  pattern where 2QB/superflex ADP over-drafts QBs and pushes TE value down the board.
+  (The M8-era version of this paragraph used Travis Kelce 2024 as the illustrative example;
+  his real corrected 2024 season total dropped enough after the D28 fix — his 3 real 2024
+  playoff/Super Bowl games, previously double-counted into his "season" total, are real games
+  but not part of a regular-season projection — that his own EDGE call flipped from BUY to
+  SELL. Left in as a concrete illustration of the bug's real impact rather than quietly
+  swapped out.)
 - `evidence_score` is a disclosed neutral placeholder (0.5) pending M9 — reported in every
   `edge_snapshot` row and its `reasons` for transparency, but never used to gate BUY/SELL/HOLD/
   WATCH (D21). This is not a corner cut silently: the field exists with the exact contract
@@ -415,6 +423,92 @@ milestone. See `docs/TRACEABILITY.md` for the acceptance-criteria-level mapping.
   live network tests (33 total) exercise the same endpoints against a real, live-ingested
   dataset.
 
+## M13 summary
+- **Correlated team-season Monte Carlo simulation** (`models/simulation/`), the item deferred
+  since D8: `team_scores.py` derives real final team scores per (team, season, week) from
+  `pbp`'s running score columns; `correlated.py` samples one joint (plays, pass_rate,
+  team_points) draw per simulated trial from a team's real historical covariance, and derives
+  every rostered player's simulated weekly points from that *same* trial's draw via their real
+  opportunity share and efficiency — the shared-randomness structure genuine QB/WR1 correlation
+  requires, measured empirically rather than assumed. Wired into the CLI
+  (`alpha-squad simulate team-season`), persisting a summary row to `team_simulation_runs`.
+  Verified across all 32 real NFL teams x 3 seasons (2022-2024, 96 simulations):
+  `qb_wr1_correlation` positive in 100% of runs (mean 0.358, range 0.27-0.46).
+- **A real, cross-cutting data bug found and fixed (D28), not scoped to M13's own new code.**
+  Building the simulation surfaced that `player_week_stats`/`team_week_stats` (M3) had silently
+  included postseason NFL games in every "season" aggregate since the very first ingestion —
+  nflverse's weekly releases carry postseason weeks with no flag of their own, and the REG/POST
+  distinction that `games` already tracked (`game_type`) was never joined against when building
+  those two tables. This inflated `player_season_stats` (feeds M4's baselines), let a team's
+  trailing "last 3 games" feature silently pull in a playoff game, and inflated the season
+  totals used everywhere else — for every playoff team's players, in every one of the 11
+  ingested seasons (2015-2025), not just M13. Fixed at the source (an explicit
+  `game_type = 'REG'` join condition); the already-populated tables needed an explicit `DELETE`
+  (8,543 stale rows from `player_week_stats`, 266 from `team_week_stats` — an upsert alone
+  cannot remove keys a corrected query stops producing). Every downstream step was re-run
+  against the cleaned tables: `features build`, `evaluate baselines`, `train established`,
+  `train established-season`, `train uncertainty`, `train rookie`, `edge build`, `edge
+  validate` — all from already-cached local snapshots, no new network fetch needed. The
+  qualitative findings are unchanged (ML still beats baselines by a wide margin at every
+  position; EDGE's BUY cohort still beats market expectation in most seasons) but the exact
+  numbers shifted, most visibly EDGE's real Travis Kelce 2024 example flipping from BUY to SELL
+  once his 3 real playoff/Super Bowl games stopped being double-counted into his "season" total
+  (see the corrected M8 summary above). A regression test
+  (`tests/unit/test_features.py`) asserts a synthetic postseason game's stats never reach either
+  table.
+- **Two further simulation-design bugs, both caught by checking real numbers against known
+  real outcomes rather than trusting that the code ran without error (D29):** (1) the QB's
+  simulated output was anchored to `team_points` rather than `pass_attempts` — both come from
+  the same per-trial draw, but real per-team history shows `pass_attempts` and `team_points`
+  are only weakly (sometimes negatively) related, due to ordinary game-script effects, so the
+  QB rarely landed in the same "big passing game" trial as his own WR1; `qb_wr1_correlation`
+  measured -0.03 before the fix. Re-anchored the QB to `pass_attempts * (real points per pass
+  attempt)`, the same shared draw and functional form every pass-catcher already uses. (2) a
+  qualifying pass-catcher's target/carry share was computed against the sum of only *other
+  qualifying* pass-catchers' volume, then multiplied against the team's *full* simulated
+  volume — two mismatched denominators that inflated every qualifying player's output (caught
+  when a real 316-point 2024 WR1 season simulated to a 504-point mean). Fixed by normalizing
+  share against the team's real total volume (all positions, all players) instead.
+- **A real RNG-reproducibility bug, caught by writing the reproducibility test rather than
+  assuming it would pass:** `_pass_catcher_shares`/`_rb_shares` built their result from an
+  unordered SQL `GROUP BY`, and the simulation draws each player's noise sequentially from one
+  shared seeded `np.random.Generator` in dict-iteration order — DuckDB doesn't guarantee
+  `GROUP BY` row order without an explicit `ORDER BY`, so which named player got which slice of
+  the seeded random stream was query-plan-dependent, not code-dependent. Fixed with explicit
+  `ORDER BY`s; verified reproducible both offline (11 new unit tests,
+  `tests/unit/test_simulation.py`) and against real data (4 new live tests,
+  `tests/integration/test_simulation_live.py`; 3 repeated real calls against KC 2024 produce
+  bit-identical output to full float precision).
+- **Model reproducibility, previously asserted by a fixed `random_state=42` in every model
+  config but never actually tested:** added a new offline test
+  (`tests/unit/test_established_ml.py::TestReproducibility`) that runs the real
+  CatBoost/XGBoost/Ridge fit-predict path twice against identical synthetic data and diffs the
+  persisted `evaluation_results` — genuinely exercising the claim rather than trusting the
+  presence of a seed kwarg.
+- **Secrets audit:** grepped tracked source for hardcoded credential patterns (none found);
+  confirmed `.gitignore` excludes `.env`/`.env.*`/`data/`/`models/`/`*.duckdb`; confirmed
+  `.env.example` files contain only placeholders; confirmed no data files or unusually large
+  files are tracked in git.
+- **Data-refresh, historical-reconstruction, and ambiguous-ID coverage reviewed** against the
+  existing suite rather than assumed adequate: `tests/leakage/`'s `TestRebuildInvariance`
+  already covers data-refresh consistency; `as_of`/`scrape_date` filtering is already tested
+  across baselines/EDGE/league/leakage; `tests/unit/test_canonical_identity.py`'s
+  quarantine tests already prove an ambiguous mapping is never inserted (and therefore can
+  never silently join). Judged adequately covered rather than duplicated.
+- **README, Makefile, and CI had drifted from the real system (D30), found while writing
+  `docs/TRACEABILITY.md`:** `README.md` still documented the *original planning package*
+  ("put this package into the repository..."), not how to install/run/use the system that was
+  actually built — rewritten. `Makefile`'s `train`/`evaluate` targets referenced CLI flags that
+  never existed on the real Typer CLI (verified broken by running them, not assumed); fixed,
+  and added `market`/`edge validate`/`simulate`/`orchestrate` targets that had no Makefile
+  entry despite being real since M8/M11/M13. No CI existed; added
+  `.github/workflows/ci.yml` (lint + offline test suite on push/PR).
+- `docs/TRACEABILITY.md` written: every `ACCEPTANCE_CRITERIA.md` checkbox mapped to the
+  module/test/report that satisfies it, with every LIMITED/BLOCKED item's reason and fallback
+  named explicitly rather than silently omitted.
+- 15 new offline tests (204 total: 11 simulation + 3 REG/POST regression + 1 established-ML
+  reproducibility) and 4 new live network tests (37 total, `test_simulation_live.py`).
+
 ## Known limitations (see docs/DECISIONS.md for full reasoning)
 - Sleeper, FantasyPros API, CollegeFootballData, KeepTradeCut, ESPN direct APIs are
   `BLOCKED_BY_POLICY` in this environment. Verified open-data substitutes are wired in instead
@@ -433,8 +527,10 @@ milestone. See `docs/TRACEABILITY.md` for the acceptance-criteria-level mapping.
   dynasty-horizon EDGE using `dsf`/`dynasty_values.value_2qb` is deferred to M10's trade logic
   rather than conflated with a single-season points model (D21).
 - Historical EDGE validation: the BUY cohort's real out-of-sample outperformance is a strong,
-  consistent positive signal (4/4 scored seasons); the SELL cohort is a real, reported mixed
-  result (correct direction 2/4 seasons, small n) — not hidden, see M8 summary above.
+  consistent positive signal (3/4 scored seasons decisively positive, the 4th essentially flat)
+  and the SELL cohort moved the same direction as the market's real mistake in 3/4 seasons —
+  not hidden, and recomputed in M13 after fixing a data bug that had been inflating some of
+  these numbers; see M13 summary below and D28.
 - Evidence Medium/Weak tiers (beat writers, coach comments, social media, practice-participation
   narrative): LIMITED to a registered taxonomy + manual-entry path; no reachable news/social API
   in this environment (D5, D22). Only Strong-tier, officially-sourced structured signals have a

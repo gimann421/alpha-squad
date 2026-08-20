@@ -42,7 +42,10 @@ class TestContracts:
 
     def test_result_status_and_tests_round_trip(self):
         result = Result(
-            task_id="T1", agent="projection_ml", status="COMPLETE", confidence=0.87,
+            task_id="T1",
+            agent="projection_ml",
+            status="COMPLETE",
+            confidence=0.87,
             tests=[{"name": "no_future_leakage", "status": "PASS"}],
         )
         assert result.tests[0].name == "no_future_leakage"
@@ -68,7 +71,9 @@ class TestAgentState:
     def test_set_task_status_running_increments_attempt_and_sets_started_at(self, con):
         create_task(con, "run1", Task(task_id="T1", agent="a", objective="x"))
         set_task_status(con, "T1", "RUNNING", increment_attempt=True)
-        row = con.execute("SELECT status, attempt, started_at FROM agent_tasks WHERE task_id='T1'").fetchone()
+        row = con.execute(
+            "SELECT status, attempt, started_at FROM agent_tasks WHERE task_id='T1'"
+        ).fetchone()
         assert row[0] == "RUNNING"
         assert row[1] == 1
         assert row[2] is not None
@@ -83,7 +88,9 @@ class TestAgentState:
         create_task(con, "run1", Task(task_id="T1", agent="a", objective="x"))
         record_result(con, Result(task_id="T1", agent="a", status="COMPLETE", confidence=0.5))
         record_result(con, Result(task_id="T1", agent="a", status="FAILED", confidence=0.1))
-        row = con.execute("SELECT status, confidence FROM agent_results WHERE task_id='T1'").fetchone()
+        row = con.execute(
+            "SELECT status, confidence FROM agent_results WHERE task_id='T1'"
+        ).fetchone()
         assert row == ("FAILED", 0.1)
 
     def test_reconstruct_run_rebuilds_full_state_with_no_external_context(self, con):
@@ -91,7 +98,9 @@ class TestAgentState:
         DB state."""
         create_task(con, "run1", Task(task_id="T1", agent="a", objective="do x", depends_on=["T0"]))
         set_task_status(con, "T1", "RUNNING", increment_attempt=True)
-        record_result(con, Result(task_id="T1", agent="a", status="COMPLETE", confidence=0.9, findings=["ok"]))
+        record_result(
+            con, Result(task_id="T1", agent="a", status="COMPLETE", confidence=0.9, findings=["ok"])
+        )
         set_task_status(con, "T1", "COMPLETE")
 
         rebuilt = reconstruct_run(con, "run1")
@@ -131,7 +140,10 @@ class TestAgentState:
 
 def _stub_ok(name):
     def fn(con, settings, task):
-        return Result(task_id=task.task_id, agent=task.agent, status="COMPLETE", findings=[f"{name} ran"])
+        return Result(
+            task_id=task.task_id, agent=task.agent, status="COMPLETE", findings=[f"{name} ran"]
+        )
+
     return fn
 
 
@@ -146,7 +158,10 @@ def _stub_fail_then_ok():
         calls["n"] += 1
         if calls["n"] < 2:
             raise RuntimeError("transient")
-        return Result(task_id=task.task_id, agent=task.agent, status="COMPLETE", findings=["recovered"])
+        return Result(
+            task_id=task.task_id, agent=task.agent, status="COMPLETE", findings=["recovered"]
+        )
+
     return fn
 
 
@@ -173,6 +188,7 @@ class TestOrchestrator:
                 with order_lock:
                     order.append(task.task_id)
                 return Result(task_id=task.task_id, agent=task.agent, status="COMPLETE")
+
             return fn
 
         monkeypatch.setitem(registry_module.AGENT_REGISTRY, "agent_a", make_stub("a"))
@@ -296,9 +312,13 @@ class TestDisagreementProtocol:
 
     def test_resolve_and_record_preserves_both_positions(self, con):
         disagreement = {
-            "disagreement_type": "market", "subject": "p1", "season": 2025,
-            "majority_position": "model", "majority_value": 5.0,
-            "minority_position": "market", "minority_value": 50.0,
+            "disagreement_type": "market",
+            "subject": "p1",
+            "season": 2025,
+            "majority_position": "model",
+            "majority_value": 5.0,
+            "minority_position": "market",
+            "minority_value": 50.0,
             "critique": "test critique",
         }
         disagreement_id = resolve_and_record(con, "run1", disagreement)

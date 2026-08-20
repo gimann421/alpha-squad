@@ -265,12 +265,18 @@ at WATCH; near-zero edges are HOLD (explicit "market and model agree," distinct 
 
 **Result, honestly reported either way (real data, `rsf`, 2022-2025 — 2021 has no training
 season yet since `rsf` history itself starts in 2021):** the BUY cohort's mean outperformance
-vs. market-implied points was positive in all 4 scored seasons (+25.7, +21.8, +16.9, +0.33 PPR;
-n=35-47/season) — a genuine out-of-sample signal that the gated EDGE is finding real,
-actionable market inefficiency, not noise. The SELL cohort was mixed: correct direction
-(negative outperformance, i.e. the sold-off player really did underperform market expectation)
-in 2022/2023, wrong direction in 2024/2025 (small n=10-18/season). This is reported as-is in
-`docs/PROJECT_STATE.md`'s M8 summary, not suppressed or cherry-picked.
+vs. market-implied points was positive in 3 of 4 scored seasons (+19.77, +15.07, +13.98 PPR in
+2022-2024; n=36-47/season) and essentially flat in the most recent (-0.56 PPR, 2025, n=31) — a
+genuine out-of-sample signal that the gated EDGE finds real, actionable market inefficiency in
+most seasons, not a guaranteed edge every year. The SELL cohort moved the same direction as the
+market's own eventual mistake (negative outperformance, i.e. the sold-off player really did
+underperform market expectation) in 2022/2023/2024 (-47.00, -21.92, -18.32 PPR), and the wrong
+direction in 2025 (+36.91 PPR, n=12). This is reported as-is in `docs/PROJECT_STATE.md`'s M8
+summary, not suppressed or cherry-picked.
+(Figures recomputed in M13 after fixing the postseason-game contamination bug described in
+D28 below; the direction and general strength of the finding are unchanged from the original
+M8-era numbers, but every per-season figure shifted slightly and the previously-reported
+4-for-4 BUY sweep is now honestly 3-for-4. See D28 for why.)
 
 ## D22 — Evidence engine v1 implements only PRODUCT_SPEC.md's Strong tier, with real detectors on officially-sourced structured data; Medium/Weak are registered vocabulary for a manual-entry path
 Consistent with D5 (no news/social API is reachable in this environment): PRODUCT_SPEC.md's
@@ -471,3 +477,149 @@ the source of fantasy truth." Agents in `src/alpha_squad/agents/` are typed Pyth
 functions/classes producing `AGENT_CONTRACTS.md`-shaped results, orchestrated by a DAG scheduler.
 No agent calls an LLM to produce a projection, ranking, or recommendation — all fantasy-relevant
 output comes from the deterministic model/market/league modules those agents wrap.
+
+## D28 — `player_week_stats`/`team_week_stats` silently mixed postseason games into every "season" aggregate since M3; fixed at the source and the affected tables rebuilt and retrained
+Found while building M13's team-season simulation: KC's simulated 2024 season had a rookie WR
+(Xavier Worthy) drastically outscoring Patrick Mahomes, traced back to his *real* 2024 season
+total including 3 playoff games plus a Super Bowl outlier performance, extrapolated as if it
+were a normal-game rate. `nflverse`'s weekly stat releases (`stats_player_week`,
+`stats_team_week`) include postseason weeks with no flag of their own; `games` (built from
+`pbp`, features/games.py) already carries the real `season_type` field as `game_type`, but
+neither `features/player.py::build_player_week_stats` nor `features/team.py::build_team_week_stats`
+filtered on it before joining. Every "season" aggregate built on top —
+`player_season_stats` (feeds M4's previous-year/weighted-2yr/per-game-rate baselines),
+`player_week_features`'/`team_week_features`'s trailing "last 3 games" windows (which could
+silently pull a playoff game in as one of a team's "last 3" games heading into the next
+season) — inherited the contamination for every team that made the playoffs, in every ingested
+season (2015-2025), not just M13's new code.
+
+**Fix:** `build_player_week_stats` and `build_team_week_stats` now join `games` with
+`AND g.game_type = 'REG'`; `models/simulation/team_scores.py::build_team_week_points` filters
+`pbp`'s own `season_type = 'REG'` directly. This stops future ingestion from reintroducing the
+problem. The already-populated tables needed an explicit `DELETE` (an `INSERT ... ON CONFLICT
+DO UPDATE` upsert does not remove keys the new query stops producing) — removed 8,543 stale
+rows from `player_week_stats`, 266 from `team_week_stats`, matching row-for-row the count
+`features build`'s corrected query itself produced.
+
+**Blast radius and what was redone:** this table feeds M4 (baselines), M5 (established ML
+features and targets), M6 (uncertainty/calibration), M7 (rookie features depend on
+`team_week_stats`), M8 (EDGE, via `player_season_stats`), and M13. All of `alpha-squad features
+build`, `evaluate baselines`, `train established`, `train established-season`, `train
+uncertainty`, `train rookie`, `edge build`, and `edge validate` were re-run against the cleaned
+tables (no new network fetch needed — snapshots were already cached locally). Model structure
+and the qualitative findings (ML beats baselines by a wide margin at every position; EDGE's BUY
+cohort beats market expectation in most seasons) are unchanged; the exact numbers shifted
+slightly. D21's EDGE validation paragraph above was updated with the corrected figures rather
+than left stale. `docs/TRACEABILITY.md` and `reports/*.md` reflect the post-fix numbers.
+
+A regression test (`tests/unit/test_features.py::test_build_player_week_stats_excludes_postseason_games`
+and the team-stats equivalent) asserts a synthetic postseason game's stats never reach
+`player_week_stats`/`team_week_stats`, so this cannot silently regress.
+
+## D29 — Team-season Monte Carlo: the QB is anchored to the same `pass_attempts` draw as his pass-catchers, and every position's target/carry share is normalized against the team's real total volume, not the sum of only the "qualifying" players
+Verifying M13's `models/simulation/correlated.py` (docs/DECISIONS.md D8's deferred simulation
+item) against real data surfaced two further, unrelated bugs beyond D28's postseason
+contamination — both caught by checking `qb_wr1_correlation` and player-level season totals
+against known real outcomes rather than trusting that the code ran without error.
+
+**Bug 1 — QB anchored to the wrong shared variable.** The first version computed the
+QB's simulated weekly points as `team_points * (real fantasy points per team point)`, while
+WR/TE/RB were `pass_attempts * share * efficiency`. Both `team_points` and `pass_attempts` come
+from the same per-trial joint draw, so this should still correlate the QB with his
+pass-catchers — but real per-team history (checked directly: KC pre-2024,
+`corr(pass_attempts, team_points) = -0.09`) shows those two dimensions are only weakly (and
+sometimes negatively) related, because of ordinary game-script effects — a team already
+winning big tends to run more and pass less. The result was measured, not assumed:
+`qb_wr1_correlation` came back at -0.03, essentially zero, the opposite of the property the
+module exists to demonstrate. Real QB/WR1 fantasy correlation comes specifically from sharing
+the same passing plays (a TD pass scores both players from the same snap), so the QB is now
+anchored to `pass_attempts * (real fantasy points per pass attempt)` — the same shared draw
+every pass-catcher already uses, and the same functional form used for every other position.
+Verified afterward across all 32 teams x 3 seasons (2022-2024, 96 simulations):
+`qb_wr1_correlation` positive in 100% of runs (mean 0.358, range 0.27-0.46, std 0.038) — a
+real, empirically-measured result, not a hardcoded one.
+
+**Bug 2 — target/carry share's denominator didn't match what it was later multiplied
+against.** `_pass_catcher_shares` computed each qualifying WR/TE's share as
+`player_targets / sum(qualifying WR/TEs' targets)`, then multiplied that share by
+`pass_attempts` — the team's *total* simulated pass volume, which also covers targets to RBs
+and to receivers below the `MIN_PLAYER_WEEKS` qualification floor. Caught by a real-data sanity
+check: DET's real 2024 WR1 (Amon-Ra St. Brown, a real, elite 316 PPR-point season) simulated to
+a 504-point mean — traced to a share denominator (404, sum of qualifying WR/TE targets only)
+roughly two-thirds the size of the team's real total targets (522), inflating every qualifying
+pass-catcher's implied volume by about the same ratio. Fixed by computing share against the
+team's real total targets that season (all positions, all players) — the same basis
+`pass_attempts` represents — mirrored for `_rb_shares` against team total carries. Re-checked
+against the same DET case: 504 -> 395 (residual gap from using the prior season's environment
+distribution as the volume base and the lognormal noise term's mean-inflation, both intentional
+design choices, not a further bug).
+
+**Also fixed in the same pass:** `team_week_points` (D8/M13's own new table, built by
+`models/simulation/team_scores.py`) had only ever been built for [2023, 2024] as an initial
+smoke-test range, so `_team_environment_history`'s `season < before_season` filter silently
+starved every simulated season except 2024 of any real history at all (`simulate_team_season`
+returned `None` for e.g. SF 2023 purely for this reason, not from a genuine data gap — SF had
+8 real prior seasons in `team_week_stats`, just none yet in `team_week_points`). Backfilled to
+the full ingested 2015-2025 range to match `team_week_stats`/`player_week_stats`.
+
+**Bug 3 — the seeded RNG stream was not actually reproducible, caught by writing the
+reproducibility test rather than assuming it would pass.**
+`tests/unit/test_simulation.py::test_same_seed_is_bit_for_bit_reproducible` initially failed:
+two calls to `simulate_team_season` with an identical `seed` produced identical
+`mean_team_points` and identical QB output, but slightly different WR1/WR2 output (and
+therefore a different `qb_wr1_correlation`) between runs. Root cause: `_pass_catcher_shares`/
+`_rb_shares` return a `dict` built from a SQL `GROUP BY` query with no `ORDER BY`, and
+`simulate_team_season` iterates that dict, drawing each player's `rng.lognormal(...)` noise
+sequentially from one shared `np.random.Generator` — DuckDB's `GROUP BY` output order is not
+guaranteed absent an explicit `ORDER BY`, so which named player consumed which slice of the
+seeded RNG stream was query-plan-dependent, not code-dependent. Fixed with an explicit
+`ORDER BY player_id` on both queries, plus a `, s.player_id` tiebreaker added to
+`_starting_qb`'s existing `ORDER BY count(*) DESC` for the same reason (two QBs tied on real
+start count would otherwise be a second source of the same class of bug). Verified after the
+fix: 3 repeated real calls against KC 2024 (`seed=42`) produce bit-identical
+`mean_team_points`, `qb_wr1_correlation`, and every player's `mean_points` to full float
+precision.
+
+## D30 — README, Makefile, and CI had drifted from the real CLI/system as it was built out; fixed while writing docs/TRACEABILITY.md rather than documenting the drift as a limitation
+Writing `docs/TRACEABILITY.md`'s "Engineering quality" section against
+`ACCEPTANCE_CRITERIA.md`'s "README documents setup and workflows" / "Tests run
+automatically/continuously" checkboxes surfaced three real, independently-discovered gaps —
+none related to D28/D29's data bugs, all found by checking the actual claim rather than
+assuming it still held from M0:
+
+1. **`README.md` was the original planning package's own meta-README** ("This directory is
+   the definitive implementation package...", "Recommended startup: 1. Put this package into
+   the repository...") — accurate when M0 started from an empty repo, but never replaced once
+   Alpha Squad was actually built, so it documented how to *hand this package to a Claude Code
+   session*, not how to install, run, or use the system that session built. Rewritten to
+   document the real thing: `make install`/`test`/`lint`, the real pipeline order
+   (`ingest`→`identity`→`features`→`market`→`train`→`evaluate`→`edge`→`simulate`→`orchestrate`→
+   `serve`), the real CLI tree, and a map of `docs/*.md`.
+2. **`Makefile`'s `train` and `evaluate` targets were broken** — `alpha-squad train
+   --walk-forward` and `alpha-squad evaluate --compare-baselines` were sketched in the
+   original implementation plan's verification-command list before the CLI existed, and were
+   never updated once M4/M5 built the real subcommands (`train established-season`, `train
+   uncertainty`, `train rookie`, `evaluate baselines`). Verified broken by literally running
+   them (`No such option: --walk-forward`) rather than assuming; every replacement command in
+   the fixed Makefile was individually run and verified working during this same milestone's
+   retrain pass. Added `market`, `edge validate`, `simulate`, and `orchestrate` targets, which
+   had no Makefile entry at all despite being real, working CLI surfaces since M8/M11/M13.
+3. **No CI existed** — only local `make test`/`make lint`. Added
+   `.github/workflows/ci.yml`: checkout, `uv python install 3.12`, `make install`, `make
+   lint`, `make test` (offline suite only — network-marked tests need real external source
+   access this runner won't have, consistent with `pytest`'s own default marker exclusion).
+   Validated the YAML directly (`yaml.safe_load`) rather than assuming it was well-formed;
+   caught and fixed the classic YAML 1.1 "Norway problem" in the process (`on:` unquoted
+   parses as the boolean `true`, not the string key `"on"` — GitHub's own workflow parser
+   special-cases this and it would likely have worked unquoted regardless, but `"on":` removes
+   the ambiguity at zero cost rather than relying on that).
+
+Discovered a fourth, related gap while validating the new CI job would actually pass: `make
+lint` runs both `ruff check` (clean) and `ruff format --check` — the latter failed on 31 files,
+almost all pre-existing (from M8-M12, not touched this session), so this drift predates M13 and
+had simply never been caught because no CI ever ran `make lint` end to end and `ruff format
+--check` was never re-verified after `ruff check` alone came back clean. Fixed by running `ruff
+format src tests`; diffed the result to confirm every change was pure line-wrapping/whitespace
+(spot-checked `api/routers/league.py`'s largest diff) and re-ran the full offline suite (still
+204 passed) to confirm no behavior changed. Both `ruff check` and `ruff format --check` are now
+clean, matching what `docs/TRACEABILITY.md`'s "Ruff/static checks pass" row claims.

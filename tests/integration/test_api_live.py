@@ -37,7 +37,11 @@ def client(settings):
     nflverse = NflverseSource(settings)
     dp = DynastyProcessSource(settings)
 
-    for snap in [nflverse.fetch("players"), nflverse.fetch("draft_picks"), nflverse.fetch("combine")]:
+    for snap in [
+        nflverse.fetch("players"),
+        nflverse.fetch("draft_picks"),
+        nflverse.fetch("combine"),
+    ]:
         record_snapshot(con, snap)
     record_snapshot(con, dp.fetch("player_ids"))
     build_identity(con, settings)

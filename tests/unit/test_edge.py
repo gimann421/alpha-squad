@@ -101,7 +101,9 @@ class TestClassifyActionGatingRule:
 
     def test_evidence_score_defaults_to_neutral_and_does_not_change_prior_behavior(self):
         with_default, _ = classify_action(
-            rank_edge=RANK_EDGE_THRESHOLD + 50, points_edge=POINTS_EDGE_THRESHOLD + 50, confidence=0.95
+            rank_edge=RANK_EDGE_THRESHOLD + 50,
+            points_edge=POINTS_EDGE_THRESHOLD + 50,
+            confidence=0.95,
         )
         explicit_neutral, _ = classify_action(
             rank_edge=RANK_EDGE_THRESHOLD + 50,
@@ -184,8 +186,12 @@ class TestComputeEdgesForSeason:
             7,
             [("underrated_wr", "WR", 80.0), ("agree_qb", "QB", 5.0)],
         )
-        _seed_prediction(con, "underrated_wr", 2021, "WR", point_pred=250.0, top24_prob=0.6, confidence=0.9)
-        _seed_prediction(con, "agree_qb", 2021, "QB", point_pred=50.0, top24_prob=0.05, confidence=0.9)
+        _seed_prediction(
+            con, "underrated_wr", 2021, "WR", point_pred=250.0, top24_prob=0.6, confidence=0.9
+        )
+        _seed_prediction(
+            con, "agree_qb", 2021, "QB", point_pred=50.0, top24_prob=0.05, confidence=0.9
+        )
 
         records = compute_edges_for_season(con, 2021, ecr_type="rsf")
         by_player = {r.player_id: r for r in records}
@@ -205,7 +211,9 @@ class TestComputeEdgesForSeason:
 
     def test_no_overlap_between_model_and_market_returns_empty(self, con):
         _seed_market(con, "rsf", 2021, 7, [("only_market", "WR", 10.0)])
-        _seed_prediction(con, "only_model", 2021, "WR", point_pred=100.0, top24_prob=0.5, confidence=0.8)
+        _seed_prediction(
+            con, "only_model", 2021, "WR", point_pred=100.0, top24_prob=0.5, confidence=0.8
+        )
         assert compute_edges_for_season(con, 2021, ecr_type="rsf") == []
 
 
@@ -224,7 +232,9 @@ class TestStoreAndBuildEdge:
         _seed_prediction(con, "p1", 2021, "WR", point_pred=100.0, top24_prob=0.5, confidence=0.8)
         records = compute_edges_for_season(con, 2021, ecr_type="rsf")
         store_edges(con, records)
-        raw = con.execute("SELECT reasons_json FROM edge_snapshot WHERE player_id='p1'").fetchone()[0]
+        raw = con.execute("SELECT reasons_json FROM edge_snapshot WHERE player_id='p1'").fetchone()[
+            0
+        ]
         reasons = json.loads(raw)
         assert isinstance(reasons, list) and reasons
         assert any("evidence_score" in r for r in reasons)
@@ -238,12 +248,8 @@ class TestStoreAndBuildEdge:
 class TestEvaluateHistoricalEdge:
     def test_mean_outperformance_matches_hand_computation(self, con):
         # Training season 2020 for the points curve (needs >= MIN_CURVE_TRAINING_ROWS).
-        training_market = [
-            (f"t{i}", "WR", float(i + 1)) for i in range(MIN_CURVE_TRAINING_ROWS)
-        ]
-        training_stats = [
-            (f"t{i}", "WR", 400.0 - i * 20) for i in range(MIN_CURVE_TRAINING_ROWS)
-        ]
+        training_market = [(f"t{i}", "WR", float(i + 1)) for i in range(MIN_CURVE_TRAINING_ROWS)]
+        training_stats = [(f"t{i}", "WR", 400.0 - i * 20) for i in range(MIN_CURVE_TRAINING_ROWS)]
         _seed_market(con, "rsf", 2020, 7, training_market)
         _seed_season_stats(con, 2020, training_stats)
 

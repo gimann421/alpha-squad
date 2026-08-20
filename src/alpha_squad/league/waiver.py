@@ -37,7 +37,9 @@ class WaiverRecommendation:
     reasons: list[str]
 
 
-def _value_spike_probability(con: duckdb.DuckDBPyConnection, player_id: str, season: int, week: int) -> float:
+def _value_spike_probability(
+    con: duckdb.DuckDBPyConnection, player_id: str, season: int, week: int
+) -> float:
     """0-1 read on recent structured evidence (M9) as a proxy for "is this player's value
     about to spike": maps the signed, bounded aggregate_evidence score ([-1, 1], recent-week
     evidence only) onto 0-1. 0.5 = no recent evidence either way, not a penalty."""
@@ -91,8 +93,7 @@ def recommend_waiver_pickup(
         1.0,
         max(
             0.0,
-            (scarcity_normalized.get(position, 0.5) * 0.6)
-            + ((meaningful_role_prob or 0.0) * 0.4),
+            (scarcity_normalized.get(position, 0.5) * 0.6) + ((meaningful_role_prob or 0.0) * 0.4),
         ),
     )
 
@@ -105,8 +106,10 @@ def recommend_waiver_pickup(
     # restatement of the preseason baseline. spike_prob=0.5 (no recent evidence) contributes
     # nothing; a confirmed spike (spike_prob near 1.0) contributes up to half of `scale`.
     spike_contribution = max(0.0, spike_prob - 0.5) * 2.0 * (scale * 0.5)
-    bid_signal = (max(0.0, marginal_value) + spike_contribution) * fit_mult * (
-        0.5 + 0.5 * competing_bid_likelihood
+    bid_signal = (
+        (max(0.0, marginal_value) + spike_contribution)
+        * fit_mult
+        * (0.5 + 0.5 * competing_bid_likelihood)
     )
     bid_fraction = min(MAX_BID_FRACTION_OF_BUDGET, bid_signal / (scale * 2))
     recommended_bid = round(league.faab_budget * bid_fraction, 2)

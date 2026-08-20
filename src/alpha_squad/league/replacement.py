@@ -58,7 +58,8 @@ def compute_league_starters(
     flex_starter_set = set(flex_starters)
 
     replacement_pool = {
-        pos: [p for p in remaining_by_pos[pos] if p not in flex_starter_set] for pos in all_positions
+        pos: [p for p in remaining_by_pos[pos] if p not in flex_starter_set]
+        for pos in all_positions
     }
 
     starters = set(flex_starters)
@@ -94,9 +95,7 @@ def positional_scarcity(
     levels = replacement_level(league, projections, positions)
     scarcity = {}
     for pos, dedicated_list in result["dedicated_starters"].items():
-        pos_flex_starters = [
-            p for p in result["flex_starters"] if positions.get(p) == pos
-        ]
+        pos_flex_starters = [p for p in result["flex_starters"] if positions.get(p) == pos]
         pos_starters = dedicated_list + pos_flex_starters
         if not pos_starters:
             scarcity[pos] = 0.0
@@ -115,9 +114,7 @@ def marginal_value_over_replacement(
     higher-projected player at a deep one."""
     levels = replacement_level(league, projections, positions)
     return {
-        p: projections[p] - levels[positions[p]]
-        for p in projections
-        if positions.get(p) in levels
+        p: projections[p] - levels[positions[p]] for p in projections if positions.get(p) in levels
     }
 
 

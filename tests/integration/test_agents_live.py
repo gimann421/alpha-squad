@@ -48,7 +48,12 @@ def test_real_data_engineering_and_identity_agents_run_through_the_orchestrator(
                 ]
             },
         ),
-        Task(task_id="identity", agent="player_identity", objective="build identity", depends_on=["data"]),
+        Task(
+            task_id="identity",
+            agent="player_identity",
+            objective="build identity",
+            depends_on=["data"],
+        ),
     ]
     report = run_pipeline(settings, "live-run-1", tasks)
     assert report.results["data"].status == "COMPLETE"
@@ -74,7 +79,9 @@ def test_unregistered_dataset_is_reported_as_a_finding_not_a_crash(settings):
             task_id="data",
             agent="data_engineering",
             objective="ingest a mix of real and bogus datasets",
-            params={"datasets": [["nflverse", "players", {}], ["nflverse", "not_a_real_dataset", {}]]},
+            params={
+                "datasets": [["nflverse", "players", {}], ["nflverse", "not_a_real_dataset", {}]]
+            },
         )
     ]
     report = run_pipeline(settings, "live-run-2", tasks)
@@ -89,7 +96,11 @@ def test_real_disagreements_are_detected_and_resolved_preserving_minority(settin
     nflverse = NflverseSource(settings)
     dp = DynastyProcessSource(settings)
 
-    for snap in [nflverse.fetch("players"), nflverse.fetch("draft_picks"), nflverse.fetch("combine")]:
+    for snap in [
+        nflverse.fetch("players"),
+        nflverse.fetch("draft_picks"),
+        nflverse.fetch("combine"),
+    ]:
         record_snapshot(con, snap)
     record_snapshot(con, dp.fetch("player_ids"))
     build_identity(con, settings)
@@ -116,7 +127,9 @@ def test_real_disagreements_are_detected_and_resolved_preserving_minority(settin
         model_disagreements.extend(detect_baseline_vs_ml_disagreements(con, 2025, position))
 
     all_disagreements = market_disagreements + model_disagreements
-    assert all_disagreements, "expected at least one real disagreement across a full season's real data"
+    assert all_disagreements, (
+        "expected at least one real disagreement across a full season's real data"
+    )
 
     for d in all_disagreements:
         disagreement_id = resolve_and_record(con, "live-run-3", d)

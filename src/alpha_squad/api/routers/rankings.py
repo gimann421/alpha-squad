@@ -39,9 +39,21 @@ def get_rankings(
     ).fetchall()
     return [
         RankingRow(
-            prediction_id=r[0], player_id=r[1], display_name=r[2], position=r[3], season=r[4],
-            point_prediction=r[5], p10=r[6], p25=r[7], median=r[8], p75=r[9], p90=r[10],
-            top12_prob=r[11], top24_prob=r[12], confidence=r[13], model_version=r[14],
+            prediction_id=r[0],
+            player_id=r[1],
+            display_name=r[2],
+            position=r[3],
+            season=r[4],
+            point_prediction=r[5],
+            p10=r[6],
+            p25=r[7],
+            median=r[8],
+            p75=r[9],
+            p90=r[10],
+            top12_prob=r[11],
+            top24_prob=r[12],
+            confidence=r[13],
+            model_version=r[14],
             feature_version=r[15],
         )
         for r in rows

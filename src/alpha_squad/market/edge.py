@@ -73,9 +73,9 @@ class EdgeBuildReport:
 
 
 def _edge_id(player_id: str, season: int, ecr_type: str, model_version: str) -> str:
-    digest = hashlib.md5(
-        f"{player_id}:{season}:{ecr_type}:{model_version}".encode()
-    ).hexdigest()[:16]
+    digest = hashlib.md5(f"{player_id}:{season}:{ecr_type}:{model_version}".encode()).hexdigest()[
+        :16
+    ]
     return f"edge_{digest}"
 
 
@@ -289,7 +289,9 @@ def compute_edges_for_season(
         return []
 
     # The model's own full ranking that season (not narrowed to the market-covered subset).
-    model_overall_order = sorted(model_by_player, key=lambda p: -model_by_player[p]["point_prediction"])
+    model_overall_order = sorted(
+        model_by_player, key=lambda p: -model_by_player[p]["point_prediction"]
+    )
     model_overall_rank = {p: i + 1 for i, p in enumerate(model_overall_order)}
 
     # The market's own within-position rank, from the full preseason market set for this
@@ -331,10 +333,14 @@ def compute_edges_for_season(
             market_prob = float(prob_curve.predict([market_position_rank[player_id]])[0])
             prob_edge = model["top24_prob"] - market_prob
 
-        tentative_sign = 0 if points_edge is None else (1 if points_edge > 0 else (-1 if points_edge < 0 else 0))
+        tentative_sign = (
+            0 if points_edge is None else (1 if points_edge > 0 else (-1 if points_edge < 0 else 0))
+        )
         evidence_score = evidence_score_for_action(con, player_id, target_season, tentative_sign)
 
-        action, reasons = classify_action(rank_edge, points_edge, model["confidence"], evidence_score)
+        action, reasons = classify_action(
+            rank_edge, points_edge, model["confidence"], evidence_score
+        )
         reasons.append(f"evidence_score {evidence_score:.2f} (0.5 = no recorded evidence yet)")
 
         records.append(
@@ -411,7 +417,9 @@ def run_edge_build(
     for season in range(season_start, season_end + 1):
         records = compute_edges_for_season(con, season, ecr_type)
         if not records:
-            report.skipped.append(f"{season}: no overlapping model+market data for ecr_type={ecr_type}")
+            report.skipped.append(
+                f"{season}: no overlapping model+market data for ecr_type={ecr_type}"
+            )
             continue
         report.edges_written += store_edges(con, records)
         report.seasons.append(season)
@@ -519,7 +527,14 @@ def write_edge_validation_report(con: duckdb.DuckDBPyConnection, path: Path) -> 
         """
     ).fetchall()
 
-    headers = ["season", "action", "n", "mean_actual_pts", "mean_market_implied_pts", "mean_outperformance"]
+    headers = [
+        "season",
+        "action",
+        "n",
+        "mean_actual_pts",
+        "mean_market_implied_pts",
+        "mean_outperformance",
+    ]
     lines = [
         "# Historical EDGE Validation",
         "",

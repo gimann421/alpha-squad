@@ -85,14 +85,28 @@ class TestRecordEvent:
 class TestAggregateEvidence:
     def test_sums_strength_times_direction_across_events(self, con):
         record_event(
-            con, player_id="p1", season=2024, week=5, event_date="2024-10-01",
-            event_type="depth_chart_promotion", source="t", direction=1,
-            structured_impact={}, summary="promo",
+            con,
+            player_id="p1",
+            season=2024,
+            week=5,
+            event_date="2024-10-01",
+            event_type="depth_chart_promotion",
+            source="t",
+            direction=1,
+            structured_impact={},
+            summary="promo",
         )
         record_event(
-            con, player_id="p1", season=2024, week=5, event_date="2024-10-01",
-            event_type="injury_own_status", source="t", direction=-1,
-            structured_impact={}, summary="questionable",
+            con,
+            player_id="p1",
+            season=2024,
+            week=5,
+            event_date="2024-10-01",
+            event_type="injury_own_status",
+            source="t",
+            direction=-1,
+            structured_impact={},
+            summary="questionable",
         )
         # STRONG=0.9 each: +0.9 (promotion) + (-0.9) (own injury) nets to 0.0.
         score, detail = aggregate_evidence(con, "p1", 2024, 5)
@@ -102,9 +116,16 @@ class TestAggregateEvidence:
     def test_clips_to_bounded_range(self, con):
         for i in range(5):
             record_event(
-                con, player_id="p1", season=2024, week=5, event_date="2024-10-01",
-                event_type="depth_chart_promotion", source="t", direction=1,
-                structured_impact={"i": i}, summary=f"promo{i}",
+                con,
+                player_id="p1",
+                season=2024,
+                week=5,
+                event_date="2024-10-01",
+                event_type="depth_chart_promotion",
+                source="t",
+                direction=1,
+                structured_impact={"i": i},
+                summary=f"promo{i}",
             )
         score, _ = aggregate_evidence(con, "p1", 2024, 5)
         assert score == pytest.approx(1.0)
@@ -136,9 +157,16 @@ class TestApplyEvidenceAdjustment:
         )
         for i in range(10):
             record_event(
-                con, player_id="p1", season=2024, week=5, event_date="2024-10-01",
-                event_type="depth_chart_promotion", source="t", direction=1,
-                structured_impact={"i": i}, summary=f"promo{i}",
+                con,
+                player_id="p1",
+                season=2024,
+                week=5,
+                event_date="2024-10-01",
+                event_type="depth_chart_promotion",
+                source="t",
+                direction=1,
+                structured_impact={"i": i},
+                summary=f"promo{i}",
             )
         delta = apply_evidence_adjustment(con, "p1", 2024, 5)
         assert delta.adjustment_pct == pytest.approx(MAX_ADJUSTMENT_PCT)
@@ -151,9 +179,16 @@ class TestApplyEvidenceAdjustment:
             "VALUES ('p1', 2024, 5, 'ml_catboost', 'WR', 10.0, current_timestamp)"
         )
         record_event(
-            con, player_id="p1", season=2024, week=5, event_date="2024-10-01",
-            event_type="injury_own_status", source="t", direction=-1,
-            structured_impact={}, summary="questionable",
+            con,
+            player_id="p1",
+            season=2024,
+            week=5,
+            event_date="2024-10-01",
+            event_type="injury_own_status",
+            source="t",
+            direction=-1,
+            structured_impact={},
+            summary="questionable",
         )
         delta = apply_evidence_adjustment(con, "p1", 2024, 5)
         assert delta.adjusted_value < 10.0
@@ -168,9 +203,16 @@ class TestApplyEvidenceAdjustment:
         )
         for i in range(10):
             record_event(
-                con, player_id="p1", season=2024, week=5, event_date="2024-10-01",
-                event_type="depth_chart_promotion", source="t", direction=1,
-                structured_impact={"i": i}, summary=f"promo{i}",
+                con,
+                player_id="p1",
+                season=2024,
+                week=5,
+                event_date="2024-10-01",
+                event_type="depth_chart_promotion",
+                source="t",
+                direction=1,
+                structured_impact={"i": i},
+                summary=f"promo{i}",
             )
         apply_evidence_adjustment(con, "p1", 2024, 5)
         base_after = con.execute(
@@ -184,9 +226,16 @@ class TestApplyEvidenceAdjustment:
             "VALUES ('p1', 2024, 5, 'ml_catboost', 'WR', 10.0, current_timestamp)"
         )
         event_id = record_event(
-            con, player_id="p1", season=2024, week=5, event_date="2024-10-01",
-            event_type="depth_chart_promotion", source="t", direction=1,
-            structured_impact={"prior_rank": 2, "new_rank": 1}, summary="RB1 promoted",
+            con,
+            player_id="p1",
+            season=2024,
+            week=5,
+            event_date="2024-10-01",
+            event_type="depth_chart_promotion",
+            source="t",
+            direction=1,
+            structured_impact={"prior_rank": 2, "new_rank": 1},
+            summary="RB1 promoted",
         )
         delta = apply_evidence_adjustment(con, "p1", 2024, 5)
         assert delta.reason
@@ -219,17 +268,31 @@ class TestEvidenceScoreForAction:
         # EDGE's evidence score -- the honest D23 behavior: evidence and preseason EDGE are
         # different horizons in practice.
         record_event(
-            con, player_id="p1", season=2024, week=5, event_date="2024-10-01",
-            event_type="depth_chart_promotion", source="t", direction=1,
-            structured_impact={}, summary="promo",
+            con,
+            player_id="p1",
+            season=2024,
+            week=5,
+            event_date="2024-10-01",
+            event_type="depth_chart_promotion",
+            source="t",
+            direction=1,
+            structured_impact={},
+            summary="promo",
         )
         assert evidence_score_for_action(con, "p1", 2024, action_sign=1) == pytest.approx(0.5)
 
     def test_offseason_evidence_before_the_cutoff_moves_the_score(self, con):
         record_event(
-            con, player_id="p1", season=2024, week=1, event_date="2024-07-01",
-            event_type="roster_transaction", source="t", direction=1,
-            structured_impact={}, summary="signed as starter",
+            con,
+            player_id="p1",
+            season=2024,
+            week=1,
+            event_date="2024-07-01",
+            event_type="roster_transaction",
+            source="t",
+            direction=1,
+            structured_impact={},
+            summary="signed as starter",
         )
         # roster_transaction is registered STRONG=0.9; agreeing with a bullish (+1) lean.
         score = evidence_score_for_action(con, "p1", 2024, action_sign=1)

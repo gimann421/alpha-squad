@@ -45,9 +45,18 @@ def get_evidence(
     ).fetchall()
     return [
         EvidenceRow(
-            event_id=r[0], player_id=r[1], display_name=r[2], season=r[3], week=r[4],
-            event_date=str(r[5]), event_type=r[6], strength_label=r[7], strength=r[8],
-            direction=r[9], summary=r[10], source=r[11],
+            event_id=r[0],
+            player_id=r[1],
+            display_name=r[2],
+            season=r[3],
+            week=r[4],
+            event_date=str(r[5]),
+            event_type=r[6],
+            strength_label=r[7],
+            strength=r[8],
+            direction=r[9],
+            summary=r[10],
+            source=r[11],
         )
         for r in rows
     ]

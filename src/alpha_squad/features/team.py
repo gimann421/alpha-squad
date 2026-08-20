@@ -2,7 +2,12 @@
 then computes leakage-safe trailing features into `team_week_features` using the same
 window-frame technique as the player panel (features/panel.py) — a row's features reflect
 only that team's strictly-prior games. Feeds the M5 team-environment model and gets joined
-onto `player_week_features` by (team, season, week)."""
+onto `player_week_features` by (team, season, week).
+
+Regular-season games only (games.game_type = 'REG'): postseason games are excluded so a
+trailing "last 3 games" window never silently pulls in a playoff game as one of a team's
+last 3 games of the season, and so season-level aggregates stay comparable across teams
+regardless of playoff participation."""
 
 from __future__ import annotations
 
@@ -30,7 +35,7 @@ def build_team_week_stats(
                 CASE WHEN (t.attempts + t.carries) > 0 THEN t.attempts / (t.attempts + t.carries) END AS pass_rate,
                 t.passing_epa, t.rushing_epa, ?
             FROM {src} t
-            JOIN games g ON g.game_id = t.game_id
+            JOIN games g ON g.game_id = t.game_id AND g.game_type = 'REG'
             ON CONFLICT (team, season, week) DO UPDATE SET
                 plays = excluded.plays,
                 pass_rate = excluded.pass_rate,

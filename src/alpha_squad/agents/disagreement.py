@@ -56,7 +56,10 @@ def detect_model_vs_market_disagreements(
 
 
 def detect_baseline_vs_ml_disagreements(
-    con: duckdb.DuckDBPyConnection, season: int, position: str, mae_gap_threshold: float = MAE_GAP_THRESHOLD
+    con: duckdb.DuckDBPyConnection,
+    season: int,
+    position: str,
+    mae_gap_threshold: float = MAE_GAP_THRESHOLD,
 ) -> list[dict]:
     """Compares the real, already-computed evaluation_results MAE for the ECR-implied
     baseline vs. the established-ML ensemble at the same season/position -- a real, stored

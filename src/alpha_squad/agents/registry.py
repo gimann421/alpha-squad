@@ -13,7 +13,9 @@ from alpha_squad.config.settings import Settings
 
 
 def _complete(task: Task, findings: list[str], **kw) -> Result:
-    return Result(task_id=task.task_id, agent=task.agent, status="COMPLETE", findings=findings, **kw)
+    return Result(
+        task_id=task.task_id, agent=task.agent, status="COMPLETE", findings=findings, **kw
+    )
 
 
 def _failed(task: Task, reason: str) -> Result:
@@ -138,7 +140,9 @@ def run_news_evidence(con: duckdb.DuckDBPyConnection, settings: Settings, task: 
         findings.append(f"skipped: {report.skipped}")
 
     if "week" in p:
-        deltas = run_prior_update(con, p["season_end"], p["week"], p.get("base_model_name", "ml_catboost"))
+        deltas = run_prior_update(
+            con, p["season_end"], p["week"], p.get("base_model_name", "ml_catboost")
+        )
         findings.append(f"prior update: {len(deltas)} deltas applied for week {p['week']}")
 
     return _complete(task, findings, confidence=0.7)
@@ -151,7 +155,11 @@ def run_fantasy_strategy(con: duckdb.DuckDBPyConnection, settings: Settings, tas
     from alpha_squad.league.waiver import recommend_waiver_pickup
 
     p = task.params
-    league = load_league_context(p.get("league_config")) if p.get("league_config") else load_league_context()
+    league = (
+        load_league_context(p.get("league_config"))
+        if p.get("league_config")
+        else load_league_context()
+    )
     decision_type = p.get("decision_type", "draft_pick")
     try:
         if decision_type == "draft_pick":
@@ -174,7 +182,9 @@ def run_fantasy_strategy(con: duckdb.DuckDBPyConnection, settings: Settings, tas
             findings = [f"bid ${rec.recommended_bid:.2f}"] + rec.reasons
             confidence = rec.meaningful_role_probability
         elif decision_type == "dynasty_trade":
-            rec = recommend_dynasty_trade(con, p["player_id"], p["season"], p.get("ecr_type", "rsf"))
+            rec = recommend_dynasty_trade(
+                con, p["player_id"], p["season"], p.get("ecr_type", "rsf")
+            )
             findings = [f"action {rec.action}"] + rec.reasons
             confidence = None
         else:
@@ -228,10 +238,14 @@ def run_evaluation_qa(con: duckdb.DuckDBPyConnection, settings: Settings, task: 
     findings = [f"{model_name}/{position} is validated: {notes}"]
     if mae_row:
         findings.append(f"season {season} MAE: {mae_row[0]:.2f}")
-    return Result(task_id=task.task_id, agent=task.agent, status="COMPLETE", findings=findings, confidence=0.9)
+    return Result(
+        task_id=task.task_id, agent=task.agent, status="COMPLETE", findings=findings, confidence=0.9
+    )
 
 
-def run_research_validation(con: duckdb.DuckDBPyConnection, settings: Settings, task: Task) -> Result:
+def run_research_validation(
+    con: duckdb.DuckDBPyConnection, settings: Settings, task: Task
+) -> Result:
     """Optional per AGENT_CONTRACTS.md. No unstructured research/browsing capability exists
     in this environment -- honestly reported as NEEDS_REVIEW rather than fabricating a
     finding, consistent with every other documented capability gap in docs/DECISIONS.md."""
@@ -239,7 +253,9 @@ def run_research_validation(con: duckdb.DuckDBPyConnection, settings: Settings, 
         task_id=task.task_id,
         agent=task.agent,
         status="NEEDS_REVIEW",
-        findings=["research_validation has no reachable unstructured research source in this environment"],
+        findings=[
+            "research_validation has no reachable unstructured research source in this environment"
+        ],
         recommended_next_action="Escalate to a human if independent research is genuinely required.",
     )
 

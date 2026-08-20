@@ -13,7 +13,9 @@ import duckdb
 from alpha_squad.sources.base import utcnow
 
 
-def _decision_id(decision_type: str, league_id: str, season: int, recommendation: str, built_at) -> str:
+def _decision_id(
+    decision_type: str, league_id: str, season: int, recommendation: str, built_at
+) -> str:
     digest = hashlib.md5(
         f"{decision_type}:{league_id}:{season}:{recommendation}:{built_at}".encode()
     ).hexdigest()[:16]

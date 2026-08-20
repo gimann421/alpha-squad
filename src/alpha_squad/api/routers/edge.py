@@ -43,10 +43,21 @@ def get_edge(
     ).fetchall()
     return [
         EdgeRow(
-            player_id=r[0], display_name=r[1], season=r[2], position=r[3], ecr_type=r[4],
-            model_rank=r[5], market_rank=r[6], rank_edge=r[7], projected_points_edge=r[8],
-            probability_edge=r[9], evidence_score=r[10], confidence=r[11], action=r[12],
-            reasons=json.loads(r[13]), prediction_id=r[14],
+            player_id=r[0],
+            display_name=r[1],
+            season=r[2],
+            position=r[3],
+            ecr_type=r[4],
+            model_rank=r[5],
+            market_rank=r[6],
+            rank_edge=r[7],
+            projected_points_edge=r[8],
+            probability_edge=r[9],
+            evidence_score=r[10],
+            confidence=r[11],
+            action=r[12],
+            reasons=json.loads(r[13]),
+            prediction_id=r[14],
         )
         for r in rows
     ]

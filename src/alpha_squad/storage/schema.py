@@ -634,7 +634,42 @@ M11_AGENTS_DDL = [
     """,
 ]
 
-# M12+ DDL is appended here as later milestones are implemented.
+M13_SIMULATION_DDL = [
+    # Real final team scores, derived from nflverse pbp's running score columns (max per
+    # game_id, unpivoted to one row per team). Not folded into team_week_stats/features.py's
+    # existing pipeline (M5's already-validated team-environment model) -- a separate,
+    # self-contained table this module owns, so nothing already built is touched.
+    """
+    CREATE TABLE IF NOT EXISTS team_week_points (
+        team VARCHAR NOT NULL,
+        season INTEGER NOT NULL,
+        week INTEGER NOT NULL,
+        game_id VARCHAR NOT NULL,
+        points DOUBLE NOT NULL,
+        opponent_points DOUBLE,
+        source_snapshot_id VARCHAR,
+        PRIMARY KEY (team, season, week)
+    )
+    """,
+    # One row per (team, season) simulation run's summary -- the per-player detail is large
+    # (n_simulations x players) and reported directly rather than persisted row-by-row.
+    """
+    CREATE TABLE IF NOT EXISTS team_simulation_runs (
+        run_id VARCHAR PRIMARY KEY,
+        team VARCHAR NOT NULL,
+        season INTEGER NOT NULL,
+        n_simulations INTEGER NOT NULL,
+        seed INTEGER NOT NULL,
+        mean_team_points DOUBLE,
+        std_team_points DOUBLE,
+        qb_wr1_correlation DOUBLE,
+        same_position_correlation DOUBLE,
+        built_at TIMESTAMP NOT NULL
+    )
+    """,
+]
+
+# M14+ DDL is appended here as later milestones are implemented.
 ALL_DDL: list[str] = [
     *M1_SNAPSHOTS_DDL,
     *M2_IDENTITY_DDL,
@@ -648,4 +683,5 @@ ALL_DDL: list[str] = [
     *M9_EVIDENCE_DDL,
     *M10_LEAGUE_DDL,
     *M11_AGENTS_DDL,
+    *M13_SIMULATION_DDL,
 ]

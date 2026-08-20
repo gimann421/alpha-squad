@@ -45,6 +45,11 @@ from alpha_squad.models.established.season_level import run_season_level_establi
 from alpha_squad.models.established.train import run_established_ml
 from alpha_squad.models.report import write_evaluation_report
 from alpha_squad.models.rookie.train import run_rookie_models
+from alpha_squad.models.simulation.correlated import (
+    MIN_TEAM_WEEKS,
+    record_simulation_run,
+    simulate_team_season,
+)
 from alpha_squad.models.uncertainty.run import run_uncertainty
 from alpha_squad.sources.base import SourceError, SourceHealth, SourceStatus, utcnow
 from alpha_squad.sources.registry import all_adapters
@@ -62,6 +67,7 @@ edge_app = typer.Typer(help="Model-vs-market EDGE operations")
 evidence_app = typer.Typer(help="Structured evidence engine operations")
 league_app = typer.Typer(help="League-specific decision engine operations")
 orchestrate_app = typer.Typer(help="Agent orchestrator operations")
+simulate_app = typer.Typer(help="Team-season Monte Carlo simulation operations")
 app.add_typer(sources_app, name="sources")
 app.add_typer(identity_app, name="identity")
 app.add_typer(features_app, name="features")
@@ -72,6 +78,7 @@ app.add_typer(edge_app, name="edge")
 app.add_typer(evidence_app, name="evidence")
 app.add_typer(league_app, name="league")
 app.add_typer(orchestrate_app, name="orchestrate")
+app.add_typer(simulate_app, name="simulate")
 console = Console()
 
 # Datasets that vary by NFL season vs. ones that are a single current/whole-history file.
@@ -636,7 +643,9 @@ def edge_build(
     for season, action, n in action_counts:
         table.add_row(str(season), action, str(n))
     console.print(table)
-    console.print(f"edges written: [green]{report.edges_written}[/green] across seasons {report.seasons}")
+    console.print(
+        f"edges written: [green]{report.edges_written}[/green] across seasons {report.seasons}"
+    )
     if report.skipped:
         console.print(f"[yellow]skipped: {report.skipped}[/yellow]")
     con.close()
@@ -660,7 +669,14 @@ def edge_validate(
     results = evaluate_historical_edge(con, season_start, season_end, ecr_type)
 
     table = Table(title="Historical EDGE validation")
-    for col in ("season", "action", "n", "mean_actual_pts", "mean_market_implied_pts", "mean_outperformance"):
+    for col in (
+        "season",
+        "action",
+        "n",
+        "mean_actual_pts",
+        "mean_market_implied_pts",
+        "mean_outperformance",
+    ):
         table.add_column(col)
     for r in results:
         table.add_row(
@@ -668,8 +684,12 @@ def edge_validate(
             r["action"],
             str(r["n"]),
             f"{r['mean_actual_points']:.2f}" if r["mean_actual_points"] is not None else "-",
-            f"{r['mean_market_implied_points']:.2f}" if r["mean_market_implied_points"] is not None else "-",
-            f"{r['mean_outperformance_vs_market']:.2f}" if r["mean_outperformance_vs_market"] is not None else "-",
+            f"{r['mean_market_implied_points']:.2f}"
+            if r["mean_market_implied_points"] is not None
+            else "-",
+            f"{r['mean_outperformance_vs_market']:.2f}"
+            if r["mean_outperformance_vs_market"] is not None
+            else "-",
         )
     console.print(table)
 
@@ -733,7 +753,9 @@ def evidence_update_projections(
         )
     console.print(table)
     n_adjusted = sum(1 for d in deltas if abs(d.adjustment_pct) > 1e-9)
-    console.print(f"deltas written: [green]{len(deltas)}[/green] ({n_adjusted} materially adjusted)")
+    console.print(
+        f"deltas written: [green]{len(deltas)}[/green] ({n_adjusted} materially adjusted)"
+    )
     con.close()
 
 
@@ -972,7 +994,9 @@ def orchestrate_demo(
     for task_id in report.order:
         result = report.results[task_id]
         table.add_row(
-            task_id, result.agent, result.status,
+            task_id,
+            result.agent,
+            result.status,
             f"{result.confidence:.2f}" if result.confidence is not None else "-",
         )
     console.print(table)
@@ -998,7 +1022,9 @@ def orchestrate_status(run_id: str = typer.Option(..., help="Run ID to reconstru
     for col in ("task_id", "agent", "status", "attempt", "depends_on"):
         table.add_column(col)
     for t in rebuilt["tasks"]:
-        table.add_row(t["task_id"], t["agent"], t["status"], str(t["attempt"]), ",".join(t["depends_on"]))
+        table.add_row(
+            t["task_id"], t["agent"], t["status"], str(t["attempt"]), ",".join(t["depends_on"])
+        )
     console.print(table)
     con.close()
 
@@ -1006,7 +1032,9 @@ def orchestrate_status(run_id: str = typer.Option(..., help="Run ID to reconstru
 @orchestrate_app.command("disagreements")
 def orchestrate_disagreements(
     season: int = typer.Option(..., help="Season to detect disagreements for"),
-    ecr_type: str = typer.Option(DEFAULT_ECR_TYPE, help="Market series for model-vs-market comparison"),
+    ecr_type: str = typer.Option(
+        DEFAULT_ECR_TYPE, help="Market series for model-vs-market comparison"
+    ),
     run_id: str = typer.Option("adhoc", help="Run ID to associate detected disagreements with"),
 ) -> None:
     """Detect real disagreements (model vs. market from edge_snapshot.rank_edge; baseline vs.
@@ -1034,6 +1062,66 @@ def orchestrate_disagreements(
         )
     console.print(table)
     console.print(f"{len(disagreements)} disagreements detected and recorded")
+    con.close()
+
+
+@simulate_app.command("team-season")
+def simulate_team_season_cmd(
+    team: str = typer.Option(..., help="Team abbreviation, e.g. 'KC'"),
+    season: int = typer.Option(..., help="Season to simulate"),
+    n_simulations: int = typer.Option(1000, help="Number of Monte Carlo trials"),
+    n_weeks: int = typer.Option(17, help="Simulated regular-season weeks"),
+    seed: int = typer.Option(42, help="Random seed, for reproducibility"),
+) -> None:
+    """Correlated team-season Monte Carlo: every trial draws one joint (plays, pass_rate,
+    team_points) sample from the team's real historical covariance, and every rostered
+    player's simulated weekly points come from that same trial's draw via their real
+    opportunity share and efficiency (docs/DECISIONS.md D8, D29). Prints team- and
+    player-level floor/ceiling and the empirically measured QB/WR1 stack correlation, and
+    persists the team-level summary to `team_simulation_runs`."""
+    settings = get_settings()
+    con = get_connection(settings)
+    init_db(con)
+
+    result = simulate_team_season(con, team, season, n_weeks, n_simulations, seed)
+    if result is None:
+        console.print(
+            f"[red]Not enough real history for {team} before {season} "
+            f"(need >= {MIN_TEAM_WEEKS} prior weeks of team_week_stats/team_week_points).[/red]"
+        )
+        con.close()
+        raise typer.Exit(code=1)
+
+    console.print(
+        f"[green]{team} {season}[/green]: mean team points "
+        f"{result.mean_team_points:.1f} (std {result.std_team_points:.1f}) over "
+        f"{result.n_simulations} simulations x {result.n_weeks} weeks"
+    )
+    corr_str = f"{result.qb_wr1_correlation:.3f}" if result.qb_wr1_correlation is not None else "-"
+    same_str = (
+        f"{result.same_position_correlation:.3f}"
+        if result.same_position_correlation is not None
+        else "-"
+    )
+    console.print(f"qb_wr1_correlation={corr_str}  same_position_correlation={same_str}")
+
+    table = Table(title="Player season-point distribution")
+    for col in ("player_id", "position", "mean", "std", "p10", "p50", "p90"):
+        table.add_column(col)
+    for p in result.players:
+        table.add_row(
+            p.player_id,
+            p.position,
+            f"{p.mean_points:.1f}",
+            f"{p.std_points:.1f}",
+            f"{p.p10:.1f}",
+            f"{p.p50:.1f}",
+            f"{p.p90:.1f}",
+        )
+    console.print(table)
+
+    run_id = record_simulation_run(con, result, seed)
+    console.print(f"simulation run recorded: [green]{run_id}[/green]")
     con.close()
 
 

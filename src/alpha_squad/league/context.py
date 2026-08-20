@@ -24,7 +24,9 @@ FLEX_ELIGIBILITY: dict[str, tuple[str, ...]] = {
     "WRRB_FLEX": ("RB", "WR"),
 }
 
-DEFAULT_TARGET_LEAGUE_PATH = Path(__file__).parent.parent / "config" / "league_configs" / "target_league.yaml"
+DEFAULT_TARGET_LEAGUE_PATH = (
+    Path(__file__).parent.parent / "config" / "league_configs" / "target_league.yaml"
+)
 
 
 class LeagueContext(BaseModel):

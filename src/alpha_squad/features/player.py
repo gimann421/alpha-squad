@@ -34,18 +34,21 @@ def build_player_week_stats(
                 s.rushing_yards, s.rushing_tds, s.receiving_yards, s.receiving_tds,
                 s.fantasy_points, s.fantasy_points_ppr
             FROM {stats_src} s
-            JOIN games g ON g.game_id = s.game_id
+            JOIN games g ON g.game_id = s.game_id AND g.game_type = 'REG'
             LEFT JOIN players p ON p.gsis_id = s.player_id
             """
         )
 
         # player_id in _stats_matched is the *canonical* id post-join (NULL when unmatched);
         # the raw source gsis_id isn't retained there once unmatched, so re-derive unmatched
-        # rows directly against the source for an accurate exception record.
+        # rows directly against the source for an accurate exception record. Scoped to REG
+        # games only, matching _stats_matched -- a player who only appears in postseason data
+        # we intentionally discard shouldn't generate an identity exception.
         unmatched = con.execute(
             f"""
             SELECT DISTINCT s.player_id, s.player_display_name
             FROM {stats_src} s
+            JOIN games g ON g.game_id = s.game_id AND g.game_type = 'REG'
             LEFT JOIN players p ON p.gsis_id = s.player_id
             WHERE p.player_id IS NULL
             """
