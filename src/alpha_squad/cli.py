@@ -9,6 +9,8 @@ from rich.console import Console
 from rich.table import Table
 
 from alpha_squad.config.settings import get_settings
+from alpha_squad.evidence.events import build_evidence_events_range
+from alpha_squad.evidence.prior_update import run_prior_update
 from alpha_squad.features.build import build_features
 from alpha_squad.identity.canonical import build_identity
 from alpha_squad.identity.exceptions import list_exceptions
@@ -39,6 +41,7 @@ market_app = typer.Typer(help="Market consensus operations")
 evaluate_app = typer.Typer(help="Baseline/model evaluation operations")
 train_app = typer.Typer(help="Model training operations")
 edge_app = typer.Typer(help="Model-vs-market EDGE operations")
+evidence_app = typer.Typer(help="Structured evidence engine operations")
 app.add_typer(sources_app, name="sources")
 app.add_typer(identity_app, name="identity")
 app.add_typer(features_app, name="features")
@@ -46,6 +49,7 @@ app.add_typer(market_app, name="market")
 app.add_typer(evaluate_app, name="evaluate")
 app.add_typer(train_app, name="train")
 app.add_typer(edge_app, name="edge")
+app.add_typer(evidence_app, name="evidence")
 console = Console()
 
 # Datasets that vary by NFL season vs. ones that are a single current/whole-history file.
@@ -649,6 +653,65 @@ def edge_validate(
 
     write_edge_validation_report(con, Path(report_path))
     console.print(f"report written to [green]{report_path}[/green]")
+    con.close()
+
+
+@evidence_app.command("build")
+def evidence_build(
+    season_start: int = typer.Option(2019, help="First season to detect evidence events for"),
+    season_end: int = typer.Option(2025, help="Last season to detect evidence events for"),
+) -> None:
+    """Detect structured evidence events (depth-chart moves, injury reports, roster
+    transactions, usage-share shifts) from officially-sourced nflverse data. Requires
+    `sources ingest` for depth_charts/injuries/weekly_rosters and `features build` to have
+    already run for the relevant seasons."""
+    settings = get_settings()
+    con = get_connection(settings)
+    init_db(con)
+
+    report = build_evidence_events_range(con, season_start, season_end)
+
+    table = Table(title="Evidence events detected")
+    table.add_column("event_type")
+    table.add_column("n")
+    for event_type, n in sorted(report.by_type.items()):
+        table.add_row(event_type, str(n))
+    console.print(table)
+    console.print(f"total events written: [green]{report.events_written}[/green]")
+    if report.skipped:
+        console.print(f"[yellow]skipped: {report.skipped}[/yellow]")
+    con.close()
+
+
+@evidence_app.command("update-projections")
+def evidence_update_projections(
+    season: int = typer.Option(..., help="Season to apply evidence-driven projection deltas for"),
+    week: int = typer.Option(..., help="Week to apply evidence-driven projection deltas for"),
+) -> None:
+    """Apply the bounded, explainable evidence adjustment to that week's real weekly
+    established-ML projections (never overwrites the base prediction; writes a separate
+    projection_deltas row with reason + evidence_ids). Requires `train established` to have
+    already populated weekly_projection_snapshot and `evidence build` to have run."""
+    settings = get_settings()
+    con = get_connection(settings)
+    init_db(con)
+
+    deltas = run_prior_update(con, season, week)
+
+    table = Table(title=f"Evidence-adjusted projections ({season} week {week})")
+    for col in ("player_id", "base", "adjusted", "adjustment_pct", "evidence_score"):
+        table.add_column(col)
+    for d in sorted(deltas, key=lambda d: -abs(d.adjustment_pct))[:20]:
+        table.add_row(
+            d.player_id,
+            f"{d.base_value:.2f}",
+            f"{d.adjusted_value:.2f}",
+            f"{d.adjustment_pct:+.1%}",
+            f"{d.evidence_score:.2f}",
+        )
+    console.print(table)
+    n_adjusted = sum(1 for d in deltas if abs(d.adjustment_pct) > 1e-9)
+    console.print(f"deltas written: [green]{len(deltas)}[/green] ({n_adjusted} materially adjusted)")
     con.close()
 
 

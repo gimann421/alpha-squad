@@ -272,6 +272,76 @@ actionable market inefficiency, not noise. The SELL cohort was mixed: correct di
 in 2022/2023, wrong direction in 2024/2025 (small n=10-18/season). This is reported as-is in
 `docs/PROJECT_STATE.md`'s M8 summary, not suppressed or cherry-picked.
 
+## D22 — Evidence engine v1 implements only PRODUCT_SPEC.md's Strong tier, with real detectors on officially-sourced structured data; Medium/Weak are registered vocabulary for a manual-entry path
+Consistent with D5 (no news/social API is reachable in this environment): PRODUCT_SPEC.md's
+Medium tier (repeated beat observations, coach comments, one strong practice) and Weak tier
+(highlight clips, generic praise, social media, speculative commentary) all require a text/news
+source this environment cannot reach. Building fake detectors for them, or quietly omitting
+them from the taxonomy, would either fabricate signal or leave
+`ACCEPTANCE_CRITERIA.md`'s "Strong/medium/weak hierarchy is implemented" only partially true.
+
+**Decision:** `evidence/taxonomy.py` registers the full three-tier vocabulary from
+PRODUCT_SPEC.md, including Medium/Weak `event_type`s with no detector behind them. A human (or
+a future integration) can still write a structured Medium/Weak event through the same
+`record_event()` contract used by real detectors — the manual-entry path promised in the
+original plan (Phase 0's Decision 5). Only the four Strong-tier `event_type`s that map cleanly
+onto reachable nflverse data have real detectors (`evidence/events.py`): `depth_chart_promotion`
+/`depth_chart_demotion`, `injury_own_status`/`injury_teammate_opportunity`, `roster_transaction`,
+`usage_share_spike`/`usage_share_drop`. This mirrors D20's rookie-model precedent: build what is
+real from reachable data, mark the rest LIMITED with the reason on record, never fabricate.
+
+## D23 — evidence_score is a real, mostly-neutral-in-practice value for M8's preseason EDGE, not a placeholder; contradicting evidence vetoes BUY/SELL
+With M9 shipping, `market/edge.py`'s `evidence_score` (previously a disclosed constant
+placeholder per the original D21) is now computed for real from `evidence_events` via
+`evidence/prior_update.py::evidence_score_for_action`. But M8's EDGE (D21) is anchored to
+*preseason* market snapshots (`market_snapshot` rows from July/August, before the season being
+predicted has played a single game), while every real evidence detector in `events.py` only
+ever produces *in-season* events (week ≥ 2, dated after that season's Week 1). The honest
+consequence, verified in `tests/unit/test_evidence.py::TestEvidenceScoreForAction`: a
+preseason-anchored EDGE build will see **no** qualifying evidence for the season it is
+predicting, so `evidence_score` comes back neutral (0.5) in the overwhelming majority of real
+calls. This is not a bug or a disguised placeholder — it is the honest state of a
+preseason-timed decision meeting an in-season-timed signal, and it is reported as such (D23's
+regression test proves the mechanism computes a real, moved score when evidence genuinely
+predates the cutoff, e.g. an offseason transaction).
+
+**Decision on how evidence participates in the gate:** rather than *requiring* evidence to act
+(which would make BUY/SELL nearly always WATCH, since preseason evidence coverage is
+structurally sparse) or ignoring it entirely (contradicting PRODUCT_SPEC.md: "A strong signal
+requires model discrepancy, market discrepancy, supporting evidence, and reasonable
+confidence"), `classify_action` (`market/edge.py`) adds evidence as a **veto, not a
+requirement**: neutral evidence (0.5, "nothing recorded") never blocks an otherwise-valid
+BUY/SELL, but evidence that actively *contradicts* the action's direction
+(`evidence_score < EVIDENCE_CONTRADICTION_THRESHOLD = 0.35`) forces WATCH. This keeps M8's
+already-published, real historical validation numbers (docs/PROJECT_STATE.md's M8 summary)
+unchanged — every one of those calls saw neutral evidence and clears the veto trivially — while
+giving the mechanism genuine teeth once evidence timing and EDGE timing eventually overlap (a
+future in-season EDGE variant, or M9 evidence recorded further in advance of a season). Literal
+regression tests for the veto: `tests/unit/test_edge.py::test_contradicting_evidence_vetoes_an_
+otherwise_valid_buy` / `test_neutral_evidence_does_not_block_an_otherwise_valid_buy`.
+
+## D24 — nflverse `depth_charts` has two incompatible real historical schemas; the evidence engine detects and handles both
+Verified against real data while building M9: nflverse's `depth_charts` release changed format
+at some point before the 2025 season. Seasons 2015-2024 (verified: 2019, 2022, 2024) use an
+explicit `week`-keyed schema (`season, club_code, week, game_type, depth_team, ..., gsis_id,
+position, depth_position, ...`, one row per player per week, `depth_team` — a VARCHAR despite
+holding integers — as the within-position-group rank). Seasons 2025+ use a near-daily
+`dt`-keyed schema (`dt, team, player_name, gsis_id, pos_grp, pos_id, pos_name, pos_abb,
+pos_slot, pos_rank, captured_at`, ~221 distinct timestamps across a season, `pos_rank` a real
+INTEGER). Treating both as the same shape (the initial implementation's mistake, caught by a
+real `BinderException: column "dt" not found` when running against 2019 data) would have
+silently produced zero depth-chart evidence for every pre-2025 season.
+
+**Decision:** `evidence/events.py::_depth_chart_entering` detects which schema a given season's
+file uses (`"dt" in columns`) and normalizes both into the same (gsis_id, team, pos_abb,
+pos_rank) shape before any diff logic runs, restricted to QB/RB/WR/TE (`pos_abb`/
+`depth_position` IN ('QB','RB','WR','TE')) in both branches to keep the signal fantasy-relevant.
+For the old week-keyed schema, "the depth chart entering week W" is defined as the filing for
+week W-1 (there is no sub-week timestamp to compare against a game date, so this is the most
+recent fully-known state strictly before W — conservative and leakage-safe, consistent with the
+`dt`-based branch's own "strictly before the week's first game" rule). `depth_team` is
+`TRY_CAST` to INTEGER since it is a VARCHAR column holding integer-valued strings.
+
 ## D14 — Agents are deterministic services, not LLM calls
 `ARCHITECTURE.md` §6: "The project orchestrator is an engineering orchestration layer, not itself
 the source of fantasy truth." Agents in `src/alpha_squad/agents/` are typed Python

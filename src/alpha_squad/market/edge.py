@@ -9,11 +9,12 @@ was never asked to predict.
 
 Hard rule (ACCEPTANCE_CRITERIA.md: "a raw ranking discrepancy cannot alone produce a strong
 EDGE"), encoded in `classify_action`: BUY/SELL requires rank edge AND points edge to agree in
-direction AND both clear a materiality threshold AND model confidence to clear a floor. A
-rank gap with no corroborating points gap, or with insufficient confidence, is WATCH at best.
-`evidence_score` is a disclosed neutral placeholder pending M9 (D21) — it is reported for
-provenance/UI transparency but is never part of the gate itself, since a placeholder has no
-real signal to withhold action on."""
+direction AND both clear a materiality threshold AND model confidence to clear a floor AND
+real structured evidence (M9, D23) to not actively contradict the action. `evidence_score` is
+computed from real `evidence_events`, not a placeholder; it is genuinely neutral (0.5) for
+this preseason-anchored EDGE in practice, since evidence detectors only ever produce
+in-season events and this EDGE compares preseason market snapshots -- reported as-is, not
+faked into looking more evidence-backed than the timing genuinely allows (D23)."""
 
 from __future__ import annotations
 
@@ -25,6 +26,7 @@ from pathlib import Path
 import duckdb
 from sklearn.isotonic import IsotonicRegression
 
+from alpha_squad.evidence.prior_update import evidence_score_for_action
 from alpha_squad.models.uncertainty.run import MODEL_VERSION as UNCERTAINTY_MODEL_VERSION
 from alpha_squad.sources.base import utcnow
 
@@ -32,16 +34,14 @@ EDGE_MODEL_VERSION = "edge_v1"
 SKILL_POSITIONS = ("QB", "RB", "WR", "TE")
 DEFAULT_ECR_TYPE = "rsf"
 
-# D21: the evidence engine (M9) does not exist yet. 0.5 is a disclosed "unknown" placeholder,
-# never a hard-zero gate -- it must not silently suppress every action once evidence scoring
-# is real, and it must not be mistaken for a confident neutral signal either.
-EVIDENCE_SCORE_PLACEHOLDER = 0.5
-
 RANK_EDGE_THRESHOLD = 15
 POINTS_EDGE_THRESHOLD = 15.0
 CONFIDENCE_THRESHOLD = 0.5
 NEAR_ZERO_RANK = 5
 NEAR_ZERO_POINTS = 5.0
+# D23: real evidence_score is 0.5 (neutral) when no structured evidence exists yet, not a
+# penalty -- only evidence that actively contradicts the candidate action vetoes it.
+EVIDENCE_CONTRADICTION_THRESHOLD = 0.35
 
 MIN_CURVE_TRAINING_ROWS = 10
 
@@ -190,11 +190,18 @@ def _market_implied_probability_curve(
 
 
 def classify_action(
-    rank_edge: int, points_edge: float | None, confidence: float | None
+    rank_edge: int,
+    points_edge: float | None,
+    confidence: float | None,
+    evidence_score: float = 0.5,
 ) -> tuple[str, list[str]]:
     """The hard gating rule: a raw rank discrepancy alone can never produce BUY/SELL.
-    Both a same-direction, threshold-clearing points edge AND a confidence floor are
-    required. See tests/unit/test_edge.py for the literal regression test of this rule."""
+    A same-direction, threshold-clearing points edge, a confidence floor, AND real evidence
+    that does not actively contradict the action are all required. evidence_score defaults
+    to neutral (0.5, "no evidence either way") so callers that don't pass it (or players with
+    no recorded evidence) are unaffected -- only evidence_score below
+    EVIDENCE_CONTRADICTION_THRESHOLD (real, contradicting evidence) vetoes an otherwise-valid
+    BUY/SELL. See tests/unit/test_edge.py for the literal regression test of this rule."""
     reasons: list[str] = [
         f"rank edge {rank_edge:+d} (market rank minus model rank; positive = model more bullish than market)"
     ]
@@ -233,8 +240,18 @@ def classify_action(
         )
         return "WATCH", reasons
 
+    if evidence_score < EVIDENCE_CONTRADICTION_THRESHOLD:
+        reasons.append(
+            f"real structured evidence contradicts this action (evidence_score={evidence_score:.2f} "
+            f"< {EVIDENCE_CONTRADICTION_THRESHOLD}) -- vetoed to WATCH"
+        )
+        return "WATCH", reasons
+
     action = "BUY" if points_edge > 0 else "SELL"
-    reasons.append(f"{action}: rank and points edges agree, clear thresholds, confidence sufficient")
+    reasons.append(
+        f"{action}: rank and points edges agree, clear thresholds, confidence sufficient, "
+        f"evidence does not contradict (evidence_score={evidence_score:.2f})"
+    )
     return action, reasons
 
 
@@ -314,11 +331,11 @@ def compute_edges_for_season(
             market_prob = float(prob_curve.predict([market_position_rank[player_id]])[0])
             prob_edge = model["top24_prob"] - market_prob
 
-        action, reasons = classify_action(rank_edge, points_edge, model["confidence"])
-        reasons.append(
-            "evidence_score is a neutral placeholder (M9 evidence engine not yet built); "
-            "reported for transparency, never used to gate this action"
-        )
+        tentative_sign = 0 if points_edge is None else (1 if points_edge > 0 else (-1 if points_edge < 0 else 0))
+        evidence_score = evidence_score_for_action(con, player_id, target_season, tentative_sign)
+
+        action, reasons = classify_action(rank_edge, points_edge, model["confidence"], evidence_score)
+        reasons.append(f"evidence_score {evidence_score:.2f} (0.5 = no recorded evidence yet)")
 
         records.append(
             EdgeRecord(
@@ -332,7 +349,7 @@ def compute_edges_for_season(
                 rank_edge=rank_edge,
                 projected_points_edge=points_edge,
                 probability_edge=prob_edge,
-                evidence_score=EVIDENCE_SCORE_PLACEHOLDER,
+                evidence_score=evidence_score,
                 confidence=model["confidence"],
                 action=action,
                 reasons=reasons,

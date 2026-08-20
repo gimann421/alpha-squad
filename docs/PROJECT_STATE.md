@@ -3,7 +3,7 @@
 Living summary of what is implemented, validated, and outstanding. Updated at the end of every
 milestone. See `docs/TRACEABILITY.md` for the acceptance-criteria-level mapping.
 
-## Status: M8 complete, M9 next
+## Status: M9 complete, M10 next
 
 | Milestone | Status | Notes |
 |---|---|---|
@@ -16,7 +16,7 @@ milestone. See `docs/TRACEABILITY.md` for the acceptance-criteria-level mapping.
 | M6 Uncertainty + calibration | DONE | Split-conformal p10/p25/median/p75/p90 + Monte Carlo top-12/24 probabilities on the M5 season-level CatBoost model; walk-forward 3-way split (train/calibrate/target) so calibration is genuinely out-of-sample; real measured coverage_10_90 mostly 0.72-0.90 (target 0.80) across 2019-2025/QB-RB-WR-TE — legitimately well-calibrated, not just plausible-looking; 82 offline + 13 network tests passing |
 | M7 Rookie/prospect intelligence | DONE | Draft capital + combine + prior-season landing-spot features (college production LIMITED — no verified ID bridge to cfbfastR exists, D20); CatBoost regression (rookie-year PPR) + classifier (top-24 breakout, Brier-scored) walk-forward by draft class; nearest-neighbor historical comps; 1,077 real rookie-seasons, 88 offline + 15 network tests passing; two real bugs found and fixed (combine height stored as "6-0" string, comps dtype crash) |
 | M8 Market + EDGE | DONE | market_snapshot extended to ro/do/rsf/dsf (2QB-aware); dynasty_values (681 real players, 97.6% identity coverage); EDGE (rank/points/probability edge, BUY/HOLD/SELL/WATCH) gated so a raw rank discrepancy alone can never produce BUY/SELL (D21); historical EDGE validation shows the real BUY cohort beat market-implied points in every scored season 2022-2025 (+25.7, +21.8, +16.9, +0.33 PPR); 102 offline + 18 network tests passing (both suites reran clean end-to-end after this milestone) |
-| M9 Evidence engine | NOT STARTED | |
+| M9 Evidence engine | DONE | 4 real Strong-tier detectors (depth-chart move, injury self/teammate-opportunity, roster transaction, usage-share shift) on officially-sourced nflverse data; 33,311 real events across 2019-2025; bounded (±15%) evidence-adjusted weekly projections, never overwriting the base M5 prediction; wired as a real (mostly-neutral-in-practice) veto into M8's EDGE gate (D23); 123 offline + 21 network tests passing (verified via `pytest -m "not network"` / `-m network` directly, not estimated) |
 | M10 League decision engine | NOT STARTED | |
 | M11 Agents/orchestrator | NOT STARTED | |
 | M12 API + frontend | NOT STARTED | |
@@ -251,6 +251,47 @@ milestone. See `docs/TRACEABILITY.md` for the acceptance-criteria-level mapping.
   WATCH (D21). This is not a corner cut silently: the field exists with the exact contract
   shape now, and M9 only needs to start producing a real score into the same column.
 
+## M9 summary
+- `evidence_events` (real data, 2019-2025: **33,311 events** — 8,231 usage_share_spike,
+  7,720 usage_share_drop, 8,200 injury_own_status, 2,539 injury_teammate_opportunity, 2,397
+  depth_chart_promotion, 2,000 depth_chart_demotion, 2,006 roster_transaction): four Strong-tier
+  detectors (`evidence/events.py`), all on officially-sourced nflverse structured data, every
+  event dated strictly before the week it informs (leakage-safe by construction, same
+  discipline as `features/panel.py`). PRODUCT_SPEC.md's full Strong/Medium/Weak taxonomy is
+  registered in `evidence/taxonomy.py`; Medium/Weak have no detector (no reachable news/social
+  source, D5) but share the same `record_event()` contract for future manual entry (D22).
+- Real, spot-checked example matching an actual documented 2024 event: Amari Cooper's week-8
+  2024 evidence-adjusted projection (10.27 -> 8.88, -13.5%) is driven by `roster_transaction`
+  (Cleveland -> Buffalo, the real in-season trade) plus `usage_share_drop` (snap_pct 0.35 vs.
+  his own 0.86 trailing average) — the detectors independently reconstructed a real, verifiable
+  storyline from structured data alone, not fabricated.
+- `weekly_projection_snapshot`: M5's `train.py` was already computing a real per-week point
+  prediction (`ml_catboost`) internally and discarding it after season-aggregation; this
+  milestone persists it (12,212 real rows for a 2023-2024 smoke run) since evidence is
+  inherently a weekly signal, not an annual one.
+- `projection_deltas` (`evidence/prior_update.py`): bounded (±15% of the base value, hard
+  cap `MAX_ADJUSTMENT_PCT`) adjustment from aggregated same-week evidence, applied to
+  `weekly_projection_snapshot` and written to a **separate** table — the base row is only ever
+  read, never mutated (regression-tested against both synthetic data and this milestone's real
+  12,212-row run: `tests/unit/test_evidence.py::test_never_mutates_the_base_weekly_projection_row`,
+  `tests/integration/test_evidence_live.py::test_evidence_never_overwrites_the_real_weekly_projection`).
+  Every material delta carries a human-readable `reason` and its source `evidence_ids`.
+- M8's EDGE `evidence_score` is now real (`evidence_score_for_action`), not the D21 placeholder:
+  computed from `evidence_events`, defaulting to neutral 0.5 when none exist. In practice it
+  stays neutral for M8's preseason-anchored EDGE (real detectors only ever produce in-season
+  events, and EDGE compares preseason market snapshots) — an honestly-reported horizon mismatch,
+  not a disguised placeholder (D23). `classify_action` now vetoes an otherwise-valid BUY/SELL to
+  WATCH only when evidence *actively contradicts* the action (`evidence_score < 0.35`); neutral
+  evidence never blocks. M8's already-published historical BUY/SELL numbers are unchanged by
+  this wiring (every one of those calls saw neutral evidence, which trivially clears the veto).
+- Real bug found and fixed during this milestone's review (D24): nflverse's `depth_charts`
+  release has two incompatible real historical schemas (pre-2025: `week`-keyed with
+  `depth_team`/`depth_position`/`club_code`; 2025+: near-daily `dt`-keyed with
+  `pos_rank`/`pos_abb`/`team`). The initial implementation assumed the new schema everywhere
+  and crashed outright (`BinderException: column "dt" not found`) on every pre-2025 season.
+  Fixed with schema detection in `evidence/events.py::_depth_chart_entering`, normalizing both
+  into the same shape before any diff logic runs.
+
 ## Known limitations (see docs/DECISIONS.md for full reasoning)
 - Sleeper, FantasyPros API, CollegeFootballData, KeepTradeCut, ESPN direct APIs are
   `BLOCKED_BY_POLICY` in this environment. Verified open-data substitutes are wired in instead
@@ -271,3 +312,11 @@ milestone. See `docs/TRACEABILITY.md` for the acceptance-criteria-level mapping.
 - Historical EDGE validation: the BUY cohort's real out-of-sample outperformance is a strong,
   consistent positive signal (4/4 scored seasons); the SELL cohort is a real, reported mixed
   result (correct direction 2/4 seasons, small n) — not hidden, see M8 summary above.
+- Evidence Medium/Weak tiers (beat writers, coach comments, social media, practice-participation
+  narrative): LIMITED to a registered taxonomy + manual-entry path; no reachable news/social API
+  in this environment (D5, D22). Only Strong-tier, officially-sourced structured signals have a
+  real detector.
+- EDGE `evidence_score` is real but structurally near-always neutral in practice for the current
+  preseason-anchored EDGE, since evidence detectors are in-season and EDGE is preseason (D23) —
+  a genuine horizon mismatch, disclosed rather than papered over. An in-season EDGE variant that
+  would let evidence meaningfully move `evidence_score` beyond a veto is future scope.

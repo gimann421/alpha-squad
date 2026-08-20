@@ -60,6 +60,36 @@ MODEL_SPECS: dict[str, tuple[type, dict, list[str]]] = {
 COMPONENT_MODELS_FOR_ENSEMBLE = ("ml_ridge", "ml_catboost", "ml_xgboost")
 MIN_TRAINING_ROWS = 50
 
+# M9's evidence engine needs a real, persisted weekly (not season-aggregate) point
+# prediction to adjust. This was already being computed here every run and thrown away
+# after aggregation; ml_catboost is picked as the single base since it is the strongest
+# individual model in M5's own evaluation, not a new model.
+WEEKLY_PROJECTION_BASE_MODEL = "ml_catboost"
+
+
+def _persist_weekly_projections(
+    con: duckdb.DuckDBPyConnection, model_name: str, position: str, predict_df, weekly_preds
+) -> None:
+    now = utcnow()
+    for player_id, season, week, pred in zip(
+        predict_df["player_id"].tolist(),
+        predict_df["season"].tolist(),
+        predict_df["week"].tolist(),
+        weekly_preds,
+        strict=True,
+    ):
+        con.execute(
+            """
+            INSERT INTO weekly_projection_snapshot
+                (player_id, season, week, model_name, position, predicted_points, built_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT (model_name, player_id, season, week) DO UPDATE SET
+                position = excluded.position, predicted_points = excluded.predicted_points,
+                built_at = excluded.built_at
+            """,
+            [player_id, int(season), int(week), model_name, position, float(pred), now],
+        )
+
 
 @dataclass
 class TrainRunReport:
@@ -138,6 +168,9 @@ def run_established_ml(
                 model = model_cls(**kwargs)
                 model.fit(x_train, y_train)
                 weekly_preds = model.predict(x_pred)
+
+                if model_name == WEEKLY_PROJECTION_BASE_MODEL:
+                    _persist_weekly_projections(con, model_name, position, predict_df, weekly_preds)
 
                 season_totals = _season_totals_from_weekly(
                     predict_df["player_id"].tolist(), weekly_preds

@@ -80,6 +80,37 @@ class TestClassifyActionGatingRule:
         action, reasons = classify_action(rank_edge=1, points_edge=1.0, confidence=0.9)
         assert action == "HOLD"
 
+    def test_contradicting_evidence_vetoes_an_otherwise_valid_buy(self):
+        action, reasons = classify_action(
+            rank_edge=RANK_EDGE_THRESHOLD + 50,
+            points_edge=POINTS_EDGE_THRESHOLD + 50,
+            confidence=0.95,
+            evidence_score=0.1,
+        )
+        assert action == "WATCH"
+        assert any("contradicts" in r for r in reasons)
+
+    def test_neutral_evidence_does_not_block_an_otherwise_valid_buy(self):
+        action, reasons = classify_action(
+            rank_edge=RANK_EDGE_THRESHOLD + 50,
+            points_edge=POINTS_EDGE_THRESHOLD + 50,
+            confidence=0.95,
+            evidence_score=0.5,
+        )
+        assert action == "BUY"
+
+    def test_evidence_score_defaults_to_neutral_and_does_not_change_prior_behavior(self):
+        with_default, _ = classify_action(
+            rank_edge=RANK_EDGE_THRESHOLD + 50, points_edge=POINTS_EDGE_THRESHOLD + 50, confidence=0.95
+        )
+        explicit_neutral, _ = classify_action(
+            rank_edge=RANK_EDGE_THRESHOLD + 50,
+            points_edge=POINTS_EDGE_THRESHOLD + 50,
+            confidence=0.95,
+            evidence_score=0.5,
+        )
+        assert with_default == explicit_neutral == "BUY"
+
 
 @pytest.fixture
 def con():
@@ -188,7 +219,7 @@ class TestStoreAndBuildEdge:
         n = con.execute("SELECT count(*) FROM edge_snapshot").fetchone()[0]
         assert n == 1
 
-    def test_reasons_json_is_valid_and_mentions_evidence_placeholder(self, con):
+    def test_reasons_json_is_valid_and_reports_evidence_score(self, con):
         _seed_market(con, "rsf", 2021, 7, [("p1", "WR", 5.0)])
         _seed_prediction(con, "p1", 2021, "WR", point_pred=100.0, top24_prob=0.5, confidence=0.8)
         records = compute_edges_for_season(con, 2021, ecr_type="rsf")
@@ -196,7 +227,7 @@ class TestStoreAndBuildEdge:
         raw = con.execute("SELECT reasons_json FROM edge_snapshot WHERE player_id='p1'").fetchone()[0]
         reasons = json.loads(raw)
         assert isinstance(reasons, list) and reasons
-        assert any("neutral placeholder" in r for r in reasons)
+        assert any("evidence_score" in r for r in reasons)
 
     def test_run_edge_build_skips_seasons_with_no_data_rather_than_erroring(self, con):
         report = run_edge_build(con, 2030, 2031, ecr_type="rsf")

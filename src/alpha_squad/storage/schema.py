@@ -482,7 +482,70 @@ M8_MARKET_EDGE_DDL = [
     """,
 ]
 
-# M9+ DDL is appended here as later milestones are implemented.
+M9_EVIDENCE_DDL = [
+    # Mirrors AGENT_CONTRACTS.md's Evidence contract. strength/strength_label both stored:
+    # strength_label is PRODUCT_SPEC.md's qualitative STRONG/MEDIUM/WEAK taxonomy (D22),
+    # strength is the numeric 0-1 field the contract itself uses, derived deterministically
+    # from the label. direction is -1/0/+1 (bearish/neutral/bullish for the player named).
+    """
+    CREATE TABLE IF NOT EXISTS evidence_events (
+        event_id VARCHAR PRIMARY KEY,
+        player_id VARCHAR NOT NULL,
+        season INTEGER NOT NULL,
+        week INTEGER NOT NULL,
+        event_date DATE NOT NULL,
+        captured_at TIMESTAMP NOT NULL,
+        event_type VARCHAR NOT NULL,
+        source VARCHAR NOT NULL,
+        source_url VARCHAR,
+        strength_label VARCHAR NOT NULL,
+        strength DOUBLE NOT NULL,
+        direction INTEGER NOT NULL,
+        structured_impact_json VARCHAR NOT NULL,
+        summary VARCHAR NOT NULL,
+        source_snapshot_id VARCHAR
+    )
+    """,
+    # Weekly established-ML predictions were computed in M5 but only ever aggregated into a
+    # season total and discarded (models/established/train.py). Evidence is an inherently
+    # weekly signal (a depth-chart move in week 4 should adjust week 5's projection, not
+    # retroactively the season total), so this persists the real, already-computed
+    # `ml_catboost` weekly predictions M5 was throwing away, giving M9 a real base to adjust.
+    """
+    CREATE TABLE IF NOT EXISTS weekly_projection_snapshot (
+        player_id VARCHAR NOT NULL,
+        season INTEGER NOT NULL,
+        week INTEGER NOT NULL,
+        model_name VARCHAR NOT NULL,
+        position VARCHAR,
+        predicted_points DOUBLE NOT NULL,
+        built_at TIMESTAMP NOT NULL,
+        PRIMARY KEY (model_name, player_id, season, week)
+    )
+    """,
+    # The bounded, explainable adjustment (ARCHITECTURE.md: "evidence never directly
+    # overwrites model output"). This table only ever reads weekly_projection_snapshot and
+    # writes a separate derived row here -- the base model prediction is never mutated.
+    """
+    CREATE TABLE IF NOT EXISTS projection_deltas (
+        delta_id VARCHAR PRIMARY KEY,
+        player_id VARCHAR NOT NULL,
+        season INTEGER NOT NULL,
+        week INTEGER NOT NULL,
+        base_model_name VARCHAR NOT NULL,
+        base_value DOUBLE NOT NULL,
+        adjusted_value DOUBLE NOT NULL,
+        adjustment_pct DOUBLE NOT NULL,
+        evidence_score DOUBLE NOT NULL,
+        reason VARCHAR NOT NULL,
+        evidence_ids_json VARCHAR NOT NULL,
+        built_at TIMESTAMP NOT NULL,
+        UNIQUE (player_id, season, week, base_model_name)
+    )
+    """,
+]
+
+# M10+ DDL is appended here as later milestones are implemented.
 ALL_DDL: list[str] = [
     *M1_SNAPSHOTS_DDL,
     *M2_IDENTITY_DDL,
@@ -493,4 +556,5 @@ ALL_DDL: list[str] = [
     *M6_UNCERTAINTY_DDL,
     *M7_ROOKIE_DDL,
     *M8_MARKET_EDGE_DDL,
+    *M9_EVIDENCE_DDL,
 ]
