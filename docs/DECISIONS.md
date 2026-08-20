@@ -423,6 +423,48 @@ disagreements (the established-ML ensemble beats the ECR-implied baseline's MAE 
 at every position, consistent with M5's own already-published results) were detected and
 recorded, preserving both positions per AGENT_CONTRACTS.md's conflict protocol.
 
+## D27 — The API is a pure projection layer (every response field traces to an already-persisted table or an M10 function call); the frontend is deliberately lean but genuinely live, verified in a real browser
+`ARCHITECTURE.md`/`ACCEPTANCE_CRITERIA.md` require the application layer to expose validated
+player intelligence without duplicating or bypassing core model/decision logic, and require a
+test proving UI endpoints return engine output with no parallel path — killing the engine must
+break the UI, not silently serve stale demo data.
+
+**API layer (`src/alpha_squad/api/`):** every route in `api/routers/*.py` is either (a) a
+`SELECT` against an already-computed, already-tested table (`uncertainty_predictions` M6,
+`rookie_predictions` M7, `edge_snapshot` M8/M9, `evidence_events` M9, `source_health_log` M1),
+with the response schema's fields mapped one-to-one from the query's own SELECT list, or (b) a
+direct call into the exact M10 function the CLI calls (`recommend_draft_pick`,
+`recommend_waiver_pickup`, `recommend_dynasty_trade`) — never a re-implementation. `/provenance/
+{id}` performs a plain lookup across every table that could own an ID, again no new
+computation. `RankingRow` was extended to carry `prediction_id` (initially omitted) so a
+ranking can actually be traced back to its source row through `/provenance` — found during this
+milestone's own review while writing the live traceability test.
+
+**Verified in a real browser, not just asserted:** using the pre-installed Chromium via
+Playwright, the React dev server was loaded, all six views were clicked through and screenshot
+against the real persisted DuckDB (real players — Lamar Jackson, Tyler Conklin, Amari Cooper —
+with correct EDGE reasons, evidence events, and BLOCKED/NO_CREDENTIALS source badges rendering
+honestly), a draft recommendation was submitted end-to-end through the real form and matched
+the CLI's own output for the same inputs, and — the literal Gate 8 test — the API process was
+killed and the page reloaded: the UI surfaced a real fetch error ("Couldn't reach the Alpha
+Squad API"), not fabricated or stale content. The first draft of that error string literally
+said "as intended" (written for this decision log, not for a user) and was caught and rewritten
+during the same review pass.
+
+**Frontend scope, deliberately:** `ARCHITECTURE.md`/`IMPLEMENTATION_PLAN.md` describe the web
+SPA as "presentation only, zero business logic" — a materially lower correctness bar than the
+modeling/decision layers. The React+Vite+TS app (`web/`) is real and live (six views: Rankings,
+EDGE, Rookies, Evidence, League, Source Health; every view fetches from the real API, no mock
+data, no client-side scoring), but is intentionally not a polished production UI — that tradeoff
+matches where PRODUCT_SPEC.md's own rigor requirements are concentrated (data/model/decision
+correctness), not frontend polish.
+
+**Tooling note:** `ruff`'s B008 rule (flags a function call in an argument default) is a false
+positive for FastAPI's own idiomatic `Depends(...)`/`Query(...)`-in-signature pattern — FastAPI
+inspects these at route-declaration time, not per-request, so it isn't the mutable-default bug
+the rule exists to catch. Disabled via a `per-file-ignores` entry scoped to `src/alpha_squad/
+api/**/*.py` only, not project-wide.
+
 ## D14 — Agents are deterministic services, not LLM calls
 `ARCHITECTURE.md` §6: "The project orchestrator is an engineering orchestration layer, not itself
 the source of fantasy truth." Agents in `src/alpha_squad/agents/` are typed Python

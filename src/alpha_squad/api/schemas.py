@@ -1,0 +1,143 @@
+"""Pydantic response/request models for the API. Every response schema is a direct
+projection of an already-persisted table the CLI reads from too (uncertainty_predictions,
+rookie_predictions, edge_snapshot, evidence_events, ...) -- no field here is computed by a
+separate code path from what the CLI/orchestrator already produced."""
+
+from __future__ import annotations
+
+from pydantic import BaseModel
+
+
+class PlayerSummary(BaseModel):
+    player_id: str
+    display_name: str | None
+    position: str | None
+    college_name: str | None
+    draft_year: int | None
+    status: str | None
+
+
+class PlayerDetail(PlayerSummary):
+    gsis_id: str
+    birth_date: str | None
+    draft_round: int | None
+    draft_pick: int | None
+    draft_team: str | None
+    rookie_season: int | None
+    last_season: int | None
+    id_map: dict[str, str]
+
+
+class RankingRow(BaseModel):
+    prediction_id: str
+    player_id: str
+    display_name: str | None
+    position: str
+    season: int
+    point_prediction: float
+    p10: float | None
+    p25: float | None
+    median: float | None
+    p75: float | None
+    p90: float | None
+    top12_prob: float | None
+    top24_prob: float | None
+    confidence: float | None
+    model_version: str
+    feature_version: str
+
+
+class RookieRow(BaseModel):
+    player_id: str
+    display_name: str | None
+    position: str
+    draft_class: int
+    predicted_rookie_points: float | None
+    breakout_probability: float | None
+    model_version: str
+
+
+class RookieComp(BaseModel):
+    player_id: str
+    display_name: str | None
+    draft_class: int
+    similarity_distance: float
+
+
+class EdgeRow(BaseModel):
+    player_id: str
+    display_name: str | None
+    season: int
+    position: str
+    ecr_type: str
+    model_rank: int
+    market_rank: int
+    rank_edge: int
+    projected_points_edge: float | None
+    probability_edge: float | None
+    evidence_score: float
+    confidence: float | None
+    action: str
+    reasons: list[str]
+    prediction_id: str | None
+
+
+class EvidenceRow(BaseModel):
+    event_id: str
+    player_id: str
+    display_name: str | None
+    season: int
+    week: int
+    event_date: str
+    event_type: str
+    strength_label: str
+    strength: float
+    direction: int
+    summary: str
+    source: str
+
+
+class SourceHealthRow(BaseModel):
+    source: str
+    dataset: str
+    status: str
+    checked_at: str
+    detail: str | None
+
+
+class ProvenanceResponse(BaseModel):
+    entity_type: str
+    entity_id: str
+    found: bool
+    record: dict | None = None
+
+
+class DraftRequest(BaseModel):
+    season: int
+    roster_positions: list[str] = []
+    available_player_ids: list[str] | None = None
+    next_pick_overall: int | None = None
+    ecr_type: str = "rsf"
+    top_n: int = 5
+
+
+class WaiverRequest(BaseModel):
+    season: int
+    week: int
+    player_id: str
+    roster_positions: list[str] = []
+
+
+class TradeRequest(BaseModel):
+    season: int
+    player_id: str
+    ecr_type: str = "rsf"
+
+
+class DecisionResponse(BaseModel):
+    decision_id: str
+    recommendation: str
+    alternatives: list[str]
+    expected_value: float | None
+    confidence: float | None
+    reasons: list[str]

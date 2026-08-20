@@ -65,5 +65,11 @@ target-version = "py312"
 select = ["E", "F", "I", "UP", "B", "SIM"]
 ignore = ["E501"]
 
+# B008 (function call in argument default) is FastAPI's own idiomatic dependency-injection
+# pattern (Depends(...)/Query(...) in a route signature's defaults) -- not the mutable-default
+# bug the rule exists to catch. FastAPI inspects these at route-declaration time, not per-call.
+[tool.ruff.lint.per-file-ignores]
+"src/alpha_squad/api/**/*.py" = ["B008"]
+
 [tool.coverage.run]
 source = ["src/alpha_squad"]

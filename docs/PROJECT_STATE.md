@@ -3,7 +3,7 @@
 Living summary of what is implemented, validated, and outstanding. Updated at the end of every
 milestone. See `docs/TRACEABILITY.md` for the acceptance-criteria-level mapping.
 
-## Status: M11 complete, M12 next
+## Status: M12 complete, M13 next
 
 | Milestone | Status | Notes |
 |---|---|---|
@@ -19,7 +19,7 @@ milestone. See `docs/TRACEABILITY.md` for the acceptance-criteria-level mapping.
 | M9 Evidence engine | DONE | 4 real Strong-tier detectors (depth-chart move, injury self/teammate-opportunity, roster transaction, usage-share shift) on officially-sourced nflverse data; 33,311 real events across 2019-2025; bounded (±15%) evidence-adjusted weekly projections, never overwriting the base M5 prediction; wired as a real (mostly-neutral-in-practice) veto into M8's EDGE gate (D23); 123 offline + 21 network tests passing (verified via `pytest -m "not network"` / `-m network` directly, not estimated) |
 | M10 League decision engine | DONE | Real value-based-drafting replacement/scarcity derived from the league's own lineup config (verified: 2QB target league produces 20 real dedicated QB starters on real 2025 data, exactly 10 teams x 2 QB slots); draft/waiver/dynasty-trade recommendations with alternatives, roster fit, next-pick survival probability, and real evidence-driven value-spike bidding; the M7 rookie-prediction fallback was confirmed live against a real rookie-only player; 152 offline + 26 network tests passing |
 | M11 Agents/orchestrator | DONE | Pydantic Task/Result/Evidence/Prediction/Edge/Decision contracts mirroring AGENT_CONTRACTS.md; 9 real agents (thin wrappers around already-validated M1-M10 code, never an LLM call, D14); DAG orchestrator with real dependency resolution, retry/backoff, and genuinely concurrent scheduling (proven: two independent tasks start within 0.2s of each other) with DB-write serialization for correctness; disagreement protocol reusing real M8/M4-M5 data (296 real disagreements detected on 2024/2025 data, both positions always preserved); a real DuckDB concurrent-DDL bug was found and fixed via the orchestrator's own test suite (D26); 172 offline + 29 network tests passing |
-| M12 API + frontend | NOT STARTED | |
+| M12 API + frontend | DONE | FastAPI over the real M1-M11 pipeline (8 routers, every field a direct projection of an already-persisted table or an M10 function call, zero parallel logic); React+Vite+TS SPA (6 real, live-data views); verified end-to-end in a real Chromium browser via Playwright against real persisted data, including the literal Gate 8 test (killed the API process, reloaded, confirmed a real fetch error rather than stale/fabricated content); 189 offline + 33 network tests passing |
 | M13 Hardening | NOT STARTED | |
 
 ## M1 summary
@@ -380,6 +380,40 @@ milestone. See `docs/TRACEABILITY.md` for the acceptance-criteria-level mapping.
 - 20 new offline unit tests (172 total) plus 3 new live network tests (29 total), including a
   real orchestrated run against live nflverse/DynastyProcess data and real disagreement
   detection against a full real season's established-ML/baseline/EDGE results.
+
+## M12 summary
+- `src/alpha_squad/api/`: FastAPI app with 8 routers (`players`, `rankings`, `rookies`,
+  `edge`, `evidence`, `league`, `provenance`, `health`). Every response field is a direct
+  projection of an already-persisted table (`uncertainty_predictions` M6, `rookie_predictions`
+  M7, `edge_snapshot` M8/M9, `evidence_events` M9, `source_health_log` M1) or a direct call
+  into the exact M10 function the CLI calls (`recommend_draft_pick`, `recommend_waiver_pickup`,
+  `recommend_dynasty_trade`) — D27 documents why there is no parallel logic path anywhere in
+  this package. `/provenance/{id}` traces any ID across every table that could own it. A
+  missing/unknown league returns 404, never a fabricated universal answer.
+- `web/`: a real React + Vite + TS SPA (six views: Rankings, EDGE, Rookies, Evidence, League,
+  Source Health), deliberately lean rather than polished (PRODUCT_SPEC.md frames the SPA as
+  presentation-only) but genuinely live — every view fetches the real API, no mock data, no
+  client-side scoring/ranking. BLOCKED_BY_POLICY/NO_CREDENTIALS source badges render honestly
+  (verified: cfbd/fantasypros show amber NO_CREDENTIALS badges with the real reason text, not
+  hidden behind a generic status).
+- Verified end-to-end in a real Chromium browser (Playwright, the environment's pre-installed
+  browser — CLAUDE.md's "start the dev server and use the feature in a browser" requirement):
+  all six views loaded and rendered real persisted data (real players — Lamar Jackson/Josh
+  Allen top QB rankings, Tyler Conklin/real TE BUY signals on EDGE, Ashton Jeanty atop 2025
+  rookies, a real Storm Duck injury event); the League tab's draft form was submitted and
+  returned the same recommendation/reasons the CLI produces for identical inputs; and the
+  literal Gate 8 test was performed, not just written: the API process was killed and the page
+  reloaded, producing a real fetch error in the UI rather than stale or fabricated content. A
+  real UX bug (the error message literally said "as intended," written for this decision log
+  rather than a user) was caught during that same review pass and fixed.
+- Real gap found and fixed during review (D27): `RankingRow` initially omitted `prediction_id`,
+  which would have made a ranking untraceable through `/provenance` — added, along with a live
+  test proving the trace actually resolves to the real source row.
+- 17 new offline API tests (189 total) using FastAPI's `TestClient` with `get_db` overridden to
+  an in-memory DB — including a literal test that `/rankings`/`/edge` return the *exact* stored
+  values from a seeded row, proving no re-ranking/re-scoring happens in the API layer. 4 new
+  live network tests (33 total) exercise the same endpoints against a real, live-ingested
+  dataset.
 
 ## Known limitations (see docs/DECISIONS.md for full reasoning)
 - Sleeper, FantasyPros API, CollegeFootballData, KeepTradeCut, ESPN direct APIs are
