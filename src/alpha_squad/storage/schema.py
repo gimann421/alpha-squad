@@ -238,10 +238,71 @@ M4_BASELINES_DDL = [
     """,
 ]
 
-# M5+ DDL is appended here as later milestones are implemented.
+M5_ESTABLISHED_ML_DDL = [
+    """
+    CREATE TABLE IF NOT EXISTS team_week_stats (
+        team VARCHAR NOT NULL,
+        season INTEGER NOT NULL,
+        week INTEGER NOT NULL,
+        game_id VARCHAR NOT NULL,
+        game_date DATE NOT NULL,
+        plays DOUBLE,
+        pass_rate DOUBLE,
+        passing_epa DOUBLE,
+        rushing_epa DOUBLE,
+        source_snapshot_id VARCHAR,
+        PRIMARY KEY (team, season, week)
+    )
+    """,
+    # Leakage-safe by construction, same as player_week_features (window frames excluding
+    # the current/future rows) — see features/team.py.
+    """
+    CREATE TABLE IF NOT EXISTS team_week_features (
+        team VARCHAR NOT NULL,
+        season INTEGER NOT NULL,
+        week INTEGER NOT NULL,
+        game_date DATE NOT NULL,
+        team_plays_avg_last3 DOUBLE,
+        team_pass_rate_avg_last3 DOUBLE,
+        team_epa_avg_last3 DOUBLE,
+        PRIMARY KEY (team, season, week)
+    )
+    """,
+    # Model version/provenance tracking (ARCHITECTURE.md §7/§10). validated=false bars a
+    # model from being a default decision source until evaluation confirms it beats the
+    # relevant baseline out of sample (ARCHITECTURE.md §12).
+    """
+    CREATE TABLE IF NOT EXISTS model_registry (
+        model_name VARCHAR NOT NULL,
+        position VARCHAR NOT NULL,
+        version VARCHAR NOT NULL,
+        feature_version VARCHAR NOT NULL,
+        training_season_start INTEGER,
+        training_season_end INTEGER,
+        trained_at TIMESTAMP NOT NULL,
+        validated BOOLEAN NOT NULL DEFAULT false,
+        notes VARCHAR,
+        PRIMARY KEY (model_name, position, version)
+    )
+    """,
+]
+
+# Extends the M3 player_week_features panel with the team-environment lag features M5's
+# team-environment model needs. Additive/nullable, so existing rows and leakage guarantees
+# for the original columns are untouched.
+M5_PANEL_EXTENSION_DDL = [
+    "ALTER TABLE player_week_features ADD COLUMN IF NOT EXISTS team VARCHAR",
+    "ALTER TABLE player_week_features ADD COLUMN IF NOT EXISTS team_plays_avg_last3 DOUBLE",
+    "ALTER TABLE player_week_features ADD COLUMN IF NOT EXISTS team_pass_rate_avg_last3 DOUBLE",
+    "ALTER TABLE player_week_features ADD COLUMN IF NOT EXISTS team_epa_avg_last3 DOUBLE",
+]
+
+# M6+ DDL is appended here as later milestones are implemented.
 ALL_DDL: list[str] = [
     *M1_SNAPSHOTS_DDL,
     *M2_IDENTITY_DDL,
     *M3_FEATURES_DDL,
     *M4_BASELINES_DDL,
+    *M5_ESTABLISHED_ML_DDL,
+    *M5_PANEL_EXTENSION_DDL,
 ]

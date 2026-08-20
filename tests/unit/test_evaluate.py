@@ -5,7 +5,7 @@ from __future__ import annotations
 import duckdb
 import pytest
 
-from alpha_squad.models.evaluate import evaluate_predictions, record_evaluation
+from alpha_squad.models.evaluate import evaluate_and_record, evaluate_predictions, record_evaluation
 from alpha_squad.storage.db import init_db
 
 
@@ -67,6 +67,37 @@ class TestEvaluatePredictions:
         predicted["p0"], predicted["p12"] = predicted["p12"], predicted["p0"]
         m = evaluate_predictions("test", 2024, "ALL", predicted, actual)
         assert m.tier_accuracy < 1.0
+
+
+def test_all_positions_rollup_excludes_non_skill_positions(con):
+    """Regression test for a real bug: player_season_stats holds every position (LB, CB, K,
+    etc.), most of which correctly score ~0 PPR points. Pooling them into the 'ALL' rollup
+    diluted it with hundreds of trivially-correct near-zero pairs, making 'ALL' MAE look far
+    better than any individual skill position's real MAE. The fix scopes 'ALL' to
+    QB/RB/WR/TE only."""
+    rows = [
+        ("qb1", "QB", 300.0),
+        ("wr1", "WR", 150.0),
+        ("wr2", "WR", 5.0),
+    ] + [(f"lb{i}", "LB", 0.0) for i in range(50)]
+    for pid, pos, pts in rows:
+        con.execute(
+            "INSERT INTO player_season_stats (player_id, season, position, games_played, "
+            "total_fantasy_points_ppr, ppr_points_per_game) VALUES (?, 2024, ?, 15, ?, ?)",
+            [pid, pos, pts, pts / 15],
+        )
+
+    # A deliberately bad model: way off on the skill players, perfectly correct on every LB
+    # (who all score exactly 0, easy to "predict").
+    predicted = {"qb1": 100.0, "wr1": 50.0, "wr2": 55.0, **{f"lb{i}": 0.0 for i in range(50)}}
+
+    results = evaluate_and_record(con, "bad_model", 2024, predicted)
+    all_metric = next(m for m in results if m.position == "ALL")
+
+    assert all_metric.n == 3, "the ALL rollup must only include the 3 skill-position players"
+    # True MAE over just qb1/wr1/wr2: (200 + 100 + 50) / 3 = 116.67. If the 50 perfectly-
+    # predicted LBs leaked in, this would collapse toward ~6.6.
+    assert all_metric.mae == pytest.approx(350 / 3)
 
 
 def test_record_evaluation_upserts_without_duplicating(con):

@@ -15,6 +15,14 @@ from alpha_squad.sources.base import utcnow
 
 ALL_POSITIONS_SENTINEL = "ALL"
 
+# The target league (docs/DECISIONS.md D7) only rosters QB/RB/WR/TE. player_season_stats
+# also contains hundreds of defensive/special-teams/O-line players who correctly score ~0
+# PPR points (verified against real data: 2024 had 1512 total rows but only 592 at these
+# four positions). Pooling every position into the "ALL" metric would dilute it with
+# near-zero predicted/actual pairs contributing near-zero error, making it look far better
+# than it is — a real bug found and fixed during M5 review; see docs/DECISIONS.md D19.
+SKILL_POSITIONS = ("QB", "RB", "WR", "TE")
+
 
 @dataclass
 class EvaluationMetrics:
@@ -145,17 +153,24 @@ def record_evaluation(con: duckdb.DuckDBPyConnection, m: EvaluationMetrics) -> N
 def evaluate_and_record(
     con: duckdb.DuckDBPyConnection, model_name: str, season: int, predicted: dict[str, float]
 ) -> list[EvaluationMetrics]:
-    """Evaluates `predicted` against real season outcomes, both overall (position='ALL') and
-    broken out per position (QB/RB/WR/TE), and persists every row to evaluation_results."""
+    """Evaluates `predicted` against real season outcomes, both overall (position='ALL',
+    scoped to SKILL_POSITIONS only — see its docstring) and broken out per position
+    (QB/RB/WR/TE), and persists every row to evaluation_results."""
     results = []
 
     actual_all = actuals_for_season(con, season)
-    m_all = evaluate_predictions(model_name, season, ALL_POSITIONS_SENTINEL, predicted, actual_all)
+    positions = positions_for(con, set(predicted) & set(actual_all))
+    skill_players = {p for p, pos in positions.items() if pos in SKILL_POSITIONS}
+
+    pred_skill = {p: v for p, v in predicted.items() if p in skill_players}
+    actual_skill = {p: v for p, v in actual_all.items() if p in skill_players}
+    m_all = evaluate_predictions(
+        model_name, season, ALL_POSITIONS_SENTINEL, pred_skill, actual_skill
+    )
     record_evaluation(con, m_all)
     results.append(m_all)
 
-    positions = positions_for(con, set(predicted) & set(actual_all))
-    for position in ("QB", "RB", "WR", "TE"):
+    for position in SKILL_POSITIONS:
         pos_players = {p for p, pos in positions.items() if pos == position}
         pred_pos = {p: v for p, v in predicted.items() if p in pos_players}
         actual_pos = {p: v for p, v in actual_all.items() if p in pos_players}

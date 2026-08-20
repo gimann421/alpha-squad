@@ -3,7 +3,7 @@
 Living summary of what is implemented, validated, and outstanding. Updated at the end of every
 milestone. See `docs/TRACEABILITY.md` for the acceptance-criteria-level mapping.
 
-## Status: M4 complete, M5 next
+## Status: M5 complete, M6 next
 
 | Milestone | Status | Notes |
 |---|---|---|
@@ -11,7 +11,8 @@ milestone. See `docs/TRACEABILITY.md` for the acceptance-criteria-level mapping.
 | M1 Sources + snapshots | DONE | 7 adapters (4 available, 3 blocked/no-creds), all verified live; 25 offline + 6 network tests passing; one real bug found and fixed in review (see below) |
 | M2 Canonical identity | DONE | player_id spine (25,046 players) + 25 crosswalk ID types + college bridge, all verified against live data; 43 offline + 8 network tests passing; three real bugs found and fixed in review (see below) |
 | M3 As-of features + leakage | DONE | games/player_week_stats/player_week_features (199,632 rows over 2015-2025, built in ~7s from cache); leakage-safe by construction via SQL window frames; 51 offline (incl. 12 leakage tests with independent Python recomputation) + 9 network tests passing |
-| M4 Baselines + evaluation | DONE | 3 baselines (previous-year, weighted-2yr, ECR-implied) walk-forward evaluated 2018-2025 against 21,421 real player-seasons and 210,730 real market snapshots; shared evaluation harness (MAE/RMSE/R²/Spearman/top-N hit rate/tier accuracy) reused by every later milestone; 65 offline + 10 network tests passing |
+| M4 Baselines + evaluation | DONE | 3 baselines (previous-year, weighted-2yr, ECR-implied) walk-forward evaluated 2018-2025 against 21,421 real player-seasons and 210,730 real market snapshots; shared evaluation harness (MAE/RMSE/R²/Spearman/top-N hit rate/tier accuracy) reused by every later milestone; 65 offline + 10 network tests passing. **One number in this milestone's report was wrong and got corrected in M5 — see D19.** |
+| M5 Established-player ML | DONE | Position-specific Ridge/CatBoost/XGBoost + opportunity-only + team-environment-only + ensemble, both weekly (in-season) and season-level (preseason, apples-to-apples vs M4); team_week_stats/features extend the M3 panel; model_registry tracks version/validation; 70 offline + 12 network tests passing. One real evaluation-harness bug found and fixed (D19), affecting M4's reports too. |
 | M2 Canonical identity | NOT STARTED | |
 | M3 As-of features + leakage | NOT STARTED | |
 | M4 Baselines + evaluation | NOT STARTED | |
@@ -124,13 +125,43 @@ milestone. See `docs/TRACEABILITY.md` for the acceptance-criteria-level mapping.
   rate, tier accuracy — computed overall and per position, persisted to `evaluation_results`,
   published to `reports/baseline_evaluation.md`. Every later model (M5, M7, M8) reports
   through the same harness so comparisons are apples-to-apples, per ACCEPTANCE_CRITERIA.md.
-- Real result worth flagging, not hiding: the ECR-implied baseline's MAE (~45-49) is
-  substantially worse than the simple historical baselines' (~14-15) on 2018-2025 data.
-  Verified this isn't a calibration bug (predictions land in a sensible range, e.g. Josh
-  Allen 2024 predicted 459.6 vs actual 444.98) — market consensus rank is just a noisier
-  predictor of exact season point totals than "what a player scored last year." This is
-  exactly the kind of market-vs-outcome divergence M8's EDGE engine is meant to exploit, not
-  a defect to paper over.
+- **Correction (superseded by the M5 fix below):** an earlier version of this section claimed
+  the ECR-implied baseline's MAE was "substantially worse" than the simple historical
+  baselines' based on comparing ecr_implied's correctly-scoped MAE (~45-49) against the other
+  two baselines' *unscoped* "ALL positions" MAE (~14-15). That comparison was invalid — see
+  docs/DECISIONS.md D19. With the fix, all three baselines land in the same ~45-53 MAE range
+  for "ALL" (QB/RB/WR/TE only), a much more sensible result.
+
+## M5 summary
+- `team_week_stats`/`team_week_features` (6,056 rows): team-environment signal (plays, pass
+  rate, EPA) from `stats_team_week`, leakage-safe by construction (same window-frame pattern
+  as M3), attached onto `player_week_features` by (team, season, week).
+- **Weekly/in-season models** (`models/established/train.py`): Ridge, CatBoost, XGBoost,
+  plus standalone opportunity-only and team-environment-only models (isolating each signal's
+  own predictive power — team-environment alone is markedly the weakest, MAE 30-56 vs 10-19
+  for the full models, exactly as expected: team context alone barely predicts individual
+  output), and an ensemble that's only marked `validated=True` in `model_registry` when it
+  beats every component model's MAE out of sample that season (ARCHITECTURE.md §5/§12).
+  Trains on seasons < S, predicts every week of season S using that week's already-lagged
+  features, aggregates to a season total for comparison. Real result: Spearman 0.94-0.98,
+  MAE 10-19 for the full models — strong, because this task has access to season S's own
+  in-progress weeks (a genuinely different, easier task than preseason projection).
+- **Season-level/preseason models** (`models/established/season_level.py`): Ridge, CatBoost,
+  XGBoost trained on season S-1 aggregate + preseason ECR rank only — the actual
+  apples-to-apples comparison against M4's baselines, since both use only pre-S information.
+  Real, modest, genuine result: e.g. WR 2024, `ml_season_catboost` MAE 44.27 vs the best M4
+  baseline (`ecr_implied`) at 45.05 — CatBoost edges out every baseline slightly, without
+  overclaiming a dramatic win. Documented per-position, not hidden either way.
+- Two model families, not one, precisely because comparing the weekly model against M4
+  baselines would have overstated ML's advantage (different information sets) — see D18.
+- **Real bug found and fixed during this milestone's review**: `models/evaluate.py`'s "ALL
+  positions" rollup pooled *every* position in `player_season_stats` (LB, CB, K, P, etc. —
+  ~900 of 1,512 rows for 2024), most of which correctly score ~0 PPR points. Their
+  near-perfectly-predictable near-zero outcomes diluted the pooled MAE to ~14.7, while every
+  individual skill position's real MAE was 33-65 — a materially misleading number that had
+  been silently wrong since M4. Fixed with `SKILL_POSITIONS = ("QB","RB","WR","TE")` scoping
+  the "ALL" rollup; per-position numbers were never affected (D19). All M4 and M5 evaluation
+  reports were regenerated after the fix; regression-tested.
 
 ## Known limitations (see docs/DECISIONS.md for full reasoning)
 - Sleeper, FantasyPros API, CollegeFootballData, KeepTradeCut, ESPN direct APIs are

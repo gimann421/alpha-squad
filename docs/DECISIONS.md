@@ -161,6 +161,39 @@ for this general-purpose baseline; the 2QB-aware series (`rsf`/`dsf`) that fits 
 league (D7) is reserved for M8's EDGE engine, which needs the market-vs-model comparison to be
 format-aware.
 
+## D18 — Two established-player ML evaluations, not one, to keep the baseline comparison honest
+M5's first working model (`models/established/train.py`) predicts weekly and aggregates to a
+season total, using player_week_features rows *from the target season itself* (recent
+trailing form) as inputs. Comparing that directly against M4's baselines — which predict
+season S using only information from before S — would overstate ML's advantage, since the
+weekly model has strictly more information available (it gets to see most of the season
+before predicting the rest). **Decision:** keep both, clearly separated. `train.py`'s weekly
+models answer "in-season rest-of-season update" (a real PRODUCT_SPEC.md output) and are not
+compared head-to-head against M4. `models/established/season_level.py` is the genuine
+apples-to-apples comparison: season S-1 aggregate + preseason ECR predicting season S,
+exactly matching M4 baselines' information set.
+
+## D19 — "ALL positions" evaluation must be scoped to fantasy-relevant positions, not literally every position
+Real bug found during M5 review: `player_season_stats` contains every position that
+accumulates any stat in `stats_player_week` — not just QB/RB/WR/TE, but also LB, CB, DT, DE,
+OT, SAF, G, DB, K, C, P, LS, and more (2024: 1,512 total rows, only 592 at the four skill
+positions the target league actually rosters). Hundreds of these non-skill-position players
+correctly score ~0 PPR points, and every baseline correctly predicts ~0 for them too — so
+pooling them into an "ALL positions" MAE contributes near-zero error from hundreds of
+trivially-easy pairs, dragging the pooled metric down to a number that looked far better than
+any individual skill position's real performance (verified: reported "ALL" MAE of ~14.7 for
+2024 weighted-2yr, while every individual skill position's own MAE was 33-65). This was
+silently wrong in every M4 evaluation report produced before the fix.
+
+**Decision:** `models/evaluate.py`'s `SKILL_POSITIONS = ("QB","RB","WR","TE")` constant scopes
+the `ALL` rollup to only these positions before computing pooled metrics. Per-position
+(QB/RB/WR/TE) breakouts were never affected — they already filtered correctly — so no
+prior per-position numbers need correction, only the "ALL" rows. `player_season_stats`
+itself is left unscoped (still covers every position) since it is general-purpose storage
+that a future capability might legitimately need; the fix lives in the evaluation layer,
+where the fantasy-relevance judgment actually belongs. All M4/M5 evaluation reports were
+regenerated after this fix. Regression-tested in tests/unit/test_evaluate.py.
+
 ## D14 — Agents are deterministic services, not LLM calls
 `ARCHITECTURE.md` §6: "The project orchestrator is an engineering orchestration layer, not itself
 the source of fantasy truth." Agents in `src/alpha_squad/agents/` are typed Python

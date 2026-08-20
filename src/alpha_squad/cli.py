@@ -14,6 +14,8 @@ from alpha_squad.identity.canonical import build_identity
 from alpha_squad.identity.exceptions import list_exceptions
 from alpha_squad.market.consensus import build_market_snapshot
 from alpha_squad.models.baselines.run import run_baselines
+from alpha_squad.models.established.season_level import run_season_level_established_ml
+from alpha_squad.models.established.train import run_established_ml
 from alpha_squad.models.report import write_evaluation_report
 from alpha_squad.sources.base import SourceError, SourceHealth, SourceStatus, utcnow
 from alpha_squad.sources.registry import all_adapters
@@ -26,11 +28,13 @@ identity_app = typer.Typer(help="Canonical player identity operations")
 features_app = typer.Typer(help="As-of feature store operations")
 market_app = typer.Typer(help="Market consensus operations")
 evaluate_app = typer.Typer(help="Baseline/model evaluation operations")
+train_app = typer.Typer(help="Model training operations")
 app.add_typer(sources_app, name="sources")
 app.add_typer(identity_app, name="identity")
 app.add_typer(features_app, name="features")
 app.add_typer(market_app, name="market")
 app.add_typer(evaluate_app, name="evaluate")
+app.add_typer(train_app, name="train")
 console = Console()
 
 # Datasets that vary by NFL season vs. ones that are a single current/whole-history file.
@@ -262,6 +266,13 @@ def features_build(
     console.print(
         f"player_season_stats upserted: [green]{report.player_season_stats_upserted}[/green]"
     )
+    console.print(f"team_week_stats upserted: [green]{report.team_week_stats_upserted}[/green]")
+    console.print(
+        f"team_week_features upserted: [green]{report.team_week_features_upserted}[/green]"
+    )
+    console.print(
+        f"player panel rows with team features attached: [green]{report.player_panel_team_attached}[/green]"
+    )
     con.close()
 
 
@@ -327,6 +338,90 @@ def evaluate_baselines(
             f"{m.tier_accuracy:.2f}" if m.tier_accuracy is not None else "-",
         )
     console.print(table)
+
+    write_evaluation_report(con, Path(report_path))
+    console.print(f"report written to [green]{report_path}[/green]")
+    con.close()
+
+
+@train_app.command("established")
+def train_established(
+    season_start: int = typer.Option(2020, help="First target season to walk-forward evaluate"),
+    season_end: int = typer.Option(2025, help="Last target season to walk-forward evaluate"),
+    min_train_season: int = typer.Option(2015, help="Earliest season usable for training data"),
+    report_path: str = typer.Option(
+        "reports/established_ml_evaluation.md", help="Markdown report output path"
+    ),
+) -> None:
+    """Walk-forward train and evaluate established-player ML (Ridge, CatBoost, XGBoost,
+    opportunity-only, team-environment-only, and an ensemble) per position, comparing
+    against the M4 baselines through the same evaluation harness. Requires `features build`
+    and `market build` to have already run for the relevant seasons."""
+    settings = get_settings()
+    con = get_connection(settings)
+    init_db(con)
+
+    run_report = run_established_ml(con, season_start, season_end, min_train_season)
+
+    table = Table(title="Established-player ML evaluation (ALL positions per model/season)")
+    for col in ("model", "season", "n", "mae", "rmse", "spearman", "top12_hit", "top24_hit"):
+        table.add_column(col)
+    for m in run_report.metrics:
+        table.add_row(
+            m.model_name,
+            str(m.season),
+            str(m.n),
+            f"{m.mae:.2f}" if m.mae == m.mae else "-",
+            f"{m.rmse:.2f}" if m.rmse == m.rmse else "-",
+            f"{m.spearman:.3f}" if m.spearman == m.spearman else "-",
+            f"{m.top12_hit_rate:.2f}" if m.top12_hit_rate is not None else "-",
+            f"{m.top24_hit_rate:.2f}" if m.top24_hit_rate is not None else "-",
+        )
+    console.print(table)
+    if run_report.skipped:
+        console.print(f"[yellow]skipped: {run_report.skipped}[/yellow]")
+
+    write_evaluation_report(con, Path(report_path))
+    console.print(f"report written to [green]{report_path}[/green]")
+    con.close()
+
+
+@train_app.command("established-season")
+def train_established_season(
+    season_start: int = typer.Option(2020, help="First target season to walk-forward evaluate"),
+    season_end: int = typer.Option(2025, help="Last target season to walk-forward evaluate"),
+    min_train_season: int = typer.Option(2015, help="Earliest season usable for training data"),
+    report_path: str = typer.Option(
+        "reports/established_ml_evaluation.md", help="Markdown report output path"
+    ),
+) -> None:
+    """Walk-forward train and evaluate season-level (preseason) established-player ML —
+    the genuine apples-to-apples comparison against M4's baselines, since both use only
+    information available before the target season starts (unlike `train established`,
+    which additionally uses the target season's own in-progress weeks)."""
+    settings = get_settings()
+    con = get_connection(settings)
+    init_db(con)
+
+    run_report = run_season_level_established_ml(con, season_start, season_end, min_train_season)
+
+    table = Table(title="Season-level (preseason) established-player ML evaluation")
+    for col in ("model", "season", "n", "mae", "rmse", "spearman", "top12_hit", "top24_hit"):
+        table.add_column(col)
+    for m in run_report.metrics:
+        table.add_row(
+            m.model_name,
+            str(m.season),
+            str(m.n),
+            f"{m.mae:.2f}" if m.mae == m.mae else "-",
+            f"{m.rmse:.2f}" if m.rmse == m.rmse else "-",
+            f"{m.spearman:.3f}" if m.spearman == m.spearman else "-",
+            f"{m.top12_hit_rate:.2f}" if m.top12_hit_rate is not None else "-",
+            f"{m.top24_hit_rate:.2f}" if m.top24_hit_rate is not None else "-",
+        )
+    console.print(table)
+    if run_report.skipped:
+        console.print(f"[yellow]skipped: {run_report.skipped}[/yellow]")
 
     write_evaluation_report(con, Path(report_path))
     console.print(f"report written to [green]{report_path}[/green]")

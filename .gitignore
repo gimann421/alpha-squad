@@ -11,6 +11,9 @@ htmlcov/
 # uv
 uv.lock.bak
 
+# CatBoost training-run artifacts (written to cwd by default during .fit())
+catboost_info/
+
 # Data / models / state (all reproducible from ingestion; never committed)
 data/**
 !data/.gitkeep

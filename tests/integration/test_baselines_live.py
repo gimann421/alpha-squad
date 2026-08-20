@@ -42,7 +42,7 @@ def con_ready_for_baselines(settings):
     build_identity(con, settings)
 
     for season in SEASONS:
-        for dataset in ("pbp", "stats_player_week", "snap_counts"):
+        for dataset in ("pbp", "stats_player_week", "snap_counts", "stats_team_week"):
             record_snapshot(con, nflverse.fetch(dataset, season=season))
     build_features(con, settings, SEASONS)
 
