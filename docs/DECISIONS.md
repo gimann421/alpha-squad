@@ -125,6 +125,18 @@ The affected canonical player still exists (from the nflverse spine) and simply 
 DynastyProcess-derived IDs (sleeper_id, mfl_id, etc.) until a human resolves the exception.
 28 such conflicts were found on first build, out of 12,472 crosswalk rows.
 
+## D15 — as-of semantics and the source of game dates
+nflverse publishes no separate `schedules`/`games` release tag (verified: both 404). Every
+game's real calendar date lives in `pbp` (`game_id`, `game_date`) instead, so `games` is
+derived from there (`features/games.py`), reading only the game-identifying columns.
+
+`features_as_of(con, as_of_date)` (`features/panel.py`) filters `game_date < as_of_date`
+(strict, not `<=`): a game's stats are only considered "known" starting the day *after* it
+was played, which is the conservative choice given nflverse doesn't publish a same-day
+stat-finalization timestamp. `player_week_features`'s lag columns are additionally leakage-
+safe *by construction* (SQL window frames that structurally exclude the current and all
+future rows), independent of this row-level filter — see tests/leakage/.
+
 ## D14 — Agents are deterministic services, not LLM calls
 `ARCHITECTURE.md` §6: "The project orchestrator is an engineering orchestration layer, not itself
 the source of fantasy truth." Agents in `src/alpha_squad/agents/` are typed Python

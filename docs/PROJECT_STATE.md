@@ -3,13 +3,14 @@
 Living summary of what is implemented, validated, and outstanding. Updated at the end of every
 milestone. See `docs/TRACEABILITY.md` for the acceptance-criteria-level mapping.
 
-## Status: M2 complete, M3 next
+## Status: M3 complete, M4 next
 
 | Milestone | Status | Notes |
 |---|---|---|
 | M0 Bootstrap | DONE | project skeleton, deps, docs |
 | M1 Sources + snapshots | DONE | 7 adapters (4 available, 3 blocked/no-creds), all verified live; 25 offline + 6 network tests passing; one real bug found and fixed in review (see below) |
 | M2 Canonical identity | DONE | player_id spine (25,046 players) + 25 crosswalk ID types + college bridge, all verified against live data; 43 offline + 8 network tests passing; three real bugs found and fixed in review (see below) |
+| M3 As-of features + leakage | DONE | games/player_week_stats/player_week_features (199,632 rows over 2015-2025, built in ~7s from cache); leakage-safe by construction via SQL window frames; 51 offline (incl. 12 leakage tests with independent Python recomputation) + 9 network tests passing |
 | M2 Canonical identity | NOT STARTED | |
 | M3 As-of features + leakage | NOT STARTED | |
 | M4 Baselines + evaluation | NOT STARTED | |
@@ -88,6 +89,25 @@ milestone. See `docs/TRACEABILITY.md` for the acceptance-criteria-level mapping.
   IDs (handled via `nullstr=['NA']`), and the export itself contains internally-inconsistent
   duplicate gsis_id rows (e.g. one gsis_id mapped to two different player names) — quarantined
   rather than trusting whichever row loaded first.
+
+## M3 summary
+- `games` (3,028 rows, 2015-2025): derived from `pbp`'s `game_id`/`game_date` since nflverse
+  publishes no separate schedules dataset (verified 404) — the anchor for every as-of check.
+- `player_week_stats` (199,632 rows): normalized `stats_player_week` + `snap_counts`,
+  identity-joined once (gsis_id direct to spine; pfr_id through `player_id_map` for snaps,
+  same pattern as the M2 college bridge).
+- `player_week_features` (199,632 rows): the engineered lag/rolling panel — leakage-safe *by
+  construction* via SQL window frames (`ROWS BETWEEN N PRECEDING AND 1 PRECEDING`), not by
+  trusting a date filter. `target_fantasy_points_ppr` is the real unlagged outcome, kept only
+  as the training target.
+- `features_as_of(con, date)` is a second, independent row-level safety layer (`game_date <
+  as_of`, strict) for reconstructing "what was known as of date D" — verified both offline
+  and against real data that a game on the as-of date itself is correctly not yet visible.
+- Leakage tests (tests/leakage/): poison/sentinel injection, target isolation via independent
+  Python recomputation (not reusing the SQL under test), season-reset verification, and
+  rebuild-invariance (appending future weeks and rebuilding must not change historical rows'
+  stored features) — all passing, both offline (synthetic fixtures) and against real data.
+- Full build against 11 real seasons (2015-2025) of cached data: ~7 seconds.
 
 ## Known limitations (see docs/DECISIONS.md for full reasoning)
 - Sleeper, FantasyPros API, CollegeFootballData, KeepTradeCut, ESPN direct APIs are

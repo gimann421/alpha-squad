@@ -7,6 +7,7 @@ from rich.console import Console
 from rich.table import Table
 
 from alpha_squad.config.settings import get_settings
+from alpha_squad.features.build import build_features
 from alpha_squad.identity.canonical import build_identity
 from alpha_squad.identity.exceptions import list_exceptions
 from alpha_squad.sources.base import SourceError, SourceHealth, SourceStatus, utcnow
@@ -17,8 +18,10 @@ from alpha_squad.storage.snapshots import record_health, record_snapshot
 app = typer.Typer(help="Alpha Squad — fantasy football market-inefficiency intelligence system")
 sources_app = typer.Typer(help="Data source operations")
 identity_app = typer.Typer(help="Canonical player identity operations")
+features_app = typer.Typer(help="As-of feature store operations")
 app.add_typer(sources_app, name="sources")
 app.add_typer(identity_app, name="identity")
+app.add_typer(features_app, name="features")
 console = Console()
 
 # Datasets that vary by NFL season vs. ones that are a single current/whole-history file.
@@ -218,6 +221,35 @@ def identity_exceptions(
         )
     console.print(table)
     console.print(f"total: {len(rows)}")
+    con.close()
+
+
+@features_app.command("build")
+def features_build(
+    season_start: int = typer.Option(
+        2012, help="First season (snap_counts, an input, starts 2012)"
+    ),
+    season_end: int = typer.Option(2026, help="Last season to include"),
+) -> None:
+    """Build the games/player_week_stats/player_week_features tables from stored snapshots
+    for the given season range. Requires `sources ingest` and `identity build` to have
+    already run for that range."""
+    settings = get_settings()
+    con = get_connection(settings)
+    init_db(con)
+    seasons = list(range(season_start, season_end + 1))
+    try:
+        report = build_features(con, settings, seasons)
+    except RuntimeError as e:
+        console.print(f"[red]{e}[/red]")
+        con.close()
+        raise typer.Exit(code=1) from e
+
+    console.print(f"games inserted: [green]{report.games_inserted}[/green]")
+    console.print(f"player_week_stats upserted: [green]{report.player_week_stats_upserted}[/green]")
+    console.print(
+        f"player_week_features upserted: [green]{report.player_week_features_upserted}[/green]"
+    )
     con.close()
 
 
