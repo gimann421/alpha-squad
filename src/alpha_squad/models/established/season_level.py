@@ -47,7 +47,7 @@ MODEL_SPECS: dict[str, tuple[type, dict]] = {
 }
 
 
-def _load_season_level_data(
+def load_season_level_data(
     con: duckdb.DuckDBPyConnection, position: str, season_start: int, season_end: int
 ) -> pd.DataFrame:
     """One row per (player, target_season): season S-1 aggregate + preseason ECR for season
@@ -111,7 +111,7 @@ def run_season_level_established_ml(
 
     for target_season in range(season_start, season_end + 1):
         for position in POSITIONS:
-            all_data = _load_season_level_data(con, position, min_train_season, target_season)
+            all_data = load_season_level_data(con, position, min_train_season, target_season)
             train_df = all_data[all_data["target_season"] < target_season]
             predict_df = all_data[all_data["target_season"] == target_season]
 

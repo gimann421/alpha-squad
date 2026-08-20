@@ -12,7 +12,7 @@ import pytest
 
 from alpha_squad.models.established.data import load_position_week_data
 from alpha_squad.models.established.features import FULL_FEATURES
-from alpha_squad.models.established.season_level import _load_season_level_data
+from alpha_squad.models.established.season_level import load_season_level_data
 from alpha_squad.storage.db import init_db
 
 
@@ -92,7 +92,7 @@ class TestSeasonLevelWalkForward:
         ]:
             _seed_season(con, "p1", season, pts, position="WR")
 
-        df = _load_season_level_data(con, "WR", 2015, 2024)
+        df = load_season_level_data(con, "WR", 2015, 2024)
         # target_season = prior_season + 1, so a row with target_season==2024 uses season
         # 2023 as its "prior" features — the 999.0 poison value for season 2024 must only
         # ever appear as somebody's *target*, never as a feature input for an earlier row.
@@ -102,5 +102,5 @@ class TestSeasonLevelWalkForward:
     def test_missing_preseason_ecr_is_imputed_to_a_deliberately_bad_rank(self, con):
         _seed_season(con, "p1", 2022, 100.0, position="WR")
         _seed_season(con, "p1", 2023, 110.0, position="WR")
-        df = _load_season_level_data(con, "WR", 2015, 2023)
+        df = load_season_level_data(con, "WR", 2015, 2023)
         assert (df["preseason_ecr_rank"] == 999.0).all()

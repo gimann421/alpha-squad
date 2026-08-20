@@ -297,7 +297,50 @@ M5_PANEL_EXTENSION_DDL = [
     "ALTER TABLE player_week_features ADD COLUMN IF NOT EXISTS team_epa_avg_last3 DOUBLE",
 ]
 
-# M6+ DDL is appended here as later milestones are implemented.
+M6_UNCERTAINTY_DDL = [
+    # Mirrors AGENT_CONTRACTS.md's "Prediction contract" fields (p10/p25/median/p75/p90,
+    # top12_prob/top24_prob, confidence, model_version, feature_version).
+    """
+    CREATE TABLE IF NOT EXISTS uncertainty_predictions (
+        prediction_id VARCHAR PRIMARY KEY,
+        player_id VARCHAR NOT NULL,
+        season INTEGER NOT NULL,
+        position VARCHAR NOT NULL,
+        model_version VARCHAR NOT NULL,
+        feature_version VARCHAR NOT NULL,
+        point_prediction DOUBLE NOT NULL,
+        p10 DOUBLE,
+        p25 DOUBLE,
+        median DOUBLE,
+        p75 DOUBLE,
+        p90 DOUBLE,
+        top12_prob DOUBLE,
+        top24_prob DOUBLE,
+        confidence DOUBLE,
+        calibration_season INTEGER NOT NULL,
+        predicted_at TIMESTAMP NOT NULL,
+        UNIQUE (player_id, season, model_version)
+    )
+    """,
+    # Out-of-sample empirical coverage — did the [p10,p90]/[p25,p75] intervals actually
+    # contain that fraction of real outcomes? Published per PRODUCT_SPEC.md's "measure
+    # calibration" / "do not present false precision" requirement.
+    """
+    CREATE TABLE IF NOT EXISTS calibration_diagnostics (
+        model_version VARCHAR NOT NULL,
+        season INTEGER NOT NULL,
+        position VARCHAR NOT NULL,
+        n INTEGER NOT NULL,
+        coverage_10_90 DOUBLE,
+        coverage_25_75 DOUBLE,
+        mean_interval_width_10_90 DOUBLE,
+        evaluated_at TIMESTAMP NOT NULL,
+        PRIMARY KEY (model_version, season, position)
+    )
+    """,
+]
+
+# M7+ DDL is appended here as later milestones are implemented.
 ALL_DDL: list[str] = [
     *M1_SNAPSHOTS_DDL,
     *M2_IDENTITY_DDL,
@@ -305,4 +348,5 @@ ALL_DDL: list[str] = [
     *M4_BASELINES_DDL,
     *M5_ESTABLISHED_ML_DDL,
     *M5_PANEL_EXTENSION_DDL,
+    *M6_UNCERTAINTY_DDL,
 ]

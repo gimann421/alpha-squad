@@ -17,6 +17,7 @@ from alpha_squad.models.baselines.run import run_baselines
 from alpha_squad.models.established.season_level import run_season_level_established_ml
 from alpha_squad.models.established.train import run_established_ml
 from alpha_squad.models.report import write_evaluation_report
+from alpha_squad.models.uncertainty.run import run_uncertainty
 from alpha_squad.sources.base import SourceError, SourceHealth, SourceStatus, utcnow
 from alpha_squad.sources.registry import all_adapters
 from alpha_squad.storage.db import get_connection, init_db
@@ -424,6 +425,63 @@ def train_established_season(
         console.print(f"[yellow]skipped: {run_report.skipped}[/yellow]")
 
     write_evaluation_report(con, Path(report_path))
+    console.print(f"report written to [green]{report_path}[/green]")
+    con.close()
+
+
+@train_app.command("uncertainty")
+def train_uncertainty(
+    season_start: int = typer.Option(2020, help="First target season to walk-forward evaluate"),
+    season_end: int = typer.Option(2025, help="Last target season to walk-forward evaluate"),
+    min_train_season: int = typer.Option(2015, help="Earliest season usable for training data"),
+    report_path: str = typer.Option("reports/calibration_report.md", help="Markdown report output path"),
+) -> None:
+    """Walk-forward split-conformal uncertainty: p10-p90 + top-12/24 probabilities per
+    player/season/position, with out-of-sample calibration diagnostics (did the intervals
+    actually contain that fraction of real outcomes?)."""
+    settings = get_settings()
+    con = get_connection(settings)
+    init_db(con)
+
+    run_report = run_uncertainty(con, season_start, season_end, min_train_season)
+
+    table = Table(title="Calibration diagnostics (out-of-sample coverage)")
+    for col in ("season", "position", "n", "coverage_10_90 (target 0.80)", "coverage_25_75 (target 0.50)", "mean_width"):
+        table.add_column(col)
+    for row in run_report.calibration_rows:
+        if row.get("n", 0) == 0:
+            continue
+        table.add_row(
+            str(row["season"]), row["position"], str(row["n"]),
+            f"{row['coverage_10_90']:.2f}", f"{row['coverage_25_75']:.2f}",
+            f"{row['mean_interval_width_10_90']:.1f}",
+        )
+    console.print(table)
+    console.print(f"predictions written: [green]{run_report.predictions_written}[/green]")
+    if run_report.skipped:
+        console.print(f"[yellow]skipped: {run_report.skipped}[/yellow]")
+
+    lines = [
+        "# Uncertainty Calibration Report",
+        "",
+        "Out-of-sample: season S's intervals are calibrated on season S-1's residuals from a "
+        "model trained on seasons before S-1, then checked against season S's real outcomes "
+        "that the model/calibration never saw. coverage_10_90 should be near 0.80; "
+        "coverage_25_75 near 0.50. See docs/DECISIONS.md for the conformal method.",
+        "",
+        "| season | position | n | coverage_10_90 | coverage_25_75 | mean_width_10_90 |",
+        "|---|---|---|---|---|---|",
+    ]
+    for row in run_report.calibration_rows:
+        if row.get("n", 0) == 0:
+            continue
+        lines.append(
+            f"| {row['season']} | {row['position']} | {row['n']} | "
+            f"{row['coverage_10_90']:.3f} | {row['coverage_25_75']:.3f} | "
+            f"{row['mean_interval_width_10_90']:.2f} |"
+        )
+    Path(report_path).parent.mkdir(parents=True, exist_ok=True)
+    Path(report_path).write_text("\n".join(lines) + "\n")
     console.print(f"report written to [green]{report_path}[/green]")
     con.close()
 

@@ -3,7 +3,7 @@
 Living summary of what is implemented, validated, and outstanding. Updated at the end of every
 milestone. See `docs/TRACEABILITY.md` for the acceptance-criteria-level mapping.
 
-## Status: M5 complete, M6 next
+## Status: M6 complete, M7 next
 
 | Milestone | Status | Notes |
 |---|---|---|
@@ -13,6 +13,7 @@ milestone. See `docs/TRACEABILITY.md` for the acceptance-criteria-level mapping.
 | M3 As-of features + leakage | DONE | games/player_week_stats/player_week_features (199,632 rows over 2015-2025, built in ~7s from cache); leakage-safe by construction via SQL window frames; 51 offline (incl. 12 leakage tests with independent Python recomputation) + 9 network tests passing |
 | M4 Baselines + evaluation | DONE | 3 baselines (previous-year, weighted-2yr, ECR-implied) walk-forward evaluated 2018-2025 against 21,421 real player-seasons and 210,730 real market snapshots; shared evaluation harness (MAE/RMSE/R²/Spearman/top-N hit rate/tier accuracy) reused by every later milestone; 65 offline + 10 network tests passing. **One number in this milestone's report was wrong and got corrected in M5 — see D19.** |
 | M5 Established-player ML | DONE | Position-specific Ridge/CatBoost/XGBoost + opportunity-only + team-environment-only + ensemble, both weekly (in-season) and season-level (preseason, apples-to-apples vs M4); team_week_stats/features extend the M3 panel; model_registry tracks version/validation; 70 offline + 12 network tests passing. One real evaluation-harness bug found and fixed (D19), affecting M4's reports too. |
+| M6 Uncertainty + calibration | DONE | Split-conformal p10/p25/median/p75/p90 + Monte Carlo top-12/24 probabilities on the M5 season-level CatBoost model; walk-forward 3-way split (train/calibrate/target) so calibration is genuinely out-of-sample; real measured coverage_10_90 mostly 0.72-0.90 (target 0.80) across 2019-2025/QB-RB-WR-TE — legitimately well-calibrated, not just plausible-looking; 82 offline + 13 network tests passing |
 | M2 Canonical identity | NOT STARTED | |
 | M3 As-of features + leakage | NOT STARTED | |
 | M4 Baselines + evaluation | NOT STARTED | |
@@ -162,6 +163,26 @@ milestone. See `docs/TRACEABILITY.md` for the acceptance-criteria-level mapping.
   been silently wrong since M4. Fixed with `SKILL_POSITIONS = ("QB","RB","WR","TE")` scoping
   the "ALL" rollup; per-position numbers were never affected (D19). All M4 and M5 evaluation
   reports were regenerated after the fix; regression-tested.
+
+## M6 summary
+- `uncertainty_predictions`: p10/p25/median/p75/p90 + top12_prob/top24_prob + a documented
+  confidence heuristic, one row per (player, season, model_version) — field names mirror
+  AGENT_CONTRACTS.md's Prediction contract directly.
+- Split-conformal method (`models/uncertainty/conformal.py`): signed calibration-residual
+  quantiles (not a symmetric margin), so intervals can be asymmetric — verified this matters
+  with a synthetic right-skewed-residual test (p90 offset larger in magnitude than p10).
+  Three-way, strictly time-ordered split per target season S: proper-train (< S-1) ->
+  calibration (S-1 only, held out from training) -> target (S). Top-12/24 probabilities via
+  Monte Carlo: resample from the empirical calibration-residual distribution 2,000x per
+  player, rank within the simulated draw, measure how often each player lands in the top
+  12/24 among their position peers.
+- `calibration_diagnostics`: out-of-sample empirical coverage, published to
+  `reports/calibration_report.md`. Real result on 2019-2025 QB/RB/WR/TE: coverage_10_90
+  mostly 0.72-0.90 against a target of 0.80 (one outlier at 0.69, WR 2024) —
+  genuinely close to nominal, not just directionally plausible. This is the "measure
+  calibration" / "do not present false precision" requirement actually verified against real
+  data, not asserted.
+- 3,120 real predictions written on the full 2019-2025 run.
 
 ## Known limitations (see docs/DECISIONS.md for full reasoning)
 - Sleeper, FantasyPros API, CollegeFootballData, KeepTradeCut, ESPN direct APIs are
