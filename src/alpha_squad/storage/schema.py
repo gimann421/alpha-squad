@@ -545,7 +545,29 @@ M9_EVIDENCE_DDL = [
     """,
 ]
 
-# M10+ DDL is appended here as later milestones are implemented.
+M10_LEAGUE_DDL = [
+    # Mirrors AGENT_CONTRACTS.md's Decision contract. One row per recommendation actually
+    # requested (persisted by the CLI layer, not by the pure recommendation functions
+    # themselves -- league/draft.py, waiver.py, trade.py stay side-effect-free and testable),
+    # giving every draft/waiver/trade call the same traceability M4-M9's outputs already have.
+    """
+    CREATE TABLE IF NOT EXISTS decisions (
+        decision_id VARCHAR PRIMARY KEY,
+        decision_type VARCHAR NOT NULL,
+        league_id VARCHAR NOT NULL,
+        season INTEGER NOT NULL,
+        recommendation VARCHAR NOT NULL,
+        alternatives_json VARCHAR NOT NULL,
+        expected_value DOUBLE,
+        confidence DOUBLE,
+        reasons_json VARCHAR NOT NULL,
+        provenance_json VARCHAR NOT NULL,
+        built_at TIMESTAMP NOT NULL
+    )
+    """,
+]
+
+# M11+ DDL is appended here as later milestones are implemented.
 ALL_DDL: list[str] = [
     *M1_SNAPSHOTS_DDL,
     *M2_IDENTITY_DDL,
@@ -557,4 +579,5 @@ ALL_DDL: list[str] = [
     *M7_ROOKIE_DDL,
     *M8_MARKET_EDGE_DDL,
     *M9_EVIDENCE_DDL,
+    *M10_LEAGUE_DDL,
 ]

@@ -342,6 +342,51 @@ recent fully-known state strictly before W — conservative and leakage-safe, co
 `dt`-based branch's own "strictly before the week's first game" rule). `depth_team` is
 `TRY_CAST` to INTEGER since it is a VARCHAR column holding integer-valued strings.
 
+## D25 — Replacement level is a real value-based-drafting (VBD) allocation over the league's own lineup config; dynasty trade's age curve is a disclosed heuristic, not a trained model; the M6 season-level model structurally excludes rookies, filled from M7's real predictions instead
+`PRODUCT_SPEC.md`'s league optimizer requires replacement level, positional scarcity, and
+marginal value over replacement to be real, not a fixed "top-N" assumption, and specifically
+calls for the architecture to represent arbitrary league settings while exactly representing
+the target league (10 teams, 2QB/2RB/2WR/1TE/2FLEX). `league/replacement.py` implements this as
+a real VBD allocation: dedicated slots (QB, RB, WR, TE) are filled first by within-position
+rank, then flex slots are filled by the single best remaining players across every
+flex-eligible position (RB/WR/TE) -- earned by actual projected value, not split evenly by
+position. Verified against real 2025 data: this produces 20 dedicated QB starters (10 teams x
+2, matching the target league exactly) and a QB replacement level of ~220 points -- a
+genuinely different, deeper market than a 1QB league's ~13-15th-ranked-QB replacement would be,
+exactly the "strong test that the engine is real" the original implementation plan called for.
+
+**Real player coverage gap found and fixed:** M6's season-level uncertainty model requires a
+prior season's `player_season_stats` row (`load_season_level_data`'s join), which structurally
+excludes true rookies -- verified against real data: 0 of 442 real 2024
+`uncertainty_predictions` rows belonged to a `rookie_season=2024` player. Since rookies are
+exactly the player class a waiver-wire or rookie-draft recommendation most needs,
+`league/replacement.py::load_season_projections` fills any player missing from
+`uncertainty_predictions` in from M7's real `rookie_predictions` (`draft_class == season`)
+rather than silently omitting them -- established players always take the M6 value when both
+exist (M6 has more information: an actual prior season), rookies are covered by the model
+actually built for them.
+
+**Dynasty trade's age curve is a disclosed heuristic, not a trained model:** no ground-truth
+dynasty-value-decay dataset exists to fit one in the time/data available in this environment.
+`league/trade.py::AGE_CURVE_PARAMS` (position-specific peak/decline/cliff ages, fantasy-analytics
+convention) is documented as an assumption here, exactly like every other documented assumption
+in this log, and every trade recommendation's `reasons` explicitly labels it as a heuristic, not
+a validated signal -- the real, validated signals in a trade recommendation are M8's EDGE
+action/reasons and the real DynastyProcess dynasty value; the age curve is a disclosed secondary
+adjustment on top of them, never the primary basis for BUY/SELL (that stays M8's, unchanged).
+
+**Waiver/FAAB bid must react to what just happened, not restate the preseason baseline:**
+verified against a real case (Keon Coleman, a 2024 rookie WR real-promoted to WR1 by week 8):
+his static, preseason-anchored M7 season-total projection is below replacement level (a
+realistic outcome for many rookies at the time they're drafted), which would zero out a FAAB
+bid under a naive marginal-value-only formula despite his real, detected
+`depth_chart_promotion` and `usage_share_spike` evidence (M9) saying otherwise. `recommend_waiver_pickup`
+blends a real evidence-driven "value-spike" contribution into the bid signal (bounded, scaled
+to the league's own replacement-level magnitude) precisely so a confirmed recent role change can
+justify a real bid even when the season-level baseline hasn't caught up -- exactly
+`PRODUCT_SPEC.md`'s "value-spike probability" requirement, and exactly what a real waiver-wire
+decision needs to weigh.
+
 ## D14 — Agents are deterministic services, not LLM calls
 `ARCHITECTURE.md` §6: "The project orchestrator is an engineering orchestration layer, not itself
 the source of fantasy truth." Agents in `src/alpha_squad/agents/` are typed Python

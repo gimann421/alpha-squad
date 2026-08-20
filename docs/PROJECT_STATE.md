@@ -3,7 +3,7 @@
 Living summary of what is implemented, validated, and outstanding. Updated at the end of every
 milestone. See `docs/TRACEABILITY.md` for the acceptance-criteria-level mapping.
 
-## Status: M9 complete, M10 next
+## Status: M10 complete, M11 next
 
 | Milestone | Status | Notes |
 |---|---|---|
@@ -17,7 +17,7 @@ milestone. See `docs/TRACEABILITY.md` for the acceptance-criteria-level mapping.
 | M7 Rookie/prospect intelligence | DONE | Draft capital + combine + prior-season landing-spot features (college production LIMITED — no verified ID bridge to cfbfastR exists, D20); CatBoost regression (rookie-year PPR) + classifier (top-24 breakout, Brier-scored) walk-forward by draft class; nearest-neighbor historical comps; 1,077 real rookie-seasons, 88 offline + 15 network tests passing; two real bugs found and fixed (combine height stored as "6-0" string, comps dtype crash) |
 | M8 Market + EDGE | DONE | market_snapshot extended to ro/do/rsf/dsf (2QB-aware); dynasty_values (681 real players, 97.6% identity coverage); EDGE (rank/points/probability edge, BUY/HOLD/SELL/WATCH) gated so a raw rank discrepancy alone can never produce BUY/SELL (D21); historical EDGE validation shows the real BUY cohort beat market-implied points in every scored season 2022-2025 (+25.7, +21.8, +16.9, +0.33 PPR); 102 offline + 18 network tests passing (both suites reran clean end-to-end after this milestone) |
 | M9 Evidence engine | DONE | 4 real Strong-tier detectors (depth-chart move, injury self/teammate-opportunity, roster transaction, usage-share shift) on officially-sourced nflverse data; 33,311 real events across 2019-2025; bounded (±15%) evidence-adjusted weekly projections, never overwriting the base M5 prediction; wired as a real (mostly-neutral-in-practice) veto into M8's EDGE gate (D23); 123 offline + 21 network tests passing (verified via `pytest -m "not network"` / `-m network` directly, not estimated) |
-| M10 League decision engine | NOT STARTED | |
+| M10 League decision engine | DONE | Real value-based-drafting replacement/scarcity derived from the league's own lineup config (verified: 2QB target league produces 20 real dedicated QB starters on real 2025 data, exactly 10 teams x 2 QB slots); draft/waiver/dynasty-trade recommendations with alternatives, roster fit, next-pick survival probability, and real evidence-driven value-spike bidding; the M7 rookie-prediction fallback was confirmed live against a real rookie-only player; 152 offline + 26 network tests passing |
 | M11 Agents/orchestrator | NOT STARTED | |
 | M12 API + frontend | NOT STARTED | |
 | M13 Hardening | NOT STARTED | |
@@ -292,6 +292,56 @@ milestone. See `docs/TRACEABILITY.md` for the acceptance-criteria-level mapping.
   Fixed with schema detection in `evidence/events.py::_depth_chart_entering`, normalizing both
   into the same shape before any diff logic runs.
 
+## M10 summary
+- `league/context.py`: `LeagueContext` mirrors AGENT_CONTRACTS.md's League context contract
+  exactly (`extra="allow"` + free-form dicts for lineup/scoring/roster/etc., so arbitrary
+  league settings can be represented per ACCEPTANCE_CRITERIA.md), loaded from
+  `config/league_configs/target_league.yaml` (10 teams, 2QB/2RB/2WR/1TE/2FLEX, dynasty PPR,
+  bench 10, FAAB $100 — D7's defaults).
+- `league/replacement.py`: real value-based-drafting (VBD) with flex allocation — dedicated
+  slots filled first by within-position rank, then flex slots earned by the single best
+  remaining players across every flex-eligible position (not split evenly). Verified against
+  real 2025 uncertainty_predictions (455 real players): exactly 20 dedicated QB starters (10
+  teams x 2, matching the target league precisely) and a QB replacement level (~220 pts) far
+  above RB/WR/TE's (~138-146 pts) — the target league's 2QB format genuinely reshapes the
+  market, not a hardcoded assumption. Real, disclosed finding worth a future look: at this
+  model's real rank ~18-26, WR point_prediction values exceed RB/TE's enough that every FLEX
+  slot in this run went to WR — a legitimate downstream consequence of M5/M6's own
+  already-validated (by those milestones' own gates) predictions, not a bug in M10's
+  allocation logic, but a candidate for cross-position calibration review in a future model
+  refinement pass.
+- Real coverage gap found and fixed: M6's uncertainty model structurally excludes true
+  rookies (0/442 real 2024 rows). `load_season_projections` now fills any player missing from
+  `uncertainty_predictions` in from M7's real `rookie_predictions`, so waiver/draft tools can
+  evaluate rookies at all (D25).
+- `league/draft.py`: VORP x roster-fit x model-confidence x next-pick-survival-probability
+  scoring, with alternatives and reasons (Decision contract). Survival probability models the
+  real `ecr_best`/`ecr_worst` expert-rank dispersion (M4/M8) as Uniform(best, worst) — real
+  data, not a fabricated distribution.
+- `league/waiver.py`: meaningful-role probability (M6 top24_prob), dynasty value (M8), a
+  value-spike read from real recent M9 evidence, roster fit, replacement level, a
+  scarcity-and-role-based competing-bid-likelihood heuristic, and a bounded (≤40% of budget)
+  FAAB bid. Real, spot-checked example: Keon Coleman (2024 rookie WR), whose static
+  preseason-anchored projection is *below* WR replacement level (a realistic outcome for many
+  rookies), still gets a real, non-zero recommended bid ($18.94 of $100) because his real,
+  detected `depth_chart_promotion`/`usage_share_spike` evidence (his actual real-life
+  promotion to WR1) drives the value-spike term — verified this would have incorrectly zeroed
+  out under a naive marginal-value-only formula, and fixed (D25).
+- `league/trade.py`: dynasty buy/hold/sell/watch built directly on M8's real, already-validated
+  EDGE action/reasons and DynastyProcess's real `value_2qb`, with a clearly-labeled,
+  documented age-curve heuristic (NOT a trained model — no ground-truth dynasty-decay dataset
+  exists to fit one, D25) as a disclosed secondary adjustment only.
+- `decisions` table (AGENT_CONTRACTS.md's Decision contract): every `league draft`/`waiver`/
+  `trade` CLI call persists its recommendation, alternatives, expected value, confidence,
+  reasons, and provenance — the pure recommendation functions themselves stay side-effect-free
+  and unit-tested independently.
+- 29 new offline unit tests (152 total), covering the VBD algorithm's flex-earned-not-split
+  behavior, the literal 2QB-vs-1QB replacement-level difference, survival-probability edge
+  cases, roster-need bounds, and the evidence-driven bid override case. 5 new live network
+  tests (`tests/integration/test_league_live.py`, 26 total network) validate the same logic
+  end-to-end against real 2022-2025 data, including confirming the M7 rookie-prediction
+  fallback actually returns a usable projection for a real rookie-only player.
+
 ## Known limitations (see docs/DECISIONS.md for full reasoning)
 - Sleeper, FantasyPros API, CollegeFootballData, KeepTradeCut, ESPN direct APIs are
   `BLOCKED_BY_POLICY` in this environment. Verified open-data substitutes are wired in instead
@@ -320,3 +370,13 @@ milestone. See `docs/TRACEABILITY.md` for the acceptance-criteria-level mapping.
   preseason-anchored EDGE, since evidence detectors are in-season and EDGE is preseason (D23) —
   a genuine horizon mismatch, disclosed rather than papered over. An in-season EDGE variant that
   would let evidence meaningfully move `evidence_score` beyond a veto is future scope.
+- Dynasty trade's age-curve adjustment is a documented heuristic (D25), not a trained/validated
+  model — no ground-truth dynasty-value-decay dataset exists in this environment to fit one. It
+  is a disclosed secondary adjustment only; the primary BUY/SELL signal is M8's real, validated
+  EDGE.
+- A real, disclosed cross-position calibration question (not a bug): on real 2025 data, M5/M6's
+  point predictions at rank ~18-26 favor WR enough that M10's real VBD allocation sent every
+  FLEX slot to WR rather than splitting across RB/WR/TE. M5/M6 passed their own baseline/
+  calibration gates in aggregate; this is a downstream reminder that aggregate MAE doesn't
+  guarantee cross-position relative calibration, worth revisiting in a future model-refinement
+  pass — not addressed in M10, which correctly allocates flex by whatever values it is given.

@@ -14,6 +14,16 @@ from alpha_squad.evidence.prior_update import run_prior_update
 from alpha_squad.features.build import build_features
 from alpha_squad.identity.canonical import build_identity
 from alpha_squad.identity.exceptions import list_exceptions
+from alpha_squad.league.context import DEFAULT_TARGET_LEAGUE_PATH, load_league_context
+from alpha_squad.league.decisions import record_decision
+from alpha_squad.league.draft import recommend_draft_pick
+from alpha_squad.league.replacement import (
+    load_season_projections,
+    positional_scarcity,
+    replacement_level,
+)
+from alpha_squad.league.trade import recommend_dynasty_trade
+from alpha_squad.league.waiver import recommend_waiver_pickup
 from alpha_squad.market.consensus import build_market_snapshot
 from alpha_squad.market.dynasty_values import build_dynasty_values
 from alpha_squad.market.edge import (
@@ -42,6 +52,7 @@ evaluate_app = typer.Typer(help="Baseline/model evaluation operations")
 train_app = typer.Typer(help="Model training operations")
 edge_app = typer.Typer(help="Model-vs-market EDGE operations")
 evidence_app = typer.Typer(help="Structured evidence engine operations")
+league_app = typer.Typer(help="League-specific decision engine operations")
 app.add_typer(sources_app, name="sources")
 app.add_typer(identity_app, name="identity")
 app.add_typer(features_app, name="features")
@@ -50,6 +61,7 @@ app.add_typer(evaluate_app, name="evaluate")
 app.add_typer(train_app, name="train")
 app.add_typer(edge_app, name="edge")
 app.add_typer(evidence_app, name="evidence")
+app.add_typer(league_app, name="league")
 console = Console()
 
 # Datasets that vary by NFL season vs. ones that are a single current/whole-history file.
@@ -712,6 +724,203 @@ def evidence_update_projections(
     console.print(table)
     n_adjusted = sum(1 for d in deltas if abs(d.adjustment_pct) > 1e-9)
     console.print(f"deltas written: [green]{len(deltas)}[/green] ({n_adjusted} materially adjusted)")
+    con.close()
+
+
+@league_app.command("replacement")
+def league_replacement(
+    season: int = typer.Option(..., help="Season to compute replacement level/scarcity for"),
+    league_config: str = typer.Option(
+        str(DEFAULT_TARGET_LEAGUE_PATH), help="Path to league YAML config"
+    ),
+) -> None:
+    """Show replacement level and positional scarcity derived from the league's own lineup
+    config -- e.g. a 2QB league's QB replacement level sits far deeper than a 1QB league's,
+    purely from the config, not a hardcoded assumption. Requires `train uncertainty` to have
+    already run for this season."""
+    settings = get_settings()
+    con = get_connection(settings)
+    init_db(con)
+    league = load_league_context(league_config)
+    projections, positions = load_season_projections(con, season)
+    if not projections:
+        console.print(
+            f"[red]no uncertainty_predictions for season {season}; run `train uncertainty` first[/red]"
+        )
+        con.close()
+        raise typer.Exit(code=1)
+    levels = replacement_level(league, projections, positions)
+    scarcity = positional_scarcity(league, projections, positions)
+
+    table = Table(title=f"Replacement level & scarcity ({league.league_id}, {season})")
+    for col in ("position", "replacement_level", "scarcity"):
+        table.add_column(col)
+    for pos in sorted(levels):
+        table.add_row(pos, f"{levels[pos]:.1f}", f"{scarcity.get(pos, 0.0):.1f}")
+    console.print(table)
+    con.close()
+
+
+@league_app.command("draft")
+def league_draft(
+    season: int = typer.Option(..., help="Season to recommend a draft pick for"),
+    roster: str = typer.Option(
+        "", help="Comma-separated positions already on your roster, e.g. 'QB,RB,RB'"
+    ),
+    available: str = typer.Option(
+        "", help="Comma-separated player_ids available to draft (default: every projected player)"
+    ),
+    next_pick: int | None = typer.Option(
+        None, help="Your next overall pick number, for survival probability"
+    ),
+    ecr_type: str = typer.Option(DEFAULT_ECR_TYPE, help="Market series for survival probability"),
+    league_config: str = typer.Option(
+        str(DEFAULT_TARGET_LEAGUE_PATH), help="Path to league YAML config"
+    ),
+    top_n: int = typer.Option(5, help="Number of alternatives to show"),
+) -> None:
+    """Recommend a draft pick: VORP, roster fit, model confidence, and next-pick survival
+    probability, with alternatives and reasoning (AGENT_CONTRACTS.md's Decision contract)."""
+    settings = get_settings()
+    con = get_connection(settings)
+    init_db(con)
+    league = load_league_context(league_config)
+    roster_positions = [p.strip() for p in roster.split(",") if p.strip()]
+    if available:
+        available_ids = {p.strip() for p in available.split(",") if p.strip()}
+    else:
+        projections, _ = load_season_projections(con, season)
+        available_ids = set(projections)
+
+    try:
+        rec = recommend_draft_pick(
+            con, league, season, roster_positions, available_ids, next_pick, ecr_type, top_n
+        )
+    except RuntimeError as e:
+        console.print(f"[red]{e}[/red]")
+        con.close()
+        raise typer.Exit(code=1) from e
+
+    table = Table(title="Draft recommendation")
+    for col in ("player_id", "position", "vorp", "confidence", "survival_prob", "score"):
+        table.add_column(col)
+    for c in rec.candidates:
+        table.add_row(
+            c.player_id,
+            c.position,
+            f"{c.vorp:+.1f}",
+            f"{c.confidence:.2f}" if c.confidence is not None else "-",
+            f"{c.survival_probability:.0%}" if c.survival_probability is not None else "-",
+            f"{c.score:.1f}",
+        )
+    console.print(table)
+    console.print(f"[green]Recommendation: {rec.recommendation}[/green]")
+    for r in rec.reasons:
+        console.print(f"  - {r}")
+
+    decision_id = record_decision(
+        con,
+        "draft_pick",
+        league.league_id,
+        season,
+        rec.recommendation,
+        rec.alternatives,
+        rec.expected_value,
+        rec.confidence,
+        rec.reasons,
+        {"league_config": league_config, "ecr_type": ecr_type, "next_pick": next_pick},
+    )
+    console.print(f"decision recorded: [green]{decision_id}[/green]")
+    con.close()
+
+
+@league_app.command("waiver")
+def league_waiver(
+    season: int = typer.Option(..., help="Season"),
+    week: int = typer.Option(..., help="Week"),
+    player_id: str = typer.Option(..., help="Canonical player_id to evaluate for a waiver claim"),
+    roster: str = typer.Option("", help="Comma-separated positions already on your roster"),
+    league_config: str = typer.Option(
+        str(DEFAULT_TARGET_LEAGUE_PATH), help="Path to league YAML config"
+    ),
+) -> None:
+    """Recommend a FAAB bid for a specific waiver-wire player: meaningful-role probability,
+    dynasty value, a value-spike read from recent evidence, roster fit, competing-bid
+    likelihood, and a bounded bid recommendation."""
+    settings = get_settings()
+    con = get_connection(settings)
+    init_db(con)
+    league = load_league_context(league_config)
+    roster_positions = [p.strip() for p in roster.split(",") if p.strip()]
+    try:
+        rec = recommend_waiver_pickup(con, league, season, week, player_id, roster_positions)
+    except RuntimeError as e:
+        console.print(f"[red]{e}[/red]")
+        con.close()
+        raise typer.Exit(code=1) from e
+
+    console.print(
+        f"[green]{rec.player_id}[/green] ({rec.position}): recommended FAAB bid "
+        f"[green]${rec.recommended_bid:.2f}[/green] of ${league.faab_budget:.0f}"
+    )
+    for r in rec.reasons:
+        console.print(f"  - {r}")
+
+    decision_id = record_decision(
+        con,
+        "waiver_bid",
+        league.league_id,
+        season,
+        rec.player_id,
+        [],
+        rec.recommended_bid,
+        rec.meaningful_role_probability,
+        rec.reasons,
+        {"league_config": league_config, "week": week},
+    )
+    console.print(f"decision recorded: [green]{decision_id}[/green]")
+    con.close()
+
+
+@league_app.command("trade")
+def league_trade(
+    season: int = typer.Option(..., help="Season"),
+    player_id: str = typer.Option(..., help="Canonical player_id to evaluate for a dynasty trade"),
+    ecr_type: str = typer.Option(DEFAULT_ECR_TYPE, help="Market series EDGE was built against"),
+    league_config: str = typer.Option(
+        str(DEFAULT_TARGET_LEAGUE_PATH), help="Path to league YAML config"
+    ),
+) -> None:
+    """Recommend a dynasty buy/hold/sell/watch action: real EDGE (M8) + real dynasty market
+    value (M8) + a documented age-curve heuristic (docs/DECISIONS.md D25)."""
+    settings = get_settings()
+    con = get_connection(settings)
+    init_db(con)
+    league = load_league_context(league_config)
+    rec = recommend_dynasty_trade(con, player_id, season, ecr_type)
+
+    console.print(f"[green]{rec.action}[/green] {rec.player_id}")
+    if rec.dynasty_value_2qb is not None:
+        console.print(
+            f"  dynasty value (2QB): {rec.dynasty_value_2qb:.0f}, "
+            f"age-adjusted: {rec.age_adjusted_value:.0f}"
+        )
+    for r in rec.reasons:
+        console.print(f"  - {r}")
+
+    decision_id = record_decision(
+        con,
+        "dynasty_trade",
+        league.league_id,
+        season,
+        rec.player_id,
+        [],
+        rec.age_adjusted_value,
+        None,
+        rec.reasons,
+        {"league_config": league_config, "ecr_type": ecr_type},
+    )
+    console.print(f"decision recorded: [green]{decision_id}[/green]")
     con.close()
 
 
