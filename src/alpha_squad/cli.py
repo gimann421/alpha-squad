@@ -8,6 +8,14 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
+from alpha_squad.agents.contracts import Task
+from alpha_squad.agents.disagreement import (
+    detect_baseline_vs_ml_disagreements,
+    detect_model_vs_market_disagreements,
+    resolve_and_record,
+)
+from alpha_squad.agents.orchestrator import run_pipeline
+from alpha_squad.agents.state import reconstruct_run
 from alpha_squad.config.settings import get_settings
 from alpha_squad.evidence.events import build_evidence_events_range
 from alpha_squad.evidence.prior_update import run_prior_update
@@ -53,6 +61,7 @@ train_app = typer.Typer(help="Model training operations")
 edge_app = typer.Typer(help="Model-vs-market EDGE operations")
 evidence_app = typer.Typer(help="Structured evidence engine operations")
 league_app = typer.Typer(help="League-specific decision engine operations")
+orchestrate_app = typer.Typer(help="Agent orchestrator operations")
 app.add_typer(sources_app, name="sources")
 app.add_typer(identity_app, name="identity")
 app.add_typer(features_app, name="features")
@@ -62,6 +71,7 @@ app.add_typer(train_app, name="train")
 app.add_typer(edge_app, name="edge")
 app.add_typer(evidence_app, name="evidence")
 app.add_typer(league_app, name="league")
+app.add_typer(orchestrate_app, name="orchestrate")
 console = Console()
 
 # Datasets that vary by NFL season vs. ones that are a single current/whole-history file.
@@ -921,6 +931,109 @@ def league_trade(
         {"league_config": league_config, "ecr_type": ecr_type},
     )
     console.print(f"decision recorded: [green]{decision_id}[/green]")
+    con.close()
+
+
+@orchestrate_app.command("demo")
+def orchestrate_demo(
+    run_id: str = typer.Option(..., help="Identifier for this orchestrated run"),
+) -> None:
+    """Run a small real DAG through the orchestrator: data_engineering (players/draft_picks/
+    combine/player_ids) -> player_identity, with real dependency resolution, retry/backoff,
+    and state persisted to agent_tasks/agent_results (never an LLM call, D14)."""
+    settings = get_settings()
+    tasks = [
+        Task(
+            task_id=f"{run_id}-data",
+            agent="data_engineering",
+            objective="Ingest identity source datasets",
+            depends_on=[],
+            params={
+                "datasets": [
+                    ["nflverse", "players", {}],
+                    ["nflverse", "draft_picks", {}],
+                    ["nflverse", "combine", {}],
+                    ["dynastyprocess", "player_ids", {}],
+                ]
+            },
+        ),
+        Task(
+            task_id=f"{run_id}-identity",
+            agent="player_identity",
+            objective="Build canonical player identity from the ingested snapshots",
+            depends_on=[f"{run_id}-data"],
+        ),
+    ]
+    report = run_pipeline(settings, run_id, tasks)
+
+    table = Table(title=f"Orchestrated run {run_id}")
+    for col in ("task_id", "agent", "status", "confidence"):
+        table.add_column(col)
+    for task_id in report.order:
+        result = report.results[task_id]
+        table.add_row(
+            task_id, result.agent, result.status,
+            f"{result.confidence:.2f}" if result.confidence is not None else "-",
+        )
+    console.print(table)
+    for task_id in report.order:
+        for f in report.results[task_id].findings:
+            console.print(f"  [{task_id}] {f}")
+
+
+@orchestrate_app.command("status")
+def orchestrate_status(run_id: str = typer.Option(..., help="Run ID to reconstruct")) -> None:
+    """Reconstruct a full run's status purely from agent_tasks/agent_results DB state --
+    no chat transcript or in-memory data required."""
+    settings = get_settings()
+    con = get_connection(settings)
+    init_db(con)
+    rebuilt = reconstruct_run(con, run_id)
+    if not rebuilt["tasks"]:
+        console.print(f"[yellow]no tasks found for run_id={run_id!r}[/yellow]")
+        con.close()
+        raise typer.Exit(code=1)
+
+    table = Table(title=f"Run {run_id} (reconstructed from state)")
+    for col in ("task_id", "agent", "status", "attempt", "depends_on"):
+        table.add_column(col)
+    for t in rebuilt["tasks"]:
+        table.add_row(t["task_id"], t["agent"], t["status"], str(t["attempt"]), ",".join(t["depends_on"]))
+    console.print(table)
+    con.close()
+
+
+@orchestrate_app.command("disagreements")
+def orchestrate_disagreements(
+    season: int = typer.Option(..., help="Season to detect disagreements for"),
+    ecr_type: str = typer.Option(DEFAULT_ECR_TYPE, help="Market series for model-vs-market comparison"),
+    run_id: str = typer.Option("adhoc", help="Run ID to associate detected disagreements with"),
+) -> None:
+    """Detect real disagreements (model vs. market from edge_snapshot.rank_edge; baseline vs.
+    established-ML from evaluation_results) and resolve+record each, preserving the minority
+    position (AGENT_CONTRACTS.md's conflict protocol)."""
+    settings = get_settings()
+    con = get_connection(settings)
+    init_db(con)
+
+    disagreements = detect_model_vs_market_disagreements(con, season, ecr_type)
+    for position in ("QB", "RB", "WR", "TE"):
+        disagreements.extend(detect_baseline_vs_ml_disagreements(con, season, position))
+
+    table = Table(title=f"Disagreements ({season})")
+    for col in ("type", "subject", "majority", "minority", "resolution"):
+        table.add_column(col)
+    for d in disagreements:
+        disagreement_id = resolve_and_record(con, run_id, d)
+        table.add_row(
+            d["disagreement_type"],
+            d["subject"],
+            f"{d['majority_position']} ({d['majority_value']:.1f})",
+            f"{d['minority_position']} ({d['minority_value']:.1f})",
+            disagreement_id,
+        )
+    console.print(table)
+    console.print(f"{len(disagreements)} disagreements detected and recorded")
     con.close()
 
 

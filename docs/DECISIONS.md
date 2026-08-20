@@ -387,6 +387,42 @@ justify a real bid even when the season-level baseline hasn't caught up -- exact
 `PRODUCT_SPEC.md`'s "value-spike probability" requirement, and exactly what a real waiver-wire
 decision needs to weigh.
 
+## D26 — The orchestrator's concurrent task dispatch must not run schema DDL per-connection; agents are thin wrappers around already-validated M1-M10 code, not new logic
+Building M11's DAG orchestrator surfaced a real DuckDB concurrency bug during its own test
+suite, not a hypothetical one: `run_pipeline`'s original per-task connection factory called
+`init_db()` (which issues `CREATE TABLE IF NOT EXISTS` and `ALTER TABLE ... ADD COLUMN IF NOT
+EXISTS`) on every worker thread's own connection. When two independent tasks became READY and
+started concurrently (exactly the real-parallelism case `test_independent_tasks_run_concurrently`
+exists to prove), two threads issued DDL against the same on-disk file at once and DuckDB raised
+a real `TransactionException: Catalog write-write conflict on alter with "players"` — this is
+not a theoretical risk description, it is what actually happened during review.
+
+**Decision:** `init_db()` runs exactly once, synchronously, in the setup phase before any
+worker thread opens a connection; per-task connections opened during the run assume the schema
+already exists and never issue DDL. Real per-task DB reads/writes (via `agents/state.py`) are
+still serialized through a shared lock (`_db_lock`) for the same underlying reason — DuckDB's
+single embedded file does not support safe unserialized concurrent writes across connections.
+This means M11's "independent tasks run in parallel" claim is honest about what is actually
+concurrent: the scheduling/readiness logic and each agent's own non-DB work (e.g. HTTP fetches
+in `data_engineering`) genuinely overlap across threads (verified: two real 0.3s stub tasks
+start within 0.2s of each other), while DB commits are serialized for correctness — not a fake
+"parallel" that is secretly sequential, and not an unsafe "parallel" that would corrupt state
+under real concurrent DDL.
+
+**Agents wrap, they do not re-implement:** every agent in `agents/registry.py` is a thin
+function calling the exact M1-M10 functions already built and validated in their own
+milestones (`build_identity`, `run_established_ml`, `run_edge_build`, `recommend_draft_pick`,
+etc.) — no agent contains new modeling or business logic. `evaluation_qa`'s REJECT capability
+(ACCEPTANCE_CRITERIA.md: "Evaluation/QA can reject unsupported claims") reuses M5's own real
+`model_registry.validated` gate rather than deriving a new judgment. The disagreement protocol
+(`agents/disagreement.py`) reuses M8's real, already-computed `edge_snapshot.rank_edge` for
+model-vs-market conflicts and M4/M5's real, already-computed `evaluation_results.mae` for
+baseline-vs-ML conflicts — real, stored data, not fabricated comparisons. Verified against real
+2024/2025 data: 292 real model-vs-market rank disagreements and 4 real baseline-vs-ML
+disagreements (the established-ML ensemble beats the ECR-implied baseline's MAE by roughly 3x
+at every position, consistent with M5's own already-published results) were detected and
+recorded, preserving both positions per AGENT_CONTRACTS.md's conflict protocol.
+
 ## D14 — Agents are deterministic services, not LLM calls
 `ARCHITECTURE.md` §6: "The project orchestrator is an engineering orchestration layer, not itself
 the source of fantasy truth." Agents in `src/alpha_squad/agents/` are typed Python

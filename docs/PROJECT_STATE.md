@@ -3,7 +3,7 @@
 Living summary of what is implemented, validated, and outstanding. Updated at the end of every
 milestone. See `docs/TRACEABILITY.md` for the acceptance-criteria-level mapping.
 
-## Status: M10 complete, M11 next
+## Status: M11 complete, M12 next
 
 | Milestone | Status | Notes |
 |---|---|---|
@@ -18,7 +18,7 @@ milestone. See `docs/TRACEABILITY.md` for the acceptance-criteria-level mapping.
 | M8 Market + EDGE | DONE | market_snapshot extended to ro/do/rsf/dsf (2QB-aware); dynasty_values (681 real players, 97.6% identity coverage); EDGE (rank/points/probability edge, BUY/HOLD/SELL/WATCH) gated so a raw rank discrepancy alone can never produce BUY/SELL (D21); historical EDGE validation shows the real BUY cohort beat market-implied points in every scored season 2022-2025 (+25.7, +21.8, +16.9, +0.33 PPR); 102 offline + 18 network tests passing (both suites reran clean end-to-end after this milestone) |
 | M9 Evidence engine | DONE | 4 real Strong-tier detectors (depth-chart move, injury self/teammate-opportunity, roster transaction, usage-share shift) on officially-sourced nflverse data; 33,311 real events across 2019-2025; bounded (±15%) evidence-adjusted weekly projections, never overwriting the base M5 prediction; wired as a real (mostly-neutral-in-practice) veto into M8's EDGE gate (D23); 123 offline + 21 network tests passing (verified via `pytest -m "not network"` / `-m network` directly, not estimated) |
 | M10 League decision engine | DONE | Real value-based-drafting replacement/scarcity derived from the league's own lineup config (verified: 2QB target league produces 20 real dedicated QB starters on real 2025 data, exactly 10 teams x 2 QB slots); draft/waiver/dynasty-trade recommendations with alternatives, roster fit, next-pick survival probability, and real evidence-driven value-spike bidding; the M7 rookie-prediction fallback was confirmed live against a real rookie-only player; 152 offline + 26 network tests passing |
-| M11 Agents/orchestrator | NOT STARTED | |
+| M11 Agents/orchestrator | DONE | Pydantic Task/Result/Evidence/Prediction/Edge/Decision contracts mirroring AGENT_CONTRACTS.md; 9 real agents (thin wrappers around already-validated M1-M10 code, never an LLM call, D14); DAG orchestrator with real dependency resolution, retry/backoff, and genuinely concurrent scheduling (proven: two independent tasks start within 0.2s of each other) with DB-write serialization for correctness; disagreement protocol reusing real M8/M4-M5 data (296 real disagreements detected on 2024/2025 data, both positions always preserved); a real DuckDB concurrent-DDL bug was found and fixed via the orchestrator's own test suite (D26); 172 offline + 29 network tests passing |
 | M12 API + frontend | NOT STARTED | |
 | M13 Hardening | NOT STARTED | |
 
@@ -341,6 +341,45 @@ milestone. See `docs/TRACEABILITY.md` for the acceptance-criteria-level mapping.
   tests (`tests/integration/test_league_live.py`, 26 total network) validate the same logic
   end-to-end against real 2022-2025 data, including confirming the M7 rookie-prediction
   fallback actually returns a usable projection for a real rookie-only player.
+
+## M11 summary
+- `agents/contracts.py`: pydantic `Task`/`Result`/`EvidenceContract`/`PredictionContract`/
+  `EdgeContract`/`DecisionContract` mirror AGENT_CONTRACTS.md's JSON examples field-for-field
+  (`extra="allow"` throughout). League context is *not* redefined here — it reuses M10's real
+  `league.context.LeagueContext`, a single source of truth.
+- `agents/registry.py`: 9 real agents (`data_engineering`, `player_identity`, `projection_ml`,
+  `rookie_ml`, `market_edge`, `news_evidence`, `fantasy_strategy`, `evaluation_qa`,
+  `research_validation`) — every one a thin, deterministic wrapper around the exact M1-M10
+  functions already built and validated in their own milestones (D14/D26). `research_validation`
+  (optional per AGENT_CONTRACTS.md) honestly reports NEEDS_REVIEW rather than fabricating a
+  finding: no unstructured research capability is reachable in this environment.
+- `agents/orchestrator.py`: real DAG scheduling (topological readiness, not a fixed order),
+  retry/backoff (2 retries, verified recovering a real transient-failure stub), and genuinely
+  concurrent dispatch of independent tasks — verified two real stub tasks start within 0.2s of
+  each other, not sequentially. `agent_tasks`/`agent_results` persist every state transition;
+  `reconstruct_run` rebuilds a full run's status purely from that DB state, satisfying
+  IMPLEMENTATION_PLAN.md's M11 gate directly (regression-tested, and re-verified against a
+  real orchestrated run of `data_engineering` -> `player_identity` against live nflverse data).
+- Real concurrency bug found and fixed via the orchestrator's own test suite (D26): running
+  `init_db()` (which includes `ALTER TABLE`) from multiple worker threads' own connections hit
+  a real DuckDB `Catalog write-write conflict` under genuine concurrent dispatch. Fixed by
+  running schema DDL exactly once, before any worker thread opens a connection.
+- `agents/disagreement.py`: reuses M8's real `edge_snapshot.rank_edge` (model-vs-market) and
+  M4/M5's real `evaluation_results.mae` (baseline-vs-ML) rather than deriving new comparisons.
+  Verified against real 2024/2025 data: 292 real model-vs-market rank disagreements and 4 real
+  baseline-vs-ML disagreements (established-ML beats the ECR baseline's MAE by roughly 3x at
+  every position, consistent with M5's own published numbers) were detected, resolved, and
+  recorded with both positions preserved (never silently discarding the minority, per
+  AGENT_CONTRACTS.md's conflict protocol).
+- `evaluation_qa`'s REJECT capability reuses M5's own real `model_registry.validated` gate
+  (ACCEPTANCE_CRITERIA.md: "Evaluation/QA can reject unsupported claims") rather than inventing
+  a new judgment.
+- `milestones` table + `record_milestone`: milestone state (ACCEPTANCE_CRITERIA.md: "Milestone
+  state is persistent") is written at the start and end of every orchestrated run, independent
+  of any individual task's state.
+- 20 new offline unit tests (172 total) plus 3 new live network tests (29 total), including a
+  real orchestrated run against live nflverse/DynastyProcess data and real disagreement
+  detection against a full real season's established-ML/baseline/EDGE results.
 
 ## Known limitations (see docs/DECISIONS.md for full reasoning)
 - Sleeper, FantasyPros API, CollegeFootballData, KeepTradeCut, ESPN direct APIs are

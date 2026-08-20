@@ -567,7 +567,74 @@ M10_LEAGUE_DDL = [
     """,
 ]
 
-# M11+ DDL is appended here as later milestones are implemented.
+M11_AGENTS_DDL = [
+    # Every column the orchestrator needs to reconstruct a full run from state alone (the
+    # M11 gate: no chat transcript required) -- see agents/state.py::reconstruct_run.
+    """
+    CREATE TABLE IF NOT EXISTS agent_tasks (
+        task_id VARCHAR PRIMARY KEY,
+        run_id VARCHAR NOT NULL,
+        agent VARCHAR NOT NULL,
+        objective VARCHAR NOT NULL,
+        priority VARCHAR NOT NULL,
+        depends_on_json VARCHAR NOT NULL,
+        params_json VARCHAR NOT NULL,
+        status VARCHAR NOT NULL,
+        attempt INTEGER NOT NULL DEFAULT 0,
+        created_at TIMESTAMP NOT NULL,
+        started_at TIMESTAMP,
+        finished_at TIMESTAMP
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS agent_results (
+        task_id VARCHAR PRIMARY KEY REFERENCES agent_tasks(task_id),
+        agent VARCHAR NOT NULL,
+        status VARCHAR NOT NULL,
+        confidence DOUBLE,
+        findings_json VARCHAR NOT NULL,
+        artifacts_json VARCHAR NOT NULL,
+        tests_json VARCHAR NOT NULL,
+        risks_json VARCHAR NOT NULL,
+        open_questions_json VARCHAR NOT NULL,
+        recommended_next_action VARCHAR,
+        recorded_at TIMESTAMP NOT NULL
+    )
+    """,
+    # Mirrors AGENT_CONTRACTS.md's orchestrator conflict protocol: every disagreement
+    # preserves BOTH positions (majority and minority) -- the minority is never discarded,
+    # only marked as resolved-against.
+    """
+    CREATE TABLE IF NOT EXISTS agent_disagreements (
+        disagreement_id VARCHAR PRIMARY KEY,
+        run_id VARCHAR,
+        disagreement_type VARCHAR NOT NULL,
+        subject VARCHAR NOT NULL,
+        season INTEGER,
+        majority_position VARCHAR NOT NULL,
+        majority_value DOUBLE,
+        minority_position VARCHAR NOT NULL,
+        minority_value DOUBLE,
+        critique VARCHAR NOT NULL,
+        resolution VARCHAR NOT NULL,
+        resolved_by VARCHAR NOT NULL,
+        detected_at TIMESTAMP NOT NULL
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS milestones (
+        milestone VARCHAR NOT NULL,
+        run_id VARCHAR NOT NULL,
+        status VARCHAR NOT NULL,
+        started_at TIMESTAMP,
+        completed_at TIMESTAMP,
+        notes VARCHAR,
+        PRIMARY KEY (milestone, run_id)
+    )
+    """,
+]
+
+# M12+ DDL is appended here as later milestones are implemented.
 ALL_DDL: list[str] = [
     *M1_SNAPSHOTS_DDL,
     *M2_IDENTITY_DDL,
@@ -580,4 +647,5 @@ ALL_DDL: list[str] = [
     *M8_MARKET_EDGE_DDL,
     *M9_EVIDENCE_DDL,
     *M10_LEAGUE_DDL,
+    *M11_AGENTS_DDL,
 ]
