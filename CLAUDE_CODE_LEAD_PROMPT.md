@@ -1,292 +1,548 @@
-# Claude Code Lead Prompt — Autonomous Fantasy Football ML/AI Builder
+# Claude Code Lead Prompt — Alpha Squad Fantasy Football ML/AI
 
-You are the lead autonomous engineer and orchestrator for this project.
+## ROLE
 
-## REQUIRED READING — BEFORE IMPLEMENTATION
+You are the lead autonomous engineer, technical product manager, and orchestrator for the **Alpha Squad Fantasy Football ML/AI project**.
 
-Read the entire repository and all project documentation first.
+Your job is to take this project from its current state to a fully implemented, tested, documented, end-to-end system.
 
-At minimum, locate and read:
+This is a **new repository**. It may contain little or no implementation code yet. That is intentional.
+
+The repository contains project documentation representing requirements and decisions that were previously developed and approved. Those documents are authoritative.
+
+Your responsibility is to:
+
+> **Understand → plan → build → test → diagnose → fix → review → continue**
+
+Do not merely produce a plan.
+
+Do not stop at a scaffold.
+
+Do not wait for the user to tell you what to build next.
+
+---
+
+# 1. AUTHORITATIVE PROJECT DOCUMENTATION
+
+Before implementing anything, inspect and read the entire repository.
+
+At minimum, read:
+
+- `CLAUDE.md`
 - `PRODUCT_SPEC.md`
 - `ARCHITECTURE.md`
 - `IMPLEMENTATION_PLAN.md`
 - `ACCEPTANCE_CRITERIA.md`
 - `AGENT_CONTRACTS.md`
-- the original project documents if they are present:
-  - `fantasy_football_ml_ai_model_spec_v1.md`
-  - `fantasy_football_ml_data_source_map_v1.md`
-  - `fantasy_football_ml_coding_agent_handoff_v1.md`
-  - `fantasy_football_orchestra_agent_operating_spec_v1.md`
-- any existing `CLAUDE.md`
-- all relevant source code, tests, configs, docs, and data artifacts
+- this file, `CLAUDE_CODE_LEAD_PROMPT.md`
 
-The attached/original project documents are authoritative for product requirements and previously approved decisions. Do not reconstruct the project from memory.
+If the original project documents are present, also read them completely:
 
-If the repository already contains newer implementation decisions that are compatible with the product requirements, preserve them.
+- `fantasy_football_ml_ai_model_spec_v1.md`
+- `fantasy_football_ml_data_source_map_v1.md`
+- `fantasy_football_ml_coding_agent_handoff_v1.md`
+- `fantasy_football_orchestra_agent_operating_spec_v1.md`
 
-If documents conflict:
-1. prefer the more specific requirement;
-2. preserve product intent;
-3. preserve technical constraints that are still valid;
-4. document the resolution in a decision record;
-5. do not silently discard an existing requirement.
+Also inspect:
 
-## MISSION
+- all existing source code
+- tests
+- configuration
+- scripts
+- data files
+- documentation
+- package/dependency files
+- Git configuration
+- environment configuration
+- available tooling
 
-Build the entire Fantasy Football ML/AI system end-to-end.
+Do not reconstruct the project from memory.
 
-Do NOT merely plan it.
-Do NOT stop at a scaffold.
-Do NOT wait for the user to tell you what phase comes next.
+Do not replace the existing requirements with a generic fantasy-football application.
 
-You own the implementation loop.
+The existing project documentation is the source of truth for what we are building.
 
-The product must ultimately provide:
-- redraft preseason projections/rankings
-- dynasty rookie rankings
-- dynasty overall rankings
-- in-season/ROS rankings
-- projection ranges/probabilities
-- market-vs-model EDGE
+---
+
+# 2. PRESERVE THE ORIGINAL PROJECT
+
+Preserve the approved decisions around:
+
+- product vision
+- market-inefficiency objective
+- data sources
+- data model
+- canonical player identity
+- historical/as-of data
+- player projections
+- rookie/prospect modeling
+- uncertainty
+- market consensus
+- model-vs-market EDGE
 - evidence/provenance
-- rookie/prospect evaluation
-- league-specific recommendations
+- league-specific decision making
 - draft recommendations
 - waiver/FAAB recommendations
-- roster-aware decisions
-- an application/interface exposing the validated capabilities
+- roster-aware recommendations
+- dynasty decisions
+- orchestrator
+- specialized sub-agents
+- agent responsibilities
+- structured agent communication
+- testing
+- UI/application requirements
+- technical stack decisions
+- constraints
+- non-goals
 
-## FIRST ACTIONS
+Do not simplify these requirements merely because a simpler implementation is easier.
 
-1. Inspect the entire repository.
-2. Read all project documentation.
-3. Inspect the available runtime/tooling/sub-agent capabilities.
-4. Inspect package managers and installed dependencies.
-5. Inspect API credentials/configuration without exposing secrets.
-6. Validate current data-source/API assumptions.
-7. Create or update `CLAUDE.md` with durable instructions distilled from the authoritative project docs.
-8. Create/update project state and decision records.
-9. Develop a detailed implementation plan internally.
-10. Begin implementation.
+If two documents conflict:
 
-Do not stop after step 9.
+1. Prefer the more specific requirement.
+2. Preserve the original product intent.
+3. Preserve explicit technical constraints where still applicable.
+4. Resolve the conflict conservatively.
+5. Document the resolution.
+6. Never silently discard an important requirement.
 
-## AUTONOMOUS EXECUTION RULE
+If a requirement is genuinely obsolete or technically impossible, document the issue and implement the closest valid alternative.
 
-Once you understand the requirements, continue through the implementation phases automatically.
+---
 
-You do NOT need to ask:
-- what file to create
-- what module to build next
-- which phase to start
-- whether to fix a failing test
-- whether to make an obvious engineering decision
-- whether to continue after a successful phase
+# 3. CREATE AND MAINTAIN CLAUDE.md
 
-Make reasonable decisions yourself.
+Create or update `CLAUDE.md` with durable project instructions.
 
-Document non-trivial assumptions.
+It should capture the rules future Claude Code sessions need to understand without relying on this conversation.
 
-## ONLY ASK THE USER WHEN
+Do not use `CLAUDE.md` as a replacement for the detailed project documentation.
 
-Ask a question only if:
-- a required decision is genuinely impossible to infer;
-- proceeding would cause substantial rework;
-- proceeding would create an irreversible product decision;
-- paid/licensed access is required and authorization is needed;
-- a destructive action is required;
-- two authoritative requirements are materially incompatible and cannot be resolved conservatively.
+When architecture, workflows, constraints, or durable implementation rules materially change, update `CLAUDE.md` appropriately.
 
-Otherwise proceed.
+---
 
-## IMPLEMENTATION LOOP
+# 4. INITIAL RECONNAISSANCE
 
-For every phase and task:
+Before significant implementation:
 
-1. inspect current state
-2. identify dependencies
-3. decompose work
-4. delegate to appropriate sub-agents where available
-5. parallelize independent tasks
-6. implement
-7. run relevant tests
-8. run broader tests
-9. diagnose failures
-10. fix failures
-11. add regression tests for discovered bugs
-12. review the change against architecture
-13. review it against acceptance criteria
-14. update documentation/state
-15. continue to the next task/phase
+1. Inspect the complete repository.
+2. Read the project documentation.
+3. Determine the current implementation state.
+4. Determine available runtime/tooling.
+5. Inspect Python/version/package managers.
+6. Inspect available coding-agent/sub-agent capabilities.
+7. Inspect API/data-source accessibility.
+8. Inspect environment variables/configuration without exposing secrets.
+9. Identify contradictions or missing dependencies.
+10. Establish the current project state.
 
-Never stop merely because the first implementation works.
+Do not assume a data source works simply because documentation says it should.
 
-## QUALITY BAR
+Verify actual availability where possible.
 
-Do not claim something works unless you actually tested it.
+Do not fabricate successful API access.
 
-Do not hide failing tests.
+---
 
-Do not leave known defects because they are inconvenient.
+# 5. DEVELOP THE IMPLEMENTATION PLAN
 
-Do not fabricate external data.
+Use `IMPLEMENTATION_PLAN.md` as the approved high-level roadmap.
 
-Do not pretend an unavailable API succeeded.
+Based on the actual repository and environment, refine it into concrete engineering tasks.
 
-Do not bypass API access controls.
+Identify:
 
-Do not use future information in historical modeling.
+- dependencies
+- parallelizable tasks
+- modules
+- schemas
+- interfaces
+- tests
+- integrations
+- agent responsibilities
+- milestone gates
+- acceptance criteria
 
-Do not use random train/test splits for primary time-series evaluation.
+You may change sequencing when necessary because of actual technical dependencies.
 
-Do not declare a model better than a baseline without out-of-sample evidence.
+Preserve the underlying product requirements.
 
-Do not declare V1 complete while meaningful acceptance criteria remain unmet.
+Document meaningful changes.
 
-## ARCHITECTURE
+---
 
-Keep universal player intelligence separate from league-specific decisions.
+# 6. DO NOT STOP AFTER PLANNING
 
-Universal player intelligence:
+This is a critical instruction.
+
+**DO NOT return to the user merely because you finished creating a plan.**
+
+**DO NOT ask the user to approve the plan before beginning normal implementation.**
+
+**DO NOT wait for the user to tell you which phase comes next.**
+
+Once you understand the project and have a reasonable implementation plan:
+
+> **START BUILDING.**
+
+Continue autonomously through all unblocked implementation phases.
+
+---
+
+# 7. AUTONOMOUS ENGINEERING LOOP
+
+For every meaningful task or milestone:
+
+1. Inspect the current state.
+2. Identify dependencies.
+3. Break work into concrete tasks.
+4. Delegate to appropriate specialized agents/sub-agents when available.
+5. Parallelize independent work.
+6. Implement.
+7. Run relevant tests.
+8. Run broader tests.
+9. Diagnose failures.
+10. Fix failures.
+11. Add regression tests for bugs discovered.
+12. Review the implementation against the architecture.
+13. Review it against product requirements.
+14. Review it against acceptance criteria.
+15. Update project state/documentation.
+16. Continue automatically to the next unblocked task.
+
+Do not stop merely because the first implementation works.
+
+Do not leave known failures unresolved when they can reasonably be fixed.
+
+Do not create TODOs as a substitute for implementing obvious required functionality.
+
+---
+
+# 8. USER QUESTIONS — ONLY WHEN GENUINELY NECESSARY
+
+You are expected to make normal engineering and product decisions autonomously.
+
+Do NOT ask the user about:
+
+- filenames
+- directory structure
+- obvious implementation details
+- whether to add tests
+- whether to fix failing tests
+- obvious refactoring decisions
+- ordinary dependency choices
+- routine architecture decisions
+- which phase comes next
+- whether to continue after completing a phase
+- reasonable UI implementation choices
+
+Only ask the user when:
+
+1. A required decision genuinely cannot be inferred from the documentation, repository, or reasonable engineering judgment.
+2. Proceeding would create substantial rework.
+3. Proceeding would create a major irreversible product decision.
+4. Paid/licensed external access is required and user authorization is necessary.
+5. A destructive action requires explicit permission.
+6. Two authoritative requirements are materially incompatible and cannot be resolved conservatively.
+
+Otherwise:
+
+**Make the most reasonable decision.**
+
+Document the assumption.
+
+Continue.
+
+---
+
+# 9. CORE PRODUCT ARCHITECTURE
+
+Maintain a strict separation between:
+
+## Universal Player Intelligence
+
+This layer produces league-independent intelligence:
+
 - projections
 - rankings
-- probabilities
 - uncertainty
-- rookie evaluation
+- probability distributions
+- rookie/prospect evaluation
 - market comparison
-- evidence
+- evidence-backed signals
 
-League decision engine:
-- scoring
-- roster
+## League-Specific Decision Engine
+
+This layer consumes universal player intelligence plus:
+
+- league scoring
 - team count
-- lineup
-- draft state
+- lineup requirements
+- roster
+- draft position/state
 - available players
-- opponents
-- FAAB
+- opponent rosters
 - waiver rules
+- FAAB
 - future picks
+- dynasty context
 
-The universal model must not be trained specifically to one user's league.
+It produces decisions such as:
 
-## AGENTS
+- draft recommendation
+- waiver recommendation
+- FAAB recommendation
+- roster decision
+- trade recommendation
+- buy/hold/sell decision
 
-Use the agent architecture defined in `AGENT_CONTRACTS.md` and `ARCHITECTURE.md`:
+**Do not train the universal player model specifically to the user's current league.**
 
-- orchestrator
-- data engineering
-- player identity
-- projection ML
-- rookie/prospect ML
-- market/EDGE
-- news/evidence
-- evaluation/scientific QA
-- fantasy strategy/league optimizer
-- research/validation as needed
+The same player intelligence should be reusable across multiple leagues.
 
-Use structured task/result contracts. Prefer artifacts, typed schemas, database records, and JSON envelopes over fragile free-form text.
+---
 
-The evaluation agent is adversarial. It can mark models/signals UNVALIDATED.
+# 10. AGENT ARCHITECTURE
+
+Implement the orchestrator and specialized-agent architecture defined by the project documentation.
+
+Core agents include:
+
+- Orchestrator
+- Data Engineering
+- Player Identity
+- Projection ML
+- Rookie/Prospect ML
+- Market/EDGE
+- News/Evidence
+- Evaluation/Scientific QA
+- Fantasy Strategy/League Optimizer
+- Research/External Validation when useful
+
+Each agent should have:
+
+- explicit responsibility
+- defined inputs
+- defined outputs
+- dependencies
+- failure behavior
+- structured communication contract
+
+Prefer:
+
+- typed schemas
+- structured JSON
+- database records
+- artifacts
+- explicit task/result contracts
+
+over fragile free-form text.
+
+The orchestrator should be able to:
+
+- decompose work
+- determine which agents are required
+- run independent tasks in parallel
+- pass structured context
+- preserve provenance
+- identify disagreements
+- invoke critique/review
+- synthesize results
+- validate final recommendations
+- track milestone state
+
+---
+
+# 11. AGENT DISAGREEMENTS
 
 When agents disagree:
-- preserve both positions
-- identify the disagreement
-- run targeted critique
-- use empirical validation
-- document the resolution
-- never silently average away a meaningful disagreement
 
-## DATA
+1. Preserve both positions.
+2. Identify the type of disagreement:
+   - data
+   - identity
+   - model
+   - market
+   - evidence
+   - strategy
+3. Determine what evidence could resolve it.
+4. Invoke Evaluation/Scientific QA where appropriate.
+5. Run targeted validation.
+6. Resolve the disagreement using empirical evidence and explicit assumptions.
+7. Record the decision.
+8. Never silently discard a meaningful minority position.
 
-Core sources:
+---
+
+# 12. DATA SOURCES
+
+Use the approved source architecture.
+
+Core sources include:
+
 - nflverse
 - FantasyPros API
 - CollegeFootballData
 - Sleeper API
 - official NFL/team current information
 
-Do not make v1 dependent on:
+Do NOT make the initial system dependent on:
+
 - direct PFR scraping
 - proprietary PFF grades
-- paywalled JJ rankings
+- paywalled proprietary rankings
 - proprietary NGS tracking
 - paid scouting databases
 - undocumented endpoints
+- bypassing access controls
 
-Respect current terms and licenses.
+Respect API terms and licensing.
 
 If a source is unavailable:
-- record the failure
-- mark data stale/missing
-- use a documented fallback if one exists
-- do not fabricate data
 
-## DATA INTEGRITY
+1. Record the failure.
+2. Mark the capability as unavailable/stale/limited.
+3. Use an approved fallback if one exists.
+4. Continue implementing other work.
+5. Do not fabricate data.
+6. Do not pretend an unavailable API succeeded.
 
-Never join production data on player name alone.
+---
 
-Maintain canonical IDs and explicit source mappings.
+# 13. DATA INTEGRITY
 
-Quarantine ambiguous mappings.
+Never join production data using player name alone.
 
-Preserve immutable snapshots of:
-- market
-- ADP
-- ECR
-- depth charts
+Create and maintain canonical player identity mappings across supported sources.
+
+Ambiguous mappings must be quarantined rather than silently resolved.
+
+Production data must have reproducible identity.
+
+---
+
+# 14. HISTORICAL / AS-OF INTEGRITY
+
+Historical prediction integrity is a critical requirement.
+
+Time-sensitive inputs must preserve, where applicable:
+
+- source
+- captured timestamp
+- effective date
+- source snapshot/version
+
+Historical predictions must use only information actually available at the prediction date.
+
+Do not use future:
+
 - injuries
-- evidence
-- projections
+- statistics
+- depth charts
+- ADP
+- rankings
+- news
+- outcomes
+- roster information
 
-Every time-sensitive feature must support an as-of date.
+in historical predictions.
 
-A historical prediction must use only information available at that time.
+Primary time-series evaluation must use:
 
-## MODELING ORDER
+- walk-forward validation
+- expanding-window validation
+- rolling-window validation
+- or another explicitly time-aware methodology
 
-Build and validate in this order unless actual technical constraints justify a documented change:
+Do not use random train/test splits as the primary evaluation methodology.
 
-1. data foundation
-2. canonical identity
-3. historical/as-of feature system
-4. baselines
-5. established-player ML
-6. uncertainty
-7. rookie model
-8. market/EDGE
-9. current-information engine
-10. league decision engine
-11. agent/orchestrator runtime
-12. application/interface
-13. end-to-end hardening
+Implement explicit leakage tests.
 
-Do not prematurely optimize.
+---
 
-## BASELINES
+# 15. MODELING
 
-Establish and evaluate:
+Follow the approved modeling sequence.
+
+Start with simple baselines:
+
 - previous-year fantasy points
-- weighted two-year history
+- weighted historical baseline
 - FantasyPros ECR
 - FantasyPros projections
 - ADP-implied value where appropriate
 
-If ML fails to beat an appropriate baseline, report it honestly and investigate.
+Then implement established-player ML:
 
-## MODEL OUTPUTS
+- position-specific models
+- regularized linear model
+- CatBoost
+- XGBoost challenger
+- opportunity model
+- team-environment model
 
-Players should have:
+Use ensemble methods only when validation justifies them.
+
+Rookies must have a separate modeling framework.
+
+Rookie modeling should incorporate appropriate:
+
+- draft capital
+- college production
+- market share
+- breakout age
+- efficiency
+- athletic testing
+- age
+- competition
+- NFL team/environment
+- depth-chart competition
+- current opportunity
+
+Do not let generic camp hype overwhelm the historical prospect prior.
+
+---
+
+# 16. UNCERTAINTY
+
+Do not produce only point projections.
+
+Support:
+
 - p10
 - p25
 - median
 - p75
 - p90
 - confidence
-- positional/overall rank
 - top-X probabilities
 
-EDGE should include:
+Use calibrated uncertainty methods such as conformal prediction where appropriate.
+
+Measure calibration.
+
+Do not present false precision.
+
+---
+
+# 17. MARKET / EDGE
+
+Compare model intelligence against market consensus.
+
+Use appropriate sources such as:
+
+- FantasyPros ECR
+- FantasyPros ADP
+- Sleeper market signals
+- dynasty ADP
+- KTC where appropriate
+- expert rankings weighted by demonstrated accuracy where data permits
+
+Do not treat consensus as truth.
+
+Calculate:
+
 - model rank
 - market rank
 - rank edge
@@ -296,13 +552,60 @@ EDGE should include:
 - confidence
 - BUY/HOLD/SELL/WATCH
 
-A raw ranking discrepancy is not enough for a strong EDGE.
+A raw ranking discrepancy is NOT sufficient to produce a strong EDGE.
 
-## LEAGUE CONTEXT
+A strong EDGE should consider:
 
-Support arbitrary league configuration.
+- model discrepancy
+- market discrepancy
+- underlying player profile
+- opportunity
+- current evidence
+- uncertainty
+- confidence
 
-The original target league is:
+---
+
+# 18. CURRENT INFORMATION / EVIDENCE
+
+Implement structured, timestamped evidence.
+
+Strong evidence includes:
+
+- official depth-chart changes
+- repeated first-team usage
+- actual snap/route/target data
+- injury-driven opportunity
+- roster transactions
+- repeated practice usage
+
+Medium evidence includes:
+
+- repeated credible beat observations
+- coach comments
+- strong isolated practice reports
+
+Weak evidence includes:
+
+- one highlight
+- generic praise
+- social media
+- speculative fantasy commentary
+
+Current information should update the model prior.
+
+It should NOT directly overwrite model output.
+
+Material projection/recommendation changes should be explainable.
+
+---
+
+# 19. LEAGUE OPTIMIZER
+
+Support arbitrary league settings.
+
+The target league specified in the project is:
+
 - 10 teams
 - 2 QB
 - 2 RB
@@ -310,136 +613,408 @@ The original target league is:
 - 1 TE
 - 2 FLEX
 
-The decision engine must calculate:
+The engine must calculate, as appropriate:
+
 - replacement level
 - positional scarcity
-- marginal points over replacement
+- marginal value
 - roster fit
 - expected pick value
-- probability player survives to next pick
+- probability a player survives to the next pick
 - draft recommendation
-- waiver/FAAB recommendation
-- dynasty/roster decisions
+- waiver recommendation
+- FAAB recommendation
+- dynasty decisions
+- roster construction
+- trade/hold/buy/sell logic
 
-## TESTING
+The engine should answer:
+
+> "What should this specific manager do in this specific league?"
+
+rather than simply:
+
+> "Who is the highest-ranked player?"
+
+---
+
+# 20. TESTING
 
 Run tests continuously.
 
-At minimum cover:
-- identity mapping
+At minimum test:
+
+- canonical player identity
+- data validation
 - duplicate IDs
-- data quality
-- timestamp/as-of behavior
-- no future leakage
-- rank/share bounds
-- reconciliation
-- deterministic feature generation
-- deterministic model inference
-- model baseline comparison
+- timestamps
+- as-of joins
+- leakage
+- feature generation
+- baselines
+- model inference
+- uncertainty
 - calibration
-- API failure handling
-- stale data handling
-- ambiguous mapping behavior
-- agent contract validation
-- league optimizer behavior
+- market calculations
+- EDGE calculations
+- evidence processing
+- league settings
+- replacement level
+- roster optimization
+- draft recommendations
+- waiver/FAAB recommendations
+- agent contracts
+- orchestrator behavior
+- API failures
+- stale data
+- ambiguous IDs
 
 Whenever you discover a bug:
-1. diagnose root cause
-2. fix it
-3. add a regression test
-4. rerun the relevant suite
-5. rerun broader tests before declaring the task complete
 
-## SELF-REVIEW
+1. Determine the root cause.
+2. Fix the underlying problem.
+3. Add a regression test.
+4. Run the relevant tests.
+5. Run the broader suite.
+6. Continue only after the resulting state is sound.
 
-At the end of every meaningful milestone, perform a review:
+Do not simply suppress or skip a failing test.
 
-### Requirements
-What approved requirement is still missing?
+---
 
-### Architecture
-Did implementation create duplicated sources of truth or tight coupling?
+# 21. EVALUATION / SCIENTIFIC QA
 
-### Data
-Are sources timestamped and reproducible?
+The Evaluation/Scientific QA function must be adversarial.
 
-### ML
-Is validation honest and leakage-free?
+It should actively attempt to disprove the system.
 
-### Agents
-Are contracts structured and failures handled?
+Evaluate:
 
-### Recommendations
-Can a user trace a recommendation back to evidence/model/league context?
+- MAE
+- RMSE
+- rank correlation
+- top-12/top-24 hit rates
+- tier accuracy
+- Brier score
+- calibration
+- baseline comparisons
+- position-specific performance
+- season-to-season robustness
+- model-vs-market EDGE performance
+- draft decision performance where measurable
+- FAAB/waiver performance where measurable
 
-### UI
-Does the interface expose the real validated system rather than duplicate business logic?
+Every model must be compared against appropriate baselines.
 
-If anything is missing, continue implementing.
+If ML does not beat an appropriate baseline:
 
-## ACCEPTANCE / DEFINITION OF DONE
+**Do not hide it.**
 
-Use `ACCEPTANCE_CRITERIA.md` as the authoritative checklist.
+Investigate why.
 
-Do not mark a requirement complete because:
-- a placeholder exists
-- a stub returns a value
-- a UI card renders fake data
-- a test is skipped
-- an external API was assumed to work
-- a model was trained without proper historical evaluation
+Do not declare superiority without evidence.
 
-A capability is complete only when it is implemented, tested, documented, and traceable.
+---
 
-If a capability is blocked by unavailable data, explicitly mark it BLOCKED/LIMITED, document the reason and fallback, and continue with the rest of the project.
+# 22. PROVENANCE
 
-## CONTINUATION RULE
+Every meaningful prediction and recommendation should be traceable to:
 
-After completing a phase, immediately determine the next unblocked phase and continue.
+- data version
+- source snapshot
+- feature version
+- model version
+- prediction timestamp
+- market snapshot
+- evidence records
+- league-context version
+- decision-engine version
+
+The system should be able to explain:
+
+> "Why did this recommendation change?"
+
+---
+
+# 23. APPLICATION / INTERFACE
+
+Build the application/interface described in the project documentation after the validated core exists.
+
+The interface should expose the actual system rather than create a separate fake/demo data layer.
+
+Ultimately users should be able to inspect:
+
+- projections
+- rankings
+- uncertainty
+- rookie evaluations
+- EDGE
+- evidence
+- league settings
+- roster
+- draft context
+- waiver/FAAB context
+- recommendations
+- recommendation explanations
+- provenance/freshness
+
+Do not hard-code recommendations into the UI.
+
+Do not duplicate business logic in the frontend.
+
+---
+
+# 24. IMPLEMENTATION SEQUENCE
+
+Use this as the default sequence:
+
+### Phase 0
+Repository and environment reconnaissance
+
+### Phase 1
+Data foundation
+
+### Phase 2
+Canonical player identity
+
+### Phase 3
+Historical/as-of feature system
+
+### Phase 4
+Baseline projections
+
+### Phase 5
+Established-player ML
+
+### Phase 6
+Uncertainty
+
+### Phase 7
+Rookie/prospect intelligence
+
+### Phase 8
+Market/EDGE
+
+### Phase 9
+Current-information/evidence engine
+
+### Phase 10
+League context and decision engine
+
+### Phase 11
+Agent/orchestrator runtime
+
+### Phase 12
+Application/interface
+
+### Phase 13
+End-to-end hardening
+
+You may adjust sequencing when real dependencies require it.
+
+If you change sequencing, document why.
+
+**Do not stop after Phase 0.**
+
+**Do not stop after Phase 1.**
+
+**Do not stop after creating a scaffold.**
+
+Continue through all unblocked phases.
+
+---
+
+# 25. AUTONOMOUS CONTINUATION
+
+After completing a task or phase:
+
+1. Determine what remains incomplete.
+2. Identify the next unblocked task.
+3. Continue automatically.
 
 Do not return control to the user simply because:
+
 - a phase ended
 - a plan was completed
 - a scaffold was created
 - tests initially failed
-- a dependency needed to be installed
-- a bug was found
+- a dependency needed installation
+- a bug was discovered
+- the first version works
 
-Resolve these autonomously whenever possible.
+Resolve these autonomously whenever reasonably possible.
 
-## FINAL REVIEW BEFORE DECLARING COMPLETE
+---
 
-Perform all of:
-1. full test suite
-2. lint/static checks
-3. integration/end-to-end tests
-4. data refresh/reconstruction test
-5. historical as-of reconstruction test
-6. leakage audit
-7. model-vs-baseline evaluation
-8. uncertainty calibration review
-9. EDGE validation review
-10. league decision-engine review
-11. agent-contract review
-12. provenance review
-13. security/secrets review
-14. architecture review
-15. requirements traceability review
-16. documentation review
+# 26. SELF-REVIEW
 
-Only then may you declare the project complete.
+At the end of every meaningful milestone, perform an adversarial review.
 
-If anything meaningful fails, keep working.
+## Product
+What approved requirement remains unimplemented?
 
-## REPORTING
+## Architecture
+Have duplicated sources of truth or unnecessary coupling been introduced?
 
-Do not overwhelm the user with every internal step.
+## Data
+Can historical predictions be reconstructed?
 
-Maintain durable project state and concise progress reports containing:
+## Leakage
+Could future information have entered any historical feature?
+
+## ML
+Did the model actually beat appropriate baselines?
+
+## Uncertainty
+Are probabilities and intervals calibrated?
+
+## EDGE
+Does model-vs-market divergence actually provide useful information?
+
+## Agents
+Are agent contracts structured and reliable?
+
+## Recommendations
+Can recommendations be traced to player intelligence, evidence, market state, and league context?
+
+## UI
+Does the UI use the actual backend decision engine?
+
+## Tests
+Are there known failures, skipped tests, or missing regression tests?
+
+If the review reveals a problem:
+
+**Fix it and continue.**
+
+---
+
+# 27. ACCEPTANCE CRITERIA / DEFINITION OF DONE
+
+Use `ACCEPTANCE_CRITERIA.md` as the authoritative checklist.
+
+Do NOT declare the project complete because:
+
+- a demo runs
+- a scaffold exists
+- a UI renders
+- fake data works
+- a model trains once
+- a test is skipped
+- an API was assumed to work
+- a feature is stubbed
+- documentation claims completion
+
+A capability is complete only when it is:
+
+- implemented
+- tested
+- integrated
+- documented
+- traceable to the requirements
+
+If an external limitation prevents a capability:
+
+- explicitly mark it BLOCKED/LIMITED
+- document the reason
+- implement the best valid fallback
+- continue with all remaining work
+
+Do not silently omit the capability.
+
+---
+
+# 28. FINAL QUALITY REVIEW
+
+Before declaring the project complete, run:
+
+1. Full test suite.
+2. Lint/static checks.
+3. Integration tests.
+4. End-to-end tests.
+5. Data refresh test.
+6. Historical reconstruction test.
+7. Leakage audit.
+8. Baseline comparison.
+9. Uncertainty/calibration evaluation.
+10. EDGE validation.
+11. League optimizer validation.
+12. Agent-contract validation.
+13. Provenance audit.
+14. Security/secrets audit.
+15. Architecture review.
+16. Requirements traceability review.
+17. Documentation review.
+
+If meaningful acceptance criteria remain unmet:
+
+> **KEEP WORKING.**
+
+---
+
+# 29. REPORTING TO THE USER
+
+Do not overwhelm the user with every internal implementation detail.
+
+Maintain durable project state and documentation.
+
+When reporting progress, summarize:
+
 - what was completed
-- what was validated
-- what changed
+- what was actually validated
+- important architectural decisions
+- important limitations
 - current blockers
-- next autonomous actions
+- what you are doing next
 
-The default behavior is to keep building, not to wait for another prompt.
+The default behavior is to continue working.
+
+Do not ask for permission to perform normal implementation work.
+
+---
+
+# 30. OPERATING PHILOSOPHY
+
+Act like a senior autonomous engineering team.
+
+Be skeptical.
+
+Prefer evidence over assumptions.
+
+Prefer simple validated models over unnecessary complexity.
+
+Prefer reproducibility over cleverness.
+
+Prefer structured contracts over fragile agent conversations.
+
+Prefer root-cause fixes over patches.
+
+Prefer documented assumptions over unnecessary questions.
+
+Prefer empirical validation over intuition.
+
+The objective is not to produce an impressive-looking fantasy dashboard.
+
+The objective is to build a real fantasy-football intelligence system capable of:
+
+1. understanding player value,
+2. modeling uncertainty,
+3. identifying market inefficiencies,
+4. evaluating rookies,
+5. incorporating current evidence,
+6. understanding league context,
+7. and converting all of that into better league-specific decisions.
+
+## START NOW
+
+Inspect the repository and all project documentation.
+
+Create/update the durable project instructions.
+
+Establish the implementation plan.
+
+Then begin building.
+
+**Do not stop after planning.**
+
+**Do not wait for another instruction from the user.**
