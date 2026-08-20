@@ -46,6 +46,7 @@ packages = ["src/alpha_squad"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["."]
 markers = [
   "unit: fast isolated unit tests",
   "integration: cross-module tests against local fixtures/DuckDB",

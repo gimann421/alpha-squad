@@ -1,0 +1,68 @@
+"""Live network tests against the real external sources. Deselected by default
+(pytest addopts = "-m 'not network'"); run explicitly with `make test-network`.
+
+These encode the reachability findings recorded in docs/DATA_SOURCES.md as a durable,
+re-runnable check rather than a one-time manual curl session — if the environment's egress
+policy or an upstream schema ever changes, this is what should catch it.
+"""
+
+from __future__ import annotations
+
+import pytest
+
+from alpha_squad.config.settings import Settings
+from alpha_squad.sources.base import SourceBlockedError, SourceCredentialsError
+from alpha_squad.sources.cfbfastr import CfbFastRSource
+from alpha_squad.sources.dynastyprocess import DynastyProcessSource
+from alpha_squad.sources.fantasypros import FantasyProsSource
+from alpha_squad.sources.nflverse import NflverseSource
+from alpha_squad.sources.sleeper import SleeperSource
+
+pytestmark = pytest.mark.network
+
+
+@pytest.fixture
+def settings(tmp_path) -> Settings:
+    return Settings(data_dir=tmp_path / "data", db_path=tmp_path / "data" / "x.duckdb")
+
+
+def test_nflverse_players_is_really_reachable(settings):
+    snap = NflverseSource(settings).fetch("players")
+    assert snap.rows and snap.rows > 20000
+    assert "gsis_id" in snap.columns
+    assert snap.local_path.exists()
+
+
+def test_nflverse_current_season_datasets_are_reachable(settings):
+    adapter = NflverseSource(settings)
+    rosters = adapter.fetch("rosters", season=2026)
+    depth = adapter.fetch("depth_charts", season=2026)
+    assert rosters.rows and rosters.rows > 0
+    assert depth.rows and depth.rows > 0
+
+
+def test_dynastyprocess_id_crosswalk_is_reachable(settings):
+    snap = DynastyProcessSource(settings).fetch("player_ids")
+    assert snap.rows and snap.rows > 5000
+    assert "sleeper_id" in snap.columns
+    assert "gsis_id" in snap.columns
+
+
+def test_cfbfastr_college_stats_reachable(settings):
+    snap = CfbFastRSource(settings).fetch("player_stats", season=2025)
+    assert snap.rows and snap.rows > 1000
+
+
+def test_sleeper_is_blocked_by_environment_policy(settings):
+    """This is expected to fail loudly (SourceBlockedError), not silently succeed or
+    silently return nothing. If this test starts failing because Sleeper suddenly *works*,
+    that's good news — update docs/DATA_SOURCES.md and docs/DECISIONS.md D3 accordingly and
+    relax this assertion."""
+    with pytest.raises(SourceBlockedError):
+        SleeperSource(settings).fetch("state")
+
+
+def test_fantasypros_without_key_reports_no_credentials(settings):
+    assert settings.fantasypros_api_key is None
+    with pytest.raises(SourceCredentialsError):
+        FantasyProsSource(settings).fetch("consensus_rankings", season=2026)
