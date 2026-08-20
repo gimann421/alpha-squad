@@ -168,9 +168,80 @@ M3_FEATURES_DDL = [
     """,
 ]
 
-# M4+ DDL is appended here as later milestones are implemented.
+M4_BASELINES_DDL = [
+    # Season-level aggregate of player_week_stats. Real games only (never fabricated for a
+    # season a player didn't play), which is exactly what makes "did this player have a
+    # season S-1" the natural gate for previous-year-style baselines.
+    """
+    CREATE TABLE IF NOT EXISTS player_season_stats (
+        player_id VARCHAR NOT NULL,
+        season INTEGER NOT NULL,
+        position VARCHAR,
+        games_played INTEGER NOT NULL,
+        total_fantasy_points_ppr DOUBLE NOT NULL,
+        ppr_points_per_game DOUBLE NOT NULL,
+        total_targets DOUBLE,
+        total_carries DOUBLE,
+        total_receptions DOUBLE,
+        PRIMARY KEY (player_id, season)
+    )
+    """,
+    # Normalized market consensus rank, identity-joined via fantasypros_id (verified 93.8%
+    # coverage on ecr_type='ro' — see docs/DECISIONS.md D16). M8 extends this table with the
+    # 2QB-aware ecr_type series and dynasty values; M4 only needs 'ro' for a general-purpose
+    # ECR-implied baseline.
+    """
+    CREATE TABLE IF NOT EXISTS market_snapshot (
+        player_id VARCHAR NOT NULL,
+        scrape_date DATE NOT NULL,
+        ecr_type VARCHAR NOT NULL,
+        position VARCHAR,
+        ecr_rank DOUBLE NOT NULL,
+        ecr_best DOUBLE,
+        ecr_worst DOUBLE,
+        source_snapshot_id VARCHAR,
+        PRIMARY KEY (player_id, scrape_date, ecr_type)
+    )
+    """,
+    # One row per (baseline/model, position, season, player) prediction, so the evaluation
+    # harness has a single uniform surface regardless of which baseline or model produced it.
+    """
+    CREATE TABLE IF NOT EXISTS projection_snapshot (
+        model_name VARCHAR NOT NULL,
+        player_id VARCHAR NOT NULL,
+        season INTEGER NOT NULL,
+        position VARCHAR,
+        predicted_points DOUBLE NOT NULL,
+        built_at TIMESTAMP NOT NULL,
+        PRIMARY KEY (model_name, player_id, season)
+    )
+    """,
+    # position='ALL' is the cross-position rollup row (not NULL, so it stays usable in the
+    # composite key). Every baseline (M4) and later model (M5+) reports through the same
+    # table so results are directly, queryably comparable.
+    """
+    CREATE TABLE IF NOT EXISTS evaluation_results (
+        model_name VARCHAR NOT NULL,
+        season INTEGER NOT NULL,
+        position VARCHAR NOT NULL,
+        n INTEGER NOT NULL,
+        mae DOUBLE,
+        rmse DOUBLE,
+        r2 DOUBLE,
+        spearman DOUBLE,
+        top12_hit_rate DOUBLE,
+        top24_hit_rate DOUBLE,
+        tier_accuracy DOUBLE,
+        evaluated_at TIMESTAMP NOT NULL,
+        PRIMARY KEY (model_name, season, position)
+    )
+    """,
+]
+
+# M5+ DDL is appended here as later milestones are implemented.
 ALL_DDL: list[str] = [
     *M1_SNAPSHOTS_DDL,
     *M2_IDENTITY_DDL,
     *M3_FEATURES_DDL,
+    *M4_BASELINES_DDL,
 ]

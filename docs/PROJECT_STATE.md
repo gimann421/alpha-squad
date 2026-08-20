@@ -3,7 +3,7 @@
 Living summary of what is implemented, validated, and outstanding. Updated at the end of every
 milestone. See `docs/TRACEABILITY.md` for the acceptance-criteria-level mapping.
 
-## Status: M3 complete, M4 next
+## Status: M4 complete, M5 next
 
 | Milestone | Status | Notes |
 |---|---|---|
@@ -11,6 +11,7 @@ milestone. See `docs/TRACEABILITY.md` for the acceptance-criteria-level mapping.
 | M1 Sources + snapshots | DONE | 7 adapters (4 available, 3 blocked/no-creds), all verified live; 25 offline + 6 network tests passing; one real bug found and fixed in review (see below) |
 | M2 Canonical identity | DONE | player_id spine (25,046 players) + 25 crosswalk ID types + college bridge, all verified against live data; 43 offline + 8 network tests passing; three real bugs found and fixed in review (see below) |
 | M3 As-of features + leakage | DONE | games/player_week_stats/player_week_features (199,632 rows over 2015-2025, built in ~7s from cache); leakage-safe by construction via SQL window frames; 51 offline (incl. 12 leakage tests with independent Python recomputation) + 9 network tests passing |
+| M4 Baselines + evaluation | DONE | 3 baselines (previous-year, weighted-2yr, ECR-implied) walk-forward evaluated 2018-2025 against 21,421 real player-seasons and 210,730 real market snapshots; shared evaluation harness (MAE/RMSE/R²/Spearman/top-N hit rate/tier accuracy) reused by every later milestone; 65 offline + 10 network tests passing |
 | M2 Canonical identity | NOT STARTED | |
 | M3 As-of features + leakage | NOT STARTED | |
 | M4 Baselines + evaluation | NOT STARTED | |
@@ -108,6 +109,28 @@ milestone. See `docs/TRACEABILITY.md` for the acceptance-criteria-level mapping.
   rebuild-invariance (appending future weeks and rebuilding must not change historical rows'
   stored features) — all passing, both offline (synthetic fixtures) and against real data.
 - Full build against 11 real seasons (2015-2025) of cached data: ~7 seconds.
+
+## M4 summary
+- `player_season_stats` (21,421 rows): season aggregate of M3's `player_week_stats`.
+- `market_snapshot` (210,730 rows): normalized DynastyProcess `fp_ecr_history` ('ro'
+  redraft-overall series), identity-joined via `fantasypros_id` (verified 93.8% coverage —
+  D16). Extended in M8 with the 2QB-aware series the target league (D7) actually needs.
+- Three baselines, all walk-forward (season S predictions read only data from before S):
+  `baseline_previous_year`, `baseline_weighted_2yr` (0.65/0.35), `baseline_ecr_implied`
+  (isotonic rank-to-points calibration curve, fit per position on an expanding window of
+  prior seasons only — D17). "ADP-implied" is LIMITED to this same ECR-based substitute; no
+  independent ADP series is reachable (D16).
+- Shared evaluation harness (`models/evaluate.py`): MAE, RMSE, R², Spearman, top-12/24 hit
+  rate, tier accuracy — computed overall and per position, persisted to `evaluation_results`,
+  published to `reports/baseline_evaluation.md`. Every later model (M5, M7, M8) reports
+  through the same harness so comparisons are apples-to-apples, per ACCEPTANCE_CRITERIA.md.
+- Real result worth flagging, not hiding: the ECR-implied baseline's MAE (~45-49) is
+  substantially worse than the simple historical baselines' (~14-15) on 2018-2025 data.
+  Verified this isn't a calibration bug (predictions land in a sensible range, e.g. Josh
+  Allen 2024 predicted 459.6 vs actual 444.98) — market consensus rank is just a noisier
+  predictor of exact season point totals than "what a player scored last year." This is
+  exactly the kind of market-vs-outcome divergence M8's EDGE engine is meant to exploit, not
+  a defect to paper over.
 
 ## Known limitations (see docs/DECISIONS.md for full reasoning)
 - Sleeper, FantasyPros API, CollegeFootballData, KeepTradeCut, ESPN direct APIs are

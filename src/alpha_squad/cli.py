@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import typer
 from rich.console import Console
 from rich.table import Table
@@ -10,6 +12,9 @@ from alpha_squad.config.settings import get_settings
 from alpha_squad.features.build import build_features
 from alpha_squad.identity.canonical import build_identity
 from alpha_squad.identity.exceptions import list_exceptions
+from alpha_squad.market.consensus import build_market_snapshot
+from alpha_squad.models.baselines.run import run_baselines
+from alpha_squad.models.report import write_evaluation_report
 from alpha_squad.sources.base import SourceError, SourceHealth, SourceStatus, utcnow
 from alpha_squad.sources.registry import all_adapters
 from alpha_squad.storage.db import get_connection, init_db
@@ -19,9 +24,13 @@ app = typer.Typer(help="Alpha Squad — fantasy football market-inefficiency int
 sources_app = typer.Typer(help="Data source operations")
 identity_app = typer.Typer(help="Canonical player identity operations")
 features_app = typer.Typer(help="As-of feature store operations")
+market_app = typer.Typer(help="Market consensus operations")
+evaluate_app = typer.Typer(help="Baseline/model evaluation operations")
 app.add_typer(sources_app, name="sources")
 app.add_typer(identity_app, name="identity")
 app.add_typer(features_app, name="features")
+app.add_typer(market_app, name="market")
+app.add_typer(evaluate_app, name="evaluate")
 console = Console()
 
 # Datasets that vary by NFL season vs. ones that are a single current/whole-history file.
@@ -250,6 +259,77 @@ def features_build(
     console.print(
         f"player_week_features upserted: [green]{report.player_week_features_upserted}[/green]"
     )
+    console.print(
+        f"player_season_stats upserted: [green]{report.player_season_stats_upserted}[/green]"
+    )
+    con.close()
+
+
+@market_app.command("build")
+def market_build() -> None:
+    """Build market_snapshot from the stored DynastyProcess fp_ecr_history snapshot
+    (redraft-overall/1QB ECR)."""
+    settings = get_settings()
+    con = get_connection(settings)
+    init_db(con)
+    try:
+        n = build_market_snapshot(con, settings)
+    except RuntimeError as e:
+        console.print(f"[red]{e}[/red]")
+        con.close()
+        raise typer.Exit(code=1) from e
+    console.print(f"market_snapshot rows upserted: [green]{n}[/green]")
+    con.close()
+
+
+@evaluate_app.command("baselines")
+def evaluate_baselines(
+    season_start: int = typer.Option(2016, help="First target season to evaluate"),
+    season_end: int = typer.Option(2025, help="Last target season to evaluate"),
+    report_path: str = typer.Option(
+        "reports/baseline_evaluation.md", help="Markdown report output path"
+    ),
+) -> None:
+    """Walk-forward evaluate every registered baseline (previous-year, weighted-2yr,
+    ECR-implied) against real outcomes for each season, and publish a report. Requires
+    `features build` and `market build` to have already run for the relevant seasons."""
+    settings = get_settings()
+    con = get_connection(settings)
+    init_db(con)
+    seasons = list(range(season_start, season_end + 1))
+    results = run_baselines(con, seasons)
+
+    table = Table(title="Baseline evaluation (ALL positions)")
+    for col in (
+        "model",
+        "season",
+        "n",
+        "mae",
+        "rmse",
+        "spearman",
+        "top12_hit",
+        "top24_hit",
+        "tier_acc",
+    ):
+        table.add_column(col)
+    for m in results:
+        if m.position != "ALL":
+            continue
+        table.add_row(
+            m.model_name,
+            str(m.season),
+            str(m.n),
+            f"{m.mae:.2f}" if m.mae == m.mae else "-",
+            f"{m.rmse:.2f}" if m.rmse == m.rmse else "-",
+            f"{m.spearman:.3f}" if m.spearman == m.spearman else "-",
+            f"{m.top12_hit_rate:.2f}" if m.top12_hit_rate is not None else "-",
+            f"{m.top24_hit_rate:.2f}" if m.top24_hit_rate is not None else "-",
+            f"{m.tier_accuracy:.2f}" if m.tier_accuracy is not None else "-",
+        )
+    console.print(table)
+
+    write_evaluation_report(con, Path(report_path))
+    console.print(f"report written to [green]{report_path}[/green]")
     con.close()
 
 

@@ -137,6 +137,30 @@ stat-finalization timestamp. `player_week_features`'s lag columns are additional
 safe *by construction* (SQL window frames that structurally exclude the current and all
 future rows), independent of this row-level filter — see tests/leakage/.
 
+## D16 — Market snapshot join key and ADP-implied baseline scope
+Verified against real data: `fp_ecr_history.id` (FantasyPros' own internal player ID) matches
+`player_id_map`'s `fantasypros_id` (from the M2 DynastyProcess crosswalk) for 211,741 of
+225,778 (93.8%) `ecr_type='ro'` rows — clearly the same ID space, and better coverage than
+`cbs_id` (61.6%) or `yahoo_id`. `market_snapshot` joins on `fantasypros_id`, never on name.
+
+`PRODUCT_SPEC.md` also calls for an "ADP-implied baseline where supportable." No independent
+ADP (average live/mock draft position) series is reachable: FantasyPros ADP requires the
+blocked API, and DynastyProcess's `values-players.csv` carries dynasty *value* (derived from
+ECR itself), not a separate live-draft ADP. **Decision:** ADP-implied is LIMITED — ECR-implied
+(D17) stands in as the closest available market-consensus-rank baseline; a genuine ADP-implied
+baseline activates automatically once FantasyPros ADP is reachable, using the same
+rank-to-points calibration mechanism.
+
+## D17 — ECR-implied baseline uses a walk-forward rank-to-points calibration curve, not a hardcoded formula
+FantasyPros ECR is a *rank*, not a points prediction, so turning it into a point value needs a
+calibration step. Built by fitting the historical relationship between preseason ECR rank and
+actual season points, per position, using only seasons strictly before the one being
+predicted (expanding window) — never seasons after, which would leak the outcome being
+predicted back into its own calibration curve. `ecr_type='ro'` (redraft-overall, 1QB) is used
+for this general-purpose baseline; the 2QB-aware series (`rsf`/`dsf`) that fits the target
+league (D7) is reserved for M8's EDGE engine, which needs the market-vs-model comparison to be
+format-aware.
+
 ## D14 — Agents are deterministic services, not LLM calls
 `ARCHITECTURE.md` §6: "The project orchestrator is an engineering orchestration layer, not itself
 the source of fantasy truth." Agents in `src/alpha_squad/agents/` are typed Python
