@@ -35,9 +35,9 @@ state at the time each milestone was first built.
 | Criterion | Status | Where |
 |---|---|---|
 | nflverse ingestion works or limitation documented | ✅ | `sources/nflverse.py` — AVAILABLE, real data 2015-2025 ingested |
-| FantasyPros API integration works or limitation documented | ❌→⚠️ | `sources/fantasypros.py` implemented, raises `BLOCKED_BY_POLICY`; substituted by DynastyProcess `db_fpecr` (D3) for the ECR signal itself |
-| CFBD integration works or limitation documented | ❌→⚠️ | `sources/cfbd.py` implemented, `BLOCKED_BY_POLICY`; substituted by cfbfastR-data (D3) for college production |
-| Sleeper integration works or limitation documented | ❌ | `sources/sleeper.py` implemented, `BLOCKED_BY_POLICY`; league context is config-driven (YAML), not synced live from a platform, so no substitute was needed for product completeness |
+| FantasyPros API integration works or limitation documented | ⚠️ | `sources/fantasypros.py` implemented; network layer confirmed open 2026-08-22 (D31, real `403 Forbidden` app response with no key) — now credential-gated (paid `FANTASYPROS_API_KEY`), not policy-blocked; substituted by DynastyProcess `db_fpecr` (D3) for the ECR signal itself in the meantime |
+| CFBD integration works or limitation documented | ⚠️ | `sources/cfbd.py` implemented; network layer confirmed open 2026-08-22 (D31, real "missing Bearer key" app response) — now credential-gated (free `CFBD_API_KEY`), not policy-blocked; substituted by cfbfastR-data (D3) for college production in the meantime |
+| Sleeper integration works or limitation documented | ✅ | `sources/sleeper.py` — became AVAILABLE 2026-08-22 when the environment's egress policy changed (D31), verified with real data (state/players/trending adds+drops); league context remains config-driven (YAML, D6) rather than live-synced, a product choice, not a data-access limitation |
 | Official/current evidence workflow exists | ✅ | `evidence/events.py` — depth chart, injury, roster, usage-share detectors on real nflverse data |
 | Raw/source snapshots are preserved | ✅ | `storage/snapshots.py`, immutable `data/raw/<source>/<dataset>/captured_at=.../`, `snapshot_registry` |
 | Canonical player IDs exist | ✅ | `identity/canonical.py`, `asq_######`, spine = nflverse `players.gsis_id` |
@@ -80,7 +80,7 @@ state at the time each milestone was first built.
 |---|---|---|
 | FantasyPros ECR is a market baseline when available | ✅ | via DynastyProcess `db_fpecr` (real historical ECR, D3); `market/consensus.py` |
 | ADP is tracked when available | ⚠️ | no direct ADP series is reachable in this environment; ECR-implied (isotonic rank→points, D17) and dynasty market value are the documented substitutes — not literal ADP |
-| Sleeper/KTC are treated as separate signals, not truth | ⚠️ | both blocked directly; KTC's dynasty-value role is covered by DynastyProcess `values-players`/`values-picks` (D3), architecturally kept as a market signal EDGE compares against, never a source of truth the model defers to |
+| Sleeper/KTC are treated as separate signals, not truth | ⚠️ | Sleeper is now AVAILABLE (D31) but nothing yet consumes it as a market/decision signal (no code change implied by reachability alone — a product decision, not built); KTC has no formal adapter and its dynasty-value role is covered by DynastyProcess `values-players`/`values-picks` (D3); either way, architecturally kept as a market signal EDGE compares against, never a source of truth the model defers to |
 | Expert weighting uses demonstrated accuracy where data permits | ⚠️ | only *consensus* ECR is reachable, not per-expert rankings (needs the blocked FantasyPros API); weighting is applied at the source level (ECR vs. dynasty value vs. model) instead (D4) |
 | Rank edge, points edge, and probability edge exist | ✅ | `market/edge.py` `EdgeContract` fields |
 | A raw ranking discrepancy cannot alone produce a strong EDGE | ✅ | `classify_action`'s hard gating rule; `tests/unit/test_edge.py::TestClassifyActionGatingRule` |

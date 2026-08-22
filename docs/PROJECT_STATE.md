@@ -25,10 +25,13 @@ milestone. See `docs/TRACEABILITY.md` for the acceptance-criteria-level mapping.
 ## M1 summary
 - Adapters: `nflverse` (15 datasets), `dynastyprocess` (4), `cfbfastr` (1), `ffopportunity` (1)
   — all AVAILABLE, verified against the live sources (both mocked-contract tests and
-  `network`-marked live tests). `sleeper` (6 endpoints) verified BLOCKED_BY_POLICY;
+  `network`-marked live tests). `sleeper` (6 endpoints) verified BLOCKED_BY_POLICY at the time;
   `fantasypros` (2) and `cfbd` (3) verified NO_CREDENTIALS, and both provably never attempt a
   network call without a configured key (see `test_fantasypros_without_key_never_makes_network_call`
   / `test_cfbd_without_key_never_makes_network_call`).
+  **Update (D31, 2026-08-22): the environment's network policy changed. `sleeper` is now
+  genuinely AVAILABLE with real data; `fantasypros`/`cfbd` are now network-reachable too and
+  blocked only on the still-missing API keys, not policy — see `docs/DATA_SOURCES.md`.**
 - `snapshot_registry` + `source_health_log` tables in DuckDB; every fetch writes an immutable
   file under `data/raw/<source>/<dataset>/captured_at=<date>/...` and is content-hashed.
 - `alpha-squad sources status` and `alpha-squad sources ingest --season-start Y --season-end Y`
@@ -510,9 +513,17 @@ milestone. See `docs/TRACEABILITY.md` for the acceptance-criteria-level mapping.
   reproducibility) and 4 new live network tests (37 total, `test_simulation_live.py`).
 
 ## Known limitations (see docs/DECISIONS.md for full reasoning)
-- Sleeper, FantasyPros API, CollegeFootballData, KeepTradeCut, ESPN direct APIs are
-  `BLOCKED_BY_POLICY` in this environment. Verified open-data substitutes are wired in instead
-  (docs/DATA_SOURCES.md). Adapters for the blocked sources are implemented but inert.
+- **Update (D31, 2026-08-22):** the line below described the environment as it stood through
+  M13. The network policy has since changed: Sleeper is now genuinely AVAILABLE (no code
+  change needed — verified with real data), and FantasyPros/CFBD are network-reachable and
+  blocked only on their still-missing API keys, not policy. KeepTradeCut (no adapter exists)
+  and ESPN (unused) are the only sources still actually inert. See `docs/DATA_SOURCES.md` for
+  the current, authoritative status.
+- FantasyPros API, CollegeFootballData, KeepTradeCut, ESPN direct APIs were `BLOCKED_BY_POLICY`
+  in this environment through M13; Sleeper has since cleared, the other three have not (or, for
+  FantasyPros/CFBD, need credentials now that the network layer is open). Verified open-data
+  substitutes are wired in regardless (docs/DATA_SOURCES.md). Adapters for the still-blocked
+  sources are implemented but inert.
 - Per-expert accuracy weighting: LIMITED to source-level weighting (D4).
 - Automated news/social evidence ingestion: LIMITED to structured official signals (D5).
 - ADP-implied baseline: LIMITED to the ECR-implied substitute; no independent ADP series is

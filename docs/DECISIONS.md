@@ -623,3 +623,57 @@ format src tests`; diffed the result to confirm every change was pure line-wrapp
 (spot-checked `api/routers/league.py`'s largest diff) and re-ran the full offline suite (still
 204 passed) to confirm no behavior changed. Both `ruff check` and `ruff format --check` are now
 clean, matching what `docs/TRACEABILITY.md`'s "Ruff/static checks pass" row claims.
+
+## D31 — Re-verified 2026-08-22: this environment's network egress policy changed. Sleeper is now genuinely AVAILABLE; FantasyPros/CFBD are network-reachable and blocked only on missing credentials
+CLAUDE.md's own instruction is to re-verify with `alpha-squad sources status` before assuming
+D3's environment snapshot is still current, rather than treat it as permanent. Asked to
+"check the env again" and then "now try," re-ran the real checks — `alpha-squad sources
+status`, the proxy's own connection log, and direct unauthenticated calls to each adapter's
+real production endpoint (not just a bare domain root, which can misleadingly redirect/succeed
+without exercising the actual code path) — rather than repeating the D3-era conclusion from
+memory.
+
+**Real result, verified via actual data returned, not just a status code:**
+- **Sleeper (`api.sleeper.app`) is now fully AVAILABLE, no credentials needed.**
+  `sources status` returned real data: `state` (1 real row), `players` (the real ~12k-player
+  pool), `trending_adds`/`trending_drops` (25 real entries each). The health check's
+  `league`/`league_rosters` calls use a placeholder `league_id=0` (`sleeper.py`'s
+  `default_health_params`) and correctly 404 against Sleeper's real API since no such league
+  exists — not a policy block; `league_drafts` for that same fake ID succeeded with an empty
+  list, confirming the endpoint itself works fine. A real league ID would pull real league
+  state.
+- **FantasyPros and CFBD's real production endpoints are now network-reachable too** — called
+  each directly, unauthenticated: FantasyPros returned a clean `{"message":"Forbidden"}` (a
+  real API auth rejection, not a connection failure), and CFBD returned its own detailed real
+  message ("Unauthorized. Did you forget to add \"Bearer \" before your key?... register for
+  your free API key"). Both `sources status` still reports these `NO_CREDENTIALS` because the
+  adapters intentionally never attempt a call without a configured key (`SourceCredentialsError`,
+  D3/CLAUDE_CODE_LEAD_PROMPT.md §8) — that check happens before the network call, so it can't by
+  itself distinguish "still policy-blocked" from "just needs a key." The direct unauthenticated
+  probe is what actually establishes the network layer is open now.
+- **KeepTradeCut's bare domain now returns HTTP 200** (previously blocked at CONNECT), but no
+  adapter exists for it in this codebase — D3's original decision to cover its role entirely via
+  DynastyProcess's dynasty values stands unchanged; there is nothing to activate.
+- **ESPN's bare domain now returns a real app-level 403** (a WAF/bot-defense response, not a
+  network block) — still not a required source, so left as-is.
+- **`api.github.com`** is reachable at the network layer, but real repo calls 403 with a Claude
+  Code Remote session-scope message (this session's GitHub access is scoped to specific attached
+  repos, unrelated to the egress policy) — irrelevant either way since the project only ever
+  reads `raw.githubusercontent.com` release-asset URLs directly, confirmed working throughout.
+
+**What this changes:** `docs/DATA_SOURCES.md` updated to reflect Sleeper as AVAILABLE and
+FantasyPros/CFBD as credential-gated rather than policy-blocked. `ACCEPTANCE_CRITERIA.md`'s
+"Sleeper integration works or limitation is explicitly documented" now reads MET rather than
+BLOCKED in `docs/TRACEABILITY.md`. No source code changed — every adapter was already built to
+activate unchanged the moment its blocker cleared (D3's own stated design intent), and that
+held up exactly as intended.
+
+**What this doesn't change on its own:** nothing in the pipeline currently *calls* Sleeper for
+anything beyond the health check — league/roster/draft state is still read from the local YAML
+config (D6), and the identity crosswalk's `sleeper_id` role was already filled by
+DynastyProcess. Wiring Sleeper in for something it would newly add value on — e.g.
+`trending_adds`/`trending_drops` as a real, timestamped, community-momentum evidence signal
+(PRODUCT_SPEC.md's Weak tier explicitly includes "social media"/buzz-type signals, previously
+undevelopable per D5/D22 since no such source was reachable at all), or real per-league sync
+given an actual Sleeper league ID — is a deliberate product decision about what to build next,
+not implied by the source becoming reachable, and is left for direction rather than assumed.
