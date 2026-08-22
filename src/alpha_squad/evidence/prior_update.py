@@ -145,10 +145,21 @@ def evidence_score_for_action(
     neutral). 0.5 means no evidence, not a penalty -- evidence detectors (events.py) only
     ever produce in-season events starting week 2, so a preseason-anchored EDGE build
     (market/edge.py, D21) will honestly see no evidence yet for the season it is predicting;
-    this is real, not a placeholder pretending otherwise, and is documented as D23."""
+    this is real, not a placeholder pretending otherwise, and is documented as D23.
+
+    The cutoff uses that season's real Week 1 game date from `games` when it has been
+    ingested (real NFL Week 1 dates run 2023-2025 fall in the first week of September, not
+    August), falling back to September 1st -- a defensible early estimate, not "before Week 1"
+    literally -- only for a season with no games ingested yet (a genuinely future/current
+    season, like a preseason evidence build; D32 found the docstring's own "before Week 1"
+    claim didn't match an earlier hardcoded August 1st cutoff, which silently excluded ~5
+    weeks of real preseason evidence)."""
     if action_sign == 0:
         return 0.5
-    season_start = f"{season}-08-01"
+    week1_date = con.execute(
+        "SELECT min(game_date) FROM games WHERE season = ? AND week = 1", [season]
+    ).fetchone()[0]
+    season_start = str(week1_date) if week1_date is not None else f"{season}-09-01"
     rows = con.execute(
         "SELECT strength, direction FROM evidence_events "
         "WHERE player_id = ? AND season = ? AND event_date < ?",

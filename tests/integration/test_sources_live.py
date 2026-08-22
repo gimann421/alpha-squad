@@ -11,7 +11,7 @@ from __future__ import annotations
 import pytest
 
 from alpha_squad.config.settings import Settings
-from alpha_squad.sources.base import SourceBlockedError, SourceCredentialsError
+from alpha_squad.sources.base import SourceCredentialsError
 from alpha_squad.sources.cfbfastr import CfbFastRSource
 from alpha_squad.sources.dynastyprocess import DynastyProcessSource
 from alpha_squad.sources.fantasypros import FantasyProsSource
@@ -53,13 +53,15 @@ def test_cfbfastr_college_stats_reachable(settings):
     assert snap.rows and snap.rows > 1000
 
 
-def test_sleeper_is_blocked_by_environment_policy(settings):
-    """This is expected to fail loudly (SourceBlockedError), not silently succeed or
-    silently return nothing. If this test starts failing because Sleeper suddenly *works*,
-    that's good news — update docs/DATA_SOURCES.md and docs/DECISIONS.md D3 accordingly and
-    relax this assertion."""
-    with pytest.raises(SourceBlockedError):
-        SleeperSource(settings).fetch("state")
+def test_sleeper_is_really_reachable(settings):
+    """Sleeper was BLOCKED_BY_POLICY through M13 (this test used to assert exactly that,
+    with an explicit note that a passing fetch here would be good news requiring a docs
+    update). The environment's egress policy changed; re-verified 2026-08-22 (D31) with real
+    data returned across every no-credential endpoint. If this ever reverts, docs/DATA_SOURCES.md
+    and docs/DECISIONS.md D31 need updating and this assertion should flip back."""
+    snap = SleeperSource(settings).fetch("state")
+    assert snap.rows == 1
+    assert snap.local_path.exists()
 
 
 def test_fantasypros_without_key_reports_no_credentials(settings):

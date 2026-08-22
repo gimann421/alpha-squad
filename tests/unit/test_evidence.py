@@ -301,3 +301,60 @@ class TestEvidenceScoreForAction:
         opposing = evidence_score_for_action(con, "p1", 2024, action_sign=-1)
         assert opposing < 0.5
         assert score + opposing == pytest.approx(1.0)
+
+    def test_august_evidence_counts_when_no_real_week1_date_is_known(self, con):
+        """Regression test (docs/DECISIONS.md D32): the cutoff used to be hardcoded to
+        August 1st despite this function's own docstring promising "before that season's own
+        Week 1" -- real NFL Week 1 dates fall in early September (2023-09-07, 2024-09-05,
+        2025-09-04), so real August evidence (the entire preseason/training-camp window) was
+        being silently excluded. With no `games` row for the season (as here), the fallback
+        cutoff is now September 1st, not August 1st."""
+        record_event(
+            con,
+            player_id="p1",
+            season=2024,
+            week=1,
+            event_date="2024-08-15",
+            event_type="roster_transaction",
+            source="t",
+            direction=1,
+            structured_impact={},
+            summary="signed as starter in August",
+        )
+        score = evidence_score_for_action(con, "p1", 2024, action_sign=1)
+        assert score > 0.5, "August evidence must count toward the preseason evidence score"
+
+    def test_real_week1_game_date_takes_priority_over_the_fallback(self, con):
+        """When the season's real Week 1 has been ingested, the cutoff uses that real date
+        instead of the September 1st fallback -- evidence dated on/after the real Week 1
+        kickoff must not count, even if the fallback constant would have allowed it."""
+        con.execute(
+            "INSERT INTO games (game_id, season, week, game_type, game_date, home_team, away_team) "
+            "VALUES ('2024_01_AAA_BBB', 2024, 1, 'REG', '2024-09-05', 'AAA', 'BBB')"
+        )
+        record_event(
+            con,
+            player_id="p1",
+            season=2024,
+            week=1,
+            event_date="2024-08-20",
+            event_type="roster_transaction",
+            source="t",
+            direction=1,
+            structured_impact={},
+            summary="before the real week 1 kickoff",
+        )
+        record_event(
+            con,
+            player_id="p2",
+            season=2024,
+            week=1,
+            event_date="2024-09-05",
+            event_type="roster_transaction",
+            source="t",
+            direction=1,
+            structured_impact={},
+            summary="on the real week 1 kickoff date itself",
+        )
+        assert evidence_score_for_action(con, "p1", 2024, action_sign=1) > 0.5
+        assert evidence_score_for_action(con, "p2", 2024, action_sign=1) == pytest.approx(0.5)

@@ -512,6 +512,41 @@ milestone. See `docs/TRACEABILITY.md` for the acceptance-criteria-level mapping.
 - 15 new offline tests (204 total: 11 simulation + 3 REG/POST regression + 1 established-ML
   reproducibility) and 4 new live network tests (37 total, `test_simulation_live.py`).
 
+## Post-M13: environment re-verification, and Sleeper trending as a real Weak-tier evidence signal (D31/D32)
+This environment's network egress policy changed after M13 shipped. Re-verified live rather
+than assumed (D31): Sleeper's public API is now genuinely `AVAILABLE`, no credentials needed;
+FantasyPros/CFBD are network-reachable too, now blocked only on their still-missing API keys,
+not policy.
+
+Built on that: `evidence/sleeper_trending.py::detect_sleeper_trending` (D32) fetches Sleeper's
+real `trending_adds`/`trending_drops`, resolves each to a canonical player via the existing
+DynastyProcess `sleeper_id` crosswalk, and records `social_media_buzz` Weak-tier evidence
+events through the same `record_event()`/taxonomy machinery every other detector uses — no
+parallel evidence path. This is the evidence engine's first real Weak-tier detector
+(previously registered vocabulary only, D5/D22). Wired into the CLI
+(`alpha-squad evidence build-sleeper-trending`). Verified against real data: real Sleeper IDs
+resolved to real players (Xavier Hutchinson, Barion Brown, Darren Waller, ...), 48/50 real
+trending entries resolved on a real run.
+
+Verifying it against real data caught a genuine, previously-undiscovered bug in
+`evidence/prior_update.py::evidence_score_for_action` (already-shipped code from M9, not new):
+its own docstring promised evidence "before that season's own Week 1" counts toward EDGE's
+evidence score, but the code hardcoded an August 1st cutoff — real Week 1 dates run early
+September (checked directly: 2023-09-07, 2024-09-05, 2025-09-04), so roughly five weeks of
+real preseason evidence were being silently discarded, contradicting the function's own
+documented intent. This had never surfaced before because no evidence source had ever
+produced real events dated in August. Fixed to use the season's real Week 1 date from `games`
+when known, falling back to September 1st only for a season with no games ingested yet.
+
+7 new offline tests (211 total: 5 sleeper-trending unit + 2 evidence-cutoff regression) and 3
+new/updated live network tests (39 total: 2 new sleeper-trending live tests, plus
+`test_sources_live.py`'s Sleeper test flipped from asserting BLOCKED to asserting AVAILABLE,
+exactly as its own prior docstring said to do if this ever happened).
+
+**Still not built:** real per-league Sleeper sync (replacing `target_league.yaml`'s assumed
+defaults with an actual league's real settings) — needs a real Sleeper league ID, not
+supplied yet. Direct FantasyPros/CFBD access — needs API keys, not supplied yet.
+
 ## Known limitations (see docs/DECISIONS.md for full reasoning)
 - **Update (D31, 2026-08-22):** the line below described the environment as it stood through
   M13. The network policy has since changed: Sleeper is now genuinely AVAILABLE (no code
@@ -546,10 +581,17 @@ milestone. See `docs/TRACEABILITY.md` for the acceptance-criteria-level mapping.
   narrative): LIMITED to a registered taxonomy + manual-entry path; no reachable news/social API
   in this environment (D5, D22). Only Strong-tier, officially-sourced structured signals have a
   real detector.
-- EDGE `evidence_score` is real but structurally near-always neutral in practice for the current
-  preseason-anchored EDGE, since evidence detectors are in-season and EDGE is preseason (D23) —
-  a genuine horizon mismatch, disclosed rather than papered over. An in-season EDGE variant that
-  would let evidence meaningfully move `evidence_score` beyond a veto is future scope.
+- EDGE `evidence_score` was structurally near-always neutral in practice for the preseason-
+  anchored EDGE, since the four Strong-tier detectors are in-season only and EDGE is preseason
+  (D23) — a genuine horizon mismatch, disclosed rather than papered over. **Partially closed in
+  D32**: Sleeper trending adds/drops is a real evidence source that exists *at* the preseason
+  horizon (unlike the Strong-tier detectors), and a real bug in the evidence cutoff itself
+  (hardcoded to August 1st despite the code's own docstring promising "before Week 1," which
+  is early September — found while verifying D32 against real data) was silently discarding
+  roughly five real weeks of any preseason evidence that did exist, for every season. Still
+  true: the four Strong-tier structured detectors remain in-season only; an in-season EDGE
+  variant that would let evidence meaningfully move `evidence_score` beyond a veto is future
+  scope.
 - Dynasty trade's age-curve adjustment is a documented heuristic (D25), not a trained/validated
   model — no ground-truth dynasty-value-decay dataset exists in this environment to fit one. It
   is a disclosed secondary adjustment only; the primary BUY/SELL signal is M8's real, validated

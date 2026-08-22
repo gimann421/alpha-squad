@@ -80,7 +80,7 @@ state at the time each milestone was first built.
 |---|---|---|
 | FantasyPros ECR is a market baseline when available | ✅ | via DynastyProcess `db_fpecr` (real historical ECR, D3); `market/consensus.py` |
 | ADP is tracked when available | ⚠️ | no direct ADP series is reachable in this environment; ECR-implied (isotonic rank→points, D17) and dynasty market value are the documented substitutes — not literal ADP |
-| Sleeper/KTC are treated as separate signals, not truth | ⚠️ | Sleeper is now AVAILABLE (D31) but nothing yet consumes it as a market/decision signal (no code change implied by reachability alone — a product decision, not built); KTC has no formal adapter and its dynasty-value role is covered by DynastyProcess `values-players`/`values-picks` (D3); either way, architecturally kept as a market signal EDGE compares against, never a source of truth the model defers to |
+| Sleeper/KTC are treated as separate signals, not truth | ✅ | Sleeper's trending adds/drops now feed the evidence engine as a real Weak-tier `social_media_buzz` signal (D32, `evidence/sleeper_trending.py`) — a separate, bounded evidence input, never a source of truth the model defers to (same ±15% bounded-adjustment ceiling as every other evidence signal). KTC has no formal adapter; its dynasty-value role is covered by DynastyProcess `values-players`/`values-picks` (D3) |
 | Expert weighting uses demonstrated accuracy where data permits | ⚠️ | only *consensus* ECR is reachable, not per-expert rankings (needs the blocked FantasyPros API); weighting is applied at the source level (ECR vs. dynasty value vs. model) instead (D4) |
 | Rank edge, points edge, and probability edge exist | ✅ | `market/edge.py` `EdgeContract` fields |
 | A raw ranking discrepancy cannot alone produce a strong EDGE | ✅ | `classify_action`'s hard gating rule; `tests/unit/test_edge.py::TestClassifyActionGatingRule` |
@@ -94,7 +94,7 @@ state at the time each milestone was first built.
 | Evidence events are timestamped | ✅ | `evidence_events.detected_at` |
 | Evidence has source/provenance | ✅ | `evidence_events.source_snapshot_id` |
 | Evidence strength is structured | ✅ | `evidence/taxonomy.py` |
-| Strong/medium/weak hierarchy is implemented | ⚠️ | Strong tier has real detectors on officially-sourced nflverse data; Medium/Weak are registered vocabulary with a manual-entry path but no reachable text/news source to detect them automatically (D5, D22) |
+| Strong/medium/weak hierarchy is implemented | ⚠️ | Strong tier has 4 real detectors on officially-sourced nflverse data; Weak tier now has one real detector too (`social_media_buzz` via Sleeper trending adds/drops, D32) — real community momentum, timestamped and bounded like every other evidence input; Medium remains registered vocabulary with a manual-entry path but no reachable text/news source (D5, D22) |
 | News does not directly overwrite model projections | ✅ | `evidence/prior_update.py::apply_evidence_adjustment`, bounded to `MAX_ADJUSTMENT_PCT = 0.15`; tested |
 | Material projection changes have reasons | ✅ | `projection_deltas.reason` + `evidence_ids` |
 

@@ -19,6 +19,7 @@ from alpha_squad.agents.state import reconstruct_run
 from alpha_squad.config.settings import get_settings
 from alpha_squad.evidence.events import build_evidence_events_range
 from alpha_squad.evidence.prior_update import run_prior_update
+from alpha_squad.evidence.sleeper_trending import detect_sleeper_trending
 from alpha_squad.features.build import build_features
 from alpha_squad.identity.canonical import build_identity
 from alpha_squad.identity.exceptions import list_exceptions
@@ -756,6 +757,34 @@ def evidence_update_projections(
     console.print(
         f"deltas written: [green]{len(deltas)}[/green] ({n_adjusted} materially adjusted)"
     )
+    con.close()
+
+
+@evidence_app.command("build-sleeper-trending")
+def evidence_build_sleeper_trending(
+    season: int = typer.Option(..., help="Season this evidence should inform"),
+    week: int = typer.Option(
+        1, help="Week this evidence should inform (1 = preseason/entering the season)"
+    ),
+) -> None:
+    """Real-time Sleeper community add/drop momentum as Weak-tier evidence
+    (docs/DECISIONS.md D31/D32) -- unlike `evidence build`'s Strong-tier detectors, this
+    fetches live (Sleeper's trending endpoints have no historical lookback) and always
+    reflects activity as of right now, attributed to whichever (season, week) you say it
+    should inform. Requires `identity build` to have run (joins via DynastyProcess's
+    sleeper_id crosswalk)."""
+    settings = get_settings()
+    con = get_connection(settings)
+    init_db(con)
+
+    try:
+        n = detect_sleeper_trending(con, settings, season, week)
+    except SourceError as e:
+        console.print(f"[red]{e}[/red]")
+        con.close()
+        raise typer.Exit(code=1) from e
+
+    console.print(f"sleeper trending events written: [green]{n}[/green]")
     con.close()
 
 

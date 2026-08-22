@@ -677,3 +677,65 @@ DynastyProcess. Wiring Sleeper in for something it would newly add value on — 
 undevelopable per D5/D22 since no such source was reachable at all), or real per-league sync
 given an actual Sleeper league ID — is a deliberate product decision about what to build next,
 not implied by the source becoming reachable, and is left for direction rather than assumed.
+
+## D32 — Sleeper trending adds/drops wired in as the first real Weak-tier evidence signal; fixed a real preseason evidence-cutoff bug found while verifying it against real data
+Following D31's finding that Sleeper is genuinely reachable now, built the trending-momentum
+signal flagged there as a real opportunity: `evidence/sleeper_trending.py::detect_sleeper_trending`
+fetches Sleeper's real `trending_adds`/`trending_drops` (no auth), resolves each entry to a
+canonical `player_id` via DynastyProcess's `sleeper_id` crosswalk (already in `player_id_map`
+since M2), and records each as a `social_media_buzz` event (PRODUCT_SPEC.md's Weak tier,
+registered but undevelopable since D5/D22 — this is its first real detector) via the existing
+`record_event()`/taxonomy machinery, direction +1 for an add and -1 for a drop.
+
+**Kept architecturally separate from `evidence/events.py`'s four detectors, deliberately:**
+those reconstruct evidence for an arbitrary *past* week from already-ingested nflverse
+snapshots (pure over stored data, no network I/O). Sleeper's trending endpoints have no
+lookback API — every call returns only *current* activity — so this module fetches live
+itself and always represents "evidence as of right now," attributed to whichever (season,
+week) the caller specifies. `week=1` is the natural choice before a season starts.
+
+**Verified against real data, not assumed:** real Sleeper IDs resolved to real players
+(Xavier Hutchinson, Barion Brown, Darren Waller, ...) via the real crosswalk; 48 of 50 real
+trending entries resolved on a real run (2 presumably not yet in the identity graph). Offline
+unit tests (`tests/unit/test_sleeper_trending.py`) mock `httpx.get` with the exact real
+response shape (`[{"count": int, "player_id": str}, ...]`) verified against the live API
+first, not a guessed shape. Live tests
+(`tests/integration/test_sleeper_trending_live.py`) hit the real endpoint.
+
+**Real bug found and fixed while verifying this against real data (not in the new code —
+in `evidence/prior_update.py::evidence_score_for_action`, which every prior milestone had
+already shipped and tested, just never with evidence dated in August):** its own docstring
+promises evidence "recorded before that season's own Week 1" counts toward EDGE's evidence
+score, but the code hardcoded `f"{season}-08-01"` as the cutoff. Real NFL Week 1 dates
+(checked directly: 2023-09-07, 2024-09-05, 2025-09-04) fall in the first week of September,
+not August 1st — so roughly five real weeks of preseason evidence, the entire training-camp
+window, were being silently excluded from ever reaching EDGE, contradicting the function's
+own documented intent. This had never surfaced before because no evidence source had ever
+produced real events dated in August — Strong-tier detectors are in-season only (D23), and
+nothing else existed at that horizon until this signal did. Fixed to use the season's real
+Week 1 game date from `games` when ingested, falling back to September 1st (not August 1st)
+only for a season with no games yet — exactly this case, a genuinely current/future season.
+Two regression tests added to `tests/unit/test_evidence.py`
+(`test_august_evidence_counts_when_no_real_week1_date_is_known`,
+`test_real_week1_game_date_takes_priority_over_the_fallback`); the three pre-existing tests in
+`TestEvidenceScoreForAction` still pass unchanged (their fixture dates never fell in the
+August 1-September 1 gap this fix actually changes behavior for).
+
+**A second real finding, from the same verification pass, that is not a bug:**
+`test_real_trending_evidence_moves_the_edge_evidence_score` initially failed — the first real
+trending-add player selected by the test also appeared, on the same real run, in
+trending-drops (different real Sleeper managers making opposite moves on the same player,
+live). Two WEAK (0.2) opposite-direction events legitimately cancel to a neutral aggregate
+score, which is correct: real, simultaneous, conflicting community sentiment should score as
+"no clear lean," not be forced to pick a side. Fixed the test to select a player with
+unambiguous evidence rather than changing the (correct) aggregation behavior.
+
+**Also updated:** `tests/integration/test_sources_live.py`'s
+`test_sleeper_is_blocked_by_environment_policy` — which had explicitly anticipated exactly
+this scenario in its own docstring ("If this test starts failing because Sleeper suddenly
+*works*, that's good news — update docs accordingly and relax this assertion") — renamed to
+`test_sleeper_is_really_reachable` and rewritten to assert success.
+
+**Still not built:** real per-league Sleeper sync (replacing `target_league.yaml`'s assumed
+defaults with a real league's actual settings) — needs a real Sleeper league ID, not supplied
+yet.
