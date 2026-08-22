@@ -739,3 +739,63 @@ this scenario in its own docstring ("If this test starts failing because Sleeper
 **Still not built:** real per-league Sleeper sync (replacing `target_league.yaml`'s assumed
 defaults with a real league's actual settings) — needs a real Sleeper league ID, not supplied
 yet.
+
+## D33 — Multi-league support: a registry-based `resolve_league()` replaces every hardcoded single-league-file assumption; Sleeper leagues hydrate live, never drift out of sync
+The user has multiple real leagues and asked to switch between them seamlessly. Investigated
+the existing single-league assumption first rather than guessing at scope: `api/routers/
+league.py`'s `{league_id}` URL parameter *looked* like it already supported multiple leagues,
+but `_league_or_404` always called `load_league_context()` with no arguments (always the one
+hardcoded `target_league.yaml`) and only ever checked whether that one config's own id
+happened to match the URL — every other `league_id` 404'd unconditionally. Multi-league
+support did not exist; only its shape did.
+
+**Design:** `config/league_configs/registry.yaml` is the index — `{league_id: {source: yaml,
+path: ...}}` or `{league_id: {source: sleeper, sleeper_league_id: ...}}`. `league/
+context.py::resolve_league(league_id, *, con=None, settings=None, registry_path=...)` looks a
+league up and dispatches: `source: yaml` calls the existing `load_league_context(path)`
+completely unchanged (zero behavior change for anyone already using it directly); `source:
+sleeper` calls the new `league/sleeper_context.py::load_sleeper_league_context`, which
+re-fetches the real league from Sleeper's API on every call — a Sleeper league's settings can
+never drift out of sync with what the league admin actually has configured, unlike a YAML
+snapshot someone forgot to update after a scoring-settings change. `resolve_league()` with no
+argument resolves to `target_league`, so this is purely additive: every pre-existing call site
+that only ever knew about the one hardcoded file keeps working identically (verified:
+`resolve_league() == load_league_context()`, byte-for-byte).
+
+**Wired everywhere a league was previously hardcoded:** all 4 `league_app` CLI commands
+(`--league <id>` replacing `--league-config <path>`), a new `alpha-squad league list`
+command, `agents/registry.py`'s `run_fantasy_strategy` (task param `league` replacing
+`league_config`), and the API's `_league_or_404` — which now actually uses the URL's
+`league_id` for the first time, plus a new `GET /league` listing endpoint. The frontend's
+`LeagueView.tsx` replaced its hardcoded `LEAGUE_ID` constant with a real `<select>` populated
+from `GET /league`, remembering the last choice per-browser via `localStorage` (a viewer
+convenience, not shared/synced state).
+
+**Sleeper hydration (`league/sleeper_context.py`), mapped from Sleeper's documented public
+API** (`settings.type` 0/1/2 → redraft/keeper/dynasty; `roster_positions` counted into
+dedicated lineup slots + registered flex slots + bench/IR/taxi; `scoring_settings.rec` →
+PPR; `settings.waiver_budget` → FAAB): a real, previously-undetected mismatch surfaced by
+this milestone's own offline test, not live data — `FLEX_ELIGIBILITY` (context.py) registered
+`"SUPERFLEX"`, but Sleeper's real `roster_positions` spelling is `"SUPER_FLEX"` (with an
+underscore), so a superflex slot would have silently landed in `dedicated_slots()` (treated
+as its own one-off position) rather than `flex_slots()`. Added `"SUPER_FLEX"` to
+`FLEX_ELIGIBILITY` alongside the existing entry (additive, not a rename, so nothing already
+relying on the unspaced spelling breaks). An `unrecognized_flex_slots` field on the hydrated
+`LeagueContext` is the safety net for any *other* real Sleeper flex variant not yet
+registered — flagged, never silently dropped — and the live test
+(`tests/integration/test_sleeper_league_context_live.py`) asserts that list is empty against
+a real league, specifically to catch exactly this class of mismatch against real data once
+one is available.
+
+**Honesty about verification status:** the Sleeper field mapping above is built from
+well-documented, stable public API knowledge and thoroughly unit-tested against a realistic
+mocked response (`tests/unit/test_sleeper_league_context.py`), but — unlike everything else
+in this codebase — has *not yet* been run against a real Sleeper league, because no real
+league id was available at implementation time. `tests/integration/
+test_sleeper_league_context_live.py` is written and ready, reading a real league id from
+`ALPHA_SQUAD_TEST_SLEEPER_LEAGUE_ID` and skipping cleanly without one (there is no way to
+discover a real league id on our own — Sleeper has no public "any real league" listing
+endpoint). This decision entry, `docs/TRACEABILITY.md`, and `docs/PROJECT_STATE.md` will be
+updated with the real result once a real league id is supplied and this live test actually
+runs — until then, `source: sleeper` registry entries are implemented-but-unverified, the
+same honest status this project gives every source before its first real-data check.

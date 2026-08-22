@@ -97,6 +97,12 @@ export interface SourceHealthRow {
   detail: string | null;
 }
 
+export interface LeagueSummary {
+  league_id: string;
+  source: string;
+  detail: string | null;
+}
+
 export interface LeagueContext {
   league_id: string;
   format: string;
@@ -105,6 +111,7 @@ export interface LeagueContext {
   lineup: Record<string, number>;
   roster: Record<string, unknown>;
   faab: Record<string, unknown>;
+  source?: string;
 }
 
 export interface DecisionResponse {

@@ -11,9 +11,15 @@ contract automatically once reachable -- no schema change required."""
 from __future__ import annotations
 
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field
+
+if TYPE_CHECKING:
+    import duckdb
+
+    from alpha_squad.config.settings import Settings
 
 # lineup slot name -> positions eligible to fill it. Any slot name not listed here (QB, RB,
 # WR, TE, DST, K, ...) is a dedicated slot for that exact position abbreviation. This is the
@@ -21,12 +27,14 @@ from pydantic import BaseModel, ConfigDict, Field
 FLEX_ELIGIBILITY: dict[str, tuple[str, ...]] = {
     "FLEX": ("RB", "WR", "TE"),
     "SUPERFLEX": ("QB", "RB", "WR", "TE"),
+    "SUPER_FLEX": ("QB", "RB", "WR", "TE"),  # Sleeper's real roster_positions spelling (D33)
     "WRRB_FLEX": ("RB", "WR"),
 }
 
-DEFAULT_TARGET_LEAGUE_PATH = (
-    Path(__file__).parent.parent / "config" / "league_configs" / "target_league.yaml"
-)
+_LEAGUE_CONFIGS_DIR = Path(__file__).parent.parent / "config" / "league_configs"
+DEFAULT_TARGET_LEAGUE_PATH = _LEAGUE_CONFIGS_DIR / "target_league.yaml"
+DEFAULT_REGISTRY_PATH = _LEAGUE_CONFIGS_DIR / "registry.yaml"
+DEFAULT_LEAGUE_ID = "target_league"
 
 
 class LeagueContext(BaseModel):
@@ -75,3 +83,55 @@ def load_league_context(path: Path | str = DEFAULT_TARGET_LEAGUE_PATH) -> League
     with path.open() as f:
         raw = yaml.safe_load(f)
     return LeagueContext.model_validate(raw)
+
+
+def _load_registry(registry_path: Path | str = DEFAULT_REGISTRY_PATH) -> dict[str, dict]:
+    registry_path = Path(registry_path)
+    if not registry_path.exists():
+        return {}
+    with registry_path.open() as f:
+        return yaml.safe_load(f) or {}
+
+
+def list_registered_leagues(registry_path: Path | str = DEFAULT_REGISTRY_PATH) -> dict[str, dict]:
+    """{league_id: {source, ...}} for every league this deployment knows about -- the "which
+    leagues can I switch between" listing (CLI: `alpha-squad league list`)."""
+    return _load_registry(registry_path)
+
+
+def resolve_league(
+    league_id: str = DEFAULT_LEAGUE_ID,
+    *,
+    con: duckdb.DuckDBPyConnection | None = None,
+    settings: Settings | None = None,
+    registry_path: Path | str = DEFAULT_REGISTRY_PATH,
+) -> LeagueContext:
+    """The seamless-switching entry point (docs/DECISIONS.md D33): looks `league_id` up in
+    the registry and dispatches to whichever source it declares -- a local YAML config
+    (`load_league_context`, unchanged) or a live Sleeper league
+    (`league/sleeper_context.py::load_sleeper_league_context`, hydrated fresh every call so it
+    can never drift from what the league admin actually has configured). Every existing call
+    site that only ever knew about the one hardcoded target_league.yaml keeps working
+    unchanged by defaulting to DEFAULT_LEAGUE_ID, which the registry maps to that same file."""
+    registry = _load_registry(registry_path)
+    entry = registry.get(league_id)
+    if entry is None:
+        known = ", ".join(sorted(registry)) or "(none registered)"
+        raise RuntimeError(
+            f"no league registered as {league_id!r} in {registry_path}; known leagues: {known}"
+        )
+
+    source = entry.get("source")
+    if source == "yaml":
+        config_path = Path(entry["path"])
+        if not config_path.is_absolute():
+            config_path = Path(registry_path).parent / config_path
+        return load_league_context(config_path)
+    if source == "sleeper":
+        from alpha_squad.config.settings import get_settings
+        from alpha_squad.league.sleeper_context import load_sleeper_league_context
+
+        return load_sleeper_league_context(
+            con, settings or get_settings(), entry["sleeper_league_id"]
+        )
+    raise RuntimeError(f"league {league_id!r} has unknown source {source!r} in {registry_path}")

@@ -9,6 +9,7 @@ import type {
   EdgeRow,
   EvidenceRow,
   LeagueContext,
+  LeagueSummary,
   PlayerDetail,
   PlayerSummary,
   ProvenanceResponse,
@@ -67,6 +68,7 @@ export const api = {
   getEvidence: (params: { player_id?: string; season?: number; week?: number; limit?: number }) =>
     getJson<EvidenceRow[]>("/evidence", params),
 
+  listLeagues: () => getJson<LeagueSummary[]>("/league"),
   getLeagueContext: (leagueId: string) => getJson<LeagueContext>(`/league/${leagueId}/context`),
   getRosterNeed: (leagueId: string, rosterPositions: string) =>
     getJson<{ need: Record<string, number> }>(`/league/${leagueId}/roster`, {

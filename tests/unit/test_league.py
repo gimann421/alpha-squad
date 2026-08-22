@@ -8,7 +8,12 @@ import duckdb
 import pytest
 import yaml
 
-from alpha_squad.league.context import LeagueContext, load_league_context
+from alpha_squad.league.context import (
+    LeagueContext,
+    list_registered_leagues,
+    load_league_context,
+    resolve_league,
+)
 from alpha_squad.league.draft import next_pick_survival_probability, recommend_draft_pick
 from alpha_squad.league.replacement import (
     compute_league_starters,
@@ -61,6 +66,59 @@ class TestLeagueContext:
         assert not league.is_ppr
         assert league.dedicated_slots() == {"QB": 1, "RB": 2, "WR": 3}
         assert league.flex_slots() == {"SUPERFLEX": 1}
+
+
+class TestResolveLeague:
+    """docs/DECISIONS.md D33: `resolve_league` is the seamless-switching entry point --
+    looks a league_id up in a registry and dispatches to whichever source it declares,
+    rather than every caller hardcoding a single YAML path."""
+
+    def test_default_league_id_matches_the_old_hardcoded_behavior_exactly(self):
+        assert resolve_league() == load_league_context()
+
+    def test_unregistered_league_id_raises_an_actionable_error(self):
+        with pytest.raises(RuntimeError, match="no league registered"):
+            resolve_league("does_not_exist")
+
+    def test_a_yaml_entry_with_a_relative_path_resolves_relative_to_the_registry_file(
+        self, tmp_path
+    ):
+        league_yaml = tmp_path / "my_league.yaml"
+        league_yaml.write_text(
+            yaml.dump(
+                {
+                    "league_id": "my_league",
+                    "format": "redraft",
+                    "teams": 8,
+                    "scoring": {"ppr": True},
+                    "lineup": {"QB": 1, "RB": 2, "WR": 2},
+                    "roster": {"bench": 5},
+                    "faab": {"budget": 0},
+                }
+            )
+        )
+        registry = tmp_path / "registry.yaml"
+        registry.write_text(yaml.dump({"my_league": {"source": "yaml", "path": "my_league.yaml"}}))
+
+        league = resolve_league("my_league", registry_path=registry)
+        assert league.teams == 8
+        assert league.league_id == "my_league"
+
+    def test_an_entry_with_an_unknown_source_raises_rather_than_silently_defaulting(self, tmp_path):
+        registry = tmp_path / "registry.yaml"
+        registry.write_text(yaml.dump({"weird": {"source": "espn_scrape"}}))
+        with pytest.raises(RuntimeError, match="unknown source"):
+            resolve_league("weird", registry_path=registry)
+
+    def test_list_registered_leagues_reflects_the_real_registry_file(self):
+        leagues = list_registered_leagues()
+        assert "target_league" in leagues
+        assert leagues["target_league"]["source"] == "yaml"
+
+    def test_list_registered_leagues_on_a_missing_file_is_an_empty_dict_not_an_error(
+        self, tmp_path
+    ):
+        assert list_registered_leagues(tmp_path / "nope.yaml") == {}
 
 
 def _flat_league(teams, lineup, bench=6, faab=100) -> LeagueContext:

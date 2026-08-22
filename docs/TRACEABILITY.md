@@ -37,7 +37,7 @@ state at the time each milestone was first built.
 | nflverse ingestion works or limitation documented | ✅ | `sources/nflverse.py` — AVAILABLE, real data 2015-2025 ingested |
 | FantasyPros API integration works or limitation documented | ⚠️ | `sources/fantasypros.py` implemented; network layer confirmed open 2026-08-22 (D31, real `403 Forbidden` app response with no key) — now credential-gated (paid `FANTASYPROS_API_KEY`), not policy-blocked; substituted by DynastyProcess `db_fpecr` (D3) for the ECR signal itself in the meantime |
 | CFBD integration works or limitation documented | ⚠️ | `sources/cfbd.py` implemented; network layer confirmed open 2026-08-22 (D31, real "missing Bearer key" app response) — now credential-gated (free `CFBD_API_KEY`), not policy-blocked; substituted by cfbfastR-data (D3) for college production in the meantime |
-| Sleeper integration works or limitation documented | ✅ | `sources/sleeper.py` — became AVAILABLE 2026-08-22 when the environment's egress policy changed (D31), verified with real data (state/players/trending adds+drops); league context remains config-driven (YAML, D6) rather than live-synced, a product choice, not a data-access limitation |
+| Sleeper integration works or limitation documented | ✅ | `sources/sleeper.py` — became AVAILABLE 2026-08-22 when the environment's egress policy changed (D31), verified with real data (state/players/trending adds+drops); league context is now available either config-driven (YAML, D6) or live-synced from a real Sleeper league (`league/sleeper_context.py`, D33) — unit-tested against realistic fixtures, not yet live-verified against a real league (needs a real league ID, not supplied yet; `tests/integration/test_sleeper_league_context_live.py` is ready to confirm) |
 | Official/current evidence workflow exists | ✅ | `evidence/events.py` — depth chart, injury, roster, usage-share detectors on real nflverse data |
 | Raw/source snapshots are preserved | ✅ | `storage/snapshots.py`, immutable `data/raw/<source>/<dataset>/captured_at=.../`, `snapshot_registry` |
 | Canonical player IDs exist | ✅ | `identity/canonical.py`, `asq_######`, spine = nflverse `players.gsis_id` |
@@ -103,8 +103,9 @@ state at the time each milestone was first built.
 | Criterion | Status | Where |
 |---|---|---|
 | Universal player intelligence is separate from league context | ✅ | architectural split: M1-M9 (`identity/`, `features/`, `models/`, `market/`, `evidence/`) never import from `league/`; only `league/` reads the universal layer |
-| Arbitrary league settings can be represented | ✅ | `league/context.py::LeagueContext` (pydantic), YAML-driven |
+| Arbitrary league settings can be represented | ✅ | `league/context.py::LeagueContext` (pydantic), YAML-driven or Sleeper-live-driven (D33) |
 | Target league settings are supported | ✅ | `config/league_configs/target_league.yaml` — 10 teams, 2QB/2RB/2WR/1TE/2FLEX |
+| Multiple leagues can be configured and switched between | ✅ | `league/context.py::resolve_league` + `config/league_configs/registry.yaml` (D33) — every CLI league command, the API, and `LeagueView.tsx`'s league picker resolve through the same registry; no hardcoded single-league assumption remains |
 | Replacement level is calculated | ✅ | `league/replacement.py::replacement_level`, derived from the league's own starting-slot config (verified: 2QB league's QB replacement sits at real rank ~20-24, materially different from a 1QB league) |
 | Positional scarcity is calculated | ✅ | `positional_scarcity` |
 | Roster fit is calculated | ✅ | `roster_fit_multiplier` |

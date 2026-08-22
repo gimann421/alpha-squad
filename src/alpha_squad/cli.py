@@ -23,7 +23,7 @@ from alpha_squad.evidence.sleeper_trending import detect_sleeper_trending
 from alpha_squad.features.build import build_features
 from alpha_squad.identity.canonical import build_identity
 from alpha_squad.identity.exceptions import list_exceptions
-from alpha_squad.league.context import DEFAULT_TARGET_LEAGUE_PATH, load_league_context
+from alpha_squad.league.context import DEFAULT_LEAGUE_ID, list_registered_leagues, resolve_league
 from alpha_squad.league.decisions import record_decision
 from alpha_squad.league.draft import recommend_draft_pick
 from alpha_squad.league.replacement import (
@@ -788,11 +788,35 @@ def evidence_build_sleeper_trending(
     con.close()
 
 
+@league_app.command("list")
+def league_list() -> None:
+    """List every registered league (config/league_configs/registry.yaml) -- the seamless
+    "which league am I about to run this for" check before any draft/waiver/trade/replacement
+    command. Add a league by editing that file: a `source: yaml` entry points at a local
+    config, a `source: sleeper` entry is hydrated live from a real Sleeper league on every
+    use (docs/DECISIONS.md D33)."""
+    registry = list_registered_leagues()
+    if not registry:
+        console.print(
+            "[yellow]no leagues registered in config/league_configs/registry.yaml[/yellow]"
+        )
+        return
+
+    table = Table(title="Registered leagues")
+    for col in ("league_id", "source", "detail"):
+        table.add_column(col)
+    for league_id, entry in sorted(registry.items()):
+        source = entry.get("source", "?")
+        detail = entry.get("path") if source == "yaml" else entry.get("sleeper_league_id")
+        table.add_row(league_id, source, str(detail))
+    console.print(table)
+
+
 @league_app.command("replacement")
 def league_replacement(
     season: int = typer.Option(..., help="Season to compute replacement level/scarcity for"),
-    league_config: str = typer.Option(
-        str(DEFAULT_TARGET_LEAGUE_PATH), help="Path to league YAML config"
+    league: str = typer.Option(
+        DEFAULT_LEAGUE_ID, help="Registered league id to use (see `alpha-squad league list`)"
     ),
 ) -> None:
     """Show replacement level and positional scarcity derived from the league's own lineup
@@ -802,7 +826,7 @@ def league_replacement(
     settings = get_settings()
     con = get_connection(settings)
     init_db(con)
-    league = load_league_context(league_config)
+    league = resolve_league(league, con=con, settings=settings)
     projections, positions = load_season_projections(con, season)
     if not projections:
         console.print(
@@ -835,8 +859,8 @@ def league_draft(
         None, help="Your next overall pick number, for survival probability"
     ),
     ecr_type: str = typer.Option(DEFAULT_ECR_TYPE, help="Market series for survival probability"),
-    league_config: str = typer.Option(
-        str(DEFAULT_TARGET_LEAGUE_PATH), help="Path to league YAML config"
+    league: str = typer.Option(
+        DEFAULT_LEAGUE_ID, help="Registered league id to use (see `alpha-squad league list`)"
     ),
     top_n: int = typer.Option(5, help="Number of alternatives to show"),
 ) -> None:
@@ -845,7 +869,7 @@ def league_draft(
     settings = get_settings()
     con = get_connection(settings)
     init_db(con)
-    league = load_league_context(league_config)
+    league = resolve_league(league, con=con, settings=settings)
     roster_positions = [p.strip() for p in roster.split(",") if p.strip()]
     if available:
         available_ids = {p.strip() for p in available.split(",") if p.strip()}
@@ -889,7 +913,7 @@ def league_draft(
         rec.expected_value,
         rec.confidence,
         rec.reasons,
-        {"league_config": league_config, "ecr_type": ecr_type, "next_pick": next_pick},
+        {"league": league.league_id, "ecr_type": ecr_type, "next_pick": next_pick},
     )
     console.print(f"decision recorded: [green]{decision_id}[/green]")
     con.close()
@@ -901,8 +925,8 @@ def league_waiver(
     week: int = typer.Option(..., help="Week"),
     player_id: str = typer.Option(..., help="Canonical player_id to evaluate for a waiver claim"),
     roster: str = typer.Option("", help="Comma-separated positions already on your roster"),
-    league_config: str = typer.Option(
-        str(DEFAULT_TARGET_LEAGUE_PATH), help="Path to league YAML config"
+    league: str = typer.Option(
+        DEFAULT_LEAGUE_ID, help="Registered league id to use (see `alpha-squad league list`)"
     ),
 ) -> None:
     """Recommend a FAAB bid for a specific waiver-wire player: meaningful-role probability,
@@ -911,7 +935,7 @@ def league_waiver(
     settings = get_settings()
     con = get_connection(settings)
     init_db(con)
-    league = load_league_context(league_config)
+    league = resolve_league(league, con=con, settings=settings)
     roster_positions = [p.strip() for p in roster.split(",") if p.strip()]
     try:
         rec = recommend_waiver_pickup(con, league, season, week, player_id, roster_positions)
@@ -937,7 +961,7 @@ def league_waiver(
         rec.recommended_bid,
         rec.meaningful_role_probability,
         rec.reasons,
-        {"league_config": league_config, "week": week},
+        {"league": league.league_id, "week": week},
     )
     console.print(f"decision recorded: [green]{decision_id}[/green]")
     con.close()
@@ -948,8 +972,8 @@ def league_trade(
     season: int = typer.Option(..., help="Season"),
     player_id: str = typer.Option(..., help="Canonical player_id to evaluate for a dynasty trade"),
     ecr_type: str = typer.Option(DEFAULT_ECR_TYPE, help="Market series EDGE was built against"),
-    league_config: str = typer.Option(
-        str(DEFAULT_TARGET_LEAGUE_PATH), help="Path to league YAML config"
+    league: str = typer.Option(
+        DEFAULT_LEAGUE_ID, help="Registered league id to use (see `alpha-squad league list`)"
     ),
 ) -> None:
     """Recommend a dynasty buy/hold/sell/watch action: real EDGE (M8) + real dynasty market
@@ -957,7 +981,7 @@ def league_trade(
     settings = get_settings()
     con = get_connection(settings)
     init_db(con)
-    league = load_league_context(league_config)
+    league = resolve_league(league, con=con, settings=settings)
     rec = recommend_dynasty_trade(con, player_id, season, ecr_type)
 
     console.print(f"[green]{rec.action}[/green] {rec.player_id}")
@@ -979,7 +1003,7 @@ def league_trade(
         rec.age_adjusted_value,
         None,
         rec.reasons,
-        {"league_config": league_config, "ecr_type": ecr_type},
+        {"league": league.league_id, "ecr_type": ecr_type},
     )
     console.print(f"decision recorded: [green]{decision_id}[/green]")
     con.close()

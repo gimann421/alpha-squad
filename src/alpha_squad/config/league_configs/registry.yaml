@@ -1,0 +1,18 @@
+# Index of every league this deployment knows about, keyed by the short id you pass to
+# `--league` / `/league/{league_id}/...`. Each entry names its source and how to load it:
+#
+#   my_league:
+#     source: yaml
+#     path: my_league.yaml       # relative to this directory
+#
+#   my_sleeper_league:
+#     source: sleeper
+#     sleeper_league_id: "1234567890123456789"   # from the league's Sleeper URL
+#
+# `source: sleeper` entries are hydrated live from Sleeper's real API every time they're
+# loaded (league/sleeper_context.py) -- no YAML file needed, settings/scoring/lineup/format
+# always reflect the real league. `source: yaml` entries load a manually-maintained config
+# (league/context.py::load_league_context) for leagues with no reachable API.
+target_league:
+  source: yaml
+  path: target_league.yaml

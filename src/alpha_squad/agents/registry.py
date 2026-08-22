@@ -149,17 +149,13 @@ def run_news_evidence(con: duckdb.DuckDBPyConnection, settings: Settings, task: 
 
 
 def run_fantasy_strategy(con: duckdb.DuckDBPyConnection, settings: Settings, task: Task) -> Result:
-    from alpha_squad.league.context import load_league_context
+    from alpha_squad.league.context import DEFAULT_LEAGUE_ID, resolve_league
     from alpha_squad.league.draft import recommend_draft_pick
     from alpha_squad.league.trade import recommend_dynasty_trade
     from alpha_squad.league.waiver import recommend_waiver_pickup
 
     p = task.params
-    league = (
-        load_league_context(p.get("league_config"))
-        if p.get("league_config")
-        else load_league_context()
-    )
+    league = resolve_league(p.get("league", DEFAULT_LEAGUE_ID), con=con, settings=settings)
     decision_type = p.get("decision_type", "draft_pick")
     try:
         if decision_type == "draft_pick":

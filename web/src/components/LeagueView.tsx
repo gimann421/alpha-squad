@@ -1,11 +1,21 @@
 import { useEffect, useState } from "react";
 import { api } from "../api";
-import type { DecisionResponse, LeagueContext } from "../types";
+import type { DecisionResponse, LeagueContext, LeagueSummary } from "../types";
 import { AsyncSection } from "./common";
 
-const LEAGUE_ID = "target_league";
+const LAST_LEAGUE_STORAGE_KEY = "alpha-squad:last-league-id";
 
 export function LeagueView() {
+  const [leagues, setLeagues] = useState<LeagueSummary[] | null>(null);
+  const [leaguesError, setLeaguesError] = useState<string | null>(null);
+  const [leagueId, setLeagueId] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem(LAST_LEAGUE_STORAGE_KEY);
+    } catch {
+      return null;
+    }
+  });
+
   const [context, setContext] = useState<LeagueContext | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -20,13 +30,39 @@ export function LeagueView() {
 
   useEffect(() => {
     api
-      .getLeagueContext(LEAGUE_ID)
+      .listLeagues()
+      .then((rows) => {
+        setLeagues(rows);
+        // Nothing picked yet (first visit, or a stored id that's no longer registered) --
+        // default to the first registered league so the view is never stuck on nothing.
+        if (!leagueId || !rows.some((r) => r.league_id === leagueId)) {
+          setLeagueId(rows[0]?.league_id ?? null);
+        }
+      })
+      .catch((e) => setLeaguesError(String(e)));
+    // Only ever runs once on mount -- switching leagues afterward changes `leagueId`
+    // directly via the dropdown, it doesn't need to re-list the registry.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (!leagueId) return;
+    try {
+      localStorage.setItem(LAST_LEAGUE_STORAGE_KEY, leagueId);
+    } catch {
+      // per-browser convenience only -- fine if storage is unavailable (private mode etc.)
+    }
+    setLoading(true);
+    setError(null);
+    api
+      .getLeagueContext(leagueId)
       .then(setContext)
       .catch((e) => setError(String(e)))
       .finally(() => setLoading(false));
-  }, []);
+  }, [leagueId]);
 
   async function runDraft() {
+    if (!leagueId) return;
     setSubmitting(true);
     setDecisionError(null);
     setDecision(null);
@@ -35,7 +71,7 @@ export function LeagueView() {
         .split(",")
         .map((s) => s.trim())
         .filter(Boolean);
-      const result = await api.postDraft(LEAGUE_ID, {
+      const result = await api.postDraft(leagueId, {
         season,
         roster_positions: rosterPositions
           .split(",")
@@ -54,12 +90,36 @@ export function LeagueView() {
 
   return (
     <section>
-      <h2>League — {LEAGUE_ID}</h2>
+      <h2>League</h2>
       <p className="muted">
         Every recommendation below calls the exact same M10 function the CLI does
         (`recommend_draft_pick`) — this panel has no independent scoring logic. A missing
         league context returns an explicit error, never a fabricated universal answer.
       </p>
+
+      <div className="controls">
+        <label>
+          League{" "}
+          {leaguesError ? (
+            <span className="error">Error: {leaguesError}</span>
+          ) : (
+            <select
+              value={leagueId ?? ""}
+              onChange={(e) => setLeagueId(e.target.value)}
+              disabled={!leagues || leagues.length === 0}
+            >
+              {!leagues && <option>Loading…</option>}
+              {leagues?.length === 0 && <option>No leagues registered</option>}
+              {leagues?.map((l) => (
+                <option key={l.league_id} value={l.league_id}>
+                  {l.league_id} ({l.source})
+                </option>
+              ))}
+            </select>
+          )}
+        </label>
+      </div>
+
       <AsyncSection
         loading={loading}
         error={error}

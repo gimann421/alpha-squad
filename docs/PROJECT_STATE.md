@@ -543,9 +543,61 @@ new/updated live network tests (39 total: 2 new sleeper-trending live tests, plu
 `test_sources_live.py`'s Sleeper test flipped from asserting BLOCKED to asserting AVAILABLE,
 exactly as its own prior docstring said to do if this ever happened).
 
-**Still not built:** real per-league Sleeper sync (replacing `target_league.yaml`'s assumed
-defaults with an actual league's real settings) — needs a real Sleeper league ID, not
-supplied yet. Direct FantasyPros/CFBD access — needs API keys, not supplied yet.
+**Then built (see D33 below):** real per-league Sleeper sync, and a multi-league registry so
+multiple leagues (Sleeper-live and/or YAML) can be configured and switched between. **Still not
+built:** live verification of the Sleeper field mapping against a real league (needs a real
+Sleeper league ID, not supplied yet) and direct FantasyPros/CFBD access (needs API keys, not
+supplied yet).
+
+## Post-M13: multi-league registry — switch between multiple leagues seamlessly (D33)
+The user has multiple real leagues, a mix of Sleeper and other/manual platforms, and asked to
+switch between them seamlessly. Investigating first (rather than assuming the existing
+`{league_id}` path parameters already did this) found they were vestigial: every CLI command,
+the API, and the frontend hardcoded `target_league.yaml` regardless of what `league_id` was
+passed in. There was exactly one league, config-driven, and nothing to switch between.
+
+Built `league/context.py::resolve_league(league_id, ...)` and
+`config/league_configs/registry.yaml` (`league_id -> {source: "yaml"|"sleeper", ...}`) as an
+additive layer in front of the existing, unchanged `load_league_context()`: a `yaml` entry
+resolves to a config file exactly as before; a `sleeper` entry hydrates a `LeagueContext` live
+from a real Sleeper league on every call (never cached, so it can't drift from the real league's
+current settings) via the new `league/sleeper_context.py::load_sleeper_league_context`. Every
+call site that used to hardcode `target_league.yaml` — all 4 `league` CLI commands, the
+`run_fantasy_strategy` agent, all `api/routers/league.py` endpoints, and `LeagueView.tsx` — now
+resolves through the same registry, plus a new `alpha-squad league list` command / `GET /league`
+endpoint / frontend dropdown (persisted across reloads via `localStorage`) to actually switch.
+Verified in a real browser (Playwright): two leagues with deliberately different real settings
+(14-team redraft/non-PPR vs. 10-team dynasty/PPR) switch correctly in both directions, with the
+displayed data genuinely changing each time, not just a one-way fluke.
+
+The Sleeper field mapping (`sleeper_context.py`) translates a real `/league/{id}` response into
+`LeagueContext`: `roster_positions` counted into `lineup`/`roster` (bench vs. `IR`/`TAXI` split
+out), `settings.type` (0/1/2) into `format` (redraft/keeper/dynasty), `scoring_settings.rec` into
+PPR value, `settings.waiver_budget` into FAAB. Provenance (`source`, `sleeper_league_id`,
+`sleeper_league_name`, `sleeper_season`) is stashed on the pydantic model via its existing
+`extra="allow"` rather than a schema change. Building this against Sleeper's documented API shape
+(no real league available yet to test against) surfaced a real naming inconsistency in the
+codebase's own `FLEX_ELIGIBILITY` registry: Sleeper's real superflex slot is spelled
+`SUPER_FLEX` (underscore); the already-registered key was `SUPERFLEX` (no underscore) — caught by
+a new unit test, not live data, and fixed additively (both spellings now registered, so no
+existing manual YAML using the unspaced form breaks).
+
+**Honesty about verification status:** the Sleeper hydration logic is unit-tested against a
+realistic fixture built from Sleeper's documented public API shape, and the code path is real and
+wired end to end — but it has NOT yet been run against a real Sleeper league, because the user
+has not yet supplied a real league ID despite indicating they would. A live test
+(`tests/integration/test_sleeper_league_context_live.py`) is written and ready: it skips itself
+with a clear message unless `ALPHA_SQUAD_TEST_SLEEPER_LEAGUE_ID` is set, and specifically asserts
+`unrecognized_flex_slots == []` — the exact check that would catch the `SUPER_FLEX`-style mistake
+for real, not just plausibly. Until that runs, treat the Sleeper field mapping as implemented and
+tested-as-far-as-possible, not as confirmed-correct-against-real-data.
+
+11 new offline tests (222 total: 6 `resolve_league`/registry unit tests, 4 Sleeper-context
+mapping unit tests, 1 API registry test) and 1 new live network test (40 total, currently
+skipped pending a real league ID).
+
+**Still not built:** manual/non-Sleeper league configs for the user's other leagues — needs the
+actual league details (teams, scoring, roster slots) from the user, not supplied yet.
 
 ## Known limitations (see docs/DECISIONS.md for full reasoning)
 - **Update (D31, 2026-08-22):** the line below described the environment as it stood through

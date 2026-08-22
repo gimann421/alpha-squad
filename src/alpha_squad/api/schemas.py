@@ -105,6 +105,12 @@ class SourceHealthRow(BaseModel):
     detail: str | None
 
 
+class LeagueSummary(BaseModel):
+    league_id: str
+    source: str
+    detail: str | None = None
+
+
 class ProvenanceResponse(BaseModel):
     entity_type: str
     entity_id: str

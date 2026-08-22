@@ -154,6 +154,14 @@ class TestEvidence:
 
 
 class TestLeague:
+    def test_list_leagues_returns_the_real_registry(self, client):
+        r = client.get("/league")
+        assert r.status_code == 200
+        body = r.json()
+        assert any(
+            entry["league_id"] == "target_league" and entry["source"] == "yaml" for entry in body
+        )
+
     def test_unknown_league_id_returns_404_not_a_fabricated_answer(self, client):
         r = client.get("/league/not-a-real-league/context")
         assert r.status_code == 404
