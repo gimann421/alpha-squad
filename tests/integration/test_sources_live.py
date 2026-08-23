@@ -12,6 +12,7 @@ import pytest
 
 from alpha_squad.config.settings import Settings
 from alpha_squad.sources.base import SourceCredentialsError
+from alpha_squad.sources.cfbd import CfbdSource
 from alpha_squad.sources.cfbfastr import CfbFastRSource
 from alpha_squad.sources.dynastyprocess import DynastyProcessSource
 from alpha_squad.sources.fantasypros import FantasyProsSource
@@ -69,3 +70,26 @@ def test_fantasypros_without_key_reports_no_credentials(settings):
     assert settings.fantasypros_api_key is None
     with pytest.raises(SourceCredentialsError):
         FantasyProsSource(settings).fetch("consensus_rankings", season=2026)
+
+
+def test_fantasypros_with_key_is_really_reachable(settings):
+    """A real FANTASYPROS_API_KEY was configured and confirmed live 2026-08-23 (D37) — the
+    earlier 403 Forbidden (D36) was a wrong adapter base URL (missing `/public`), not a
+    credentials or policy problem; fixed in `sources/fantasypros.py`. Skips (not fails) when
+    no key is configured, since a paid key isn't guaranteed to exist in every environment."""
+    if not settings.fantasypros_api_key:
+        pytest.skip("FANTASYPROS_API_KEY not configured in this environment")
+    snap = FantasyProsSource(settings).fetch("consensus_rankings", season=2026, position="WR", type="ros")
+    assert snap.rows and snap.rows > 0
+    assert snap.local_path.exists()
+
+
+def test_cfbd_with_key_is_really_reachable(settings):
+    """A real CFBD_API_KEY was configured and confirmed live 2026-08-23 (D36). Skips (not
+    fails) when no key is configured, since a free key still isn't guaranteed to exist in
+    every environment."""
+    if not settings.cfbd_api_key:
+        pytest.skip("CFBD_API_KEY not configured in this environment")
+    snap = CfbdSource(settings).fetch("teams")
+    assert snap.rows and snap.rows > 100
+    assert "school" in (snap.columns or ())

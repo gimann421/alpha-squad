@@ -906,3 +906,55 @@ made to prefer one over the other for existing pipeline code, and switching is o
 credentials-verification pass). No code depends on live CFBD or FantasyPros calls yet; wiring
 either into the pipeline for something new is, per D31, a deliberate product decision left for
 direction rather than assumed here.
+
+## D37 — D36's FantasyPros `403 Forbidden` was a wrong adapter base URL, not a bad/unrotated key — fixed, confirmed AVAILABLE with real data
+
+D36 confirmed the key was present, correctly transmitted, and that the network layer was open
+(not a proxy/policy block), but deliberately stopped short of asserting a root cause for the
+`403 Forbidden` — it named several plausible explanations (invalid/expired key, wrong plan/tier,
+wrong auth mechanism, or, given D35's leak history, the key not actually having been rotated) and
+asked the user rather than guessing. The user confirmed the key in the environment was already
+the correctly-rotated one, which ruled out the D35-rotation explanation and narrowed the search.
+
+That narrowing made it worth checking the remaining explanations against FantasyPros's own
+documentation rather than continuing to treat this as unresolvable from inside the repo. A web
+search turned up FantasyPros's public API reference (`api.fantasypros.com/public/v2/docs`), which
+states the real base path is `https://api.fantasypros.com/public/v2/json` — `sources/fantasypros.py`
+had `https://api.fantasypros.com/v2/json` (missing `/public`). Verified directly with `curl`
+before touching code: the wrong path returns `403`/`ForbiddenException` from FantasyPros's real
+AWS API Gateway (byte-identical to D31's unauthenticated probe, which is what made it look like a
+credentials problem — a wrong-resource rejection and a bad-key rejection look the same from the
+outside), while the corrected `/public/v2/json` path returns real `200` data for both
+`consensus_rankings` (real player rankings, e.g. Ja'Marr Chase at WR1) and `projections` with the
+exact same key, unchanged.
+
+**Fix:** corrected `_BASE` in `sources/fantasypros.py`; no key rotation, header change, or other
+code change was needed. Re-ran `alpha-squad sources status`: both `fantasypros` datasets now
+report AVAILABLE with real data (10 rows/25 columns and 10 rows/7 columns for the default
+WR/ros health-check params). Also updated the module's docstring, which still described the old
+D3-era "blocked by proxy policy" state.
+
+**Regression coverage added:** `tests/integration/test_sources_live.py` previously had no
+`network`-marked test proving FantasyPros or CFBD are reachable with a real key — only a
+"without key" test existed for FantasyPros, and no live test at all for CFBD. Added
+`test_fantasypros_with_key_is_really_reachable` and `test_cfbd_with_key_is_really_reachable`
+(both skip rather than fail when no key is configured, since a paid/free key isn't guaranteed in
+every environment) so a regression in either adapter's URL, auth header, or the provider's own
+API surface gets caught by `make test-network` rather than silently reappearing. `make test`
+(222 passed) and `make lint` both stay clean.
+
+**What this changes:** `docs/DATA_SOURCES.md` — FantasyPros moved from "network-reachable but
+credential-gated" into the AVAILABLE section, describing the real root cause instead of the
+credentials-vs-policy framing D36 used while the cause was still unknown. `docs/TRACEABILITY.md`'s
+FantasyPros row moves from ⚠️ to ✅ MET. `docs/PROJECT_STATE.md`'s FantasyPros note updated to
+match — no longer "needs the user to check the key," since the key was never the problem.
+
+**What this doesn't change:** the same as D36 — DynastyProcess/cfbfastR-data substitutes stay
+wired in as the operating path in existing pipeline code; nothing currently calls the live
+FantasyPros or CFBD adapters outside health checks, and wiring either in for something new is a
+deliberate product decision left for direction, not assumed here. The broader lesson worth
+keeping: a `403` from a real API Gateway response and a `403` from a proxy/policy block can look
+identical from a single status code, and even a byte-identical error body across an unauthenticated
+and an authenticated-but-wrong-resource request doesn't by itself distinguish "bad key" from
+"bad URL" — checking the provider's own documentation before concluding either resolved this
+faster than continuing to guess between credential explanations.

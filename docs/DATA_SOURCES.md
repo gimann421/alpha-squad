@@ -4,9 +4,9 @@ Probed directly against the running environment on 2026-08-20 (see `docs/DECISIO
 **Re-verified 2026-08-22 (D31): the environment's network egress policy changed. Sleeper is now
 fully AVAILABLE; FantasyPros and CFBD are now network-reachable and blocked only on missing
 credentials (not policy) — see the D31 section below.**
-**Re-verified 2026-08-23 (D36): `CFBD_API_KEY` was supplied and is now live — CFBD is fully
-AVAILABLE with real data. `FANTASYPROS_API_KEY` was also supplied but is being rejected by
-FantasyPros's own API (`403 Forbidden`), not by network policy — see the D36 section below.**
+**Re-verified 2026-08-23 (D36/D37): `CFBD_API_KEY` and `FANTASYPROS_API_KEY` were supplied and
+are both now fully live. FantasyPros briefly appeared blocked (`403 Forbidden`) — that turned out
+to be a wrong adapter base URL, not a credentials or policy problem; see D37.**
 Re-run `alpha-squad sources status` for current status; this file is the narrative record of
 point-in-time verifications, not a live document — always trust a fresh `sources status` run
 over this file if they disagree.
@@ -72,15 +72,23 @@ after fixing the health check to pass a required `year` param — D36) all retur
 the `Authorization: Bearer <key>` header already used by `sources/cfbd.py`. Fallback
 (cfbfastR-data, D3) is no longer needed for college production but is left in place.
 
-## Network-reachable but credential-gated (not a policy block — see D31/D36)
+### FantasyPros API (`api.fantasypros.com`) — became AVAILABLE 2026-08-23, see D37
+`FANTASYPROS_API_KEY` was supplied and confirmed live: `consensus_rankings` and `projections`
+both return real data (`sources status`: 10 rows / 25 columns and 10 rows / 7 columns for the
+default WR/ros health-check params). The `403 Forbidden` seen first (D36) was **not** a
+credentials or policy problem — `sources/fantasypros.py`'s base URL was missing a `/public` path
+segment (`api.fantasypros.com/v2/json/...` instead of the real `api.fantasypros.com/public/v2/json/...`,
+confirmed against FantasyPros's own published API docs at `api.fantasypros.com/public/v2/docs`).
+The wrong path still terminated at FantasyPros's real AWS API Gateway, which returned a genuine
+`403`/`ForbiddenException` for a resource the key's usage plan doesn't cover — indistinguishable
+from an invalid-key rejection without checking the docs. Fixed by correcting `_BASE`; no key
+rotation was actually needed. Fallback (DynastyProcess `db_fpecr`/`values-players`, D3) is no
+longer needed for consensus ECR but is left in place; per-expert weighting stays LIMITED
+regardless (D4) — this key unlocks consensus ECR direct from source, not per-expert data.
 
-| Source | Host | What's needed | Current fallback |
-|---|---|---|---|
-| FantasyPros API | `api.fantasypros.com` | paid `FANTASYPROS_API_KEY` — **a key is now supplied but FantasyPros's own API is rejecting it** (`403 Forbidden`, `x-amzn-errortype: ForbiddenException`, body `{"message":"Forbidden"}` — byte-identical to D31's unauthenticated probe). Network layer is open (confirmed via real AWS API Gateway/CloudFront response headers, not a proxy error); this is an app-level auth rejection, not a policy block or a missed env var. Root cause not established — could be an invalid/expired key, a plan/tier that doesn't include API access, or (per D35) the key not actually having been rotated after the earlier public leak. Needs the user to check the key at FantasyPros's own dashboard. | DynastyProcess `db_fpecr`/`values-players` (D3); per-expert weighting stays LIMITED regardless (D4) — a working key would unlock consensus ECR direct from source, not per-expert data |
-
-The adapter already refuses to call out without a key configured (`SourceCredentialsError`,
-never a guessed/fabricated key) — a key being present is necessary but, as of D36, evidently not
-sufficient here.
+Both adapters already refuse to call out without a key configured (`SourceCredentialsError`,
+never a guessed/fabricated key) — set the env var and the real source activates with no further
+code change needed now that both base URLs are correct.
 
 ## Still policy-blocked or otherwise unavailable
 

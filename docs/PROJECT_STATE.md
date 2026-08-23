@@ -37,6 +37,9 @@ milestone. See `docs/TRACEABILITY.md` for the acceptance-criteria-level mapping.
   resolved the same way: a real `FANTASYPROS_API_KEY` is present and being sent, but FantasyPros's
   own API rejects it (`403 Forbidden`), so it stays blocked, now for a different, more specific
   reason than a missing key — see `docs/DATA_SOURCES.md`.**
+  **Update (D37, 2026-08-23): `fantasypros` is now also genuinely AVAILABLE — the `403 Forbidden`
+  was a wrong adapter base URL (missing `/public`), not a bad or unrotated key; fixed, both
+  datasets confirmed live with real data — see `docs/DATA_SOURCES.md`.**
 - `snapshot_registry` + `source_health_log` tables in DuckDB; every fetch writes an immutable
   file under `data/raw/<source>/<dataset>/captured_at=<date>/...` and is content-hashed.
 - `alpha-squad sources status` and `alpha-squad sources ingest --season-start Y --season-end Y`
@@ -615,12 +618,20 @@ a real AWS API Gateway/CloudFront response, not a proxy error), so this is not a
 "not yet picked up" state; it needs the user to check the key itself at FantasyPros's dashboard.
 See D36 for the full account.
 
+**Update (D37, 2026-08-23):** the FantasyPros `403 Forbidden` above was not a key problem — the
+user confirmed the key was already correctly rotated, which prompted checking FantasyPros's own
+API docs instead of continuing to suspect the key. `sources/fantasypros.py`'s base URL was missing
+a `/public` path segment. Fixed; both FantasyPros datasets now confirmed AVAILABLE with real data.
+Direct FantasyPros access is no longer pending or blocked. See D37 for the full account.
+
 **Still not built:** manual/non-Sleeper league configs for the user's other leagues — needs the
-actual league details (teams, scoring, roster slots) from the user, not supplied yet. Direct
-FantasyPros access — key is set and picked up, but rejected by FantasyPros's API; needs the user
-to verify/regenerate the key (D36).
+actual league details (teams, scoring, roster slots) from the user, not supplied yet.
 
 ## Known limitations (see docs/DECISIONS.md for full reasoning)
+- **Update (D37, 2026-08-23):** FantasyPros is now also fully AVAILABLE — the `403 Forbidden`
+  reported below (D36) was a wrong adapter base URL, not a bad/unrotated key; fixed. Both CFBD
+  and FantasyPros now return real data with their configured keys. See `docs/DATA_SOURCES.md`
+  for the current, authoritative status.
 - **Update (D36, 2026-08-23):** CFBD is now fully AVAILABLE with a live `CFBD_API_KEY` (real data
   confirmed across all 3 datasets). FantasyPros still isn't — a `FANTASYPROS_API_KEY` is present
   and being sent, but FantasyPros's own API rejects it with `403 Forbidden`; this is not a policy
@@ -633,9 +644,8 @@ to verify/regenerate the key (D36).
   and ESPN (unused) are the only sources still actually inert. See `docs/DATA_SOURCES.md` for
   the current, authoritative status.
 - FantasyPros API, CollegeFootballData, KeepTradeCut, ESPN direct APIs were `BLOCKED_BY_POLICY`
-  in this environment through M13; Sleeper and CFBD have since cleared (D31/D36), FantasyPros and
-  the other two have not (FantasyPros needs a working key — the one supplied is being rejected by
-  FantasyPros itself, D36). Verified open-data
+  in this environment through M13; Sleeper, CFBD, and FantasyPros have since cleared (D31/D36/D37),
+  KeepTradeCut and ESPN have not. Verified open-data
   substitutes are wired in regardless (docs/DATA_SOURCES.md). Adapters for the still-blocked
   sources are implemented but inert.
 - Per-expert accuracy weighting: LIMITED to source-level weighting (D4).

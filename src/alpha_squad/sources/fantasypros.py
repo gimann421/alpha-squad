@@ -1,10 +1,10 @@
 """FantasyPros API adapter. Requires a paid API key. Per CLAUDE_CODE_LEAD_PROMPT.md §8
 (item 4), paid/licensed access requires explicit user authorization — this adapter never
 attempts a network call without FANTASYPROS_API_KEY already configured by the user, and never
-invents or guesses a key. Direct egress to api.fantasypros.com is additionally blocked by
-this environment's proxy policy regardless of key (confirmed empirically). The operating
-substitute is DynastyProcess's `db_fpecr` (historical ECR) and `values-players` (current ECR,
-including 2QB format) — see docs/DECISIONS.md D3/D4."""
+invents or guesses a key. Live and AVAILABLE as of 2026-08-23 (D37) with a real key — see
+docs/DECISIONS.md D3/D4/D31/D36/D37. The operating substitute, used when no key is configured,
+is DynastyProcess's `db_fpecr` (historical ECR) and `values-players` (current ECR, including
+2QB format)."""
 
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ from alpha_squad.sources.base import (
     utcnow,
 )
 
-_BASE = "https://api.fantasypros.com/v2/json/nfl"
+_BASE = "https://api.fantasypros.com/public/v2/json/nfl"
 _DATASETS = {
     "consensus_rankings": "/{season}/consensus-rankings",
     "projections": "/{season}/projections",
