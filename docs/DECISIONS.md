@@ -848,3 +848,61 @@ at the pre-fix commit.
 Durable guardrail added directly in `.env.example` (not just this log entry, so it survives
 independently of any one session's memory): an explicit comment stating the file is tracked,
 real values must never go here, and pointing at this entry.
+
+## D36 — Re-verified 2026-08-23 in a fresh container: `CFBD_API_KEY` is live and confirmed AVAILABLE; `FANTASYPROS_API_KEY` is present but rejected by FantasyPros's own API, not a policy block
+
+D31 predicted this exact follow-up (both keys network-reachable and blocked only on credentials)
+and PROJECT_STATE.md's "Still not built" section explicitly flagged this as "pending confirmation
+from a fresh session" since an env-var change in this deployment's config only takes effect for a
+new container, not one already running. This session is that fresh container: `printenv` confirms
+both `FANTASYPROS_API_KEY` and `CFBD_API_KEY` are set (values not printed), and `alpha-squad
+sources status` was re-run to check what actually happens with them.
+
+**CFBD: genuinely AVAILABLE, real data confirmed.** `teams` (1931 rows) and `player_usage` (5197
+rows) returned real data immediately. `recruiting_players` initially errored `400 Bad Request`
+("year required when team not specified") — not a credentials or policy issue, just a pre-existing
+gap in `CfbdSource.default_health_params` (only `player_usage` passed a `year`). Fixed
+(`sources/cfbd.py`) to also pass `year=2025` for `recruiting_players`; re-ran and got 4120 real
+rows. All three CFBD datasets are now AVAILABLE with real data, using the same
+`Authorization: Bearer <key>` header `cfbd.py` already had in place per D3's original design
+intent (no other code change needed).
+
+**FantasyPros: key present and transmitted, but rejected by FantasyPros itself — not resolved.**
+`sources status` still reports `ERROR` (`403 Forbidden`) for both `consensus_rankings` and
+`projections`. To rule out a proxy-level block (the D3/D31-era failure mode, which
+`fantasypros.py` only catches as `httpx.ProxyError` → `SourceBlockedError`), called the real
+endpoint directly with `curl -D -` to inspect raw headers: the CONNECT tunnel succeeds
+(`HTTP/1.1 200 Connection Established`), and the `403` comes back from FantasyPros's own AWS
+infrastructure (`x-amzn-errortype: ForbiddenException`, `via: ... cloudfront.net`, body
+`{"message":"Forbidden"}`) — i.e. this is a real app-level auth rejection, not an egress block,
+and not an env-var-pickup problem (the key is confirmed present and is being sent as the
+`x-api-key` header exactly as `fantasypros.py` sends it). The key itself was sanity-checked for
+whitespace/quoting corruption (none found; 40 chars, no leading/trailing whitespace, no quote
+characters) and is not a network-layer problem, since CFBD's key against a different provider
+went through cleanly with the same session/proxy in the same run.
+
+**What's notable, and deliberately not guessed past:** the response body is byte-for-byte
+identical to D31's unauthenticated probe of the same endpoint (`{"message":"Forbidden"}`, same
+error type). An unauthenticated call and an authenticated-but-rejected call producing the exact
+same response is consistent with several different root causes this repo cannot distinguish from
+the outside — an invalid or expired key, a FantasyPros plan/tier that doesn't include API access,
+a wrong auth mechanism for this specific v2 endpoint, or (given D35's leak/rotation history)
+the possibility that the value now configured is not actually a freshly-rotated key. Per this
+project's rule against guessing past what's actually verified, none of these is asserted; the
+user was told directly which of the two keys needs their attention and why, rather than the
+adapter code being changed speculatively (e.g. trying a different header format) without evidence
+that would fix it.
+
+**What this changes:** `docs/DATA_SOURCES.md` updated — CFBD moved to the AVAILABLE section;
+FantasyPros's credential-gated entry updated to describe the new, more specific failure mode.
+`docs/TRACEABILITY.md`'s CFBD row updated to ✅ MET; FantasyPros's stays ⚠️ but with the updated
+reason. `docs/PROJECT_STATE.md`'s "pending confirmation from a fresh session" note resolved for
+CFBD, updated (not resolved) for FantasyPros.
+
+**What this doesn't change:** DynastyProcess/cfbfastR-data substitutes stay wired in as the
+operating path for FantasyPros's ECR signal (CFBD's college-production role can now also be
+served directly, but cfbfastR-data is left in place rather than removed — no product decision was
+made to prefer one over the other for existing pipeline code, and switching is out of scope for a
+credentials-verification pass). No code depends on live CFBD or FantasyPros calls yet; wiring
+either into the pipeline for something new is, per D31, a deliberate product decision left for
+direction rather than assumed here.

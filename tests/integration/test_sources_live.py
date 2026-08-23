@@ -65,6 +65,7 @@ def test_sleeper_is_really_reachable(settings):
 
 
 def test_fantasypros_without_key_reports_no_credentials(settings):
+    settings = settings.model_copy(update={"fantasypros_api_key": None})
     assert settings.fantasypros_api_key is None
     with pytest.raises(SourceCredentialsError):
         FantasyProsSource(settings).fetch("consensus_rankings", season=2026)

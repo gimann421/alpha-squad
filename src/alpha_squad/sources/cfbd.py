@@ -40,7 +40,7 @@ class CfbdSource(SourceAdapter):
         return list(_DATASETS.keys())
 
     def default_health_params(self, dataset: str) -> dict:
-        if dataset == "player_usage":
+        if dataset in ("player_usage", "recruiting_players"):
             return {"year": 2025}
         return {}
 

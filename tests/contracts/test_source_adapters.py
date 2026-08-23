@@ -144,6 +144,7 @@ class TestJsonApiAdapters:
             raise AssertionError("must not call network without a configured API key")
 
         monkeypatch.setattr(httpx, "get", boom)
+        settings = settings.model_copy(update={"fantasypros_api_key": None})
         assert settings.fantasypros_api_key is None
         adapter = FantasyProsSource(settings)
         with pytest.raises(SourceCredentialsError):
@@ -154,6 +155,7 @@ class TestJsonApiAdapters:
             raise AssertionError("must not call network without a configured API key")
 
         monkeypatch.setattr(httpx, "get", boom)
+        settings = settings.model_copy(update={"cfbd_api_key": None})
         assert settings.cfbd_api_key is None
         adapter = CfbdSource(settings)
         with pytest.raises(SourceCredentialsError):

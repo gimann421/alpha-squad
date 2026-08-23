@@ -32,6 +32,11 @@ milestone. See `docs/TRACEABILITY.md` for the acceptance-criteria-level mapping.
   **Update (D31, 2026-08-22): the environment's network policy changed. `sleeper` is now
   genuinely AVAILABLE with real data; `fantasypros`/`cfbd` are now network-reachable too and
   blocked only on the still-missing API keys, not policy — see `docs/DATA_SOURCES.md`.**
+  **Update (D36, 2026-08-23): `cfbd` moved from NO_CREDENTIALS to genuinely AVAILABLE — a real
+  `CFBD_API_KEY` is live, verified with real data across all 3 datasets. `fantasypros` is not
+  resolved the same way: a real `FANTASYPROS_API_KEY` is present and being sent, but FantasyPros's
+  own API rejects it (`403 Forbidden`), so it stays blocked, now for a different, more specific
+  reason than a missing key — see `docs/DATA_SOURCES.md`.**
 - `snapshot_registry` + `source_health_log` tables in DuckDB; every fetch writes an immutable
   file under `data/raw/<source>/<dataset>/captured_at=<date>/...` and is content-hashed.
 - `alpha-squad sources status` and `alpha-squad sources ingest --season-start Y --season-end Y`
@@ -601,13 +606,26 @@ durable guardrail comment added directly in `.env.example` itself. The user was 
 both keys at their providers regardless of the repo fix, since a repo-side fix cannot undo a
 credential already having been public. See D35 for the full account.
 
+**Update (D36, 2026-08-23):** re-verified in a fresh container. `CFBD_API_KEY` is confirmed picked
+up and live — all 3 CFBD datasets (`teams`, `player_usage`, `recruiting_players`) return real
+data; direct CFBD access is now AVAILABLE, no longer pending. `FANTASYPROS_API_KEY` is also
+confirmed picked up (present, sent as the `x-api-key` header) but FantasyPros's own API rejects it
+(`403 Forbidden`) — network policy is not the blocker (confirmed via raw response headers showing
+a real AWS API Gateway/CloudFront response, not a proxy error), so this is not a repeat of the
+"not yet picked up" state; it needs the user to check the key itself at FantasyPros's dashboard.
+See D36 for the full account.
+
 **Still not built:** manual/non-Sleeper league configs for the user's other leagues — needs the
 actual league details (teams, scoring, roster slots) from the user, not supplied yet. Direct
-FantasyPros/CFBD access — keys were set via this deployment's env-var config, but not yet
-confirmed picked up by a running container (env-var changes apply to new containers, not ones
-already running); pending confirmation from a fresh session.
+FantasyPros access — key is set and picked up, but rejected by FantasyPros's API; needs the user
+to verify/regenerate the key (D36).
 
 ## Known limitations (see docs/DECISIONS.md for full reasoning)
+- **Update (D36, 2026-08-23):** CFBD is now fully AVAILABLE with a live `CFBD_API_KEY` (real data
+  confirmed across all 3 datasets). FantasyPros still isn't — a `FANTASYPROS_API_KEY` is present
+  and being sent, but FantasyPros's own API rejects it with `403 Forbidden`; this is not a policy
+  block, and root cause isn't established (needs the user to check the key). See `docs/DATA_SOURCES.md`
+  for the current, authoritative status.
 - **Update (D31, 2026-08-22):** the line below described the environment as it stood through
   M13. The network policy has since changed: Sleeper is now genuinely AVAILABLE (no code
   change needed — verified with real data), and FantasyPros/CFBD are network-reachable and
@@ -615,8 +633,9 @@ already running); pending confirmation from a fresh session.
   and ESPN (unused) are the only sources still actually inert. See `docs/DATA_SOURCES.md` for
   the current, authoritative status.
 - FantasyPros API, CollegeFootballData, KeepTradeCut, ESPN direct APIs were `BLOCKED_BY_POLICY`
-  in this environment through M13; Sleeper has since cleared, the other three have not (or, for
-  FantasyPros/CFBD, need credentials now that the network layer is open). Verified open-data
+  in this environment through M13; Sleeper and CFBD have since cleared (D31/D36), FantasyPros and
+  the other two have not (FantasyPros needs a working key — the one supplied is being rejected by
+  FantasyPros itself, D36). Verified open-data
   substitutes are wired in regardless (docs/DATA_SOURCES.md). Adapters for the still-blocked
   sources are implemented but inert.
 - Per-expert accuracy weighting: LIMITED to source-level weighting (D4).

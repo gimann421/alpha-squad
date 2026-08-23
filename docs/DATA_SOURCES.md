@@ -3,9 +3,13 @@
 Probed directly against the running environment on 2026-08-20 (see `docs/DECISIONS.md` D3).
 **Re-verified 2026-08-22 (D31): the environment's network egress policy changed. Sleeper is now
 fully AVAILABLE; FantasyPros and CFBD are now network-reachable and blocked only on missing
-credentials (not policy) — see the D31 section below.** Re-run `alpha-squad sources status` for
-current status; this file is the narrative record of point-in-time verifications, not a live
-document — always trust a fresh `sources status` run over this file if they disagree.
+credentials (not policy) — see the D31 section below.**
+**Re-verified 2026-08-23 (D36): `CFBD_API_KEY` was supplied and is now live — CFBD is fully
+AVAILABLE with real data. `FANTASYPROS_API_KEY` was also supplied but is being rejected by
+FantasyPros's own API (`403 Forbidden`), not by network policy — see the D36 section below.**
+Re-run `alpha-squad sources status` for current status; this file is the narrative record of
+point-in-time verifications, not a live document — always trust a fresh `sources status` run
+over this file if they disagree.
 
 ## AVAILABLE
 
@@ -61,16 +65,22 @@ health check's placeholder `league_id=0` correctly 404s since no such league exi
 league ID to pull real league state. As designed, this activated with no code change once the
 policy opened (`sources/sleeper.py`).
 
-## Network-reachable but credential-gated (not a policy block — see D31)
+### CollegeFootballData (`api.collegefootballdata.com`) — became AVAILABLE 2026-08-23, see D36
+`CFBD_API_KEY` was supplied via this deployment's env-var config and confirmed live in a fresh
+container: `teams` (1931 rows), `player_usage` (5197 rows), and `recruiting_players` (4120 rows,
+after fixing the health check to pass a required `year` param — D36) all return real data with
+the `Authorization: Bearer <key>` header already used by `sources/cfbd.py`. Fallback
+(cfbfastR-data, D3) is no longer needed for college production but is left in place.
+
+## Network-reachable but credential-gated (not a policy block — see D31/D36)
 
 | Source | Host | What's needed | Current fallback |
 |---|---|---|---|
-| FantasyPros API | `api.fantasypros.com` | paid `FANTASYPROS_API_KEY` (network layer confirmed open 2026-08-22: real `{"message":"Forbidden"}` app-level response with no key) | DynastyProcess `db_fpecr`/`values-players` (D3); per-expert weighting stays LIMITED regardless (D4) — a key unlocks consensus ECR direct from source, not per-expert data |
-| CollegeFootballData | `api.collegefootballdata.com` | free `CFBD_API_KEY` from collegefootballdata.com (network layer confirmed open 2026-08-22: real, detailed "missing Bearer key" response) | cfbfastR-data (D3) |
+| FantasyPros API | `api.fantasypros.com` | paid `FANTASYPROS_API_KEY` — **a key is now supplied but FantasyPros's own API is rejecting it** (`403 Forbidden`, `x-amzn-errortype: ForbiddenException`, body `{"message":"Forbidden"}` — byte-identical to D31's unauthenticated probe). Network layer is open (confirmed via real AWS API Gateway/CloudFront response headers, not a proxy error); this is an app-level auth rejection, not a policy block or a missed env var. Root cause not established — could be an invalid/expired key, a plan/tier that doesn't include API access, or (per D35) the key not actually having been rotated after the earlier public leak. Needs the user to check the key at FantasyPros's own dashboard. | DynastyProcess `db_fpecr`/`values-players` (D3); per-expert weighting stays LIMITED regardless (D4) — a working key would unlock consensus ECR direct from source, not per-expert data |
 
-Both adapters already refuse to call out without a key configured (`SourceCredentialsError`,
-never a guessed/fabricated key) — set the env var and the real source activates with no code
-change.
+The adapter already refuses to call out without a key configured (`SourceCredentialsError`,
+never a guessed/fabricated key) — a key being present is necessary but, as of D36, evidently not
+sufficient here.
 
 ## Still policy-blocked or otherwise unavailable
 
