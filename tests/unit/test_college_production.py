@@ -166,3 +166,23 @@ class TestSeasonsNeededForRookies:
         seasons = seasons_needed_for_rookies(con)
 
         assert seasons == [2022, 2023]
+
+    def test_seasons_before_cfbd_coverage_are_floored_out(self, con):
+        """Regression (D39): `players` spans nflverse's full history, so an unfloored version
+        issued ~40 real CFBD requests for pre-2013 seasons that all return an empty list."""
+        from alpha_squad.features.college_production import CFBD_USAGE_FIRST_SEASON
+
+        con.execute(
+            "INSERT INTO players (player_id, gsis_id, position, rookie_season) "
+            "VALUES ('old', 'g_old', 'RB', 1974)"
+        )
+        con.execute(
+            "INSERT INTO players (player_id, gsis_id, position, rookie_season) "
+            "VALUES ('new', 'g_new', 'RB', 2024)"
+        )
+
+        seasons = seasons_needed_for_rookies(con)
+
+        assert 1973 not in seasons
+        assert all(s >= CFBD_USAGE_FIRST_SEASON for s in seasons)
+        assert 2023 in seasons

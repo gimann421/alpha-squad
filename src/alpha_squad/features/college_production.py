@@ -24,17 +24,33 @@ from alpha_squad.config.settings import Settings
 from alpha_squad.sources.cfbd import CfbdSource
 from alpha_squad.storage.snapshots import record_snapshot
 
+# CFBD's `player/usage` endpoint returns an empty list for every season before 2013 — probed
+# directly against the real API (1973, 1990, 2004, 2010 → `[]`; 2013 → 2991 rows). This is the
+# real lower bound on college-usage coverage, and therefore on which draft classes can carry a
+# college-production signal at all: a rookie's final college season is `rookie_season - 1`, so
+# the earliest usable draft class is 2014.
+CFBD_USAGE_FIRST_SEASON = 2013
+
 
 def seasons_needed_for_rookies(con: duckdb.DuckDBPyConnection) -> list[int]:
     """The player's final college season is rookie_season - 1 — the season CFBD's
-    `player_usage` needs to cover for every rookie already in the `players` spine."""
+    `player_usage` needs to cover for every rookie already in the `players` spine, floored at
+    CFBD_USAGE_FIRST_SEASON.
+
+    The floor is not cosmetic: `players` spans the full nflverse history (rookie seasons back
+    to the 1970s here), so an unfloored version issues ~40 real CFBD requests that every one
+    return an empty list — verified empirically, not assumed (1973/1990/2004/2010 all returned
+    `[]`, 2013 returned 2991 rows). That is wasted load on a third party's free API for zero
+    rows. Shipped unfloored in D38 and corrected in D39."""
     rows = con.execute(
         """
         SELECT DISTINCT rookie_season - 1
         FROM players
         WHERE rookie_season IS NOT NULL AND position IN ('QB', 'RB', 'WR', 'TE')
+          AND rookie_season - 1 >= ?
         ORDER BY 1
-        """
+        """,
+        [CFBD_USAGE_FIRST_SEASON],
     ).fetchall()
     return [r[0] for r in rows]
 

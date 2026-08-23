@@ -106,6 +106,144 @@ def test_build_rookie_features_marks_breakout_correctly_against_real_position_ra
     assert row == (True,)
 
 
+class TestAblationArmsAreIndependent:
+    """docs/DECISIONS.md D39: the two ablation arms must not overwrite each other.
+    evaluation_results/classification_results are keyed on (model_name, season|cohort,
+    position) and rookie_predictions is PK'd on prediction_id, so without distinct model
+    names and a feature_version-aware prediction_id the second arm silently clobbers the
+    first (or hard-fails on a PK violation) and the comparison is meaningless."""
+
+    def _seed_class(self, con, draft_class, n=30):
+        for i in range(n):
+            player_id = f"p{draft_class}_{i}"
+            con.execute(
+                "INSERT INTO players (player_id, gsis_id, position, rookie_season) "
+                "VALUES (?, ?, 'WR', ?)",
+                [player_id, f"g{draft_class}_{i}", draft_class],
+            )
+            con.execute(
+                "INSERT INTO player_season_stats (player_id, season, position, games_played, "
+                "total_fantasy_points_ppr, ppr_points_per_game) VALUES (?, ?, 'WR', 15, ?, ?)",
+                [player_id, draft_class, 300.0 - i * 5, (300.0 - i * 5) / 15],
+            )
+            con.execute(
+                """
+                INSERT INTO rookie_features
+                    (player_id, draft_class, position, draft_round, draft_pick, forty,
+                     college_usage_overall, college_usage_pass, college_usage_rush,
+                     breakout_top24, rookie_year_ppr_points, rookie_year_games, built_at)
+                VALUES (?, ?, 'WR', ?, ?, 4.5, ?, ?, ?, ?, ?, 15, current_timestamp)
+                """,
+                [
+                    player_id,
+                    draft_class,
+                    (i % 7) + 1,
+                    i * 8 + 1,
+                    0.05 * (i % 10),
+                    0.04 * (i % 10),
+                    0.03 * (i % 10),
+                    i < 8,
+                    300.0 - i * 5,
+                ],
+            )
+
+    def test_both_arms_persist_distinct_rows_rather_than_overwriting(self, con):
+        from alpha_squad.models.rookie.features import (
+            COLLEGE_FEATURE_VERSION,
+            FEATURES_WITH_COLLEGE,
+        )
+        from alpha_squad.models.rookie.train import run_rookie_models
+
+        self._seed_class(con, 2022)
+        self._seed_class(con, 2023)
+
+        baseline = run_rookie_models(con, 2023, 2023, min_train_class=2000)
+        candidate = run_rookie_models(
+            con,
+            2023,
+            2023,
+            min_train_class=2000,
+            features=FEATURES_WITH_COLLEGE,
+            feature_version=COLLEGE_FEATURE_VERSION,
+            model_suffix="_college",
+        )
+
+        assert baseline.regression_metrics and candidate.regression_metrics
+
+        models = {
+            r[0]
+            for r in con.execute("SELECT DISTINCT model_name FROM evaluation_results").fetchall()
+        }
+        assert "ml_rookie_regression_wr" in models
+        assert "ml_rookie_regression_wr_college" in models
+
+        # Both feature_versions coexist in rookie_predictions -- the PK-collision case.
+        versions = {
+            r[0]
+            for r in con.execute("SELECT DISTINCT model_version FROM rookie_predictions").fetchall()
+        }
+        assert versions == {"rookie_features_v1", COLLEGE_FEATURE_VERSION}
+
+    def test_arms_are_evaluated_on_identical_folds(self, con):
+        """A delta between arms is only meaningful if both scored the same players."""
+        from alpha_squad.models.rookie.features import (
+            COLLEGE_FEATURE_VERSION,
+            FEATURES_WITH_COLLEGE,
+        )
+        from alpha_squad.models.rookie.train import run_rookie_models
+
+        self._seed_class(con, 2022)
+        self._seed_class(con, 2023)
+
+        run_rookie_models(con, 2023, 2023, min_train_class=2000)
+        run_rookie_models(
+            con,
+            2023,
+            2023,
+            min_train_class=2000,
+            features=FEATURES_WITH_COLLEGE,
+            feature_version=COLLEGE_FEATURE_VERSION,
+            model_suffix="_college",
+        )
+
+        rows = con.execute(
+            "SELECT model_name, n FROM evaluation_results "
+            "WHERE model_name IN ('ml_rookie_regression_wr', 'ml_rookie_regression_wr_college') "
+            "AND position = 'ALL'"
+        ).fetchall()
+        assert len(rows) == 2
+        assert rows[0][1] == rows[1][1] > 0
+
+    def test_model_registry_feature_version_is_refreshed_not_left_stale(self, con):
+        """Regression: _register_model's ON CONFLICT DO UPDATE omitted feature_version, so
+        re-training an existing (model_name, position, version) row kept the OLD feature
+        version while updating everything else around it."""
+        from alpha_squad.models.rookie.features import (
+            COLLEGE_FEATURE_VERSION,
+            FEATURES_WITH_COLLEGE,
+        )
+        from alpha_squad.models.rookie.train import run_rookie_models
+
+        self._seed_class(con, 2022)
+        self._seed_class(con, 2023)
+
+        run_rookie_models(
+            con,
+            2023,
+            2023,
+            min_train_class=2000,
+            features=FEATURES_WITH_COLLEGE,
+            feature_version=COLLEGE_FEATURE_VERSION,
+        )
+        run_rookie_models(con, 2023, 2023, min_train_class=2000)  # same names, v2 features
+
+        fv = con.execute(
+            "SELECT feature_version FROM model_registry "
+            "WHERE model_name = 'ml_rookie_regression' AND position = 'WR'"
+        ).fetchone()[0]
+        assert fv == "rookie_features_v1"
+
+
 class TestCollegeUsageJoin:
     """docs/DECISIONS.md D38: college_usage (CFBD, espn_id-bridged) joined into
     rookie_features for the rookie's *final college season only* (rookie_season - 1)."""

@@ -709,3 +709,51 @@ ALL_DDL: list[str] = [
     *M11_AGENTS_DDL,
     *M13_SIMULATION_DDL,
 ]
+
+# ---------------------------------------------------------------------------
+# Migrations
+#
+# Every statement above is CREATE TABLE IF NOT EXISTS, which is idempotent for *new* tables
+# but silently does nothing to a table that already exists -- including when this file adds a
+# column to it. That gap shipped a real bug in D38: `rookie_features.college_usage_*` and
+# `market_snapshot.source` were added to the DDL and verified only against fresh in-memory
+# test databases, so on any pre-existing database `features build` hard-crashed with
+# `BinderException: Referenced update column college_usage_overall not found in table` and
+# `market capture-live-fantasypros` would have failed the same way. Found by running the real
+# pipeline against a real database for the first time (D39).
+#
+# ADD COLUMN IF NOT EXISTS is itself idempotent in DuckDB (verified), so these are safe to
+# re-run on every init_db, same contract as the CREATE statements.
+ADD_COLUMN_MIGRATIONS = [
+    "ALTER TABLE rookie_features ADD COLUMN IF NOT EXISTS college_usage_overall DOUBLE",
+    "ALTER TABLE rookie_features ADD COLUMN IF NOT EXISTS college_usage_pass DOUBLE",
+    "ALTER TABLE rookie_features ADD COLUMN IF NOT EXISTS college_usage_rush DOUBLE",
+]
+
+# market_snapshot needs more than an added column: D38 also widened its PRIMARY KEY to include
+# `source`, and DuckDB cannot ALTER a primary key in place. The table is fully reproducible
+# from stored snapshots (`alpha-squad market build`), so a pre-D38 table is rebuilt with the
+# current schema and its existing rows carried over tagged as 'dynastyprocess' -- which is
+# exactly what they are, since that was the only writer before D38.
+MARKET_SNAPSHOT_REBUILD = """
+ALTER TABLE market_snapshot RENAME TO market_snapshot_pre_d38;
+CREATE TABLE market_snapshot (
+    player_id VARCHAR NOT NULL,
+    scrape_date DATE NOT NULL,
+    ecr_type VARCHAR NOT NULL,
+    position VARCHAR,
+    ecr_rank DOUBLE NOT NULL,
+    ecr_best DOUBLE,
+    ecr_worst DOUBLE,
+    source_snapshot_id VARCHAR,
+    source VARCHAR NOT NULL DEFAULT 'dynastyprocess',
+    PRIMARY KEY (player_id, scrape_date, ecr_type, source)
+);
+INSERT INTO market_snapshot
+    (player_id, scrape_date, ecr_type, position, ecr_rank, ecr_best, ecr_worst,
+     source_snapshot_id, source)
+SELECT player_id, scrape_date, ecr_type, position, ecr_rank, ecr_best, ecr_worst,
+       source_snapshot_id, 'dynastyprocess'
+FROM market_snapshot_pre_d38;
+DROP TABLE market_snapshot_pre_d38;
+"""

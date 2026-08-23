@@ -1007,12 +1007,26 @@ same underlying ID space D20 already found unbridged, not a fresh namespace.
 `nflAthleteId` per real drafted player. Checked `collegeAthleteId` against DynastyProcess's
 `espn_id` for 4 real players (Caleb Williams, Jayden Daniels, Drake Maye, Marvin Harrison Jr.) —
 exact match, 4/4, no fuzzy logic involved: CFBD's numeric athlete ID *is* ESPN's athlete ID.
-`espn_id` was present in DynastyProcess's own crosswalk CSV all along but never loaded into
-`player_id_map` (`identity/crosswalk.py`'s `DYNASTYPROCESS_ID_COLUMNS` omitted it) — added it,
-one line, reusing the existing `insert_id_mappings` machinery unchanged. This is a real,
-verified, non-fuzzy identity bridge, not the "materially larger undertaking" D20 correctly
-avoided; it supersedes D20's verdict for CFBD specifically without contradicting D20's original
-reasoning about cfbfastR-data's own ID space.
+`espn_id` was present in DynastyProcess's own crosswalk CSV but omitted from
+`identity/crosswalk.py`'s `DYNASTYPROCESS_ID_COLUMNS` — added it, one line, reusing the existing
+`insert_id_mappings` machinery unchanged. This is a real, verified, non-fuzzy identity bridge,
+not the "materially larger undertaking" D20 correctly avoided; it supersedes D20's verdict for
+CFBD specifically without contradicting D20's original reasoning about cfbfastR-data's own ID space.
+
+**CORRECTION (D39, 2026-08-23 — this paragraph as originally written was wrong).** The claim that
+`espn_id` was "never loaded into `player_id_map`" was false, and was never verified against a
+populated database (this container's DB was empty when D38 was written — `players` had 0 rows, so
+no crosswalk had ever actually been built here). `identity/canonical.py:32` has always loaded
+`espn_id` from nflverse's own `players` table. The first real `identity build` shows
+**16,771 `espn_id` mappings: 16,761 from `nflverse_players`, and only 10 net-new from the
+DynastyProcess column D38 added** (plus 6 cross-source conflicts correctly quarantined). So the
+espn_id↔CFBD bridge itself is real and holds at scale — that part of D38 stands and is what
+resolves D20 — but **D38's own code change contributed ~0.06% of it**; the bridge was already
+almost entirely present via nflverse. The DynastyProcess column is kept (it is harmless, adds 10
+genuine mappings, and surfaces 6 real cross-source disagreements rather than silently picking a
+winner), but D38 took credit for enabling a bridge that mostly already existed. The substantive
+new work in D38 was the CFBD ingestion + the leakage-safe `rookie_features` join, not the identity
+bridge.
 
 **Necessary prerequisite bug found and fixed first:** `sources/cfbd.py` and `sources/fantasypros.py`
 wrote every same-day snapshot to a `local_path` keyed only by dataset + captured-at date, ignoring
@@ -1060,3 +1074,112 @@ missing signal is now real, correctly joined, and ready to train on." Also uncha
 DynastyProcess/cfbfastR-data substitutes stay wired in as the operating path in existing
 pipeline code (no product decision was made to remove either), and per-expert FantasyPros
 weighting stays LIMITED regardless (D4) — this tier's consensus-only data doesn't touch that gap.
+
+## D39 — First real end-to-end pipeline run: college production measured and NOT adopted; three real bugs found, including a schema-migration gap that made D38 broken-on-upgrade
+
+D38 wired CFBD college production into `rookie_features` and bumped the feature set to v2, but
+explicitly did not claim the model improved — no model had been trained on it. This entry is
+that missing measurement, plus what running the real pipeline for the first time exposed. The
+database in this container was empty (`players` = 0 rows) before this run, so nothing in D38 had
+ever executed against real data end to end.
+
+**Pipeline actually run** (2012–2025): `sources ingest` (155 OK / 20 NOT_FOUND, all expected —
+2026 preseason and pre-2022 `ftn_charting`) → `identity build` (25,050 players) →
+`features build-college-usage` → `features build` (241,208 player-weeks, 26,816 player-seasons,
+1,360 rookie-seasons) → `train rookie --ablation`.
+
+### The measurement
+
+A naive "train v2 and look at the numbers" cannot answer this: `evaluation_results` and
+`classification_results` are keyed on (model_name, season|cohort, position), so a second training
+run silently overwrites the first and leaves no baseline. So `run_rookie_models` gained optional
+`features`/`feature_version`/`model_suffix` parameters (defaulting to production, so no existing
+caller changes), `models/rookie/ablation.py` pairs the two arms fold by fold, and
+`train rookie --ablation` runs both over identical folds with identical hyperparameters and seed.
+
+**Decision rule, fixed before any numbers were seen:** the breakout classifier is the
+decision-relevant output, so Brier governs; regression Spearman is secondary; adopt the college
+features only if the classifier improves.
+
+**Result — primary (draft classes 2019–2025, 28 paired folds each):**
+
+| metric | baseline | +college | delta | better |
+|---|---|---|---|---|
+| regression MAE (lower better) | 37.5379 | 37.5968 | +0.0589 | baseline |
+| regression Spearman (higher better) | 0.6182 | 0.6179 | −0.0003 | baseline |
+| breakout Brier (lower better) | 0.0678 | 0.0708 | +0.0030 | baseline |
+| breakout accuracy (higher better) | 0.8994 | 0.9005 | +0.0010 | +college |
+
+**Robustness check.** Coverage is heavily skewed — CFBD's `player/usage` returns nothing before
+2013, and real coverage of `rookie_features` runs 0% for classes 2012–2015, 5% (2016), 26%
+(2017), 56% (2018), then 83–97% for 2019–2025. Since `models/rookie/data.py` imputes a missing
+college value to 0.0, a plausible alternative explanation for the null result was a train/serve
+mismatch: models trained mostly on zero-imputed classes, then asked to predict classes where the
+feature is genuinely present. So the ablation was re-run restricted to classes where *both*
+training and target data are ≥83% covered (targets 2022–2025, training from 2019; 16 paired
+folds). That made it **worse, not better** — baseline wins all four metrics there
+(MAE +1.0585, Spearman −0.0016, Brier +0.0032, accuracy −0.0099). The coverage cliff is not the
+explanation; the signal simply is not there.
+
+**Decision: KEEP BASELINE.** `FEATURES` reverts to the 12-feature D20 set and `FEATURE_VERSION`
+back to `rookie_features_v1` — claiming v2 would misdescribe every model registered and every
+prediction written. What is deliberately *kept*: the CFBD ingestion, the `college_usage` table,
+the `rookie_features` columns, the espn_id bridge, `FEATURES_WITH_COLLEGE`, and the whole
+ablation harness. The data is real, correctly joined, and leakage-safe; the experiment is now
+one command to re-run (`train rookie --ablation`) if CFBD backfills older seasons or someone
+engineers a college feature with more signal than raw usage share. Reports:
+`reports/rookie_college_production_ablation.md` and `..._highcov.md`.
+
+An honest reading of D38 in hindsight: it was a well-built pipeline for a feature that does not
+earn its place. That is a normal experimental outcome, and the value delivered is the
+now-reproducible ability to ask the question, not a model improvement.
+
+### Three real bugs found by running it for real
+
+1. **`init_db` had no migration path — D38 was broken on upgrade.** Every DDL statement is
+   `CREATE TABLE IF NOT EXISTS`, which is idempotent for new tables but silently ignores a
+   *column* added to an existing one. D38 added `rookie_features.college_usage_*` and
+   `market_snapshot.source` (and widened market_snapshot's PRIMARY KEY) and was verified only
+   against fresh in-memory test databases — so the entire suite passed while any pre-existing
+   database would hard-crash: `features build` died with
+   `BinderException: Referenced update column college_usage_overall not found in table`, and
+   `market capture-live-fantasypros` would have failed the same way. Fixed with a real migration
+   path (`ADD_COLUMN_MIGRATIONS` + a guarded `market_snapshot` rebuild, since DuckDB cannot ALTER
+   a primary key) applied by `init_db`, and `tests/unit/test_schema_migrations.py` which builds
+   the *old* schema first — the one thing no other test in this suite does.
+
+2. **The ablation's own fold-pairing was wrong, and produced a plausible-looking false result.**
+   `run_rookie_models` trains one model per position, but `evaluate_and_record` reports each
+   one's headline row at `position='ALL'`. Keying folds on (class, position) therefore collapsed
+   all four position models onto one key and compared the candidate's QB model against the
+   baseline's TE model. The first run reported a **+13.69 MAE regression** — caught only because
+   that is implausible next to a −0.0003 Spearman delta, not because anything failed. Real
+   per-model deltas were ~0.06. Fixed by including the (suffix-stripped) model name in the fold
+   key; `tests/unit/test_rookie_ablation.py` asserts identical arms produce exactly zero delta,
+   which is what fails under the collapsing key.
+
+3. **`load_rookie_class_data` hardcoded `FEATURES` in its SELECT**, so once production reverted
+   to the 12-feature set the ablation's candidate arm got a DataFrame missing the columns it
+   asked for and died on a pandas `KeyError` at fit time. Now takes a `features` parameter.
+
+Two smaller ones, also from real execution: `_prediction_id` did not include `feature_version`,
+so two arms predicting the same player/class collided on `rookie_predictions`' primary key (the
+UNIQUE-targeted ON CONFLICT clause does not catch that); and `_register_model`'s
+`ON CONFLICT DO UPDATE` omitted `feature_version`, leaving a stale value on re-training.
+
+### D38 correction, and a pipeline-ordering trap
+
+`seasons_needed_for_rookies` had no lower bound, so it derived college seasons from the full
+nflverse history and issued ~40 real CFBD requests back to **1973**, every one returning an empty
+list (verified: 1973/1990/2004/2010 → `[]`, 2013 → 2991 rows). Floored at
+`CFBD_USAGE_FIRST_SEASON = 2013`. Separately, D38's claim that `espn_id` was "never loaded into
+`player_id_map`" was false and is corrected in place above — `identity/canonical.py:32` always
+loaded it from nflverse; of 16,771 espn_id mappings, 16,761 come from nflverse and only 10 from
+the column D38 added.
+
+Finally, D38 left a trap: `features build-college-usage` must run **between** `identity build`
+and `features build`, because `features build` is what joins `college_usage` into
+`rookie_features`. Running it after instead leaves the columns NULL, which `data.py` imputes to
+0.0 — i.e. the model trains on zeroed college features with no warning. There was no Makefile
+target and no README step for it, so `make ingest && make identity && make features && make train`
+did exactly that. Both now fixed.
