@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# uv
+uv.lock.bak
+
+# CatBoost training-run artifacts (written to cwd by default during .fit())
+catboost_info/
+
+# Data / models / state (all reproducible from ingestion; never committed)
+data/**
+!data/.gitkeep
+models/**
+!models/.gitkeep
+predictions/**
+!predictions/.gitkeep
+reports/**
+!reports/.gitkeep
+state/**
+!state/.gitkeep
+*.duckdb
+*.duckdb.wal
+
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Frontend
+web/node_modules/
+web/dist/
+web/.vite/
+
+# OS
+.DS_Store

@@ -1,0 +1,113 @@
+.app {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 1rem 1.5rem 3rem;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: #1f2328;
+}
+
+header h1 {
+  margin-bottom: 0.1rem;
+}
+
+nav {
+  display: flex;
+  gap: 0.5rem;
+  margin: 1rem 0 1.5rem;
+  border-bottom: 1px solid #d0d7de;
+  padding-bottom: 0.75rem;
+}
+
+nav button {
+  background: none;
+  border: 1px solid #d0d7de;
+  border-radius: 6px;
+  padding: 0.4rem 0.9rem;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+nav button.active {
+  background: #1f2328;
+  color: white;
+  border-color: #1f2328;
+}
+
+.muted {
+  color: #57606a;
+  font-size: 0.9rem;
+}
+
+.error {
+  color: #cf222e;
+  font-weight: 600;
+}
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: end;
+  margin: 1rem 0;
+}
+
+.controls label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.85rem;
+}
+
+.controls input,
+.controls select {
+  padding: 0.35rem 0.5rem;
+  border: 1px solid #d0d7de;
+  border-radius: 6px;
+  min-width: 8rem;
+}
+
+.controls button {
+  padding: 0.45rem 1rem;
+  border-radius: 6px;
+  border: 1px solid #1f2328;
+  background: #1f2328;
+  color: white;
+  cursor: pointer;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+th,
+td {
+  text-align: left;
+  padding: 0.5rem 0.6rem;
+  border-bottom: 1px solid #eaeef2;
+}
+
+tr:hover {
+  background: #f6f8fa;
+}
+
+.reasons {
+  background: #f6f8fa;
+  font-size: 0.85rem;
+}
+
+.reasons ul {
+  margin: 0.25rem 0;
+  padding-left: 1.2rem;
+}
+
+.card {
+  border: 1px solid #d0d7de;
+  border-radius: 8px;
+  padding: 1rem;
+  margin: 0.75rem 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}

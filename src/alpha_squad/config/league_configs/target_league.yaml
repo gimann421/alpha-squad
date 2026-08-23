@@ -1,0 +1,23 @@
+# The target league (docs/DECISIONS.md D7): 10 teams, 2QB/2RB/2WR/1TE/2FLEX, dynasty PPR.
+# Bench size and FAAB budget are unspecified anywhere in the docs -- D7 defaults them here,
+# explicitly, rather than silently assuming.
+league_id: target_league
+format: dynasty
+teams: 10
+scoring:
+  ppr: true
+  ppr_value: 1.0
+lineup:
+  QB: 2
+  RB: 2
+  WR: 2
+  TE: 1
+  FLEX: 2
+roster:
+  bench: 10
+  roster_size: 17
+draft_state: {}
+waiver_state: {}
+faab:
+  budget: 100
+future_picks: {}
