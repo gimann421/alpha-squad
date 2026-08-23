@@ -958,3 +958,105 @@ identical from a single status code, and even a byte-identical error body across
 and an authenticated-but-wrong-resource request doesn't by itself distinguish "bad key" from
 "bad URL" — checking the provider's own documentation before concluding either resolved this
 faster than continuing to guess between credential explanations.
+
+## D38 — Now-live FantasyPros/CFBD actually wired in: a new live FantasyPros market series, and a real (non-fuzzy) identity bridge that resolves D20's college-production gap
+
+D37 left both keys confirmed live but unused by any pipeline code beyond health checks —
+"wiring either in for something new is a deliberate product decision... left for direction, not
+assumed." Asked directly whether that wiring should now happen. Two separate decisions, each
+checked against real data before writing any code rather than assumed from the source becoming
+reachable:
+
+**FantasyPros: start a live snapshot series (user's chosen direction, over a cross-check-only or
+leave-unused alternative).** `market/consensus.py::build_market_snapshot` reads DynastyProcess's
+`fp_ecr_history` — a real *historical* time series that backtesting/EDGE (D16/D21) depend on for
+leakage-safe as-of joins. The live FantasyPros API has no lookback of its own — every call
+returns only *today's* rankings — so it can never be a drop-in replacement for that series; it
+can only be a new, separately-provenanced series accumulated forward from whenever it first
+runs, the same shape of problem `evidence/sleeper_trending.py` (D32) already solved for a
+different live-only source. Implementation: `market_snapshot` gained a `source` column
+(default `'dynastyprocess'`, PK extended to include it) so a live capture can never collide with
+or silently overwrite a DynastyProcess-sourced row for the same player/date/ecr_type — verified
+directly (inserted both for the identical key, both rows persisted, no clobber, INSERT is
+idempotent on re-run). `build_live_fantasypros_snapshot` fetches `consensus_rankings`
+(`position=ALL`, real data reveals `type=ROS` is silently ignored on this key's free tier — see
+below) and inserts as `source='fantasypros_live'`.
+
+**Real finding, not assumed:** requested `type=ROS` per FantasyPros's own documented enum
+(`SPORTRankingTypes` — confirmed valid, case-sensitive uppercase, via the real OpenAPI spec at
+`api.fantasypros.com/public/v2/docs/fantasypros_v2_public.yml`, D37's same doc). The live
+response's own `type`/`ranking_type_name` fields always echo back `"Draft"`/`"draft"` regardless
+of what's requested — checked with and without a `scoring` param, consistent both times. Rather
+than mislabel this as ROS data it doesn't actually contain, tagged it `ecr_type='draft_overall'`
+— an honest label for what's genuinely being captured (this key's free/public tier's Draft-type
+overall consensus), not a guess at what a higher tier might unlock. Also fixed in passing:
+`default_health_params`'s `type: "ros"` (lowercase) was being silently ignored by the real API
+the same way — the real enum values are uppercase; changed to `"ROS"` even though it doesn't
+change what tier serves, so the health check at least sends what it means to.
+
+**CFBD: yes, build the rookie feature (user's explicit direction).** D20 had already ruled out
+cfbfastR-data for college production — not for lack of a source, but because its numeric
+ESPN-style player IDs have no verified bridge to this project's nflverse-derived identity graph,
+and building one via name+school+season fuzzy matching was judged not worth the engineering cost
+given draft capital's own strength as a proxy. Before writing any rookie-modeling code, checked
+whether switching from cfbfastR-data to direct CFBD access changes that verdict — it doesn't on
+its own: cfbfastR-data is itself built by mirroring CFBD's own API, so its numeric IDs are the
+same underlying ID space D20 already found unbridged, not a fresh namespace.
+
+**What actually resolves it:** CFBD's `/draft/picks` endpoint returns both `collegeAthleteId` and
+`nflAthleteId` per real drafted player. Checked `collegeAthleteId` against DynastyProcess's
+`espn_id` for 4 real players (Caleb Williams, Jayden Daniels, Drake Maye, Marvin Harrison Jr.) —
+exact match, 4/4, no fuzzy logic involved: CFBD's numeric athlete ID *is* ESPN's athlete ID.
+`espn_id` was present in DynastyProcess's own crosswalk CSV all along but never loaded into
+`player_id_map` (`identity/crosswalk.py`'s `DYNASTYPROCESS_ID_COLUMNS` omitted it) — added it,
+one line, reusing the existing `insert_id_mappings` machinery unchanged. This is a real,
+verified, non-fuzzy identity bridge, not the "materially larger undertaking" D20 correctly
+avoided; it supersedes D20's verdict for CFBD specifically without contradicting D20's original
+reasoning about cfbfastR-data's own ID space.
+
+**Necessary prerequisite bug found and fixed first:** `sources/cfbd.py` and `sources/fantasypros.py`
+wrote every same-day snapshot to a `local_path` keyed only by dataset + captured-at date, ignoring
+query params — unlike `sources/file_release.py`'s existing `param_suffix` pattern. Fetching CFBD
+`player_usage` for multiple seasons (exactly what college-usage ingestion needs) would have
+silently overwritten each season's file on disk while `snapshot_registry` still recorded distinct
+rows pointing at the now-wrong content — a real provenance bug, caught before it could produce a
+single row of fabricated-by-omission data. Fixed both adapters to include a param suffix in the
+filename, matching `file_release.py`; added a regression test proving two same-day fetches with
+different params no longer collide.
+
+**Implementation:** `college_usage` (new table: player_id, season, usage_overall/pass/rush,
+source_snapshot_id) is built by `features/college_production.py::build_college_usage`, looping
+`CfbdSource.fetch("player_usage", year=...)` over every season a rookie in `players` actually
+needs (`seasons_needed_for_rookies`: `DISTINCT rookie_season - 1` for skill-position rookies),
+joined via `player_id_map WHERE id_type='espn_id'`. `features/rookie.py::build_rookie_features`
+LEFT JOINs `college_usage` on `(player_id, season = rookie_season - 1)` — the player's *final
+college season only*, never their own NFL season, the same leakage rule
+`landing_team_prior_pass_rate` already follows (verified with a regression test: a
+`college_usage` row that shares the rookie's *NFL* season number, not their college one, must
+not join in). `models/rookie/features.py`'s `FEATURES` gained `college_usage_overall/pass/rush`;
+missing values impute to 0.0, same convention already used for missing combine measurables.
+`FEATURE_VERSION` bumped `rookie_features_v1` -> `rookie_features_v2` so a future training run is
+correctly distinguished from anything trained on the old 12-feature set.
+
+**Verified against real data throughout, not assumed:** every new function was smoke-tested
+against the real live APIs before any unit test was written — `build_live_fantasypros_snapshot`
+correctly resolved Ja'Marr Chase's real WR1 overall rank via the real join; `build_college_usage`
+pulled Caleb Williams's real 2023 USC usage share (overall 0.624, pass 0.915, rush 0.222) via the
+real espn_id bridge; `build_rookie_features` correctly joined that through into `rookie_features`
+end-to-end. Offline regression coverage added afterward
+(`tests/unit/test_market_live_fantasypros.py`, `tests/unit/test_college_production.py`, new cases
+in `tests/unit/test_rookie_models.py`, plus the path-collision test in
+`tests/contracts/test_source_adapters.py`) mocks httpx with these exact real response shapes.
+`make test` (237 passed) and `make lint` both clean.
+
+**What this doesn't do:** no rookie model was retrained or re-evaluated against the new v2
+feature set — that requires a full pipeline run (`sources ingest` -> `identity build` ->
+`features build-college-usage` -> `features build` -> `models rookie train`) against real
+multi-season data, a heavier, separate operational step from wiring the feature in correctly and
+proving it joins leakage-safely. Until that run happens, `rookie_features_v2`'s three new columns
+exist, are correctly populated, and are in `FEATURES`, but no trained model has actually used
+them yet — this is deliberately not claimed as "the rookie model got better," only as "the
+missing signal is now real, correctly joined, and ready to train on." Also unchanged: the
+DynastyProcess/cfbfastR-data substitutes stay wired in as the operating path in existing
+pipeline code (no product decision was made to remove either), and per-expert FantasyPros
+weighting stays LIMITED regardless (D4) — this tier's consensus-only data doesn't touch that gap.

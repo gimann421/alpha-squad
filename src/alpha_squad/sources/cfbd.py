@@ -69,12 +69,13 @@ class CfbdSource(SourceAdapter):
             raise SourceError(f"cfbd/{dataset} not found (404): {url}")
         resp.raise_for_status()
 
+        param_suffix = "_".join(f"{k}-{v}" for k, v in sorted(params.items())) or "default"
         dest = (
             self.settings.raw_dir
             / self.name
             / dataset
             / f"captured_at={captured_at.date().isoformat()}"
-            / f"{dataset}.json"
+            / f"{param_suffix}_{dataset}.json"
         )
         dest.parent.mkdir(parents=True, exist_ok=True)
         dest.write_bytes(resp.content)

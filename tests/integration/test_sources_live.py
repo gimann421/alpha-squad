@@ -79,7 +79,9 @@ def test_fantasypros_with_key_is_really_reachable(settings):
     no key is configured, since a paid key isn't guaranteed to exist in every environment."""
     if not settings.fantasypros_api_key:
         pytest.skip("FANTASYPROS_API_KEY not configured in this environment")
-    snap = FantasyProsSource(settings).fetch("consensus_rankings", season=2026, position="WR", type="ros")
+    snap = FantasyProsSource(settings).fetch(
+        "consensus_rankings", season=2026, position="WR", type="ros"
+    )
     assert snap.rows and snap.rows > 0
     assert snap.local_path.exists()
 

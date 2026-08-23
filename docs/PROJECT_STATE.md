@@ -14,7 +14,7 @@ milestone. See `docs/TRACEABILITY.md` for the acceptance-criteria-level mapping.
 | M4 Baselines + evaluation | DONE | 3 baselines (previous-year, weighted-2yr, ECR-implied) walk-forward evaluated 2018-2025 against 21,421 real player-seasons and 210,730 real market snapshots; shared evaluation harness (MAE/RMSE/R²/Spearman/top-N hit rate/tier accuracy) reused by every later milestone; 65 offline + 10 network tests passing. **One number in this milestone's report was wrong and got corrected in M5 — see D19.** |
 | M5 Established-player ML | DONE | Position-specific Ridge/CatBoost/XGBoost + opportunity-only + team-environment-only + ensemble, both weekly (in-season) and season-level (preseason, apples-to-apples vs M4); team_week_stats/features extend the M3 panel; model_registry tracks version/validation; 70 offline + 12 network tests passing. One real evaluation-harness bug found and fixed (D19), affecting M4's reports too. |
 | M6 Uncertainty + calibration | DONE | Split-conformal p10/p25/median/p75/p90 + Monte Carlo top-12/24 probabilities on the M5 season-level CatBoost model; walk-forward 3-way split (train/calibrate/target) so calibration is genuinely out-of-sample; real measured coverage_10_90 mostly 0.72-0.90 (target 0.80) across 2019-2025/QB-RB-WR-TE — legitimately well-calibrated, not just plausible-looking; 82 offline + 13 network tests passing |
-| M7 Rookie/prospect intelligence | DONE | Draft capital + combine + prior-season landing-spot features (college production LIMITED — no verified ID bridge to cfbfastR exists, D20); CatBoost regression (rookie-year PPR) + classifier (top-24 breakout, Brier-scored) walk-forward by draft class; nearest-neighbor historical comps; 1,077 real rookie-seasons, 88 offline + 15 network tests passing; two real bugs found and fixed (combine height stored as "6-0" string, comps dtype crash) |
+| M7 Rookie/prospect intelligence | DONE | Draft capital + combine + prior-season landing-spot features (college production LIMITED — no verified ID bridge to cfbfastR exists, D20; **resolved D38** via a separate verified CFBD/espn_id bridge, feature set now v2); CatBoost regression (rookie-year PPR) + classifier (top-24 breakout, Brier-scored) walk-forward by draft class; nearest-neighbor historical comps; 1,077 real rookie-seasons, 88 offline + 15 network tests passing; two real bugs found and fixed (combine height stored as "6-0" string, comps dtype crash) |
 | M8 Market + EDGE | DONE | market_snapshot extended to ro/do/rsf/dsf (2QB-aware); dynasty_values (681 real players, 97.6% identity coverage); EDGE (rank/points/probability edge, BUY/HOLD/SELL/WATCH) gated so a raw rank discrepancy alone can never produce BUY/SELL (D21); historical EDGE validation shows the real BUY cohort beat market-implied points in 3 of 4 scored seasons 2022-2025 (recomputed in M13 after a data-correctness fix — see D28 — numbers below reflect the M13-era figures); 102 offline + 18 network tests passing (both suites reran clean end-to-end after this milestone) |
 | M9 Evidence engine | DONE | 4 real Strong-tier detectors (depth-chart move, injury self/teammate-opportunity, roster transaction, usage-share shift) on officially-sourced nflverse data; 33,311 real events across 2019-2025; bounded (±15%) evidence-adjusted weekly projections, never overwriting the base M5 prediction; wired as a real (mostly-neutral-in-practice) veto into M8's EDGE gate (D23); 123 offline + 21 network tests passing (verified via `pytest -m "not network"` / `-m network` directly, not estimated) |
 | M10 League decision engine | DONE | Real value-based-drafting replacement/scarcity derived from the league's own lineup config (verified: 2QB target league produces 20 real dedicated QB starters on real 2025 data, exactly 10 teams x 2 QB slots); draft/waiver/dynasty-trade recommendations with alternatives, roster fit, next-pick survival probability, and real evidence-driven value-spike bidding; the M7 rookie-prediction fallback was confirmed live against a real rookie-only player; 152 offline + 26 network tests passing |
@@ -205,6 +205,15 @@ milestone. See `docs/TRACEABILITY.md` for the acceptance-criteria-level mapping.
   than this milestone's budget justified, especially since draft capital already
   substantially proxies for it (D20). Not fabricated via a shaky join; documented as a real
   gap with a defensible fallback.
+  **Update (D38, 2026-08-23): resolved, not via cfbfastR-data's ID space but via a separate,
+  verified bridge — CFBD's own numeric athlete IDs (`player_usage.id`,
+  `recruiting_players.athleteId`) are the same ID as DynastyProcess's `espn_id`, confirmed
+  against 4/4 real players with zero fuzzy matching. `college_usage` (season usage share, via
+  CFBD, espn_id-bridged) is now joined into `rookie_features` for each rookie's final college
+  season only, and `models/rookie/features.py`'s FEATURES list bumped to
+  `rookie_features_v2` to include it. Retraining/backtesting rookie models with the new
+  feature is a separate, heavier operational step (needs a full pipeline run) and is not part
+  of this change — see D38 for what's verified vs. what's still pending.**
 - CatBoostRegressor (rookie-year PPR points) + CatBoostClassifier (top-24 breakout,
   Brier-scored) walk-forward strictly by draft class (train on classes < C, predict C).
   Real results: regression Spearman mostly 0.4-0.8 (rookie prediction is inherently noisier
@@ -652,10 +661,11 @@ actual league details (teams, scoring, roster slots) from the user, not supplied
 - Automated news/social evidence ingestion: LIMITED to structured official signals (D5).
 - ADP-implied baseline: LIMITED to the ECR-implied substitute; no independent ADP series is
   reachable (D16).
-- Rookie college production: LIMITED — no verified ID bridge from cfbfastR-data's numeric
+- Rookie college production: was LIMITED — no verified ID bridge from cfbfastR-data's numeric
   ESPN-style player IDs to the rest of the identity graph, and its "player_stats" dataset is
-  raw play-by-play, not aggregated season totals (D20). Rookie model v1 uses draft capital +
-  combine + landing spot, all cleanly identity-linked.
+  raw play-by-play, not aggregated season totals (D20). **Resolved D38 (2026-08-23)** via a
+  separate, verified bridge (CFBD's numeric athlete IDs == DynastyProcess's `espn_id`); rookie
+  model v2 now includes college usage share alongside draft capital + combine + landing spot.
 - EDGE `evidence_score`: LIMITED to a disclosed neutral placeholder (0.5) until M9's evidence
   engine exists; never used to gate an action (D21).
 - EDGE is single-season/redraft-horizon only (`rsf`), matching the M6 model's own horizon; a

@@ -69,6 +69,7 @@ state at the time each milestone was first built.
 | Rookie model is separate from established-player model | ✅ | `models/rookie/` is a fully separate pipeline/feature set, walk-forward by draft class |
 | Rookie breakout probability exists | ✅ | `ml_rookie_breakout_*` classifiers |
 | Draft capital is explicit | ✅ | `models/rookie/features.py` draft-capital/pick-value-curve feature |
+| College production feeds rookie modeling | ✅ | was ⚠️ LIMITED through D20 (no verified ID bridge to cfbfastR-data); resolved D38 via CFBD, espn_id-bridged (`features/college_production.py` -> `college_usage` -> `rookie_features`); `FEATURE_VERSION` bumped to `rookie_features_v2`. Retraining/backtesting with the new feature not yet run — needs a full pipeline pass |
 | Uncertainty intervals exist | ✅ | M6 quantile models + split-conformal calibration |
 | Probability calibration is measured | ✅ | `reports/calibration_report.md` — real out-of-sample coverage vs. nominal |
 | Model versions are tracked | ✅ | model registry (`_register_model`), `VALIDATED`/`UNVALIDATED` |

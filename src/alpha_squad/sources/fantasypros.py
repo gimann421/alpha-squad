@@ -40,7 +40,10 @@ class FantasyProsSource(SourceAdapter):
         return list(_DATASETS.keys())
 
     def default_health_params(self, dataset: str) -> dict:
-        return {"season": 2026, "position": "WR", "type": "ros"}
+        # type must be uppercase per FantasyPros's real enum (ROS/DRAFT/DYNASTY/...,
+        # confirmed against api.fantasypros.com/public/v2/docs/fantasypros_v2_public.yml) --
+        # a lowercase value is silently ignored by the API rather than rejected.
+        return {"season": 2026, "position": "WR", "type": "ROS"}
 
     def fetch(self, dataset: str, *, captured_at: datetime | None = None, **params) -> RawSnapshot:
         if dataset not in _DATASETS:
@@ -69,12 +72,13 @@ class FantasyProsSource(SourceAdapter):
             raise SourceError(f"fantasypros/{dataset} not found (404): {url}")
         resp.raise_for_status()
 
+        param_suffix = "_".join(f"{k}-{v}" for k, v in sorted(params.items())) or "default"
         dest = (
             self.settings.raw_dir
             / self.name
             / dataset
             / f"captured_at={captured_at.date().isoformat()}"
-            / f"{dataset}.json"
+            / f"{param_suffix}_{dataset}.json"
         )
         dest.parent.mkdir(parents=True, exist_ok=True)
         dest.write_bytes(resp.content)

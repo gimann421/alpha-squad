@@ -1,7 +1,8 @@
 """Feature-set definition for rookie/prospect modeling. Separate from
 established/features.py by design (PRODUCT_SPEC.md: "Rookies are a separate model because
 they lack NFL production") — a rookie has no player_week_features history to draw lag
-features from, so this operates on draft capital + combine + landing spot instead."""
+features from, so this operates on draft capital + combine + landing spot + college
+production (D38) instead."""
 
 from __future__ import annotations
 
@@ -18,10 +19,13 @@ FEATURES = [
     "weight",
     "landing_team_prior_pass_rate",
     "landing_team_prior_plays",
+    "college_usage_overall",
+    "college_usage_pass",
+    "college_usage_rush",
 ]
 REGRESSION_TARGET = "rookie_year_ppr_points"
 CLASSIFICATION_TARGET = "breakout_top24"
-FEATURE_VERSION = "rookie_features_v1"
+FEATURE_VERSION = "rookie_features_v2"  # v1 -> v2 (D38): +college_usage_overall/pass/rush
 POSITIONS = ("QB", "RB", "WR", "TE")
 
 # Undrafted free agents have draft_round/draft_pick = NULL. Rather than imputing them to 0

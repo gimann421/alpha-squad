@@ -90,6 +90,20 @@ Both adapters already refuse to call out without a key configured (`SourceCreden
 never a guessed/fabricated key) — set the env var and the real source activates with no further
 code change needed now that both base URLs are correct.
 
+**D38 addendum:** this key's free/public tier only serves `type=Draft` consensus rankings —
+requesting `type=ROS` (or any other `SPORTRankingTypes` enum value) is silently accepted but
+ignored; the response always echoes back `"type": "Draft"` regardless. Verified empirically,
+not assumed from the docs. `market/consensus.py::build_live_fantasypros_snapshot` captures
+this as a new `source='fantasypros_live'` series in `market_snapshot`, tagged `ecr_type='draft_overall'`
+(not `'ros_overall'`, so the label never claims data this tier doesn't provide) — a separate,
+provenance-tagged series accumulated forward from today, never blended into the DynastyProcess-sourced
+historical rows `build_market_snapshot` builds. Also: CFBD's numeric athlete IDs
+(`player_usage.id`, `recruiting_players.athleteId`, `draft/picks.collegeAthleteId`) were found
+to be the exact same ID as DynastyProcess's `espn_id` (verified against 4/4 real players, no
+fuzzy matching) — added to `identity/crosswalk.py`'s `DYNASTYPROCESS_ID_COLUMNS`, resolving
+D20's college-production identity-bridge gap for rookie modeling (`features/college_production.py`).
+See D38.
+
 ## Still policy-blocked or otherwise unavailable
 
 | Source | Host | Spec role | Fallback in use |

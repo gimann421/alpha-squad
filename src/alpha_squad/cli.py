@@ -21,6 +21,10 @@ from alpha_squad.evidence.events import build_evidence_events_range
 from alpha_squad.evidence.prior_update import run_prior_update
 from alpha_squad.evidence.sleeper_trending import detect_sleeper_trending
 from alpha_squad.features.build import build_features
+from alpha_squad.features.college_production import (
+    build_college_usage,
+    seasons_needed_for_rookies,
+)
 from alpha_squad.identity.canonical import build_identity
 from alpha_squad.identity.exceptions import list_exceptions
 from alpha_squad.league.context import DEFAULT_LEAGUE_ID, list_registered_leagues, resolve_league
@@ -33,7 +37,7 @@ from alpha_squad.league.replacement import (
 )
 from alpha_squad.league.trade import recommend_dynasty_trade
 from alpha_squad.league.waiver import recommend_waiver_pickup
-from alpha_squad.market.consensus import build_market_snapshot
+from alpha_squad.market.consensus import build_live_fantasypros_snapshot, build_market_snapshot
 from alpha_squad.market.dynasty_values import build_dynasty_values
 from alpha_squad.market.edge import (
     DEFAULT_ECR_TYPE,
@@ -323,6 +327,31 @@ def features_build(
     con.close()
 
 
+@features_app.command("build-college-usage")
+def features_build_college_usage() -> None:
+    """Ingest CFBD player_usage (D38) for every college season a rookie already in `players`
+    needs (their final college season, rookie_season - 1), and upsert into `college_usage`,
+    espn_id-bridged. Run `features build` afterward so rookie_features picks up the join;
+    requires CFBD_API_KEY and `identity build` having already populated player_id_map."""
+    settings = get_settings()
+    con = get_connection(settings)
+    init_db(con)
+    seasons = seasons_needed_for_rookies(con)
+    if not seasons:
+        console.print("[yellow]no rookies in `players` yet -- run `identity build` first[/yellow]")
+        con.close()
+        return
+    try:
+        n = build_college_usage(con, settings, seasons)
+    except (RuntimeError, SourceError) as e:
+        console.print(f"[red]{e}[/red]")
+        con.close()
+        raise typer.Exit(code=1) from e
+    console.print(f"seasons ingested: [green]{seasons}[/green]")
+    console.print(f"college_usage rows upserted: [green]{n}[/green]")
+    con.close()
+
+
 @market_app.command("build")
 def market_build() -> None:
     """Build market_snapshot from the stored DynastyProcess fp_ecr_history snapshot
@@ -337,6 +366,24 @@ def market_build() -> None:
         con.close()
         raise typer.Exit(code=1) from e
     console.print(f"market_snapshot rows upserted: [green]{n}[/green]")
+    con.close()
+
+
+@market_app.command("capture-live-fantasypros")
+def market_capture_live_fantasypros(season: int = 2026) -> None:
+    """Capture today's FantasyPros consensus rankings directly from the live API into
+    market_snapshot (source='fantasypros_live', D38) -- a separate, provenance-tagged series
+    from the DynastyProcess-sourced 'build' command above; requires FANTASYPROS_API_KEY."""
+    settings = get_settings()
+    con = get_connection(settings)
+    init_db(con)
+    try:
+        n = build_live_fantasypros_snapshot(con, settings, season=season)
+    except (RuntimeError, SourceError) as e:
+        console.print(f"[red]{e}[/red]")
+        con.close()
+        raise typer.Exit(code=1) from e
+    console.print(f"market_snapshot (fantasypros_live) rows upserted: [green]{n}[/green]")
     con.close()
 
 

@@ -104,3 +104,66 @@ def test_build_rookie_features_marks_breakout_correctly_against_real_position_ra
     build_rookie_features(con)
     row = con.execute("SELECT breakout_top24 FROM rookie_features WHERE player_id='r1'").fetchone()
     assert row == (True,)
+
+
+class TestCollegeUsageJoin:
+    """docs/DECISIONS.md D38: college_usage (CFBD, espn_id-bridged) joined into
+    rookie_features for the rookie's *final college season only* (rookie_season - 1)."""
+
+    def test_college_usage_for_the_final_college_season_is_joined_in(self, con):
+        con.execute(
+            "INSERT INTO players (player_id, gsis_id, position, draft_team, draft_round, "
+            "draft_pick, rookie_season) VALUES ('r1', 'g1', 'QB', 'CHI', 1, 1, 2024)"
+        )
+        con.execute(
+            "INSERT INTO college_usage (player_id, season, usage_overall, usage_pass, usage_rush) "
+            "VALUES ('r1', 2023, 0.624, 0.915, 0.222)"
+        )
+        con.execute(
+            "INSERT INTO player_season_stats (player_id, season, position, games_played, "
+            "total_fantasy_points_ppr, ppr_points_per_game) VALUES ('r1', 2024, 'QB', 17, 300.0, 17.65)"
+        )
+        build_rookie_features(con)
+        row = con.execute(
+            "SELECT college_usage_overall, college_usage_pass, college_usage_rush "
+            "FROM rookie_features WHERE player_id='r1'"
+        ).fetchone()
+        assert row == (0.624, 0.915, 0.222)
+
+    def test_the_rookies_own_nfl_season_year_is_never_used_as_the_join_key(self, con):
+        """A college_usage row that happens to share the rookie's *NFL* season number (not
+        their final *college* season, rookie_season - 1) must not leak in -- that would be a
+        look-ahead the same way using the rookie's own NFL-season team stats would be."""
+        con.execute(
+            "INSERT INTO players (player_id, gsis_id, position, draft_team, draft_round, "
+            "draft_pick, rookie_season) VALUES ('r1', 'g1', 'QB', 'CHI', 1, 1, 2024)"
+        )
+        con.execute(
+            "INSERT INTO college_usage (player_id, season, usage_overall, usage_pass, usage_rush) "
+            "VALUES ('r1', 2024, 0.999, 0.999, 0.999)"
+        )
+        con.execute(
+            "INSERT INTO player_season_stats (player_id, season, position, games_played, "
+            "total_fantasy_points_ppr, ppr_points_per_game) VALUES ('r1', 2024, 'QB', 17, 300.0, 17.65)"
+        )
+        build_rookie_features(con)
+        row = con.execute(
+            "SELECT college_usage_overall FROM rookie_features WHERE player_id='r1'"
+        ).fetchone()
+        assert row == (None,)
+
+    def test_missing_college_usage_leaves_the_columns_null_not_erroring(self, con):
+        con.execute(
+            "INSERT INTO players (player_id, gsis_id, position, draft_team, draft_round, "
+            "draft_pick, rookie_season) VALUES ('r1', 'g1', 'QB', 'CHI', 1, 1, 2024)"
+        )
+        con.execute(
+            "INSERT INTO player_season_stats (player_id, season, position, games_played, "
+            "total_fantasy_points_ppr, ppr_points_per_game) VALUES ('r1', 2024, 'QB', 17, 300.0, 17.65)"
+        )
+        build_rookie_features(con)
+        row = con.execute(
+            "SELECT college_usage_overall, college_usage_pass, college_usage_rush "
+            "FROM rookie_features WHERE player_id='r1'"
+        ).fetchone()
+        assert row == (None, None, None)
