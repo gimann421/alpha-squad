@@ -1177,6 +1177,16 @@ list (verified: 1973/1990/2004/2010 → `[]`, 2013 → 2991 rows). Floored at
 loaded it from nflverse; of 16,771 espn_id mappings, 16,761 come from nflverse and only 10 from
 the column D38 added.
 
+**A fourth bug, found by running the actual app.** With the pipeline populated, the FastAPI
+backend and the React SPA were launched and driven in a real browser (all six views, plus a live
+draft recommendation and a rookie-comps drill-down). `GET /rookies` returned **every rookie once
+per trained model version** — `rookie_predictions` is legitimately keyed on
+(player, draft_class, model_version), and the ablation made that several versions, so Ashton
+Jeanty appeared three times with three different numbers. It reads as duplicate players, not as
+alternative models. The endpoint now filters to the production `FEATURE_VERSION` by default, with
+an optional `model_version` query param to inspect an arm. No test covered this and none would
+have: it only appears once more than one arm has been trained against the same database.
+
 Finally, D38 left a trap: `features build-college-usage` must run **between** `identity build`
 and `features build`, because `features build` is what joins `college_usage` into
 `rookie_features`. Running it after instead leaves the columns NULL, which `data.py` imputes to

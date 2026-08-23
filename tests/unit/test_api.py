@@ -247,3 +247,50 @@ class TestHealth:
         ]
         assert len(rows) == 1
         assert rows[0]["status"] == "AVAILABLE"
+
+
+class TestRookiesModelVersionFiltering:
+    """docs/DECISIONS.md D39: `rookie_predictions` holds one row per
+    (player, draft_class, model_version), and since the college-production ablation that is
+    several versions -- the production feature set plus each experimental arm. The endpoint
+    must serve ONE of them, or every rookie appears once per arm and reads as duplicate
+    players. Found by running the real API against a real database; no test covered it."""
+
+    def _seed_prediction(self, con, player_id, model_version, points):
+        con.execute(
+            """
+            INSERT INTO rookie_predictions
+                (prediction_id, player_id, draft_class, position, model_version,
+                 predicted_rookie_points, breakout_probability, predicted_at)
+            VALUES (?, ?, 2025, 'RB', ?, ?, 0.5, current_timestamp)
+            """,
+            [f"rp_{player_id}_{model_version}", player_id, model_version, points],
+        )
+
+    def test_defaults_to_the_production_model_version_only(self, con, client):
+        from alpha_squad.models.rookie.features import FEATURE_VERSION
+
+        _seed_player(con, "r1", "Rookie One", "RB")
+        self._seed_prediction(con, "r1", FEATURE_VERSION, 200.0)
+        self._seed_prediction(con, "r1", "rookie_features_v2_college", 111.0)
+        self._seed_prediction(con, "r1", "some_stale_version", 222.0)
+
+        rows = client.get("/rookies?draft_class=2025").json()
+
+        assert len(rows) == 1, "one row per player, not one per trained arm"
+        assert rows[0]["model_version"] == FEATURE_VERSION
+        assert rows[0]["predicted_rookie_points"] == 200.0
+
+    def test_an_ablation_arm_can_still_be_inspected_explicitly(self, con, client):
+        from alpha_squad.models.rookie.features import FEATURE_VERSION
+
+        _seed_player(con, "r1", "Rookie One", "RB")
+        self._seed_prediction(con, "r1", FEATURE_VERSION, 200.0)
+        self._seed_prediction(con, "r1", "rookie_features_v2_college", 111.0)
+
+        rows = client.get(
+            "/rookies?draft_class=2025&model_version=rookie_features_v2_college"
+        ).json()
+
+        assert len(rows) == 1
+        assert rows[0]["predicted_rookie_points"] == 111.0

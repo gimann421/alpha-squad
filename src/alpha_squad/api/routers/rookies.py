@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, Query
 from alpha_squad.api.deps import get_db
 from alpha_squad.api.schemas import RookieComp, RookieRow
 from alpha_squad.models.rookie.comps import find_historical_comps
+from alpha_squad.models.rookie.features import FEATURE_VERSION
 
 router = APIRouter(prefix="/rookies", tags=["rookies"])
 
@@ -18,10 +19,20 @@ def get_rookies(
     draft_class: int = Query(...),
     position: str | None = Query(None),
     limit: int = Query(50, le=500),
+    model_version: str = Query(
+        FEATURE_VERSION,
+        description="Which trained feature set to serve. Defaults to the production one; "
+        "pass an ablation arm's version to inspect it.",
+    ),
     con: duckdb.DuckDBPyConnection = Depends(get_db),
 ) -> list[RookieRow]:
-    where = ["r.draft_class = ?"]
-    params: list = [draft_class]
+    # `rookie_predictions` legitimately holds one row per (player, class, model_version), and
+    # since D39's ablation that is several versions -- the production feature set plus each
+    # experimental arm. Without this filter the endpoint returned every rookie once per arm,
+    # which reads as duplicate players rather than as alternative models. Found by running the
+    # real API against a real database, not by any test.
+    where = ["r.draft_class = ?", "r.model_version = ?"]
+    params: list = [draft_class, model_version]
     if position:
         where.append("r.position = ?")
         params.append(position)
