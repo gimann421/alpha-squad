@@ -799,3 +799,52 @@ endpoint). This decision entry, `docs/TRACEABILITY.md`, and `docs/PROJECT_STATE.
 updated with the real result once a real league id is supplied and this live test actually
 runs — until then, `source: sleeper` registry entries are implemented-but-unverified, the
 same honest status this project gives every source before its first real-data check.
+
+## D34 — D33's Sleeper field mapping live-verified against two real leagues; both registered
+
+The user supplied two real Sleeper league ids. `tests/integration/test_sleeper_league_context_live.py`
+run against both, for real:
+
+- `1395093181141381120` ("Dilworth"): 12-team redraft, 1QB, PPR, 2 FLEX, 5-man bench, $200 FAAB.
+- `1326428555382394880` ("The Boys of Fall"): 10-team dynasty, 2QB/superflex, PPR, 2 FLEX,
+  15-man bench, $100 FAAB — structurally close to `target_league.yaml`'s assumed defaults.
+
+Both passed cleanly, including `unrecognized_flex_slots == []` — the specific check D33 flagged
+as unverified. This confirms the `SUPER_FLEX` fix (and the rest of `FLEX_ELIGIBILITY`) against
+real data, not just the documented API shape. Both are now registered in
+`config/league_configs/registry.yaml` as `source: sleeper` entries (keys `dilworth`,
+`boys_of_fall`), hydrated live on every call exactly like `target_league`. `source: sleeper`
+registry entries move from "implemented-but-unverified" to verified as of this entry.
+
+## D35 — Real API key values were committed to `.env.example` on `main`, in a public repo; rotated the intent (fixed the file; key rotation itself is on the user), added a durable guardrail
+
+The user asked where to put `FANTASYPROS_API_KEY`/`CFBD_API_KEY` and was told: a local
+gitignored `.env`, or this deployment's own env-var configuration — never a tracked file. They
+instead added real values directly to `.env.example`, which is deliberately the one `.env.*`
+pattern `.gitignore` carves back out as tracked (it is the template other contributors copy
+from). The values were committed (`aea0be4`, directly to `main`, outside this branch) and
+pushed. This repo is public, so both keys were live-exposed on the public internet from that
+push until the fix below — real-world credential scanners routinely pick up exactly this
+pattern within minutes, so the values must be treated as compromised regardless of any repo
+cleanup.
+
+Fix, with the user's explicit go-ahead (pushing to `main` is outside this project's designated
+branch and requires it): a follow-up commit (`aa9e841`) restored the two lines to empty
+placeholders, byte-for-byte matching the pre-leak version (diffed against the merge commit to
+confirm no other drift). Push straight to `main` was fast-forward-safe (`aa9e841` descends from
+the branch's merged tip via the earlier PR's merge commit), so no history rewrite was needed for
+the file fix itself. The user was offered, and declined, a full `git filter-repo` + force-push
+history purge — a strictly more invasive operation than removing the live value (it rewrites
+shared history and would have orphaned every existing clone, including this session's own),
+and one that still would not undo the actual exposure; rotating the key at the provider is the
+only real remediation, which the file fix cannot do on the user's behalf. The user was told
+directly, more than once, to rotate/regenerate both keys at FantasyPros and CFBD; whether they
+have is outside what this repo can verify.
+
+This project's designated branch (`claude/alpha-squad-plan-qhpg3r`) was then restarted from the
+fixed `main` tip per this session's own merged-PR-branch-restart rule, rather than left pointing
+at the pre-fix commit.
+
+Durable guardrail added directly in `.env.example` (not just this log entry, so it survives
+independently of any one session's memory): an explicit comment stating the file is tracked,
+real values must never go here, and pointing at this entry.

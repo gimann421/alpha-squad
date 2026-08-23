@@ -582,22 +582,30 @@ codebase's own `FLEX_ELIGIBILITY` registry: Sleeper's real superflex slot is spe
 a new unit test, not live data, and fixed additively (both spellings now registered, so no
 existing manual YAML using the unspaced form breaks).
 
-**Honesty about verification status:** the Sleeper hydration logic is unit-tested against a
-realistic fixture built from Sleeper's documented public API shape, and the code path is real and
-wired end to end — but it has NOT yet been run against a real Sleeper league, because the user
-has not yet supplied a real league ID despite indicating they would. A live test
-(`tests/integration/test_sleeper_league_context_live.py`) is written and ready: it skips itself
-with a clear message unless `ALPHA_SQUAD_TEST_SLEEPER_LEAGUE_ID` is set, and specifically asserts
-`unrecognized_flex_slots == []` — the exact check that would catch the `SUPER_FLEX`-style mistake
-for real, not just plausibly. Until that runs, treat the Sleeper field mapping as implemented and
-tested-as-far-as-possible, not as confirmed-correct-against-real-data.
-
 11 new offline tests (222 total: 6 `resolve_league`/registry unit tests, 4 Sleeper-context
-mapping unit tests, 1 API registry test) and 1 new live network test (40 total, currently
-skipped pending a real league ID).
+mapping unit tests, 1 API registry test) and 1 new live network test (40 total).
+
+**Update (D34, same day):** the user supplied two real Sleeper league ids. The live test above
+ran against both for real and passed, including `unrecognized_flex_slots == []` — confirming the
+`SUPER_FLEX` fix (and the rest of `FLEX_ELIGIBILITY`) against real data, not just the documented
+API shape. Both are now registered (`dilworth`: 12-team redraft/1QB/PPR; `boys_of_fall`: 10-team
+dynasty/2QB/PPR) and switchable exactly like `target_league`. The Sleeper field mapping is no
+longer "implemented but unverified" — it is verified.
+
+**Update (D35, same day):** separately, real `FANTASYPROS_API_KEY`/`CFBD_API_KEY` values were
+briefly committed to the tracked `.env.example` on `main` (a mistake, not this project's design —
+the intended path is a gitignored `.env` or the deployment's own env-var config) and, since this
+repo is public, were live-exposed until fixed. Fixed on `main` (`aa9e841`, restoring placeholders,
+with the user's explicit go-ahead since `main` is outside this project's designated branch) and a
+durable guardrail comment added directly in `.env.example` itself. The user was told to rotate
+both keys at their providers regardless of the repo fix, since a repo-side fix cannot undo a
+credential already having been public. See D35 for the full account.
 
 **Still not built:** manual/non-Sleeper league configs for the user's other leagues — needs the
-actual league details (teams, scoring, roster slots) from the user, not supplied yet.
+actual league details (teams, scoring, roster slots) from the user, not supplied yet. Direct
+FantasyPros/CFBD access — keys were set via this deployment's env-var config, but not yet
+confirmed picked up by a running container (env-var changes apply to new containers, not ones
+already running); pending confirmation from a fresh session.
 
 ## Known limitations (see docs/DECISIONS.md for full reasoning)
 - **Update (D31, 2026-08-22):** the line below described the environment as it stood through
