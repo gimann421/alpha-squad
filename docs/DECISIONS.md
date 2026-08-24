@@ -1279,3 +1279,34 @@ here since the direction never flipped). SELL was genuinely mixed: correctly neg
 Reported as-is, not smoothed over, per CLAUDE.md's no-hidden-failure rule; the model was not
 re-tuned against this result. `docs/TRACEABILITY.md`'s Market/EDGE row updated to point at both
 reports and summarize the current numbers instead of a stale prior claim ("3 of 4 seasons").
+
+## D42 — P0 security follow-up: no history rewrite performed (already decided in D35); added a durable CI guardrail instead
+
+`docs/CURRENT_STATE_AUDIT.md`'s P0 flagged the D35 leaked-key exposure as still live in Git
+history and asked for either a history rewrite with explicit user sign-off, or an explicit
+documented decision not to. Re-reading D35 itself: **that decision was already made** --
+the user was offered a full `git filter-repo` + force-push history purge at the time and
+**explicitly declined it**, on the reasoning that it is strictly more invasive than the file fix
+(rewrites shared history, orphans every existing clone) and still would not undo the actual
+exposure (only provider-side key rotation does that, which is outside what this repo can verify
+or perform). The user was told directly, more than once, to rotate both keys at FantasyPros and
+CFBD. Nothing in this session changes that picture or reopens that decision -- there is no new
+information here that would justify re-litigating a decision the user already made, and this
+autonomous session does not have standing to perform a destructive, irreversible, shared-history
+rewrite on its own initiative regardless. **No history rewrite was performed.**
+
+What *is* new and safe: a durable, non-destructive guardrail against a repeat. Added
+`scripts/check_no_secrets.py` (`make check-secrets`, now part of `make lint`, so CI enforces it
+on every push/PR): scans every git-tracked `*.env.example` file for a secret-shaped key
+(`*_KEY`/`*_SECRET`/`*_TOKEN`/`*_PASSWORD`/`*_CREDENTIAL`) with a non-empty value and fails the
+build if it finds one -- verified against a synthetic fixture that reproduces D35's exact
+pattern (real key committed to `.env.example`) and confirmed it catches it (exit 1). Unit-tested
+(`tests/unit/test_check_no_secrets.py`, 5 cases; one real bug in the first draft -- an anchored
+`.match()` where a `.search()`-on-suffix was needed -- was caught by these tests before commit,
+not after). Also fixed `.env.example`'s stale D33/D34 cross-reference (should have been D35) and
+its stale "Sleeper/FantasyPros/CFBD blocked by egress policy" note, both superseded by D36/D37.
+
+This closes the "was a decision even made" ambiguity the audit raised (yes, in D35) and adds a
+guardrail so the same failure mode can't recur silently. It does not and cannot verify whether
+the user has actually rotated the two leaked keys at their respective providers -- that remains
+outside what this repo can check, exactly as D35 already stated.

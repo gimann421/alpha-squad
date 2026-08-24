@@ -1,4 +1,4 @@
-.PHONY: install test test-network test-cov lint fmt ingest identity college-usage features market train evaluate edge simulate orchestrate serve serve-web clean
+.PHONY: install test test-network test-cov lint fmt check-secrets ingest identity college-usage features market train evaluate edge simulate orchestrate serve serve-web clean
 
 install:
 	uv sync --extra dev
@@ -13,7 +13,12 @@ test-network:
 test-cov:
 	uv run pytest --cov=alpha_squad --cov-report=term-missing
 
-lint:
+# D35: a real API key was once committed directly to .env.example. check-secrets fails the
+# build if any tracked *.env.example file has a non-empty secret-shaped value again.
+check-secrets:
+	uv run python scripts/check_no_secrets.py
+
+lint: check-secrets
 	uv run ruff check src tests
 	uv run ruff format --check src tests
 

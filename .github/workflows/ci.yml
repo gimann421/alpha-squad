@@ -22,6 +22,9 @@ jobs:
       - name: Install dependencies
         run: make install
 
+      # `make lint` runs `check-secrets` first (docs/DECISIONS.md D35/D41: a real API key was
+      # once committed directly to .env.example) -- a real secret-shaped value in a tracked
+      # *.env.example file fails CI here before ruff even runs.
       - name: Lint
         run: make lint
 
