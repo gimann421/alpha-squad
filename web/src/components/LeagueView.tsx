@@ -28,6 +28,10 @@ export function LeagueView() {
   const [decisionError, setDecisionError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
+  const [rosterNeed, setRosterNeed] = useState<Record<string, number> | null>(null);
+  const [rosterNeedError, setRosterNeedError] = useState<string | null>(null);
+  const [rosterNeedLoading, setRosterNeedLoading] = useState(false);
+
   useEffect(() => {
     api
       .listLeagues()
@@ -59,7 +63,24 @@ export function LeagueView() {
       .then(setContext)
       .catch((e) => setError(String(e)))
       .finally(() => setLoading(false));
+    // Switching leagues invalidates any roster-need read from the previous league's lineup.
+    setRosterNeed(null);
+    setRosterNeedError(null);
   }, [leagueId]);
+
+  async function checkRosterNeed() {
+    if (!leagueId) return;
+    setRosterNeedLoading(true);
+    setRosterNeedError(null);
+    try {
+      const result = await api.getRosterNeed(leagueId, rosterPositions);
+      setRosterNeed(result.need);
+    } catch (e) {
+      setRosterNeedError(String(e));
+    } finally {
+      setRosterNeedLoading(false);
+    }
+  }
 
   async function runDraft() {
     if (!leagueId) return;
@@ -139,14 +160,48 @@ export function LeagueView() {
         )}
       />
 
+      <h3>Roster need</h3>
+      <p className="muted">
+        Calls the same `roster_need` the draft and waiver recommendations use internally
+        (`league/roster.py`) — a positive score means the roster can't yet fill that position's
+        starting slots, a small positive score means thin bench depth, and a negative score
+        means the position is already saturated beyond a healthy bench.
+      </p>
+      <div className="controls">
+        <label>
+          Roster positions (used below for roster need and the draft recommendation){" "}
+          <input value={rosterPositions} onChange={(e) => setRosterPositions(e.target.value)} placeholder="QB,RB" />
+        </label>
+        <button onClick={checkRosterNeed} disabled={rosterNeedLoading || !leagueId}>
+          {rosterNeedLoading ? "Checking…" : "Check roster need"}
+        </button>
+      </div>
+      {rosterNeedError && <p className="error">Error: {rosterNeedError}</p>}
+      {rosterNeed && (
+        <div className="card">
+          <table>
+            <thead>
+              <tr>
+                <th>Position</th>
+                <th>Need score</th>
+              </tr>
+            </thead>
+            <tbody>
+              {Object.entries(rosterNeed).map(([pos, need]) => (
+                <tr key={pos}>
+                  <td>{pos}</td>
+                  <td>{need.toFixed(2)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
       <h3>Draft recommendation</h3>
       <div className="controls">
         <label>
           Season <input type="number" value={season} onChange={(e) => setSeason(Number(e.target.value))} />
-        </label>
-        <label>
-          Roster positions{" "}
-          <input value={rosterPositions} onChange={(e) => setRosterPositions(e.target.value)} placeholder="QB,RB" />
         </label>
         <label>
           Next pick #{" "}

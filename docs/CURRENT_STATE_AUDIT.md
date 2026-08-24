@@ -50,20 +50,22 @@ model version. Second, the **agent/orchestrator layer is real engineering (genui
 disagreement detector) wrapped around agents that are thin wrappers calling pre-existing M1–M10
 pipeline functions** — there is no real task decomposition/planning intelligence, so calling it a
 "multi-agent system" overstates what it is; it is a well-built parallel pipeline scheduler. Third,
-several fully-built, fully-tested capabilities are **invisible in the actual application**: the
-Monte Carlo team-season simulator, and the waiver/trade/roster-need decision engines, exist, pass
-tests, and (per the league-engine sub-audit) have even been exercised against real data — but are
-not reachable from the UI, and only one decision (a single draft-pick recommendation) has ever been
-persisted to `decisions` in this deployment's history. There is also a live, unresolved **security
-exposure**: real API keys from the previously-documented D35 leak remain permanently retrievable
-from Git history (see §23).
+one fully-built, fully-tested capability is still **invisible in the actual application**: the
+Monte Carlo team-season simulator exists, passes tests, and has been exercised against real data,
+but is not reachable from the UI (no API endpoint exists for it at all). This was previously true of
+the waiver/trade/roster-need decision engines too — **D44 (`docs/DECISIONS.md`) closed that gap**,
+wiring all three into the SPA and live-verifying real recommendations against a real Sleeper league;
+draft, waiver, trade, and roster-need are now all reachable from the app. There is also a live,
+unresolved **security exposure**: real API keys from the previously-documented D35 leak remain
+permanently retrievable from Git history (see §23).
 
 Nothing here is fabricated data, and no primary time-series split violates the walk-forward rule —
 the project's stated non-negotiables hold. The gap between "the pipeline can prove CatBoost beats a
 baseline" and "a user can open the app and get a trustworthy, personalized decision for their real
-league" is smaller than it was at session start, but it is not closed: usage evidence (real decisions
-ever recorded) is thin, and the pieces that would make the recommendation loop feel complete to an
-end user — simulation, waiver/trade UI, a served model — are the ones still missing from the surface.
+league" is smaller than it was at session start, and is now smaller still after D44: usage evidence
+(real decisions ever recorded) is thin, and the pieces that would make the recommendation loop feel
+complete to an end user — a simulation-based team outlook, a served model — are the ones still
+missing from the surface.
 
 ## 5. Requirements coverage (ACCEPTANCE_CRITERIA.md, line-by-line)
 
@@ -79,8 +81,8 @@ end user — simulation, waiver/trade UI, a served model — are the ones still 
 | Evidence/provenance explains material outliers | IMPLEMENTED/UNVERIFIED | Evidence detectors real (§16); "explains outliers" specifically not demonstrated end-to-end |
 | League-specific recommendations | COMPLETE/VERIFIED | Draft/waiver/trade all verified live against a real Sleeper league this session (§17–18) |
 | Draft decisions | COMPLETE/VERIFIED | `draft.py::recommend_draft_pick`, live-tested |
-| Waiver/FAAB decisions | COMPLETE/VERIFIED (code) / thin (usage) | `waiver.py`, live-tested; zero real `waiver_bid` decisions ever recorded |
-| Roster-aware decisions | COMPLETE/VERIFIED (code), NOT IMPLEMENTED (UI) | Roster-fit math is real; no UI surface calls it (§20) |
+| Waiver/FAAB decisions | COMPLETE/VERIFIED | `waiver.py`, live-tested; D44 wired it into `WaiverView.tsx` and recorded real `waiver_bid` decisions from the UI (previously zero) |
+| Roster-aware decisions | COMPLETE/VERIFIED | Roster-fit math is real; D44 added a UI surface (`LeagueView.tsx`'s "Roster need" section) that calls it (§20) |
 | Recommendation changes are explainable | IMPLEMENTED/UNVERIFIED | `reasons` lists exist on draft/waiver/EDGE outputs; no dedicated "what changed and why" view |
 
 ### Data
@@ -197,13 +199,13 @@ end user — simulation, waiver/trade UI, a served model — are the ones still 
 ### Application/interface
 | Item | Status | Evidence |
 |---|---|---|
-| Interface exposes the validated player intelligence | COMPLETE/VERIFIED | 6-tab SPA, thin projection over API, no logic duplication (UI/API sub-audit) |
+| Interface exposes the validated player intelligence | COMPLETE/VERIFIED | 8-tab SPA (D44 added Waiver/Trade), thin projection over API, no logic duplication (UI/API sub-audit) |
 | EDGE/evidence can be inspected | COMPLETE/VERIFIED | EDGE and Evidence tabs |
 | Rookie evaluation can be inspected | COMPLETE/VERIFIED | Rookies tab, incl. real historical comps on click |
 | League context can be loaded | COMPLETE/VERIFIED | League tab, live-tested against real Sleeper league |
-| Roster-aware recommendations can be generated | PARTIAL | Real server-side logic; per UI/API sub-audit, no wired client view actually calls it |
-| Draft/waiver/FAAB recommendations can be generated | PARTIAL | Draft path reachable; waiver/trade endpoints exist server-side (and client-side helpers exist) but are **not wired into any view** |
-| Recommendation explanations show relevant evidence/provenance | IMPLEMENTED/UNVERIFIED | `reasons` fields exist in payloads; not confirmed rendered everywhere they're returned |
+| Roster-aware recommendations can be generated | COMPLETE/VERIFIED | D44: `LeagueView.tsx`'s "Roster need" section calls `GET /league/{id}/roster` and renders the real `need` map; live-tested against `dilworth` (real Sleeper league) |
+| Draft/waiver/FAAB recommendations can be generated | COMPLETE/VERIFIED | D44: `WaiverView.tsx` (new) and `TradeView.tsx` (new) now wire `postWaiver`/`postTrade` into reachable tabs, alongside the pre-existing draft form; all three live-tested against `dilworth` (real Sleeper league, season 2025) with real recommendations and reasons rendered |
+| Recommendation explanations show relevant evidence/provenance | IMPLEMENTED/UNVERIFIED | D44 newly confirms `reasons` renders in all three league-decision views (draft, waiver, trade); still not independently re-confirmed for every other view (Rankings/EDGE/Evidence/Rookies) this session, so the broader status is left as-is rather than overclaimed |
 | UI does not duplicate or bypass core model/decision logic | COMPLETE/VERIFIED | Confirmed by UI/API sub-audit: clean thin-projection architecture |
 
 ---
@@ -248,7 +250,7 @@ that description reasonably well, short of real task decomposition (see §19).
 | `src/alpha_squad/league/` | context/decisions/draft/replacement/trade/waiver | Real, live-verified against a real Sleeper league this session |
 | `src/alpha_squad/agents/` | contracts/registry/orchestrator/disagreement/state | Real scheduler engineering; agents are thin pipeline wrappers |
 | `src/alpha_squad/api/` | FastAPI routers per domain | Real, thin, no logic duplication |
-| `web/` | React/Vite/TS SPA, 6 tabs | Real; some server capabilities (waiver/trade/roster-need) unwired |
+| `web/` | React/Vite/TS SPA, 8 tabs | Real; D44 wired waiver/trade/roster-need — simulation remains server-only, no API/UI exposure |
 | `tests/{unit,leakage,contracts,integration,e2e}/` | 259 offline + 42 network-marked | All offline tests pass; leakage/contracts genuinely adversarial |
 | `docs/` | DATA_SOURCES, DECISIONS (append-only), PROJECT_STATE, TRACEABILITY | Living, mostly current |
 | `.github/workflows/ci.yml` | Lint + offline test on push/PR | Real, minimal (no network-marked tests, no deploy step) |
@@ -376,8 +378,12 @@ PRODUCT_SPEC.md. Trade/dynasty (`trade.py`) uses real dynasty market value and a
 age-curve, but never reads `LeagueContext.future_picks` — no future-draft-pick valuation exists, a
 real gap against "dynasty decisions account for future value." Universal/league separation is
 genuinely respected: zero `.fit()`/`.train()` calls anywhere in `league/`. The soft spot is usage,
-not implementation: only one decision (a single `draft_pick`) has ever been persisted in this
-deployment's `decisions` table despite three decision types being fully built and live-verified.
+not implementation: only one decision (a single `draft_pick`) had ever been persisted in this
+deployment's `decisions` table despite three decision types being fully built and live-verified —
+now that the UI actually calls all three (D44), real `waiver_bid` and `dynasty_trade` decisions were
+recorded for the first time this session (against a working copy of the database, not this
+deployment's original `data/alpha_squad.duckdb`, since D44 ran in an isolated worktree with no prior
+ingest of its own).
 
 ## 19. Agent/orchestrator audit
 
@@ -403,13 +409,21 @@ contracts and real concurrency" is accurate.
 Today, a user can: open the SPA and see real projections/rankings (Rankings tab), see real EDGE
 BUY/HOLD/SELL/WATCH classifications with reasons (EDGE tab), see real 2026 rookie projections and
 click through to real historical comps (Rookies tab), see real evidence events (Evidence tab), load a
-real Sleeper league's real context and see a real draft-pick recommendation for it (League tab), and
-check real per-source health status (Source Health tab). The UI/API architecture is clean: thin
-projection over the API with zero logic duplication, and real error-state handling (confirmed: no
-fake-data fallback anywhere). What a user **cannot** currently do from the app: get a waiver/FAAB
-recommendation, get a dynasty trade recommendation, get a simulation-based team outlook, or see a
-roster-need-aware view — all of these exist and are tested server-side (and some client-side helper
-code exists per the UI/API sub-audit) but are not wired into any reachable view.
+real Sleeper league's real context, see a real roster-need breakdown, and see a real draft-pick
+recommendation for it (League tab), get a real FAAB bid recommendation for a specific waiver-wire
+player (new Waiver tab), get a real single-player dynasty buy/hold/sell/watch evaluation (new Trade
+tab), and check real per-source health status (Source Health tab). The UI/API architecture is clean:
+thin projection over the API with zero logic duplication, and real error-state handling (confirmed: no
+fake-data fallback anywhere).
+
+**D44 closed the waiver/trade/roster-need gap** this section previously flagged: `WaiverView.tsx` and
+`TradeView.tsx` (new files) wire the pre-existing, already-tested `postWaiver`/`postTrade` API client
+functions into reachable tabs, and `LeagueView.tsx` gained a "Roster need" section calling the
+pre-existing, already-tested `getRosterNeed`. All three were live-tested this session against the
+real `dilworth` Sleeper league (season 2025) — see D44 in `docs/DECISIONS.md` for the exact
+recommendations/reasons observed. What a user **still cannot** currently do from the app: get a
+simulation-based team outlook — that endpoint/view does not exist yet on either side, server or
+client, and is a genuinely separate gap from the one closed here.
 
 ## 21. Testing/engineering quality
 
@@ -454,9 +468,9 @@ leaked key substrings are intentionally not repeated in this file.
    production-shaped system.
 2. **Leaked API keys still live in Git history** (§23) — unresolved security exposure on a
    public-facing remote.
-3. **Simulation, waiver, trade, and roster-need capabilities are fully built and tested but invisible
-   in the application** (§20) — real engineering effort that delivers zero end-user value today
-   because nothing routes to it.
+3. **Simulation is fully built and tested but invisible in the application** (§20) — real engineering
+   effort that delivers zero end-user value today because no API endpoint or UI routes to it. (D44
+   closed this same gap for waiver, trade, and roster-need — see `docs/DECISIONS.md`.)
 4. **No committed EDGE historical-backtest report** (§15) — the evaluation ran, the artifact wasn't
    kept, so the claim "EDGE performance is evaluated" currently rests on trust rather than a
    reviewable document.
@@ -479,7 +493,7 @@ leaked key substrings are intentionally not repeated in this file.
 | Historical EDGE performance evaluated (PRODUCT_SPEC.md) | A documented backtest a reader can check | Backtest was run once; no artifact committed | Claim currently unverifiable from the repo alone | Medium |
 | Evidence materially influences projections (PRODUCT_SPEC.md) | Evidence adjusts what's actually served | Evidence computed and bounded, but not consumed downstream except as an EDGE veto (usually neutral) | Evidence is closer to "logged" than "acted on" | Medium |
 | Dynasty decisions account for future value (ACCEPTANCE_CRITERIA.md) | Future draft-pick value modeled | Dynasty market value + age heuristic only; `future_picks` field unused | No pick-valuation logic at all | Medium |
-| Waiver/trade/roster-need reachable from the app (ACCEPTANCE_CRITERIA.md, Application section) | Every league decision type usable from the UI | Draft reachable; waiver/trade/roster-need built and tested but unwired | End user cannot actually get 2 of 3 league decision types today | High |
+| Waiver/trade/roster-need reachable from the app (ACCEPTANCE_CRITERIA.md, Application section) | Every league decision type usable from the UI | **RESOLVED (D44):** draft, waiver, trade, and roster-need all wired into the SPA and live-verified against a real Sleeper league | None remaining for these three decision types; simulation (a separate, never-in-scope-for-this-row capability) is still unwired — see §24 item 3 | Closed |
 | Secrets never committed (ARCHITECTURE.md §15) | No API keys ever in tracked history | Current tree clean, but real keys from D35 remain in Git history permanently | Live exposure on a public remote | High |
 
 ## 26. Prioritized backlog (P0–P3)
@@ -489,9 +503,11 @@ sequencing, and acceptance criteria. Summary:
 
 - **P0:** Resolve the leaked-key Git-history exposure (rotate + confirm + decide on history rewrite
   with the user's explicit sign-off, since it's a destructive/irreversible action).
-- **P1:** Wire waiver/trade/roster-need into the UI; commit an EDGE historical-backtest report
-  artifact; add model-artifact persistence (at least for the established/rookie/uncertainty
-  production model versions) so serving doesn't require retraining.
+- **P1:** ~~Wire waiver/trade/roster-need into the UI~~ **done (D44)**; commit an EDGE
+  historical-backtest report artifact; add model-artifact persistence (at least for the
+  established/rookie/uncertainty production model versions) so serving doesn't require retraining;
+  wire the simulation engine into the API/UI (the one remaining "built but invisible" capability,
+  §24 item 3).
 - **P2:** Feed evidence-adjusted projections into the actually-served projection (or explicitly
   document why not); implement future-draft-pick valuation in the trade engine; add the live/network
   suite to CI (even if gated to a scheduled job rather than every PR, given credential requirements).
@@ -507,13 +523,13 @@ sequencing, and acceptance criteria. Summary:
   with real historical comps, real evidence events, and real source-health status.
 - Load a real registered Sleeper league (`dilworth` or `boys_of_fall`) and get a real, league-specific
   draft-pick recommendation with roster-fit reasoning and survival probability (verified live this
-  session).
-- Call the waiver and trade recommendation logic directly (via CLI or a direct API call) and get a
-  real FAAB bid or a real dynasty-trade evaluation — just not from a UI button.
+  session), and — as of D44 — a real waiver FAAB-bid recommendation, a real dynasty trade evaluation,
+  and a real roster-need breakdown, all from UI buttons on the Waiver/Trade/League tabs (verified live
+  against `dilworth` this session: see `docs/DECISIONS.md` D44 for the exact numbers observed).
 - Run the full offline test suite, lint, and format checks and trust the result (all currently green).
 - **Cannot** currently: get a served prediction without retraining in-process; trust "EDGE is
-  historically validated" without re-running the backtest yourself; get a waiver/trade recommendation
-  from the UI; assume a decision, once made, has actually been used before (only one ever has).
+  historically validated" without re-running the backtest yourself; get a simulation-based team
+  outlook from anywhere (no API endpoint exists for it, UI or otherwise).
 
 ## 28. Bottom line
 
@@ -522,31 +538,34 @@ features → established ML → uncertainty → rookie ML → market/EDGE) is re
 baselines with fresh, honestly-computed evidence. The league-specific decision layer is also real and
 live-verified against an actual Sleeper league — this is well past "Early Functional System." It is
 not yet "Production Candidate" because there is no model-serving path (every prediction requires
-retraining), two of three league-decision types are invisible in the UI, and a real security exposure
-is unresolved.
+retraining), the simulation capability is invisible in the UI, and a real security exposure is
+unresolved. (As of D44, this is an improvement over the prior draft of this audit: waiver, trade, and
+roster-need — the other two of the original three invisible league-decision types — are now wired in
+and live-verified.)
 
 **Completion percentage: roughly 65–70%** of ACCEPTANCE_CRITERIA.md's items land at COMPLETE/VERIFIED
-in §5's table above; most of the remainder is IMPLEMENTED/UNVERIFIED or PARTIAL rather than STUB or
-NOT IMPLEMENTED — the gaps are concentrated (serving/persistence, UI wiring, evidence consumption,
-security), not distributed evenly across the system.
+in §5's table above (higher now that D44 moved the Application/interface rows in §5 off PARTIAL);
+most of the remainder is IMPLEMENTED/UNVERIFIED or PARTIAL rather than STUB or NOT IMPLEMENTED — the
+gaps are concentrated (serving/persistence, simulation UI wiring, evidence consumption, security), not
+distributed evenly across the system.
 
 **Strongest component:** the established-player ML pipeline and its walk-forward evaluation
 methodology — genuinely leakage-safe, genuinely outperforms baselines, freshly re-verified this
 session with real numbers, not carried forward on trust.
 
-**Weakest component (as delivered to a user, not as code):** the application surface for
-league-specific decisions beyond draft — waiver, trade, and roster-need logic are real and tested but
-completely unreachable from the UI, so most of what PRODUCT_SPEC.md's league-optimizer section
-promises is invisible to an actual user today.
+**Weakest component (as delivered to a user, not as code):** the simulation capability — a real,
+tested Monte Carlo team-season engine with no API endpoint and no UI surface at all, so none of
+PRODUCT_SPEC.md's simulation-based outlook is reachable by an actual user today. (Waiver, trade, and
+roster-need held this position in the prior draft of this audit; D44 closed that gap.)
 
 **Biggest thing not to trust without re-checking:** any claim that EDGE is "historically validated" —
 the backtest happened once and its results are not preserved anywhere in the repo for a reader to
 verify.
 
-**Most important next thing to build:** wire the waiver, trade, and roster-need endpoints into the
-web UI — the server-side logic already exists and is tested, so this is the highest-value,
-lowest-risk next increment, and it's the difference between "the app can only really do drafting"
-and "the app does what the league decision engine section of the spec actually promises."
+**Most important next thing to build:** ~~wire the waiver, trade, and roster-need endpoints into the
+web UI~~ — **done, D44.** The next-highest-value, lowest-risk increment in the same spirit is wiring
+the simulation engine (`models/simulation/`) into the API/UI: the server-side logic already exists
+and is tested, exactly the same shape of gap this entry used to describe.
 
 **One recommended next action:** resolve the leaked-credential exposure in Git history (P0) before
 any further public-facing work, since it is the one open item in this audit with real, present harm
