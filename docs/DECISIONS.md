@@ -1254,3 +1254,83 @@ was actually broken (`get is not defined` — I had called a helper that does no
 `tsconfig.json` is a project-references stub and type-checks nothing; the real check is
 `tsc -p tsconfig.app.json`. The error surfaced only when the page was driven in a real browser.
 Worth knowing before trusting a green typecheck here.
+
+## D43 — Wired waiver, trade, and roster-need into the UI (`docs/CURRENT_STATE_AUDIT.md`'s largest Application/interface gap)
+
+The audit found real, tested, live-verified league-decision logic for waiver/FAAB
+(`league/waiver.py::recommend_waiver_pickup`), dynasty trade (`league/trade.py::recommend_dynasty_trade`),
+and roster need (`league/roster.py::roster_need`), all exposed via FastAPI
+(`api/routers/league.py`) and already covered by `api.postWaiver`/`api.postTrade`/`api.getRosterNeed`
+in `web/src/api.ts` — but with no UI view calling any of the three. Only the draft form in
+`LeagueView.tsx` was reachable. Frontend-only change, per the assignment's hard constraint; nothing
+under `src/alpha_squad/` was touched.
+
+**Added `web/src/components/WaiverView.tsx`** (new): league selector (same
+`localStorage`/`listLeagues` pattern as `LeagueView.tsx`, sharing the same
+`alpha-squad:last-league-id` key so the selected league persists across tabs), season/week/player-id/
+roster-positions inputs, calls `api.postWaiver`. The result card labels `expected_value` as
+"Recommended FAAB bid" and `confidence` as "Meaningful-role (top-24) probability" rather than generic
+names, since that's what `post_waiver` actually maps them from (`league.py:142-156`) — a generic
+label would have misrepresented what the number means.
+
+**Added `web/src/components/TradeView.tsx`** (new): same conventions, calls `api.postTrade`. Read
+`league/trade.py::recommend_dynasty_trade`'s real signature first — it evaluates one player's
+age-adjusted dynasty value/EDGE action, not a multi-player trade package — so the form takes a single
+`player_id`, not two "sides" of a trade; the panel's copy says so explicitly rather than implying a
+capability the backend doesn't have. Noticed but did **not** fix (frontend-only constraint): 
+`recommend_dynasty_trade`'s `TradeRecommendation.action` (BUY/HOLD/SELL/WATCH) is computed but never
+copied into `DecisionResponse` by `post_trade` (`league.py:159-184`) — only `player_id`,
+`age_adjusted_value`, and `reasons` cross the API boundary. The action is usually still recoverable
+from the `reasons` text (`market/edge.py`'s gating function prefixes the winning branch's reason with
+`"BUY:"`/`"SELL:"`), but a client that wanted the clean enum value cannot get one today. Flagging
+this as a real, minor backend gap rather than fixing it or fabricating an action badge client-side
+from parsed text.
+
+**`LeagueView.tsx`**: added a "Roster need" section directly under the league-context card, calling
+`api.getRosterNeed(leagueId, rosterPositions)` on a new "Check roster need" button. Reused the
+existing `rosterPositions` input (moved it out of the draft-recommendation controls into this shared
+section, since both the roster-need call and the draft call already read the same state variable) —
+per the assignment, deliberately not duplicated. Renders `need` as a small position/score table.
+Confirmed the draft recommendation still works unchanged after the input's relocation (same
+`recommend_draft_pick` call, same state variable, just moved which JSX block renders the `<input>`).
+
+**`App.tsx`**: registered "Waiver" and "Trade" tabs in `TABS`, same pattern as the existing six.
+
+**Verification.** `npm run build` (`tsc -b && vite build`, the real typecheck per the prior session's
+process note above) and `npm run lint` (oxlint) both clean — zero errors; lint's only output is four
+pre-existing `react/set-state-in-effect` warnings in files this change didn't touch
+(EdgeView/RankingsView/EvidenceView/RookiesView), at 0 exit code.
+
+Then actually drove it: started the real backend (`make serve`, DuckDB copied from the already-
+populated `data/alpha_squad.duckdb`, since this session ran in a fresh worktree with no prior
+ingest) and the real frontend (`npm run dev`), and used Playwright (Chromium at
+`/opt/pw-browsers`, installed into an ephemeral `uv run --with playwright` environment since neither
+the Python nor the Node project had the `playwright` package itself, only the browser binary) against
+the real `dilworth` Sleeper league:
+
+- **Roster need** (`QB,RB,RB,WR,WR,TE`): rendered `QB 0.60, RB 0.60, WR 0.60, TE 0.60, K 1.00, DEF
+  1.00` — real numbers from `roster_need`, not placeholders.
+- **Draft** (season 2025, next pick #10): still recommends `asq_583ef9bed022a35b` with VORP/roster-
+  fit/confidence/survival-probability reasons, unchanged after the input relocation.
+- **Waiver** (season 2025, week 10, `asq_567a2eee58dd0e15` = Derrick Henry, roster `QB,RB`):
+  recommended FAAB bid **$26.66**, meaningful-role probability **0.88**, with real reasons ("marginal
+  value +65.5 pts above RB replacement (139.7)", "competing-bid likelihood 72%", "dynasty value (2QB)
+  1237", etc.).
+- **Trade** (season 2025, `asq_567a2eee58dd0e15`, ecr_type `rsf`): age-adjusted dynasty value **371**,
+  with real reasons including "age 32.6 at RB: age-curve multiplier 0.30 (documented heuristic ...
+  D25)" and "current dynasty value (2QB): 1237".
+
+No console errors on any tab. All four decisions were also confirmed by direct `curl` against the
+running API before and independent of the browser pass, so the browser result reflects the real
+pipeline, not a UI-only mock.
+
+`make test`: **259 passed, 42 deselected** — identical to `docs/CURRENT_STATE_AUDIT.md` §21's
+directly-reproduced baseline (that section's number, not the differing "267" figure quoted second-hand
+in this session's task brief, which does not match anything actually reproducible in this repo at
+this commit). Confirms zero drift under `src/alpha_squad/`, as required — this was a frontend-only
+change.
+
+`docs/TRACEABILITY.md`'s Application/interface section and `docs/CURRENT_STATE_AUDIT.md` §5/§20
+updated to cite this work and retire the PARTIAL status on the two rows this closed; §20 also notes
+the one related gap this did *not* close (a simulation-based team-outlook view — no such endpoint
+exists on either side of the API boundary today, a separate and larger piece of work).

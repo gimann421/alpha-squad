@@ -160,8 +160,8 @@ state at the time each milestone was first built.
 | EDGE/evidence can be inspected | ✅ | `EdgeView.tsx`, `EvidenceView.tsx` |
 | Rookie evaluation can be inspected | ✅ | `RookiesView.tsx` |
 | League context can be loaded | ✅ | `LeagueView.tsx`, `/league/{id}/context` |
-| Roster-aware recommendations can be generated | ✅ | league draft/waiver forms in `LeagueView.tsx` |
-| Draft/waiver/FAAB recommendations can be generated | ✅ | same |
+| Roster-aware recommendations can be generated | ✅ | D43: `LeagueView.tsx`'s "Roster need" section, `GET /league/{id}/roster` — live-tested against `dilworth` (real Sleeper league) |
+| Draft/waiver/FAAB recommendations can be generated | ✅ | D43: draft form in `LeagueView.tsx` (pre-existing) plus new `WaiverView.tsx`/`TradeView.tsx` — all three live-tested against `dilworth` (real Sleeper league, season 2025); prior to D43 this row's citation ("league draft/waiver forms in `LeagueView.tsx`") was inaccurate — only the draft form existed, per `docs/CURRENT_STATE_AUDIT.md`'s UI/API sub-audit |
 | Recommendation explanations show relevant evidence/provenance | ✅ | reasons rendered alongside every recommendation |
 | UI does not duplicate or bypass core model/decision logic | ✅ | D27; every API field traces to a persisted table or a direct M10 function call — verified literally by killing the API process and confirming the UI breaks rather than serving stale data |
 
