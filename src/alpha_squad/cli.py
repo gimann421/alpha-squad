@@ -36,7 +36,12 @@ from alpha_squad.league.replacement import (
     positional_scarcity,
     replacement_level,
 )
-from alpha_squad.league.trade import recommend_dynasty_trade
+from alpha_squad.league.trade import (
+    PickAsset,
+    TradePackageSide,
+    evaluate_trade_package,
+    recommend_dynasty_trade,
+)
 from alpha_squad.league.waiver import recommend_waiver_pickup
 from alpha_squad.market.consensus import build_live_fantasypros_snapshot, build_market_snapshot
 from alpha_squad.market.dynasty_values import build_dynasty_values
@@ -1345,6 +1350,65 @@ def league_trade(
         {"league": league.league_id, "ecr_type": ecr_type},
     )
     console.print(f"decision recorded: [green]{decision_id}[/green]")
+    con.close()
+
+
+def _parse_picks(spec: str) -> list[PickAsset]:
+    """`round[:pick_in_round][:years_out]` entries, comma-separated, e.g. `1:1:0,2::1` = a
+    round-1-pick-1 pick this year plus a round-2 pick (unknown slot) one year out."""
+    picks: list[PickAsset] = []
+    for entry in spec.split(","):
+        entry = entry.strip()
+        if not entry:
+            continue
+        parts = entry.split(":")
+        round_ = int(parts[0])
+        pick_in_round = int(parts[1]) if len(parts) > 1 and parts[1] else None
+        years_out = int(parts[2]) if len(parts) > 2 and parts[2] else 0
+        picks.append(PickAsset(round=round_, pick_in_round=pick_in_round, years_out=years_out))
+    return picks
+
+
+@league_app.command("trade-package")
+def league_trade_package(
+    season: int = typer.Option(..., help="Season"),
+    side_a_players: str = typer.Option("", help="Comma-separated player_ids on side A"),
+    side_a_picks: str = typer.Option(
+        "", help="Comma-separated `round[:pick_in_round][:years_out]`, e.g. '1:1:0,2::1'"
+    ),
+    side_b_players: str = typer.Option("", help="Comma-separated player_ids on side B"),
+    side_b_picks: str = typer.Option("", help="Same format as --side-a-picks"),
+    ecr_type: str = typer.Option(DEFAULT_ECR_TYPE, help="Market series EDGE was built against"),
+    league: str = typer.Option(
+        DEFAULT_LEAGUE_ID, help="Registered league id to use (see `alpha-squad league list`)"
+    ),
+) -> None:
+    """Real multi-asset trade comparison (D45): players + future draft picks on each side,
+    summed on the same value_2qb scale `league trade` already uses. Pick values are a
+    documented heuristic (round/slot/years-out, not fit from data -- see docs/DECISIONS.md D45);
+    `LeagueContext.future_picks` is not read here since it is always empty in this deployment."""
+    settings = get_settings()
+    con = get_connection(settings)
+    init_db(con)
+    resolved_league = resolve_league(league, con=con, settings=settings)
+
+    side_a = TradePackageSide(
+        player_ids=[p.strip() for p in side_a_players.split(",") if p.strip()],
+        picks=_parse_picks(side_a_picks),
+    )
+    side_b = TradePackageSide(
+        player_ids=[p.strip() for p in side_b_players.split(",") if p.strip()],
+        picks=_parse_picks(side_b_picks),
+    )
+    result = evaluate_trade_package(con, side_a, side_b, season, resolved_league.teams, ecr_type)
+
+    console.print(f"Side A value: [green]{result.side_a_value:.0f}[/green]")
+    for r in result.side_a_reasons:
+        console.print(f"  - {r}")
+    console.print(f"Side B value: [green]{result.side_b_value:.0f}[/green]")
+    for r in result.side_b_reasons:
+        console.print(f"  - {r}")
+    console.print(f"\n[bold]Favors: {result.favors}[/bold] (delta: {result.delta:+.0f})")
     con.close()
 
 

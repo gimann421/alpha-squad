@@ -208,6 +208,37 @@ class TestLeague:
         )
         assert r.status_code == 422
 
+    def test_trade_package_endpoint_calls_the_real_evaluate_trade_package(self, con, client):
+        con.execute(
+            "INSERT INTO dynasty_values (player_id, scrape_date, age, value_2qb, updated_at) "
+            "VALUES ('star', '2026-08-01', 24.0, 9000, current_timestamp)"
+        )
+        con.execute(
+            "INSERT INTO dynasty_values (player_id, scrape_date, age, value_2qb, updated_at) "
+            "VALUES ('scrub', '2026-08-01', 30.0, 50, current_timestamp)"
+        )
+        r = client.post(
+            "/league/target_league/trade-package",
+            json={
+                "season": 2025,
+                "side_a": {"player_ids": ["star"], "picks": []},
+                "side_b": {"player_ids": ["scrub"], "picks": [{"round": 1, "pick_in_round": 1}]},
+            },
+        )
+        assert r.status_code == 200
+        body = r.json()
+        assert body["side_a_value"] > 0
+        assert body["side_b_value"] > 0
+        assert body["favors"] in ("side_a", "side_b", "even")
+        assert body["side_a_reasons"] and body["side_b_reasons"]
+
+    def test_trade_package_unknown_league_404s(self, client):
+        r = client.post(
+            "/league/not-a-real-league/trade-package",
+            json={"season": 2025, "side_a": {}, "side_b": {}},
+        )
+        assert r.status_code == 404
+
 
 class TestProvenance:
     def test_unknown_id_reports_not_found_rather_than_erroring(self, client):

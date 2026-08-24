@@ -22,7 +22,14 @@ from alpha_squad.league.replacement import (
     replacement_level,
 )
 from alpha_squad.league.roster import roster_fit_multiplier, roster_need
-from alpha_squad.league.trade import age_curve_multiplier, recommend_dynasty_trade
+from alpha_squad.league.trade import (
+    PickAsset,
+    TradePackageSide,
+    age_curve_multiplier,
+    evaluate_trade_package,
+    pick_value,
+    recommend_dynasty_trade,
+)
 from alpha_squad.league.waiver import recommend_waiver_pickup
 from alpha_squad.models.uncertainty.run import MODEL_VERSION as UNCERTAINTY_MODEL_VERSION
 from alpha_squad.storage.db import init_db
@@ -379,3 +386,91 @@ class TestRecommendDynastyTrade:
         )
         rec = recommend_dynasty_trade(con, "p1", 2025)
         assert rec.action == "WATCH"
+
+
+class TestPickValue:
+    """D45: future-draft-pick valuation, a documented heuristic on the same value_2qb scale."""
+
+    def test_earlier_round_is_worth_more_than_later_round(self):
+        v1, _ = pick_value(round_=1, teams=10, pick_in_round=6)
+        v2, _ = pick_value(round_=2, teams=10, pick_in_round=6)
+        v3, _ = pick_value(round_=3, teams=10, pick_in_round=6)
+        assert v1 > v2 > v3 > 0
+
+    def test_earlier_slot_within_round_is_worth_more(self):
+        first, _ = pick_value(round_=1, teams=10, pick_in_round=1)
+        last, _ = pick_value(round_=1, teams=10, pick_in_round=10)
+        assert first > last > 0
+
+    def test_further_out_years_are_worth_less(self):
+        this_year, _ = pick_value(round_=1, teams=10, pick_in_round=1, years_out=0)
+        next_year, _ = pick_value(round_=1, teams=10, pick_in_round=1, years_out=1)
+        two_years, _ = pick_value(round_=1, teams=10, pick_in_round=1, years_out=2)
+        assert this_year > next_year > two_years > 0
+
+    def test_unknown_slot_uses_round_midpoint_between_first_and_last(self):
+        unknown, _ = pick_value(round_=1, teams=10, pick_in_round=None)
+        first, _ = pick_value(round_=1, teams=10, pick_in_round=1)
+        last, _ = pick_value(round_=1, teams=10, pick_in_round=10)
+        assert last < unknown < first
+
+    def test_reason_string_discloses_this_is_a_heuristic_not_a_trained_model(self):
+        _, reason = pick_value(round_=1, teams=10, pick_in_round=1)
+        assert "heuristic" in reason
+        assert "D45" in reason
+
+
+class TestEvaluateTradePackage:
+    """D45: real multi-asset trade comparison summing player + pick value on each side."""
+
+    def _seed_player(self, con, player_id, age, value_2qb):
+        con.execute(
+            "INSERT INTO dynasty_values (player_id, scrape_date, age, value_2qb, updated_at) "
+            "VALUES (?, '2026-08-01', ?, ?, current_timestamp)",
+            [player_id, age, value_2qb],
+        )
+
+    def test_lopsided_package_favors_the_richer_side(self, con):
+        self._seed_player(con, "star", 24.0, 9000)
+        self._seed_player(con, "scrub", 30.0, 50)
+
+        side_a = TradePackageSide(player_ids=["star"])
+        side_b = TradePackageSide(player_ids=["scrub"], picks=[PickAsset(round=4)])
+
+        result = evaluate_trade_package(con, side_a, side_b, season=2025, teams=10)
+        assert result.favors == "side_a"
+        assert result.side_a_value > result.side_b_value
+        assert result.delta > 0
+        assert any("star" in r for r in result.side_a_reasons)
+
+    def test_a_pick_can_balance_a_trade(self, con):
+        self._seed_player(con, "playerA", 25.0, 2500)
+        self._seed_player(con, "playerB", 25.0, 2500)
+
+        # Identical players on both sides plus a real 1st-round pick added to side_b should tip
+        # the trade toward side_b, not stay even.
+        side_a = TradePackageSide(player_ids=["playerA"])
+        side_b = TradePackageSide(
+            player_ids=["playerB"], picks=[PickAsset(round=1, pick_in_round=1)]
+        )
+
+        result = evaluate_trade_package(con, side_a, side_b, season=2025, teams=10)
+        assert result.favors == "side_b"
+
+    def test_roughly_equal_packages_are_reported_even(self, con):
+        self._seed_player(con, "playerA", 25.0, 2500)
+        self._seed_player(con, "playerB", 25.0, 2500)
+
+        side_a = TradePackageSide(player_ids=["playerA"])
+        side_b = TradePackageSide(player_ids=["playerB"])
+
+        result = evaluate_trade_package(con, side_a, side_b, season=2025, teams=10)
+        assert result.favors == "even"
+
+    def test_empty_sides_do_not_error(self, con):
+        result = evaluate_trade_package(
+            con, TradePackageSide(), TradePackageSide(), season=2025, teams=10
+        )
+        assert result.side_a_value == 0.0
+        assert result.side_b_value == 0.0
+        assert result.favors == "even"

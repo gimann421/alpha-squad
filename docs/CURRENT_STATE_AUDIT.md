@@ -161,7 +161,7 @@ missing from the surface.
 | Next-pick survival probability exists | COMPLETE/VERIFIED | Real uniform-CDF model over `market_snapshot.ecr_best/ecr_worst` dispersion, not a placeholder |
 | Draft recommendation includes alternatives and reasoning | COMPLETE/VERIFIED | `top[1:]` + per-candidate `reasons` |
 | Waiver/FAAB recommendations include roster fit and replacement | COMPLETE/VERIFIED | All 8 PRODUCT_SPEC.md sub-factors present in `waiver.py`, live-tested |
-| Dynasty decisions account for future value | PARTIAL | Dynasty market value (inherently forward-looking) + a disclosed age-curve heuristic; `LeagueContext.future_picks` exists in schema but is **never read** by `trade.py` — no actual future-draft-pick valuation logic exists |
+| Dynasty decisions account for future value | COMPLETE/VERIFIED | D45 closed this: `pick_value`/`evaluate_trade_package` (real round/slot/years-out heuristic on the `value_2qb` scale) + `POST /league/{id}/trade-package`. Verified live. `LeagueContext.future_picks` itself remains intentionally unread — confirmed always empty in this deployment (no traded-picks data source), so pick assets are explicit caller input instead, per D45 |
 
 ### Agent/orchestrator
 | Item | Status | Evidence |
@@ -368,15 +368,19 @@ league, both synthetically (`tests/unit/test_league.py`) and on real 2025 data (
 
 ## 18. League-specific decision engine audit
 
-**FULLY IMPLEMENTED AND VERIFIED for draft and waiver; PARTIAL for dynasty trade.** Draft
+**FULLY IMPLEMENTED AND VERIFIED for draft, waiver, and dynasty trade (D45).** Draft
 recommendation (`draft.py::recommend_draft_pick`) genuinely combines VORP × a real roster-fit
 multiplier (computed from the *calling team's actual current roster*, not a generic list) × model
 confidence × a real next-pick survival probability (a uniform-CDF model over real stored ECR
 dispersion, not a constant) — verbatim-cited by the sub-audit. Waiver (`waiver.py`) produces a real
 FAAB dollar bid bounded by the league's real budget and incorporates all 8 sub-factors named in
 PRODUCT_SPEC.md. Trade/dynasty (`trade.py`) uses real dynasty market value and a disclosed heuristic
-age-curve, but never reads `LeagueContext.future_picks` — no future-draft-pick valuation exists, a
-real gap against "dynasty decisions account for future value." Universal/league separation is
+age-curve, and — as of D45 — real future-draft-pick valuation via `pick_value`/
+`evaluate_trade_package` (a documented round/slot/years-out heuristic anchored to the real
+`value_2qb` scale, not fit from data since no real fantasy-rookie-draft-slot outcome dataset exists
+here). `LeagueContext.future_picks` itself remains deliberately unread — it is always `{}` in this
+deployment (no traded-picks data source), so D45 takes pick assets as explicit caller input
+instead of silently doing nothing against an always-empty field. Universal/league separation is
 genuinely respected: zero `.fit()`/`.train()` calls anywhere in `league/`. The soft spot is usage,
 not implementation: only one decision (a single `draft_pick`) had ever been persisted in this
 deployment's `decisions` table despite three decision types being fully built and live-verified —
@@ -463,24 +467,33 @@ leaked key substrings are intentionally not repeated in this file.
 
 ## 24. Technical debt / architectural problems, prioritized
 
-1. **No model-artifact persistence anywhere** (§6) — every prediction requires a full retrain; no
-   inference-only serving path exists. This is the single biggest architectural gap relative to a
-   production-shaped system.
-2. **Leaked API keys still live in Git history** (§23) — unresolved security exposure on a
-   public-facing remote.
-3. **Simulation is fully built and tested but invisible in the application** (§20) — real engineering
-   effort that delivers zero end-user value today because no API endpoint or UI routes to it. (D44
-   closed this same gap for waiver, trade, and roster-need — see `docs/DECISIONS.md`.)
-4. **No committed EDGE historical-backtest report** (§15) — the evaluation ran, the artifact wasn't
-   kept, so the claim "EDGE performance is evaluated" currently rests on trust rather than a
-   reviewable document.
-5. **Evidence-adjusted projections are computed but not consumed** (§16) — real logic sitting unused
-   except as an EDGE veto input.
-6. **`LeagueContext.future_picks` is loaded but never read by the trade engine** (§18) — schema/logic
-   mismatch, a real but narrow gap.
-7. **CI does not run the live/network-marked test suite** (§21) — the Sleeper/league integration
-   claims currently depend on someone manually running them (as I did this session), not on an
-   automated gate.
+Updated as P0-P2 backlog items closed this session (D41-D45); items resolved are marked as such
+rather than deleted, so this section stays an accurate record of what was found and what changed.
+
+1. ~~No model-artifact persistence anywhere~~ **RESOLVED (D43)** — `models/persistence.py`
+   closes this for the two paths that actually serve live predictions (uncertainty → `/rankings`,
+   rookie projection → `/rookies`); verified against the real database. Established-player models
+   remain intentionally unpersisted since nothing serves their output live today (§6, D43).
+2. **Leaked API keys still live in Git history** (§23) — still unresolved; D42 added a durable CI
+   guardrail against a repeat but does not (and, per this audit's own rules, must not
+   unilaterally) rewrite history. Still the single most important open item.
+3. ~~Simulation is fully built and tested but invisible in the application~~ **PARTIALLY
+   RESOLVED** — D44 closed this same class of gap for waiver, trade, and roster-need; simulation
+   itself remains server/CLI-only with no API/UI exposure, a smaller and lower-priority remaining
+   instance of the same problem.
+4. ~~No committed EDGE historical-backtest report~~ **RESOLVED (D41)** — `alpha-squad edge
+   backtest` + `reports/edge_backtest.md`, real per-position/bucket breakdown, run against
+   current live-sourced data.
+5. **Evidence-adjusted projections are computed but not consumed** (§16) — still open; the
+   architectural question (should evidence feed the served projection, or stay EDGE-veto-only by
+   design) has not yet been explicitly resolved and documented.
+6. ~~`LeagueContext.future_picks` is loaded but never read by the trade engine`~~ **RESOLVED
+   (D45)** — real future-pick valuation (`pick_value`/`evaluate_trade_package`), verified against
+   real dynasty-value data; `future_picks` itself remains intentionally unread since it is always
+   empty in this deployment (no traded-picks data source) — pick assets are explicit caller input
+   instead, per D45's reasoning.
+7. **CI does not run the live/network-marked test suite** (§21) — still open; the Sleeper/league
+   integration claims currently depend on someone manually running them, not an automated gate.
 8. **CLAUDE.md's data-source-status note is stale** (§1) — minor, but a misleading instruction to a
    future session that isn't aware the blockers it describes were resolved.
 
@@ -492,7 +505,7 @@ leaked key substrings are intentionally not repeated in this file.
 | Multi-agent system with independent reasoning (AGENT_CONTRACTS.md) | Agents that decompose, critique, and resolve disagreement | Real scheduler/concurrency/state around agents that are thin pipeline-function wrappers | No real per-agent reasoning; the "intelligence" is the pipeline functions themselves, not the agents | Medium |
 | Historical EDGE performance evaluated (PRODUCT_SPEC.md) | A documented backtest a reader can check | Backtest was run once; no artifact committed | Claim currently unverifiable from the repo alone | Medium |
 | Evidence materially influences projections (PRODUCT_SPEC.md) | Evidence adjusts what's actually served | Evidence computed and bounded, but not consumed downstream except as an EDGE veto (usually neutral) | Evidence is closer to "logged" than "acted on" | Medium |
-| Dynasty decisions account for future value (ACCEPTANCE_CRITERIA.md) | Future draft-pick value modeled | Dynasty market value + age heuristic only; `future_picks` field unused | No pick-valuation logic at all | Medium |
+| Dynasty decisions account for future value (ACCEPTANCE_CRITERIA.md) | Future draft-pick value modeled | **RESOLVED (D45):** real `pick_value`/`evaluate_trade_package`, verified live | None remaining; `future_picks` itself stays unread by design (always empty, no data source) | Closed |
 | Waiver/trade/roster-need reachable from the app (ACCEPTANCE_CRITERIA.md, Application section) | Every league decision type usable from the UI | **RESOLVED (D44):** draft, waiver, trade, and roster-need all wired into the SPA and live-verified against a real Sleeper league | None remaining for these three decision types; simulation (a separate, never-in-scope-for-this-row capability) is still unwired — see §24 item 3 | Closed |
 | Secrets never committed (ARCHITECTURE.md §15) | No API keys ever in tracked history | Current tree clean, but real keys from D35 remain in Git history permanently | Live exposure on a public remote | High |
 

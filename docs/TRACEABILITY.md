@@ -116,7 +116,7 @@ state at the time each milestone was first built.
 | Next-pick survival probability exists | ✅ | `next_pick_survival_probability` (Uniform over ECR best/worst) |
 | Draft recommendation includes alternatives and reasoning | ✅ | `DraftRecommendation.alternatives`/`.reasons` |
 | Waiver/FAAB recommendations include roster fit and replacement | ✅ | `recommend_waiver_pickup` |
-| Dynasty decisions account for future value | ✅ | `league/trade.py::age_curve_multiplier` (disclosed heuristic, not trained — D25) |
+| Dynasty decisions account for future value | ✅ | `league/trade.py::age_curve_multiplier` (disclosed heuristic, not trained — D25) plus, as of D45, real future-draft-pick valuation (`pick_value`, `evaluate_trade_package`, `POST /league/{id}/trade-package`, `alpha-squad league trade-package`) — a documented round/slot/years-out heuristic on the same `value_2qb` scale, verified against real dynasty data live |
 
 ## Agent/orchestrator
 

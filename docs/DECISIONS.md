@@ -1450,3 +1450,42 @@ change.
 updated to cite this work and retire the PARTIAL status on the two rows this closed; §20 also notes
 the one related gap this did *not* close (a simulation-based team-outlook view — no such endpoint
 exists on either side of the API boundary today, a separate and larger piece of work).
+
+## D45 — Future-draft-pick valuation in the trade engine (P2)
+
+`docs/CURRENT_STATE_AUDIT.md`'s gap: `LeagueContext.future_picks` exists in the schema but
+`trade.py::recommend_dynasty_trade` never read it -- no future-pick valuation logic existed
+anywhere in `league/`. Checked `future_picks` itself first before wiring it in: it is a
+free-form dict that is **always `{}`** in this deployment -- `sleeper_context.py` hardcodes
+`future_picks={}` (no traded-picks Sleeper endpoint is called), and the static `target_league.yaml`
+never populates it either. Wiring new logic to read an always-empty field would be dead code,
+untestable against real data, and would silently do nothing for every real league this
+deployment actually has. So pick assets are taken as **explicit caller-supplied input** instead
+(the same pattern `draft.py`'s `available_player_ids` already uses instead of inferring
+availability from context) -- real and testable today, and `future_picks` itself is left for a
+follow-up once a real traded-picks data source exists to feed it.
+
+Added `pick_value(round_, teams, pick_in_round, years_out)` (`league/trade.py`): a documented
+heuristic, not fit from data -- there is no real fantasy-rookie-draft-slot outcome dataset in
+this environment to fit one from (NFL draft position is a different thing from fantasy
+startup/rookie-draft position, and nothing here provides the latter). Same treatment as the
+pre-existing age curve (D25): disclosed as an assumption in every reason string, not presented
+as validated. The value scale is anchored to real observed data, though: `dynasty_values.value_2qb`
+runs 0-10232 (median 6) in this deployment, and a real 1st-overall rookie-class outcome has
+reached 5767-8538 across the 2022-2025 classes -- `pick_value`'s round-1 base (2200) sits well
+below that realized ceiling (which requires the pick to actually hit) and well above the median
+outcome (which includes every bust), an explicit expected-value-under-uncertainty compromise.
+Within-round slot and years-out both decay linearly/geometrically off that base.
+
+Added `evaluate_trade_package(con, side_a, side_b, season, teams, ecr_type)`: sums real
+age-adjusted dynasty value (unchanged `recommend_dynasty_trade` logic) for every player plus
+real pick value for every pick asset on each side, and reports which side comes out ahead (or
+"even" within a 10% threshold, so a razor-thin, not-actually-meaningful edge isn't reported as
+a real recommendation). `POST /league/{id}/trade-package` and `alpha-squad league trade-package`
+expose it. Verified against the real database: a 1.01 rookie pick + a real 0-value player
+correctly valued at 2200 vs. a real elite dynasty asset (10232) -- favors the elite asset by a
+wide, sensible margin, not a coin flip.
+
+Regression-tested (`tests/unit/test_league.py::TestPickValue`/`TestEvaluateTradePackage`, 9 new
+cases) and API-tested (`tests/unit/test_api.py`, 2 new cases) -- 284 offline tests passing
+(up from 273).

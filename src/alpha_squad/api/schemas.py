@@ -140,6 +140,33 @@ class TradeRequest(BaseModel):
     ecr_type: str = "rsf"
 
 
+class PickAssetRequest(BaseModel):
+    round: int
+    pick_in_round: int | None = None
+    years_out: int = 0
+
+
+class TradePackageSideRequest(BaseModel):
+    player_ids: list[str] = []
+    picks: list[PickAssetRequest] = []
+
+
+class TradePackageRequest(BaseModel):
+    season: int
+    side_a: TradePackageSideRequest
+    side_b: TradePackageSideRequest
+    ecr_type: str = "rsf"
+
+
+class TradePackageResponse(BaseModel):
+    side_a_value: float
+    side_b_value: float
+    delta: float
+    favors: str
+    side_a_reasons: list[str]
+    side_b_reasons: list[str]
+
+
 class DecisionResponse(BaseModel):
     decision_id: str
     recommendation: str
