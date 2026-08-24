@@ -755,6 +755,13 @@ ADD_COLUMN_MIGRATIONS = [
     "ALTER TABLE rookie_features ADD COLUMN IF NOT EXISTS college_usage_overall DOUBLE",
     "ALTER TABLE rookie_features ADD COLUMN IF NOT EXISTS college_usage_pass DOUBLE",
     "ALTER TABLE rookie_features ADD COLUMN IF NOT EXISTS college_usage_rush DOUBLE",
+    # D43: model artifact persistence (models/persistence.py) -- where a fitted model was
+    # saved to disk, and (for models like uncertainty whose serving story needs more than the
+    # point prediction) the calibration residuals needed to reconstruct quantiles/probabilities
+    # without retraining. Both nullable: most model_registry rows predate persistence and have
+    # neither, which is fine -- absence just means "no persisted artifact for this row yet."
+    "ALTER TABLE model_registry ADD COLUMN IF NOT EXISTS artifact_path VARCHAR",
+    "ALTER TABLE model_registry ADD COLUMN IF NOT EXISTS calibration_residuals_json VARCHAR",
 ]
 
 # market_snapshot needs more than an added column: D38 also widened its PRIMARY KEY to include

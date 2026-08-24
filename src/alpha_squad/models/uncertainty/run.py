@@ -11,12 +11,19 @@ import hashlib
 from dataclasses import dataclass, field
 
 import duckdb
+import pandas as pd
 from catboost import CatBoostRegressor
 
 from alpha_squad.models.established.season_level import (
     FEATURES,
     TARGET_COLUMN,
     load_season_level_data,
+)
+from alpha_squad.models.persistence import (
+    load_calibration_residuals,
+    load_regressor,
+    register_artifact,
+    save_model,
 )
 from alpha_squad.models.uncertainty.conformal import (
     apply_quantiles,
@@ -31,6 +38,7 @@ FEATURE_VERSION = "established_season_level_ml_v1"
 POSITIONS = ("QB", "RB", "WR", "TE")
 MIN_TRAIN_ROWS = 30
 MIN_CALIB_ROWS = 15
+ARTIFACT_MODEL_NAME = "uncertainty_catboost"
 
 
 def _prediction_id(player_id: str, season: int, model_version: str) -> str:
@@ -139,8 +147,22 @@ def _record_calibration(
 
 
 def run_uncertainty(
-    con: duckdb.DuckDBPyConnection, season_start: int, season_end: int, min_train_season: int = 2015
+    con: duckdb.DuckDBPyConnection,
+    season_start: int,
+    season_end: int,
+    min_train_season: int = 2015,
+    *,
+    persist: bool = False,
 ) -> UncertaintyRunReport:
+    """`persist=True` saves the fitted model (and the calibration residuals needed to
+    reconstruct quantiles/probabilities) for every (position, target_season) processed, keyed
+    by (model_name, position, model_version) -- so the LAST target_season in the requested
+    range naturally ends up the one on disk when this is called in season order (upsert
+    semantics, same as `model_registry` already used before persistence existed). That is the
+    servable production artifact `score_with_persisted_model` reads: whichever season this was
+    most recently run through. Walk-forward *evaluation* callers (comparing many historical
+    seasons against each other) should leave this False -- there is no reason to write dozens
+    of intermediate artifacts to disk just to compute historical metrics."""
     report = UncertaintyRunReport()
 
     for target_season in range(season_start, season_end + 1):
@@ -170,6 +192,22 @@ def run_uncertainty(
             calib_preds = model.predict(calib[FEATURES].to_numpy())
             residuals = calib[TARGET_COLUMN].to_numpy() - calib_preds
             quantile_offsets = fit_conformal_quantiles(residuals)
+
+            if persist:
+                path = save_model(model, ARTIFACT_MODEL_NAME, position, MODEL_VERSION)
+                register_artifact(
+                    con,
+                    ARTIFACT_MODEL_NAME,
+                    position,
+                    MODEL_VERSION,
+                    FEATURE_VERSION,
+                    min_train_season,
+                    target_season,
+                    path,
+                    notes=f"servable uncertainty model, trained through {calib_season}, "
+                    f"scoring {target_season}",
+                    calibration_residuals=residuals,
+                )
 
             target_preds = model.predict(target[FEATURES].to_numpy())
             point_predictions = dict(
@@ -205,3 +243,61 @@ def run_uncertainty(
             report.calibration_rows.append(calib_row)
 
     return report
+
+
+def score_with_persisted_model(
+    con: duckdb.DuckDBPyConnection,
+    position: str,
+    season: int,
+    feature_rows: pd.DataFrame,
+    *,
+    model_version: str = MODEL_VERSION,
+    calibration_season: int | None = None,
+    store: bool = True,
+) -> dict[str, dict[str, float]]:
+    """Inference-only path: loads the already-fitted model `run_uncertainty(persist=True)`
+    saved (no `.fit()` call here at all) and scores `feature_rows` -- a DataFrame with
+    `player_id` plus every column in `FEATURES`, e.g. a handful of players whose situation
+    changed since the last full walk-forward run. This is what closes the gap the audit found:
+    previously the *only* way to get any updated prediction was to re-run the entire
+    multi-season walk-forward training loop, even to refresh a single player.
+
+    Reconstructs the same p10-p90/top-12/24 output `run_uncertainty` writes, from the same
+    persisted calibration residuals (not re-derived, not approximated) -- a caller cannot tell
+    from the output whether a row came from this path or from a full training run, which is
+    exactly the property a real inference-only serving path needs. Writes to
+    `uncertainty_predictions` the same way `run_uncertainty` does unless `store=False`."""
+    if feature_rows.empty:
+        return {}
+
+    model = load_regressor(ARTIFACT_MODEL_NAME, position, model_version)
+    residuals = load_calibration_residuals(con, ARTIFACT_MODEL_NAME, position, model_version)
+    quantile_offsets = fit_conformal_quantiles(residuals)
+
+    preds = model.predict(feature_rows[FEATURES].to_numpy())
+    point_predictions = dict(
+        zip(feature_rows["player_id"].tolist(), (float(p) for p in preds), strict=True)
+    )
+    mc_probs = monte_carlo_top_n_probabilities(point_predictions, residuals)
+
+    now = utcnow()
+    full_predictions: dict[str, dict[str, float]] = {}
+    for player_id, point_pred in point_predictions.items():
+        quantiles = apply_quantiles(point_pred, quantile_offsets)
+        # point_prediction alongside the quantiles (apply_quantiles itself only returns
+        # p10/p25/median/p75/p90 -- the same contract `run_uncertainty`'s own calibration path
+        # relies on -- so it's added here rather than changed there).
+        full_predictions[player_id] = {**quantiles, "point_prediction": point_pred}
+        if store:
+            _store_prediction(
+                con,
+                player_id,
+                season,
+                position,
+                point_pred,
+                quantiles,
+                mc_probs[player_id],
+                calibration_season if calibration_season is not None else season - 1,
+                now,
+            )
+    return full_predictions

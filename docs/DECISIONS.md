@@ -1310,3 +1310,63 @@ This closes the "was a decision even made" ambiguity the audit raised (yes, in D
 guardrail so the same failure mode can't recur silently. It does not and cannot verify whether
 the user has actually rotated the two leaked keys at their respective providers -- that remains
 outside what this repo can check, exactly as D35 already stated.
+
+## D43 — Model artifact persistence: the missing inference-only serving path (P1-3)
+
+`docs/CURRENT_STATE_AUDIT.md`'s biggest architectural finding: no model was ever saved to disk
+anywhere in this codebase (`grep` for `save_model`/`joblib.dump`/`pickle.dump` in `src/` found
+nothing) -- every prediction the API served, including `/rankings` (backed by
+`uncertainty_predictions`) and `/rookies` (backed by `rookie_predictions`), existed only because
+some CLI run had trained a model, scored it, and thrown the fitted object away in the same
+process. There was no way to refresh even one player's prediction without re-running the entire
+multi-season/multi-decade walk-forward training loop.
+
+Added `src/alpha_squad/models/persistence.py`: generic save/load for CatBoost regressors and
+classifiers (native `.cbm` format under `models/{model_version}/{model_name}_{position}.cbm`,
+gitignored like everything else under `models/`), plus a `model_registry` upsert carrying the
+artifact path and (for models whose serving story needs more than the point prediction, like
+uncertainty's conformal quantiles) the calibration residuals as JSON. New nullable columns
+`model_registry.artifact_path`/`calibration_residuals_json` via the standard `ADD_COLUMN_MIGRATIONS`
+path -- existing rows are unaffected.
+
+Wired into the two actual serving paths, both opt-in via a `persist` flag (default off for
+`run_uncertainty`'s own walk-forward *evaluation* callers -- no reason to write dozens of
+intermediate historical artifacts to disk just to compute backtest metrics -- default **on** for
+the CLI's real production commands):
+- `models/uncertainty/run.py::run_uncertainty(persist=True)` + new
+  `score_with_persisted_model(con, position, season, feature_rows)` -- loads the saved model and
+  calibration residuals, scores new feature rows, reconstructs the exact same p10-p90/top-12/24
+  output with no `.fit()` call.
+- `models/rookie/train.py::project_rookie_class(persist=True)` + new
+  `score_rookie_projection_with_persisted_model(con, position, draft_class, feature_rows)` --
+  same idea for the forward (unplayed-class) rookie projection; also fixed a pre-existing gap
+  where the classifier was never registered in `model_registry` at all (only the regressor was).
+
+CLI: `train uncertainty`/`train rookie-project` both default to `--persist` now (real usage
+should always leave a servable artifact behind); two new commands,
+`alpha-squad models rescore-uncertainty` and `alpha-squad models rescore-rookie-projection`,
+demonstrate the actual inference-only path end to end.
+
+**Verified against the real database, not just synthetic fixtures:** ran
+`alpha-squad train uncertainty --season-start 2025 --season-end 2025 --persist` (453 predictions,
+real coverage numbers written to `reports/calibration_report.md`), confirmed a real `.cbm` file
++ calibration residuals landed in `model_registry`, then ran
+`alpha-squad models rescore-uncertainty --position WR --season 2025 --player-ids <real player>`
+and got back the same point/p10/p90 the training run had stored, with no retraining. Same for
+rookies: ran `alpha-squad train rookie-project --draft-class 2026 --persist` (234 predictions,
+real 2026 class), then `alpha-squad models rescore-rookie-projection --position QB --draft-class
+2026 --player-ids <Fernando Mendoza's player_id>` and got back exactly 196.3 pts / 86% breakout
+-- the same numbers the training run produced, reproduced purely from the loaded artifact.
+
+Regression-tested (`tests/unit/test_uncertainty_run.py::TestPersistedModelInference`,
+`tests/unit/test_rookie_models.py::TestRookieProjectionPersistedInference`, 6 new cases): proves
+byte-exact reproduction of training-time predictions from the persisted artifact, and that
+scoring without a prior persist raises `FileNotFoundError` rather than failing silently or
+fabricating output.
+
+Scope decision: established-player season-level/weekly models (`models/established/`) were left
+unpersisted. Unlike uncertainty (`/rankings`) and the rookie projection (`/rookies`), nothing in
+the API currently serves established-model output live -- it feeds `evaluation_results` for
+reporting/comparison only -- so persisting it would add a servable artifact nothing reads yet.
+Flagged in `docs/IMPLEMENTATION_GAP_ANALYSIS.md` as a follow-up if/when `/rankings` is extended
+to read established-model output directly rather than only the uncertainty model's.

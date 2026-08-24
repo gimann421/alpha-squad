@@ -48,18 +48,26 @@ from alpha_squad.market.edge import (
     write_edge_validation_report,
 )
 from alpha_squad.models.baselines.run import run_baselines
-from alpha_squad.models.established.season_level import run_season_level_established_ml
+from alpha_squad.models.established.season_level import (
+    load_season_level_data,
+    run_season_level_established_ml,
+)
 from alpha_squad.models.established.train import run_established_ml
 from alpha_squad.models.report import write_evaluation_report
 from alpha_squad.models.rookie.ablation import compare_arms, write_ablation_report
+from alpha_squad.models.rookie.data import load_rookie_projection_data
 from alpha_squad.models.rookie.features import COLLEGE_FEATURE_VERSION, FEATURES_WITH_COLLEGE
-from alpha_squad.models.rookie.train import project_rookie_class, run_rookie_models
+from alpha_squad.models.rookie.train import (
+    project_rookie_class,
+    run_rookie_models,
+    score_rookie_projection_with_persisted_model,
+)
 from alpha_squad.models.simulation.correlated import (
     MIN_TEAM_WEEKS,
     record_simulation_run,
     simulate_team_season,
 )
-from alpha_squad.models.uncertainty.run import run_uncertainty
+from alpha_squad.models.uncertainty.run import run_uncertainty, score_with_persisted_model
 from alpha_squad.sources.base import SourceError, SourceHealth, SourceStatus, utcnow
 from alpha_squad.sources.registry import all_adapters
 from alpha_squad.storage.db import get_connection, init_db
@@ -77,6 +85,7 @@ evidence_app = typer.Typer(help="Structured evidence engine operations")
 league_app = typer.Typer(help="League-specific decision engine operations")
 orchestrate_app = typer.Typer(help="Agent orchestrator operations")
 simulate_app = typer.Typer(help="Team-season Monte Carlo simulation operations")
+models_app = typer.Typer(help="Persisted-model artifact operations (inference without retraining)")
 app.add_typer(sources_app, name="sources")
 app.add_typer(identity_app, name="identity")
 app.add_typer(features_app, name="features")
@@ -88,6 +97,7 @@ app.add_typer(evidence_app, name="evidence")
 app.add_typer(league_app, name="league")
 app.add_typer(orchestrate_app, name="orchestrate")
 app.add_typer(simulate_app, name="simulate")
+app.add_typer(models_app, name="models")
 console = Console()
 
 # Datasets that vary by NFL season vs. ones that are a single current/whole-history file.
@@ -553,6 +563,13 @@ def train_uncertainty(
     report_path: str = typer.Option(
         "reports/calibration_report.md", help="Markdown report output path"
     ),
+    persist: bool = typer.Option(
+        True,
+        help="Save the fitted model + calibration residuals for the last season in range, so "
+        "`models rescore-uncertainty` can re-score without retraining. Leave off for a pure "
+        "walk-forward evaluation run over many historical seasons (no need to write dozens of "
+        "intermediate artifacts to disk just to compute historical metrics).",
+    ),
 ) -> None:
     """Walk-forward split-conformal uncertainty: p10-p90 + top-12/24 probabilities per
     player/season/position, with out-of-sample calibration diagnostics (did the intervals
@@ -561,7 +578,7 @@ def train_uncertainty(
     con = get_connection(settings)
     init_db(con)
 
-    run_report = run_uncertainty(con, season_start, season_end, min_train_season)
+    run_report = run_uncertainty(con, season_start, season_end, min_train_season, persist=persist)
 
     table = Table(title="Calibration diagnostics (out-of-sample coverage)")
     for col in (
@@ -744,6 +761,12 @@ def train_rookie_project(
     ),
     min_train_class: int = typer.Option(2000, help="Earliest draft class usable for training data"),
     top_n: int = typer.Option(20, help="How many to print"),
+    persist: bool = typer.Option(
+        True,
+        help="Save the fitted regression + classification models, so "
+        "`models rescore-rookie-projection` can re-score one player (e.g. after a camp-battle "
+        "update) without retraining on the full multi-decade rookie corpus.",
+    ),
 ) -> None:
     """Project an INCOMING rookie class -- one whose NFL season hasn't happened yet.
 
@@ -765,7 +788,7 @@ def train_rookie_project(
         con.close()
         raise typer.Exit(code=1)
 
-    report = project_rookie_class(con, draft_class, min_train_class)
+    report = project_rookie_class(con, draft_class, min_train_class, persist=persist)
 
     rows = con.execute(
         """
@@ -800,6 +823,110 @@ def train_rookie_project(
     )
     if report.skipped:
         console.print(f"[yellow]skipped: {report.skipped}[/yellow]")
+    con.close()
+
+
+@models_app.command("rescore-uncertainty")
+def models_rescore_uncertainty(
+    position: str = typer.Option(..., help="QB, RB, WR, or TE"),
+    season: int = typer.Option(..., help="Season to re-score"),
+    player_ids: str = typer.Option(
+        "",
+        help="Comma-separated player_ids to re-score. Blank = every player currently in "
+        "`uncertainty_predictions` for this season/position (a full refresh using the "
+        "persisted model, still without retraining).",
+    ),
+) -> None:
+    """Re-score players using the already-fitted model `train uncertainty --persist` saved --
+    no `.fit()` call happens here. Use this after something changed for a specific player
+    (e.g. an updated preseason ECR) instead of re-running the full multi-season walk-forward
+    training loop just to refresh a handful of rows. Requires a prior `train uncertainty
+    --persist` run for this position/season's calibration lineage."""
+    settings = get_settings()
+    con = get_connection(settings)
+    init_db(con)
+
+    all_data = load_season_level_data(con, position, season, season)
+    feature_rows = all_data[all_data["target_season"] == season]
+    if player_ids.strip():
+        wanted = {p.strip() for p in player_ids.split(",") if p.strip()}
+        feature_rows = feature_rows[feature_rows["player_id"].isin(wanted)]
+
+    if feature_rows.empty:
+        console.print("[yellow]nothing to re-score (no matching feature rows)[/yellow]")
+        con.close()
+        raise typer.Exit(code=1)
+
+    try:
+        scored = score_with_persisted_model(con, position, season, feature_rows)
+    except FileNotFoundError as e:
+        console.print(f"[red]{e}[/red]")
+        con.close()
+        raise typer.Exit(code=1) from e
+
+    table = Table(title=f"Re-scored {position}/{season} from the persisted model (no retrain)")
+    for col in ("player_id", "point_prediction", "p10", "median", "p90"):
+        table.add_column(col)
+    for player_id, q in scored.items():
+        table.add_row(
+            player_id,
+            f"{q['point_prediction']:.1f}",
+            f"{q['p10']:.1f}",
+            f"{q['median']:.1f}",
+            f"{q['p90']:.1f}",
+        )
+    console.print(table)
+    console.print(f"re-scored and stored: [green]{len(scored)}[/green]")
+    con.close()
+
+
+@models_app.command("rescore-rookie-projection")
+def models_rescore_rookie_projection(
+    position: str = typer.Option(..., help="QB, RB, WR, or TE"),
+    draft_class: int = typer.Option(..., help="Draft class to re-score"),
+    player_ids: str = typer.Option(
+        "",
+        help="Comma-separated player_ids to re-score. Blank = every player currently in "
+        "`rookie_projection_features` for this class/position.",
+    ),
+) -> None:
+    """Re-score prospects using the already-fitted models `train rookie-project --persist`
+    saved -- no `.fit()` call happens here. Use this after a late camp-battle/depth-chart
+    update changes one prospect's landing-spot feature, instead of re-running training on the
+    full multi-decade rookie corpus just to refresh that one row. Requires a prior `train
+    rookie-project --persist` run for this position/draft_class's feature_version."""
+    settings = get_settings()
+    con = get_connection(settings)
+    init_db(con)
+
+    feature_rows = load_rookie_projection_data(con, position, draft_class)
+    if player_ids.strip():
+        wanted = {p.strip() for p in player_ids.split(",") if p.strip()}
+        feature_rows = feature_rows[feature_rows["player_id"].isin(wanted)]
+
+    if feature_rows.empty:
+        console.print("[yellow]nothing to re-score (no matching feature rows)[/yellow]")
+        con.close()
+        raise typer.Exit(code=1)
+
+    try:
+        scored = score_rookie_projection_with_persisted_model(
+            con, position, draft_class, feature_rows
+        )
+    except FileNotFoundError as e:
+        console.print(f"[red]{e}[/red]")
+        con.close()
+        raise typer.Exit(code=1) from e
+
+    table = Table(title=f"Re-scored {position}/{draft_class} from the persisted model (no retrain)")
+    for col in ("player_id", "predicted_rookie_points", "breakout_probability"):
+        table.add_column(col)
+    for player_id, r in scored.items():
+        table.add_row(
+            player_id, f"{r['predicted_rookie_points']:.1f}", f"{r['breakout_probability']:.0%}"
+        )
+    console.print(table)
+    console.print(f"re-scored and stored: [green]{len(scored)}[/green]")
     con.close()
 
 

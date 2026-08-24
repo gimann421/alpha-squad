@@ -10,12 +10,19 @@ import hashlib
 from dataclasses import dataclass, field
 
 import duckdb
+import pandas as pd
 from catboost import CatBoostClassifier, CatBoostRegressor
 
 from alpha_squad.models.evaluate import (
     evaluate_and_record,
     evaluate_classification,
     record_classification,
+)
+from alpha_squad.models.persistence import (
+    load_classifier,
+    load_regressor,
+    register_artifact,
+    save_model,
 )
 from alpha_squad.models.rookie.data import (
     load_rookie_class_data,
@@ -32,6 +39,8 @@ from alpha_squad.sources.base import utcnow
 
 REGRESSION_MODEL_NAME = "ml_rookie_regression"
 CLASSIFICATION_MODEL_NAME = "ml_rookie_breakout"
+PROJECTION_REGRESSION_MODEL_NAME = "ml_rookie_regression_projection"
+PROJECTION_CLASSIFICATION_MODEL_NAME = "ml_rookie_breakout_projection"
 MIN_TRAIN_ROWS = 25
 
 
@@ -214,6 +223,7 @@ def project_rookie_class(
     *,
     features: list[str] | None = None,
     feature_version: str = FEATURE_VERSION,
+    persist: bool = False,
 ) -> RookieProjectionReport:
     """Score a draft class whose NFL season has not been played yet (docs/DECISIONS.md D40).
 
@@ -223,7 +233,12 @@ def project_rookie_class(
     reporting a metric for an unplayed season would be fabricating one.
 
     Training still stops strictly before `draft_class`, the same walk-forward discipline, which
-    for a genuinely future class is simply every labeled class that exists."""
+    for a genuinely future class is simply every labeled class that exists.
+
+    `persist=True` saves both fitted models (regression + classification) and lets a later
+    caller re-score an updated feature row (e.g. after a camp-battle depth-chart update changes
+    one prospect's landing-spot feature) via `score_rookie_projection_with_persisted_model`
+    without repeating this training run across the full multi-decade rookie corpus."""
     features = features if features is not None else FEATURES
     report = RookieProjectionReport(draft_class=draft_class, trained_through=draft_class - 1)
 
@@ -264,13 +279,41 @@ def project_rookie_class(
 
         _register_model(
             con,
-            f"{REGRESSION_MODEL_NAME}_projection",
+            PROJECTION_REGRESSION_MODEL_NAME,
             position,
             min_train_class,
             draft_class - 1,
             f"forward projection of the {draft_class} class; {len(features)} features",
             feature_version,
         )
+
+        if persist:
+            reg_path = save_model(reg, PROJECTION_REGRESSION_MODEL_NAME, position, feature_version)
+            register_artifact(
+                con,
+                PROJECTION_REGRESSION_MODEL_NAME,
+                position,
+                feature_version,
+                feature_version,
+                min_train_class,
+                draft_class - 1,
+                reg_path,
+                notes=f"servable rookie regression model for the {draft_class} projection",
+            )
+            clf_path = save_model(
+                clf, PROJECTION_CLASSIFICATION_MODEL_NAME, position, feature_version
+            )
+            register_artifact(
+                con,
+                PROJECTION_CLASSIFICATION_MODEL_NAME,
+                position,
+                feature_version,
+                feature_version,
+                min_train_class,
+                draft_class - 1,
+                clf_path,
+                notes=f"servable rookie breakout classifier for the {draft_class} projection",
+            )
 
         now = utcnow()
         for player_id, points, prob in zip(
@@ -301,3 +344,65 @@ def project_rookie_class(
             report.predictions_written += 1
 
     return report
+
+
+def score_rookie_projection_with_persisted_model(
+    con: duckdb.DuckDBPyConnection,
+    position: str,
+    draft_class: int,
+    feature_rows: pd.DataFrame,
+    *,
+    features: list[str] | None = None,
+    feature_version: str = FEATURE_VERSION,
+    store: bool = True,
+) -> dict[str, dict[str, float]]:
+    """Inference-only path for the forward rookie projection: loads the models
+    `project_rookie_class(persist=True)` already fit (no `.fit()` here) and scores
+    `feature_rows` -- e.g. one prospect whose `rookie_projection_features` row changed after a
+    late camp-battle/depth-chart update. Returns {player_id: {"predicted_rookie_points":
+    ..., "breakout_probability": ...}}; writes to `rookie_predictions` the same way
+    `project_rookie_class` does unless `store=False`."""
+    features = features if features is not None else FEATURES
+    if feature_rows.empty:
+        return {}
+
+    reg = load_regressor(PROJECTION_REGRESSION_MODEL_NAME, position, feature_version)
+    clf = load_classifier(PROJECTION_CLASSIFICATION_MODEL_NAME, position, feature_version)
+
+    x = feature_rows[features].to_numpy()
+    points_preds = reg.predict(x)
+    prob_preds = clf.predict_proba(x)[:, 1]
+
+    now = utcnow()
+    results: dict[str, dict[str, float]] = {}
+    for player_id, points, prob in zip(
+        feature_rows["player_id"], points_preds, prob_preds, strict=True
+    ):
+        results[player_id] = {
+            "predicted_rookie_points": float(points),
+            "breakout_probability": float(prob),
+        }
+        if store:
+            con.execute(
+                """
+                INSERT INTO rookie_predictions
+                    (prediction_id, player_id, draft_class, position, model_version,
+                     predicted_rookie_points, breakout_probability, predicted_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT (player_id, draft_class, model_version) DO UPDATE SET
+                    predicted_rookie_points = excluded.predicted_rookie_points,
+                    breakout_probability = excluded.breakout_probability,
+                    predicted_at = excluded.predicted_at
+                """,
+                [
+                    _prediction_id(player_id, draft_class, feature_version),
+                    player_id,
+                    draft_class,
+                    position,
+                    feature_version,
+                    float(points),
+                    float(prob),
+                    now,
+                ],
+            )
+    return results

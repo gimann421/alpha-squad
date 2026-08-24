@@ -74,6 +74,7 @@ state at the time each milestone was first built.
 | Uncertainty intervals exist | ✅ | M6 quantile models + split-conformal calibration |
 | Probability calibration is measured | ✅ | `reports/calibration_report.md` — real out-of-sample coverage vs. nominal |
 | Model versions are tracked | ✅ | model registry (`_register_model`), `VALIDATED`/`UNVALIDATED` |
+| Servable model artifacts persist without retraining | ✅ | `models/persistence.py` (D43): fitted CatBoost models saved natively (`.cbm`) under `models/`, keyed by (model_name, position, version) in `model_registry.artifact_path`; `train uncertainty --persist`/`train rookie-project --persist` save on every real run (default on), `alpha-squad models rescore-uncertainty`/`rescore-rookie-projection` re-score without a `.fit()` call. Verified live: re-scored a real 2026 rookie QB from the persisted artifact and reproduced the exact training-time output (196.3 pts / 86% breakout) |
 | Model performance is compared against baselines | ✅ | same `evaluation_results` table for both, `evaluate_and_record` |
 
 ## Market/EDGE
