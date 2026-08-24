@@ -14,6 +14,23 @@ from alpha_squad.models.rookie.features import FEATURE_VERSION
 router = APIRouter(prefix="/rookies", tags=["rookies"])
 
 
+@router.get("/classes", response_model=list[int])
+def get_rookie_classes(
+    model_version: str = Query(FEATURE_VERSION),
+    con: duckdb.DuckDBPyConnection = Depends(get_db),
+) -> list[int]:
+    """Draft classes that actually have predictions, newest first. Exists so the UI can
+    default to the current class instead of a hardcoded year: a hardcoded default silently
+    goes stale every offseason, which is exactly how the app ended up showing an already-played
+    2025 class in August 2026 (docs/DECISIONS.md D40)."""
+    rows = con.execute(
+        "SELECT DISTINCT draft_class FROM rookie_predictions WHERE model_version = ? "
+        "ORDER BY draft_class DESC",
+        [model_version],
+    ).fetchall()
+    return [r[0] for r in rows]
+
+
 @router.get("", response_model=list[RookieRow])
 def get_rookies(
     draft_class: int = Query(...),

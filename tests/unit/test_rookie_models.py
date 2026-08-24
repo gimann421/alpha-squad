@@ -305,3 +305,100 @@ class TestCollegeUsageJoin:
             "FROM rookie_features WHERE player_id='r1'"
         ).fetchone()
         assert row == (None, None, None)
+
+
+class TestProjectingAnUnplayedDraftClass:
+    """docs/DECISIONS.md D40: `rookie_features` INNER JOINs player_season_stats on the rookie's
+    own season and declares the outcome NOT NULL, so a class whose season hasn't been played
+    cannot exist in it. That is why the app was still showing an already-played 2025 class in
+    August 2026. Projection uses a separate unlabeled table built from the SAME feature SQL."""
+
+    def _seed_labeled_class(self, con, draft_class, n=30):
+        for i in range(n):
+            pid = f"lab{draft_class}_{i}"
+            con.execute(
+                "INSERT INTO players (player_id, gsis_id, position, rookie_season, draft_round, "
+                "draft_pick, draft_team) VALUES (?, ?, 'RB', ?, ?, ?, 'KC')",
+                [pid, f"g{pid}", draft_class, (i % 7) + 1, i * 8 + 1],
+            )
+            con.execute(
+                "INSERT INTO player_season_stats (player_id, season, position, games_played, "
+                "total_fantasy_points_ppr, ppr_points_per_game) VALUES (?, ?, 'RB', 15, ?, ?)",
+                [pid, draft_class, 300.0 - i * 5, (300.0 - i * 5) / 15],
+            )
+
+    def test_unplayed_class_is_projected_and_excluded_from_the_training_table(self, con):
+        from alpha_squad.features.rookie import (
+            build_rookie_features,
+            build_rookie_projection_features,
+        )
+        from alpha_squad.models.rookie.train import project_rookie_class
+
+        self._seed_labeled_class(con, 2024)
+        self._seed_labeled_class(con, 2025)
+        # The incoming class: on the spine with real draft capital, but no season played.
+        con.execute(
+            "INSERT INTO players (player_id, gsis_id, display_name, position, rookie_season, "
+            "draft_round, draft_pick, draft_team) "
+            "VALUES ('rookie26', 'g26', 'Incoming Guy', 'RB', 2026, 1, 3, 'KC')"
+        )
+
+        build_rookie_features(con)
+        built = build_rookie_projection_features(con, 2026)
+
+        assert built == 1
+        # The unlabeled row must NOT be in the labeled training table.
+        assert (
+            con.execute("SELECT count(*) FROM rookie_features WHERE draft_class = 2026").fetchone()[
+                0
+            ]
+            == 0
+        )
+
+        report = project_rookie_class(con, 2026, min_train_class=2000)
+
+        assert report.predictions_written == 1
+        row = con.execute(
+            "SELECT predicted_rookie_points, breakout_probability FROM rookie_predictions "
+            "WHERE draft_class = 2026"
+        ).fetchone()
+        assert row[0] is not None and row[1] is not None
+
+    def test_projection_records_no_evaluation_metrics(self, con):
+        """There is no outcome to score against; publishing a metric would fabricate one."""
+        from alpha_squad.features.rookie import build_rookie_projection_features
+        from alpha_squad.models.rookie.train import project_rookie_class
+
+        self._seed_labeled_class(con, 2024)
+        self._seed_labeled_class(con, 2025)
+        con.execute(
+            "INSERT INTO players (player_id, gsis_id, position, rookie_season, draft_round, "
+            "draft_pick, draft_team) VALUES ('r26', 'g26', 'RB', 2026, 1, 3, 'KC')"
+        )
+        build_rookie_projection_features(con, 2026)
+        project_rookie_class(con, 2026, min_train_class=2000)
+
+        assert (
+            con.execute("SELECT count(*) FROM evaluation_results WHERE season = 2026").fetchone()[0]
+            == 0
+        )
+        assert (
+            con.execute(
+                "SELECT count(*) FROM classification_results WHERE cohort = 2026"
+            ).fetchone()[0]
+            == 0
+        )
+
+    def test_training_never_uses_the_class_being_projected(self, con):
+        """Walk-forward discipline still applies: a future class has no labels, but the guard
+        must be structural, not incidental."""
+        from alpha_squad.features.rookie import build_rookie_features
+        from alpha_squad.models.rookie.data import load_rookie_class_data
+
+        self._seed_labeled_class(con, 2024)
+        self._seed_labeled_class(con, 2025)
+        build_rookie_features(con)
+
+        train = load_rookie_class_data(con, "RB", 2000, 2025)
+        assert train["draft_class"].max() == 2025
+        assert 2026 not in set(train["draft_class"])

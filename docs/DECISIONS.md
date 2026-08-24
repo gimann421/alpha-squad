@@ -1193,3 +1193,64 @@ and `features build`, because `features build` is what joins `college_usage` int
 0.0 — i.e. the model trains on zeroed college features with no warning. There was no Makefile
 target and no README step for it, so `make ingest && make identity && make features && make train`
 did exactly that. Both now fixed.
+
+## D40 — The app was projecting an already-played rookie class; three chained defects kept the incoming 2026 class unprojectable
+
+Reported by the user against the running app in August 2026: the Rookies view showed the 2025
+class. That is a backtest, not a forecast — the 2025 season has been played. The incoming class
+(Fernando Mendoza, Ty Simpson, KC Concepcion et al.) was absent entirely. Three independent
+defects, each of which alone was sufficient to cause it:
+
+**1. nflverse's `players` file lags the draft, and `draft_picks` changed shape.** All 694
+`rookie_season=2026` rows in nflverse `players` have a NULL `draft_year`, while `draft_picks`
+already carries the full 257-pick 2026 draft. Draft capital is the single strongest rookie
+feature (D20), so without it the class cannot be projected meaningfully at all. Worse, the
+obvious join fails: `draft_picks.gsis_id` holds real gsis ids for 2022–2025 (262/259/257/257 rows,
+all `00-%`) but for 2026 holds **230 esb-style ids and zero real gsis ids** — real gsis ids are
+evidently assigned later. Fixed by COALESCEing draft capital from `draft_picks` inside
+`build_players_spine`, joining `gsis_id` with an `esb_id` fallback. Done inside the spine build
+rather than as a follow-up UPDATE because DuckDB implements UPDATE as delete+insert and refuses
+it on a table other tables hold foreign keys into, which `players` is (hit this for real).
+
+**2. The spine upsert could never refresh draft capital.** `ON CONFLICT (player_id) DO UPDATE`
+listed only display_name/position/position_group/last_season/status. A player who first enters
+`players` before their draft data is published — i.e. every incoming rookie — keeps NULL capital
+forever, no matter how many times identity is rebuilt. Now COALESCE-updates draft_round/pick/team,
+draft_year and rookie_season, so a later snapshot can fill a gap but never erase a known value.
+After the fix, 74 of the 234 2026 skill players carry real capital (Mendoza R1P1 LVR, Simpson
+R1P13 LAR, Concepcion R1P24 CLE); the remaining ~160 are genuine UDFAs and take the existing
+`UNDRAFTED_*_FALLBACK` path.
+
+**3. `rookie_features` structurally cannot hold an unplayed class.** It INNER JOINs
+`player_season_stats` on the rookie's *own* season and declares `rookie_year_ppr_points` /
+`breakout_top24` NOT NULL — correctly, because it is the labeled training set. So even with
+capital fixed, the 2026 class had nowhere to live. Added `rookie_projection_features` (same
+feature columns, no outcome) and `project_rookie_class()`, which trains on every labeled class
+before the target and writes `rookie_predictions` **without** any evaluation rows — there is no
+outcome to score against, and publishing a metric for an unplayed season would fabricate one.
+
+Kept as a separate table rather than relaxing `rookie_features` to nullable outcomes, so an
+unlabeled row can never be silently picked up as training data. The feature SQL itself is shared
+verbatim between the two builders (`_FEATURE_CTES`/`_FEATURE_SELECT`/`_FEATURE_JOINS`) and the
+imputation is shared between the two loaders (`_impute`): the labeled and unlabeled paths MUST
+compute features identically, since one trains the model and the other is what the model is asked
+to score, and divergence there would be silent and severe.
+
+**Result** (`alpha-squad train rookie-project --draft-class 2026`, trained on classes 2000–2025,
+234 players): Jeremiyah Love (RB, R1P3) 233.3 pts / 88% breakout; Carnell Tate (WR, R1P4) 202.8 /
+48%; Fernando Mendoza (QB, R1P1) 196.3 / 86%; Ty Simpson (QB, R1P13) 177.4 / 57%; KC Concepcion
+(WR, R1P24) 139.9 / 15%.
+
+**The stale default itself.** The UI hardcoded `useState(2025)`, which is how an already-played
+class was on screen. Hardcoding 2026 just re-breaks next August, so `GET /rookies/classes` now
+returns the classes that actually have predictions (newest first) and the view defaults to the
+newest. Three sibling views (Rankings, EDGE, League) still hardcode a 2025 season default; they
+are left as-is deliberately because the data behind them genuinely stops at 2025 — changing the
+default without generating 2026 rankings/EDGE would show an empty view, which is worse. That is
+recorded here as a known limitation rather than silently half-fixed.
+
+**A process note.** `npx tsc --noEmit` at the repo root reported success on frontend code that
+was actually broken (`get is not defined` — I had called a helper that does not exist). The root
+`tsconfig.json` is a project-references stub and type-checks nothing; the real check is
+`tsc -p tsconfig.app.json`. The error surfaced only when the page was driven in a real browser.
+Worth knowing before trusting a green typecheck here.

@@ -732,3 +732,28 @@ fold-pairing (which produced a plausible-looking but fabricated +13.69 MAE resul
 caught as implausible), and `load_rookie_class_data` hardcoding the production feature list.
 `tests/unit/test_schema_migrations.py` now builds the *old* schema first — the one case the suite
 never exercised. 254 offline tests passing. See D39 for the full account.
+
+
+## Post-M13: the incoming rookie class is now projectable (D40)
+
+The app was showing the 2025 rookie class in August 2026 — a backtest presented as a forecast,
+with the incoming class missing entirely. Three chained defects: nflverse's `players` file lags
+the draft (all 694 `rookie_season=2026` rows have NULL draft capital) while `draft_picks` already
+has the full 2026 draft but keys it on `esb_id` rather than `gsis_id` for that class only; the
+spine upsert could never refresh draft capital once a row existed; and `rookie_features` is by
+construction a *labeled* table that cannot hold a class whose season hasn't been played.
+
+Fixed with an esb_id-fallback COALESCE in the spine build, a COALESCE-refresh on the upsert, and
+a new `rookie_projection_features` + `alpha-squad train rookie-project --draft-class 2026`, which
+writes predictions but deliberately no evaluation metrics (there is no outcome to score against).
+The feature SQL and the imputation are shared verbatim between the labeled and unlabeled paths so
+they cannot drift. The UI now asks the API which classes exist and defaults to the newest instead
+of a hardcoded year.
+
+2026 projection (trained on classes 2000-2025, 234 players): Jeremiyah Love 233.3 / 88%,
+Carnell Tate 202.8 / 48%, Fernando Mendoza 196.3 / 86%, Ty Simpson 177.4 / 57%, KC Concepcion
+139.9 / 15%. 259 offline tests passing.
+
+**Known limitation:** Rankings, EDGE and League still default to the 2025 season, because the
+data behind them genuinely stops at 2025 — projecting the 2026 NFL season for established players
+is separate work. Changing those defaults without generating the data would show empty views.

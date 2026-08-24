@@ -17,7 +17,10 @@ from alpha_squad.models.evaluate import (
     evaluate_classification,
     record_classification,
 )
-from alpha_squad.models.rookie.data import load_rookie_class_data
+from alpha_squad.models.rookie.data import (
+    load_rookie_class_data,
+    load_rookie_projection_data,
+)
 from alpha_squad.models.rookie.features import (
     CLASSIFICATION_TARGET,
     FEATURE_VERSION,
@@ -192,5 +195,109 @@ def run_rookie_models(
                         now,
                     ],
                 )
+
+    return report
+
+
+@dataclass
+class RookieProjectionReport:
+    draft_class: int = 0
+    predictions_written: int = 0
+    trained_through: int = 0
+    skipped: list[str] = field(default_factory=list)
+
+
+def project_rookie_class(
+    con: duckdb.DuckDBPyConnection,
+    draft_class: int,
+    min_train_class: int = 2000,
+    *,
+    features: list[str] | None = None,
+    feature_version: str = FEATURE_VERSION,
+) -> RookieProjectionReport:
+    """Score a draft class whose NFL season has not been played yet (docs/DECISIONS.md D40).
+
+    Distinct from `run_rookie_models`, which is a *backtest*: it walk-forward predicts classes
+    whose outcomes are already known and evaluates against them. There is nothing to evaluate
+    here, so this deliberately writes no evaluation_results/classification_results rows --
+    reporting a metric for an unplayed season would be fabricating one.
+
+    Training still stops strictly before `draft_class`, the same walk-forward discipline, which
+    for a genuinely future class is simply every labeled class that exists."""
+    features = features if features is not None else FEATURES
+    report = RookieProjectionReport(draft_class=draft_class, trained_through=draft_class - 1)
+
+    for position in POSITIONS:
+        train_df = load_rookie_class_data(con, position, min_train_class, draft_class - 1, features)
+        target_df = load_rookie_projection_data(con, position, draft_class, features)
+
+        if len(train_df) < MIN_TRAIN_ROWS or target_df.empty:
+            report.skipped.append(
+                f"{position}: {len(train_df)} training rows, {len(target_df)} to project"
+            )
+            continue
+
+        x_train = train_df[features].to_numpy()
+        x_target = target_df[features].to_numpy()
+
+        reg = CatBoostRegressor(
+            iterations=150,
+            depth=3,
+            learning_rate=0.08,
+            loss_function="MAE",
+            verbose=False,
+            random_seed=42,
+        )
+        reg.fit(x_train, train_df[REGRESSION_TARGET].to_numpy())
+        reg_preds = reg.predict(x_target)
+
+        clf = CatBoostClassifier(
+            iterations=150,
+            depth=3,
+            learning_rate=0.08,
+            loss_function="Logloss",
+            verbose=False,
+            random_seed=42,
+        )
+        clf.fit(x_train, train_df[CLASSIFICATION_TARGET].astype(int).to_numpy())
+        clf_probs = clf.predict_proba(x_target)[:, 1]
+
+        _register_model(
+            con,
+            f"{REGRESSION_MODEL_NAME}_projection",
+            position,
+            min_train_class,
+            draft_class - 1,
+            f"forward projection of the {draft_class} class; {len(features)} features",
+            feature_version,
+        )
+
+        now = utcnow()
+        for player_id, points, prob in zip(
+            target_df["player_id"], reg_preds, clf_probs, strict=True
+        ):
+            con.execute(
+                """
+                INSERT INTO rookie_predictions
+                    (prediction_id, player_id, draft_class, position, model_version,
+                     predicted_rookie_points, breakout_probability, predicted_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT (player_id, draft_class, model_version) DO UPDATE SET
+                    predicted_rookie_points = excluded.predicted_rookie_points,
+                    breakout_probability = excluded.breakout_probability,
+                    predicted_at = excluded.predicted_at
+                """,
+                [
+                    _prediction_id(player_id, draft_class, feature_version),
+                    player_id,
+                    draft_class,
+                    position,
+                    feature_version,
+                    float(points),
+                    float(prob),
+                    now,
+                ],
+            )
+            report.predictions_written += 1
 
     return report

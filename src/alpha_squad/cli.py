@@ -25,6 +25,7 @@ from alpha_squad.features.college_production import (
     build_college_usage,
     seasons_needed_for_rookies,
 )
+from alpha_squad.features.rookie import build_rookie_projection_features
 from alpha_squad.identity.canonical import build_identity
 from alpha_squad.identity.exceptions import list_exceptions
 from alpha_squad.league.context import DEFAULT_LEAGUE_ID, list_registered_leagues, resolve_league
@@ -51,7 +52,7 @@ from alpha_squad.models.established.train import run_established_ml
 from alpha_squad.models.report import write_evaluation_report
 from alpha_squad.models.rookie.ablation import compare_arms, write_ablation_report
 from alpha_squad.models.rookie.features import COLLEGE_FEATURE_VERSION, FEATURES_WITH_COLLEGE
-from alpha_squad.models.rookie.train import run_rookie_models
+from alpha_squad.models.rookie.train import project_rookie_class, run_rookie_models
 from alpha_squad.models.simulation.correlated import (
     MIN_TEAM_WEEKS,
     record_simulation_run,
@@ -732,6 +733,72 @@ def train_rookie(
     console.print(table2)
     if run_report.skipped:
         console.print(f"[yellow]skipped: {run_report.skipped}[/yellow]")
+    con.close()
+
+
+@train_app.command("rookie-project")
+def train_rookie_project(
+    draft_class: int = typer.Option(
+        ..., help="Draft class to project (its NFL season has not been played)"
+    ),
+    min_train_class: int = typer.Option(2000, help="Earliest draft class usable for training data"),
+    top_n: int = typer.Option(20, help="How many to print"),
+) -> None:
+    """Project an INCOMING rookie class -- one whose NFL season hasn't happened yet.
+
+    `train rookie` is a backtest: it predicts classes whose outcomes are already known and
+    scores itself against them. This is the forward-looking counterpart, and it writes no
+    evaluation metrics, because there is no outcome to score against yet (D40). Requires
+    `identity build` (for draft capital) and `features build`."""
+    settings = get_settings()
+    con = get_connection(settings)
+    init_db(con)
+
+    built = build_rookie_projection_features(con, draft_class)
+    console.print(f"rookie_projection_features rows for {draft_class}: [green]{built}[/green]")
+    if not built:
+        console.print(
+            f"[yellow]no players with rookie_season={draft_class} in the spine -- "
+            "run `sources ingest` + `identity build` first[/yellow]"
+        )
+        con.close()
+        raise typer.Exit(code=1)
+
+    report = project_rookie_class(con, draft_class, min_train_class)
+
+    rows = con.execute(
+        """
+        SELECT p.display_name, r.position, r.draft_round, r.draft_pick, r.landing_team_prior_pass_rate,
+               pr.predicted_rookie_points, pr.breakout_probability
+        FROM rookie_predictions pr
+        JOIN rookie_projection_features r ON r.player_id = pr.player_id
+        LEFT JOIN players p ON p.player_id = pr.player_id
+        WHERE pr.draft_class = ?
+        ORDER BY pr.predicted_rookie_points DESC
+        LIMIT ?
+        """,
+        [draft_class, top_n],
+    ).fetchall()
+
+    table = Table(title=f"{draft_class} rookie class projection (top {top_n})")
+    for col in ("player", "pos", "rd", "pick", "proj pts", "breakout"):
+        table.add_column(col)
+    for name, pos, rd, pick, _prate, pts, prob in rows:
+        table.add_row(
+            name or "-",
+            pos,
+            str(rd) if rd else "UDFA",
+            str(pick) if pick else "-",
+            f"{pts:.1f}",
+            f"{prob:.0%}",
+        )
+    console.print(table)
+    console.print(
+        f"predictions written: [green]{report.predictions_written}[/green] "
+        f"(trained on classes {min_train_class}-{report.trained_through})"
+    )
+    if report.skipped:
+        console.print(f"[yellow]skipped: {report.skipped}[/yellow]")
     con.close()
 
 

@@ -22,6 +22,71 @@ import duckdb
 
 from alpha_squad.sources.base import utcnow
 
+# The feature side of a rookie row, shared verbatim by the labeled training table and the
+# unlabeled projection table (docs/DECISIONS.md D40). Deliberately one string rather than two
+# near-identical queries: the two tables MUST compute features identically, since one trains
+# the model and the other is what the model is asked to score. If they drifted, the model
+# would be served inputs that don't mean what it learned -- a silent, hard-to-spot failure.
+_FEATURE_CTES = """
+        WITH team_season AS (
+            SELECT team, season, AVG(pass_rate) AS avg_pass_rate, AVG(plays) AS avg_plays
+            FROM team_week_stats
+            GROUP BY team, season
+        )"""
+
+_FEATURE_SELECT = """
+            p.draft_round, p.draft_pick,
+            cr.forty, cr.bench, cr.vertical, cr.broad_jump, cr.cone, cr.shuttle, cr.height, cr.weight,
+            ts.avg_pass_rate, ts.avg_plays,
+            cu.usage_overall, cu.usage_pass, cu.usage_rush"""
+
+_FEATURE_JOINS = """
+        LEFT JOIN combine_results cr ON cr.player_id = p.player_id
+        LEFT JOIN team_season ts ON ts.team = p.draft_team AND ts.season = p.rookie_season - 1
+        LEFT JOIN college_usage cu ON cu.player_id = p.player_id AND cu.season = p.rookie_season - 1"""
+
+
+def build_rookie_projection_features(con: duckdb.DuckDBPyConnection, draft_class: int) -> int:
+    """Features for a draft class whose NFL season has not been played yet, so it has no
+    outcome to label and cannot exist in `rookie_features` (which INNER JOINs
+    player_season_stats on the rookie's own season and declares the outcome NOT NULL).
+
+    Kept as a separate table rather than relaxing `rookie_features` to nullable outcomes: that
+    table is the training set, and an unlabeled row leaking into it would poison training
+    silently. Same feature SQL, different (absent) label -- see the module constants above."""
+    rows = con.execute(
+        f"""
+        INSERT INTO rookie_projection_features (
+            player_id, draft_class, position, draft_round, draft_pick, forty, bench,
+            vertical, broad_jump, cone, shuttle, height, weight,
+            landing_team_prior_pass_rate, landing_team_prior_plays,
+            college_usage_overall, college_usage_pass, college_usage_rush, built_at
+        )
+        {_FEATURE_CTES}
+        SELECT
+            p.player_id, p.rookie_season, p.position,
+            {_FEATURE_SELECT}, ?
+        FROM players p
+        {_FEATURE_JOINS}
+        WHERE p.rookie_season = ? AND p.position IN ('QB', 'RB', 'WR', 'TE')
+        ON CONFLICT (player_id) DO UPDATE SET
+            draft_class = excluded.draft_class, position = excluded.position,
+            draft_round = excluded.draft_round, draft_pick = excluded.draft_pick,
+            forty = excluded.forty, bench = excluded.bench, vertical = excluded.vertical,
+            broad_jump = excluded.broad_jump, cone = excluded.cone, shuttle = excluded.shuttle,
+            height = excluded.height, weight = excluded.weight,
+            landing_team_prior_pass_rate = excluded.landing_team_prior_pass_rate,
+            landing_team_prior_plays = excluded.landing_team_prior_plays,
+            college_usage_overall = excluded.college_usage_overall,
+            college_usage_pass = excluded.college_usage_pass,
+            college_usage_rush = excluded.college_usage_rush,
+            built_at = excluded.built_at
+        RETURNING player_id
+        """,
+        [utcnow(), draft_class],
+    ).fetchall()
+    return len(rows)
+
 
 def build_rookie_features(con: duckdb.DuckDBPyConnection) -> int:
     rows = con.execute(

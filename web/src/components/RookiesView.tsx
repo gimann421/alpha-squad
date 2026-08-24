@@ -4,13 +4,23 @@ import type { RookieComp, RookieRow } from "../types";
 import { AsyncSection } from "./common";
 
 export function RookiesView() {
-  const [draftClass, setDraftClass] = useState(2025);
+  // Defaults to the newest class the API actually has, not a hardcoded year -- a
+  // hardcoded default goes stale every offseason (docs/DECISIONS.md D40).
+  const [draftClass, setDraftClass] = useState<number | null>(null);
   const [rows, setRows] = useState<RookieRow[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [comps, setComps] = useState<Record<string, RookieComp[]>>({});
 
   useEffect(() => {
+    api
+      .getRookieClasses()
+      .then((classes) => setDraftClass(classes[0] ?? new Date().getFullYear()))
+      .catch(() => setDraftClass(new Date().getFullYear()));
+  }, []);
+
+  useEffect(() => {
+    if (draftClass === null) return;
     setLoading(true);
     setError(null);
     setComps({});
@@ -40,7 +50,7 @@ export function RookiesView() {
       <div className="controls">
         <label>
           Draft class{" "}
-          <input type="number" value={draftClass} onChange={(e) => setDraftClass(Number(e.target.value))} />
+          <input type="number" value={draftClass ?? ""} onChange={(e) => setDraftClass(Number(e.target.value))} />
         </label>
       </div>
       <AsyncSection

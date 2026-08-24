@@ -410,6 +410,33 @@ M7_ROOKIE_DDL = [
         built_at TIMESTAMP NOT NULL
     )
     """,
+    # Same feature columns as rookie_features, deliberately WITHOUT the outcome columns: this
+    # holds a draft class whose NFL season hasn't been played, so there is nothing to label it
+    # with (D40). Separate from rookie_features so an unlabeled row can never be picked up as
+    # training data -- rookie_features stays the labeled training set by construction.
+    """
+    CREATE TABLE IF NOT EXISTS rookie_projection_features (
+        player_id VARCHAR PRIMARY KEY,
+        draft_class INTEGER NOT NULL,
+        position VARCHAR NOT NULL,
+        draft_round INTEGER,
+        draft_pick INTEGER,
+        forty DOUBLE,
+        bench DOUBLE,
+        vertical DOUBLE,
+        broad_jump DOUBLE,
+        cone DOUBLE,
+        shuttle DOUBLE,
+        height DOUBLE,
+        weight DOUBLE,
+        landing_team_prior_pass_rate DOUBLE,
+        landing_team_prior_plays DOUBLE,
+        college_usage_overall DOUBLE,
+        college_usage_pass DOUBLE,
+        college_usage_rush DOUBLE,
+        built_at TIMESTAMP NOT NULL
+    )
+    """,
     """
     CREATE TABLE IF NOT EXISTS rookie_predictions (
         prediction_id VARCHAR PRIMARY KEY,
