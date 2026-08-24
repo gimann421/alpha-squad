@@ -1254,3 +1254,28 @@ was actually broken (`get is not defined` — I had called a helper that does no
 `tsconfig.json` is a project-references stub and type-checks nothing; the real check is
 `tsc -p tsconfig.app.json`. The error surfaced only when the page was driven in a real browser.
 Worth knowing before trusting a green typecheck here.
+
+## D41 — Reviewable EDGE backtest artifact (`edge backtest`, `reports/edge_backtest.md`)
+
+`docs/CURRENT_STATE_AUDIT.md`'s P1-2 gap: `edge validate`'s per-(season, action) backtest logic
+was real (`evaluate_historical_edge`) but had never been re-run against the current live-sourced
+market data in this deployment, so no report existed to review. Confirmed `reports/` is
+gitignored by design (CLAUDE.md: reproducible from the pipeline, never committed) — the actual
+gap was that the report had never been generated, not that it existed but wasn't committed.
+
+Added `evaluate_historical_edge_detailed`/`write_edge_backtest_report` (`market/edge.py`) and
+`alpha-squad edge backtest` (`cli.py`). Reuses `evaluate_historical_edge`'s exact walk-forward
+market-implied-points methodology (same `_market_implied_points_curve`, trained only on
+strictly-prior seasons) rather than reimplementing a different backtest — just slices the same
+underlying (actual, market-implied) pairs by position and by rank-edge/points-edge/confidence
+magnitude bucket, and writes methodology/limitations/failure-modes sections alongside the
+tables. Unit-tested (`tests/unit/test_edge.py::TestEvaluateHistoricalEdgeDetailed`, 4 new cases).
+
+**Real result, run 2026-08-24 against 2022–2025 (1543 signals, 659 players, `ecr_type=rsf`):**
+BUY beat market-implied points in **all 4** scored seasons (+27.2 / +19.2 / +18.8 / +4.7 pts —
+positive throughout, though declining in magnitude, worth watching but not treated as a problem
+here since the direction never flipped). SELL was genuinely mixed: correctly negative
+(underperformed as expected) in 2022–2023, roughly neutral in 2024, and wrong-direction in 2025.
+Reported as-is, not smoothed over, per CLAUDE.md's no-hidden-failure rule; the model was not
+re-tuned against this result. `docs/TRACEABILITY.md`'s Market/EDGE row updated to point at both
+reports and summarize the current numbers instead of a stale prior claim ("3 of 4 seasons").

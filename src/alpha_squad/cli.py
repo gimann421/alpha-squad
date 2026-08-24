@@ -44,6 +44,7 @@ from alpha_squad.market.edge import (
     DEFAULT_ECR_TYPE,
     evaluate_historical_edge,
     run_edge_build,
+    write_edge_backtest_report,
     write_edge_validation_report,
 )
 from alpha_squad.models.baselines.run import run_baselines
@@ -886,6 +887,27 @@ def edge_validate(
 
     write_edge_validation_report(con, Path(report_path))
     console.print(f"report written to [green]{report_path}[/green]")
+    con.close()
+
+
+@edge_app.command("backtest")
+def edge_backtest(
+    season_start: int = typer.Option(2021, help="First season to backtest"),
+    season_end: int = typer.Option(2025, help="Last season to backtest"),
+    ecr_type: str = typer.Option(DEFAULT_ECR_TYPE, help="Market series EDGE was built against"),
+    report_path: str = typer.Option("reports/edge_backtest.md", help="Markdown report output path"),
+) -> None:
+    """The full reviewable EDGE backtest artifact: per-position, per-season, and edge-magnitude
+    (rank/points/confidence) bucket breakdowns on top of `edge validate`'s per-(season, action)
+    summary -- same walk-forward market-implied-points methodology, sliced finer. Requires
+    `edge build` to have already run for these seasons. Published either way; a weak or
+    negative result is documented, not hidden (CLAUDE.md)."""
+    settings = get_settings()
+    con = get_connection(settings)
+    init_db(con)
+
+    write_edge_backtest_report(con, Path(report_path), season_start, season_end, ecr_type)
+    console.print(f"backtest report written to [green]{report_path}[/green]")
     con.close()
 
 

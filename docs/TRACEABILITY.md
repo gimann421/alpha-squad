@@ -87,7 +87,7 @@ state at the time each milestone was first built.
 | Rank edge, points edge, and probability edge exist | ✅ | `market/edge.py` `EdgeContract` fields |
 | A raw ranking discrepancy cannot alone produce a strong EDGE | ✅ | `classify_action`'s hard gating rule; `tests/unit/test_edge.py::TestClassifyActionGatingRule` |
 | BUY/HOLD/SELL/WATCH are evidence-backed | ✅ | `evidence_score` veto below `EVIDENCE_CONTRADICTION_THRESHOLD` (D23) |
-| Historical EDGE performance is evaluated | ✅ | `edge validate`, `reports/edge_validation.md`; BUY cohort beat market-implied points in 3 of 4 scored seasons post-M13-fix, honestly reported either way (D21, D28) |
+| Historical EDGE performance is evaluated | ✅ | `edge validate` (per-season/action summary, `reports/edge_validation.md`) + `edge backtest` (per-position, per-season, and rank/points/confidence-magnitude bucket breakdown, `reports/edge_backtest.md`, D41). Re-run 2026-08-24 against the current live-sourced market data (2022-2025, 1543 signals): BUY cohort beat market-implied points in all 4 scored seasons (+27.2/+19.2/+18.8/+4.7 pts, a real declining-but-consistently-positive trend); SELL was mixed (beat in 2022-2023, roughly neutral 2024, wrong-direction 2025) — honestly reported either way, not smoothed over |
 
 ## Evidence
 
