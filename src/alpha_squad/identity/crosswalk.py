@@ -37,6 +37,12 @@ DYNASTYPROCESS_ID_COLUMNS = {
     "stats_global_id": "stats_global_id",
     "fantasy_data_id": "fantasy_data_id",
     "swish_id": "swish_id",
+    # espn_id doubles as CFBD's own athlete ID space (`player_usage.id`,
+    # `recruiting_players.athleteId`, `draft/picks.collegeAthleteId`) -- verified against
+    # real data 2026-08-23 (docs/DECISIONS.md D38): 4/4 checked players' CFBD collegeAthleteId
+    # matched this exact espn_id, with no fuzzy name matching involved. This is the identity
+    # bridge D20 found missing for college production.
+    "espn_id": "espn_id",
 }
 
 

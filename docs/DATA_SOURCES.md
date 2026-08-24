@@ -3,9 +3,13 @@
 Probed directly against the running environment on 2026-08-20 (see `docs/DECISIONS.md` D3).
 **Re-verified 2026-08-22 (D31): the environment's network egress policy changed. Sleeper is now
 fully AVAILABLE; FantasyPros and CFBD are now network-reachable and blocked only on missing
-credentials (not policy) — see the D31 section below.** Re-run `alpha-squad sources status` for
-current status; this file is the narrative record of point-in-time verifications, not a live
-document — always trust a fresh `sources status` run over this file if they disagree.
+credentials (not policy) — see the D31 section below.**
+**Re-verified 2026-08-23 (D36/D37): `CFBD_API_KEY` and `FANTASYPROS_API_KEY` were supplied and
+are both now fully live. FantasyPros briefly appeared blocked (`403 Forbidden`) — that turned out
+to be a wrong adapter base URL, not a credentials or policy problem; see D37.**
+Re-run `alpha-squad sources status` for current status; this file is the narrative record of
+point-in-time verifications, not a live document — always trust a fresh `sources status` run
+over this file if they disagree.
 
 ## AVAILABLE
 
@@ -61,16 +65,44 @@ health check's placeholder `league_id=0` correctly 404s since no such league exi
 league ID to pull real league state. As designed, this activated with no code change once the
 policy opened (`sources/sleeper.py`).
 
-## Network-reachable but credential-gated (not a policy block — see D31)
+### CollegeFootballData (`api.collegefootballdata.com`) — became AVAILABLE 2026-08-23, see D36
+`CFBD_API_KEY` was supplied via this deployment's env-var config and confirmed live in a fresh
+container: `teams` (1931 rows), `player_usage` (5197 rows), and `recruiting_players` (4120 rows,
+after fixing the health check to pass a required `year` param — D36) all return real data with
+the `Authorization: Bearer <key>` header already used by `sources/cfbd.py`. Fallback
+(cfbfastR-data, D3) is no longer needed for college production but is left in place.
 
-| Source | Host | What's needed | Current fallback |
-|---|---|---|---|
-| FantasyPros API | `api.fantasypros.com` | paid `FANTASYPROS_API_KEY` (network layer confirmed open 2026-08-22: real `{"message":"Forbidden"}` app-level response with no key) | DynastyProcess `db_fpecr`/`values-players` (D3); per-expert weighting stays LIMITED regardless (D4) — a key unlocks consensus ECR direct from source, not per-expert data |
-| CollegeFootballData | `api.collegefootballdata.com` | free `CFBD_API_KEY` from collegefootballdata.com (network layer confirmed open 2026-08-22: real, detailed "missing Bearer key" response) | cfbfastR-data (D3) |
+### FantasyPros API (`api.fantasypros.com`) — became AVAILABLE 2026-08-23, see D37
+`FANTASYPROS_API_KEY` was supplied and confirmed live: `consensus_rankings` and `projections`
+both return real data (`sources status`: 10 rows / 25 columns and 10 rows / 7 columns for the
+default WR/ros health-check params). The `403 Forbidden` seen first (D36) was **not** a
+credentials or policy problem — `sources/fantasypros.py`'s base URL was missing a `/public` path
+segment (`api.fantasypros.com/v2/json/...` instead of the real `api.fantasypros.com/public/v2/json/...`,
+confirmed against FantasyPros's own published API docs at `api.fantasypros.com/public/v2/docs`).
+The wrong path still terminated at FantasyPros's real AWS API Gateway, which returned a genuine
+`403`/`ForbiddenException` for a resource the key's usage plan doesn't cover — indistinguishable
+from an invalid-key rejection without checking the docs. Fixed by correcting `_BASE`; no key
+rotation was actually needed. Fallback (DynastyProcess `db_fpecr`/`values-players`, D3) is no
+longer needed for consensus ECR but is left in place; per-expert weighting stays LIMITED
+regardless (D4) — this key unlocks consensus ECR direct from source, not per-expert data.
 
 Both adapters already refuse to call out without a key configured (`SourceCredentialsError`,
-never a guessed/fabricated key) — set the env var and the real source activates with no code
-change.
+never a guessed/fabricated key) — set the env var and the real source activates with no further
+code change needed now that both base URLs are correct.
+
+**D38 addendum:** this key's free/public tier only serves `type=Draft` consensus rankings —
+requesting `type=ROS` (or any other `SPORTRankingTypes` enum value) is silently accepted but
+ignored; the response always echoes back `"type": "Draft"` regardless. Verified empirically,
+not assumed from the docs. `market/consensus.py::build_live_fantasypros_snapshot` captures
+this as a new `source='fantasypros_live'` series in `market_snapshot`, tagged `ecr_type='draft_overall'`
+(not `'ros_overall'`, so the label never claims data this tier doesn't provide) — a separate,
+provenance-tagged series accumulated forward from today, never blended into the DynastyProcess-sourced
+historical rows `build_market_snapshot` builds. Also: CFBD's numeric athlete IDs
+(`player_usage.id`, `recruiting_players.athleteId`, `draft/picks.collegeAthleteId`) were found
+to be the exact same ID as DynastyProcess's `espn_id` (verified against 4/4 real players, no
+fuzzy matching) — added to `identity/crosswalk.py`'s `DYNASTYPROCESS_ID_COLUMNS`, resolving
+D20's college-production identity-bridge gap for rookie modeling (`features/college_production.py`).
+See D38.
 
 ## Still policy-blocked or otherwise unavailable
 

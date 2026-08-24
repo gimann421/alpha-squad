@@ -16,3 +16,11 @@
 target_league:
   source: yaml
   path: target_league.yaml
+
+dilworth:
+  source: sleeper
+  sleeper_league_id: "1395093181141381120"
+
+boys_of_fall:
+  source: sleeper
+  sleeper_league_id: "1326428555382394880"

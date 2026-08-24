@@ -1,4 +1,4 @@
-.PHONY: install test test-network test-cov lint fmt ingest identity features market train evaluate edge simulate orchestrate serve serve-web clean
+.PHONY: install test test-network test-cov lint fmt ingest identity college-usage features market train evaluate edge simulate orchestrate serve serve-web clean
 
 install:
 	uv sync --extra dev
@@ -30,6 +30,14 @@ ingest:
 
 identity:
 	uv run alpha-squad identity build
+
+# Must run BETWEEN identity and features: it needs player_id_map's espn_id bridge, and
+# `features build` is what joins college_usage into rookie_features. Running it after
+# `features` instead leaves rookie_features.college_usage_* NULL, which models/rookie/data.py
+# silently imputes to 0.0 -- i.e. the rookie model trains on zeroed college features with no
+# warning. Requires CFBD_API_KEY (docs/DECISIONS.md D38).
+college-usage:
+	uv run alpha-squad features build-college-usage
 
 features:
 	uv run alpha-squad features build --season-start 2015 --season-end 2025

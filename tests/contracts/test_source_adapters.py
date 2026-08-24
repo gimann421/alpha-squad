@@ -26,7 +26,7 @@ from alpha_squad.sources.fantasypros import FantasyProsSource
 from alpha_squad.sources.nflverse import NflverseSource
 from alpha_squad.sources.registry import all_adapters
 from alpha_squad.sources.sleeper import SleeperSource
-from tests.fixtures.httpx_fakes import make_fake_get, make_fake_stream
+from tests.fixtures.httpx_fakes import FakeGetResponse, make_fake_get, make_fake_stream
 
 
 @pytest.fixture
@@ -144,6 +144,7 @@ class TestJsonApiAdapters:
             raise AssertionError("must not call network without a configured API key")
 
         monkeypatch.setattr(httpx, "get", boom)
+        settings = settings.model_copy(update={"fantasypros_api_key": None})
         assert settings.fantasypros_api_key is None
         adapter = FantasyProsSource(settings)
         with pytest.raises(SourceCredentialsError):
@@ -154,6 +155,7 @@ class TestJsonApiAdapters:
             raise AssertionError("must not call network without a configured API key")
 
         monkeypatch.setattr(httpx, "get", boom)
+        settings = settings.model_copy(update={"cfbd_api_key": None})
         assert settings.cfbd_api_key is None
         adapter = CfbdSource(settings)
         with pytest.raises(SourceCredentialsError):
@@ -167,6 +169,34 @@ class TestJsonApiAdapters:
         adapter = FantasyProsSource(settings)
         with pytest.raises(SourceBlockedError):
             adapter.fetch("consensus_rankings", season=2026)
+
+    def test_cfbd_two_same_day_fetches_with_different_params_do_not_collide(
+        self, settings, monkeypatch
+    ):
+        """Regression: local_path used to be keyed only by dataset+captured_at date, so two
+        fetches for different query params (e.g. different `year`) on the same day silently
+        overwrote each other's file on disk even though snapshot_registry recorded two distinct
+        rows -- a real provenance bug (the first row's local_path/sha256 would stop matching
+        what's actually on disk). Multi-season CFBD ingestion depends on this being fixed."""
+        settings = settings.model_copy(update={"cfbd_api_key": "fake-key-for-test"})
+
+        def fake_get(url: str, **kwargs):
+            import json as _json
+
+            year = kwargs["params"]["year"]
+            body = [{"id": str(year), "year": year}]
+            return FakeGetResponse(200, body, _json.dumps(body).encode())
+
+        monkeypatch.setattr(httpx, "get", fake_get)
+        adapter = CfbdSource(settings)
+        snap_2023 = adapter.fetch("player_usage", year=2023)
+        snap_2024 = adapter.fetch("player_usage", year=2024)
+
+        assert snap_2023.local_path != snap_2024.local_path
+        assert snap_2023.local_path.exists() and snap_2024.local_path.exists()
+        assert snap_2023.local_path.read_text() != snap_2024.local_path.read_text()
+        assert '"2023"' in snap_2023.local_path.read_text()
+        assert '"2024"' in snap_2024.local_path.read_text()
 
 
 class TestHealthCheckNeverRaises:

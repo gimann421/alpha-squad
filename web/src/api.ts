@@ -57,6 +57,7 @@ export const api = {
   getRankings: (params: { season: number; position?: string; limit?: number }) =>
     getJson<RankingRow[]>("/rankings", params),
 
+  getRookieClasses: () => getJson<number[]>("/rookies/classes"),
   getRookies: (params: { draft_class: number; position?: string; limit?: number }) =>
     getJson<RookieRow[]>("/rookies", params),
   getRookieComps: (playerId: string, params: { draft_class: number; position: string; k?: number }) =>

@@ -21,6 +21,11 @@ from alpha_squad.evidence.events import build_evidence_events_range
 from alpha_squad.evidence.prior_update import run_prior_update
 from alpha_squad.evidence.sleeper_trending import detect_sleeper_trending
 from alpha_squad.features.build import build_features
+from alpha_squad.features.college_production import (
+    build_college_usage,
+    seasons_needed_for_rookies,
+)
+from alpha_squad.features.rookie import build_rookie_projection_features
 from alpha_squad.identity.canonical import build_identity
 from alpha_squad.identity.exceptions import list_exceptions
 from alpha_squad.league.context import DEFAULT_LEAGUE_ID, list_registered_leagues, resolve_league
@@ -33,7 +38,7 @@ from alpha_squad.league.replacement import (
 )
 from alpha_squad.league.trade import recommend_dynasty_trade
 from alpha_squad.league.waiver import recommend_waiver_pickup
-from alpha_squad.market.consensus import build_market_snapshot
+from alpha_squad.market.consensus import build_live_fantasypros_snapshot, build_market_snapshot
 from alpha_squad.market.dynasty_values import build_dynasty_values
 from alpha_squad.market.edge import (
     DEFAULT_ECR_TYPE,
@@ -45,7 +50,9 @@ from alpha_squad.models.baselines.run import run_baselines
 from alpha_squad.models.established.season_level import run_season_level_established_ml
 from alpha_squad.models.established.train import run_established_ml
 from alpha_squad.models.report import write_evaluation_report
-from alpha_squad.models.rookie.train import run_rookie_models
+from alpha_squad.models.rookie.ablation import compare_arms, write_ablation_report
+from alpha_squad.models.rookie.features import COLLEGE_FEATURE_VERSION, FEATURES_WITH_COLLEGE
+from alpha_squad.models.rookie.train import project_rookie_class, run_rookie_models
 from alpha_squad.models.simulation.correlated import (
     MIN_TEAM_WEEKS,
     record_simulation_run,
@@ -173,7 +180,9 @@ def sources_ingest(
     season_start: int = typer.Option(2020, help="First season to ingest for seasonal datasets"),
     season_end: int = typer.Option(2026, help="Last season to ingest for seasonal datasets"),
     include_blocked: bool = typer.Option(
-        False, help="Also health-check sleeper/fantasypros/cfbd (expected to be blocked here)"
+        False,
+        help="Also health-check sleeper/fantasypros/cfbd (all three now genuinely AVAILABLE, "
+        "D31/D36/D37; they are health-checked rather than bulk-ingested here)",
     ),
 ) -> None:
     """Fetch and snapshot every dataset from the available sources across the given season
@@ -323,6 +332,31 @@ def features_build(
     con.close()
 
 
+@features_app.command("build-college-usage")
+def features_build_college_usage() -> None:
+    """Ingest CFBD player_usage (D38) for every college season a rookie already in `players`
+    needs (their final college season, rookie_season - 1), and upsert into `college_usage`,
+    espn_id-bridged. Run `features build` afterward so rookie_features picks up the join;
+    requires CFBD_API_KEY and `identity build` having already populated player_id_map."""
+    settings = get_settings()
+    con = get_connection(settings)
+    init_db(con)
+    seasons = seasons_needed_for_rookies(con)
+    if not seasons:
+        console.print("[yellow]no rookies in `players` yet -- run `identity build` first[/yellow]")
+        con.close()
+        return
+    try:
+        n = build_college_usage(con, settings, seasons)
+    except (RuntimeError, SourceError) as e:
+        console.print(f"[red]{e}[/red]")
+        con.close()
+        raise typer.Exit(code=1) from e
+    console.print(f"seasons ingested: [green]{seasons}[/green]")
+    console.print(f"college_usage rows upserted: [green]{n}[/green]")
+    con.close()
+
+
 @market_app.command("build")
 def market_build() -> None:
     """Build market_snapshot from the stored DynastyProcess fp_ecr_history snapshot
@@ -337,6 +371,24 @@ def market_build() -> None:
         con.close()
         raise typer.Exit(code=1) from e
     console.print(f"market_snapshot rows upserted: [green]{n}[/green]")
+    con.close()
+
+
+@market_app.command("capture-live-fantasypros")
+def market_capture_live_fantasypros(season: int = 2026) -> None:
+    """Capture today's FantasyPros consensus rankings directly from the live API into
+    market_snapshot (source='fantasypros_live', D38) -- a separate, provenance-tagged series
+    from the DynastyProcess-sourced 'build' command above; requires FANTASYPROS_API_KEY."""
+    settings = get_settings()
+    con = get_connection(settings)
+    init_db(con)
+    try:
+        n = build_live_fantasypros_snapshot(con, settings, season=season)
+    except (RuntimeError, SourceError) as e:
+        console.print(f"[red]{e}[/red]")
+        con.close()
+        raise typer.Exit(code=1) from e
+    console.print(f"market_snapshot (fantasypros_live) rows upserted: [green]{n}[/green]")
     con.close()
 
 
@@ -561,21 +613,93 @@ def train_uncertainty(
     con.close()
 
 
+def _run_rookie_ablation(
+    con,
+    baseline_report,
+    class_start: int,
+    class_end: int,
+    min_train_class: int,
+    report_path: Path,
+) -> None:
+    """Trains the candidate (+college) feature set over the *same* walk-forward folds as the
+    just-run production baseline, prints the delta, and publishes the report
+    (docs/DECISIONS.md D39). Distinct model names/feature_version keep both arms' rows in
+    evaluation_results/classification_results instead of one silently overwriting the other."""
+    candidate_report = run_rookie_models(
+        con,
+        class_start,
+        class_end,
+        min_train_class,
+        features=FEATURES_WITH_COLLEGE,
+        feature_version=COLLEGE_FEATURE_VERSION,
+        model_suffix="_college",
+    )
+
+    comparisons, n_reg, n_clf = compare_arms(baseline_report, candidate_report)
+
+    table = Table(title="Ablation: +college vs baseline, identical folds")
+    for col in ("metric", "baseline", "+college", "delta", "better"):
+        table.add_column(col)
+    for c in comparisons:
+        color = (
+            "green" if c.winner == "+college" else ("red" if c.winner == "baseline" else "yellow")
+        )
+        direction = "higher better" if c.higher_is_better else "lower better"
+        table.add_row(
+            f"{c.label} ({direction})",
+            f"{c.baseline:.4f}",
+            f"{c.candidate:.4f}",
+            f"{c.delta:+.4f}",
+            f"[{color}]{c.winner}[/{color}]",
+        )
+    console.print(table)
+    console.print(f"[dim]paired folds: {n_reg} regression, {n_clf} classification[/dim]")
+
+    result = write_ablation_report(
+        con,
+        baseline_report,
+        candidate_report,
+        report_path,
+        class_start=class_start,
+        class_end=class_end,
+        min_train_class=min_train_class,
+    )
+    console.print(f"\n[bold]{result}[/bold]")
+    console.print(f"report written to [green]{report_path}[/green]")
+
+
 @train_app.command("rookie")
 def train_rookie(
     class_start: int = typer.Option(2018, help="First draft class to walk-forward evaluate"),
     class_end: int = typer.Option(2025, help="Last draft class to walk-forward evaluate"),
     min_train_class: int = typer.Option(2000, help="Earliest draft class usable for training data"),
+    ablation: bool = typer.Option(
+        False,
+        "--ablation",
+        help="Also train the candidate feature set that adds CFBD college production, over "
+        "identical folds, and print a side-by-side delta against the production baseline",
+    ),
+    report_path: str = typer.Option(
+        "reports/rookie_college_production_ablation.md",
+        help="Where --ablation writes its markdown report",
+    ),
 ) -> None:
     """Walk-forward rookie regression (rookie-year PPR points) and breakout classification
     (top-24-at-position), strictly by draft class. Feature set is draft capital + combine +
-    landing spot only — no college production bridge exists yet (docs/DECISIONS.md D20).
-    Requires `features build` to have already populated rookie_features."""
+    landing spot (D20). CFBD college usage share (D38) was measured and NOT adopted -- it was
+    neutral-to-slightly-worse on every metric (D39, reports/rookie_college_production_ablation.md);
+    re-measure any time with --ablation. Requires `features build` to have already populated
+    rookie_features."""
     settings = get_settings()
     con = get_connection(settings)
     init_db(con)
 
     run_report = run_rookie_models(con, class_start, class_end, min_train_class)
+
+    if ablation:
+        _run_rookie_ablation(
+            con, run_report, class_start, class_end, min_train_class, Path(report_path)
+        )
 
     table = Table(title="Rookie regression (ALL positions per class)")
     for col in ("model", "class", "n", "mae", "rmse", "spearman"):
@@ -609,6 +733,72 @@ def train_rookie(
     console.print(table2)
     if run_report.skipped:
         console.print(f"[yellow]skipped: {run_report.skipped}[/yellow]")
+    con.close()
+
+
+@train_app.command("rookie-project")
+def train_rookie_project(
+    draft_class: int = typer.Option(
+        ..., help="Draft class to project (its NFL season has not been played)"
+    ),
+    min_train_class: int = typer.Option(2000, help="Earliest draft class usable for training data"),
+    top_n: int = typer.Option(20, help="How many to print"),
+) -> None:
+    """Project an INCOMING rookie class -- one whose NFL season hasn't happened yet.
+
+    `train rookie` is a backtest: it predicts classes whose outcomes are already known and
+    scores itself against them. This is the forward-looking counterpart, and it writes no
+    evaluation metrics, because there is no outcome to score against yet (D40). Requires
+    `identity build` (for draft capital) and `features build`."""
+    settings = get_settings()
+    con = get_connection(settings)
+    init_db(con)
+
+    built = build_rookie_projection_features(con, draft_class)
+    console.print(f"rookie_projection_features rows for {draft_class}: [green]{built}[/green]")
+    if not built:
+        console.print(
+            f"[yellow]no players with rookie_season={draft_class} in the spine -- "
+            "run `sources ingest` + `identity build` first[/yellow]"
+        )
+        con.close()
+        raise typer.Exit(code=1)
+
+    report = project_rookie_class(con, draft_class, min_train_class)
+
+    rows = con.execute(
+        """
+        SELECT p.display_name, r.position, r.draft_round, r.draft_pick, r.landing_team_prior_pass_rate,
+               pr.predicted_rookie_points, pr.breakout_probability
+        FROM rookie_predictions pr
+        JOIN rookie_projection_features r ON r.player_id = pr.player_id
+        LEFT JOIN players p ON p.player_id = pr.player_id
+        WHERE pr.draft_class = ?
+        ORDER BY pr.predicted_rookie_points DESC
+        LIMIT ?
+        """,
+        [draft_class, top_n],
+    ).fetchall()
+
+    table = Table(title=f"{draft_class} rookie class projection (top {top_n})")
+    for col in ("player", "pos", "rd", "pick", "proj pts", "breakout"):
+        table.add_column(col)
+    for name, pos, rd, pick, _prate, pts, prob in rows:
+        table.add_row(
+            name or "-",
+            pos,
+            str(rd) if rd else "UDFA",
+            str(pick) if pick else "-",
+            f"{pts:.1f}",
+            f"{prob:.0%}",
+        )
+    console.print(table)
+    console.print(
+        f"predictions written: [green]{report.predictions_written}[/green] "
+        f"(trained on classes {min_train_class}-{report.trained_through})"
+    )
+    if report.skipped:
+        console.print(f"[yellow]skipped: {report.skipped}[/yellow]")
     con.close()
 
 

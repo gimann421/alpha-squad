@@ -799,3 +799,458 @@ endpoint). This decision entry, `docs/TRACEABILITY.md`, and `docs/PROJECT_STATE.
 updated with the real result once a real league id is supplied and this live test actually
 runs — until then, `source: sleeper` registry entries are implemented-but-unverified, the
 same honest status this project gives every source before its first real-data check.
+
+## D34 — D33's Sleeper field mapping live-verified against two real leagues; both registered
+
+The user supplied two real Sleeper league ids. `tests/integration/test_sleeper_league_context_live.py`
+run against both, for real:
+
+- `1395093181141381120` ("Dilworth"): 12-team redraft, 1QB, PPR, 2 FLEX, 5-man bench, $200 FAAB.
+- `1326428555382394880` ("The Boys of Fall"): 10-team dynasty, 2QB/superflex, PPR, 2 FLEX,
+  15-man bench, $100 FAAB — structurally close to `target_league.yaml`'s assumed defaults.
+
+Both passed cleanly, including `unrecognized_flex_slots == []` — the specific check D33 flagged
+as unverified. This confirms the `SUPER_FLEX` fix (and the rest of `FLEX_ELIGIBILITY`) against
+real data, not just the documented API shape. Both are now registered in
+`config/league_configs/registry.yaml` as `source: sleeper` entries (keys `dilworth`,
+`boys_of_fall`), hydrated live on every call exactly like `target_league`. `source: sleeper`
+registry entries move from "implemented-but-unverified" to verified as of this entry.
+
+## D35 — Real API key values were committed to `.env.example` on `main`, in a public repo; rotated the intent (fixed the file; key rotation itself is on the user), added a durable guardrail
+
+The user asked where to put `FANTASYPROS_API_KEY`/`CFBD_API_KEY` and was told: a local
+gitignored `.env`, or this deployment's own env-var configuration — never a tracked file. They
+instead added real values directly to `.env.example`, which is deliberately the one `.env.*`
+pattern `.gitignore` carves back out as tracked (it is the template other contributors copy
+from). The values were committed (`aea0be4`, directly to `main`, outside this branch) and
+pushed. This repo is public, so both keys were live-exposed on the public internet from that
+push until the fix below — real-world credential scanners routinely pick up exactly this
+pattern within minutes, so the values must be treated as compromised regardless of any repo
+cleanup.
+
+Fix, with the user's explicit go-ahead (pushing to `main` is outside this project's designated
+branch and requires it): a follow-up commit (`aa9e841`) restored the two lines to empty
+placeholders, byte-for-byte matching the pre-leak version (diffed against the merge commit to
+confirm no other drift). Push straight to `main` was fast-forward-safe (`aa9e841` descends from
+the branch's merged tip via the earlier PR's merge commit), so no history rewrite was needed for
+the file fix itself. The user was offered, and declined, a full `git filter-repo` + force-push
+history purge — a strictly more invasive operation than removing the live value (it rewrites
+shared history and would have orphaned every existing clone, including this session's own),
+and one that still would not undo the actual exposure; rotating the key at the provider is the
+only real remediation, which the file fix cannot do on the user's behalf. The user was told
+directly, more than once, to rotate/regenerate both keys at FantasyPros and CFBD; whether they
+have is outside what this repo can verify.
+
+This project's designated branch (`claude/alpha-squad-plan-qhpg3r`) was then restarted from the
+fixed `main` tip per this session's own merged-PR-branch-restart rule, rather than left pointing
+at the pre-fix commit.
+
+Durable guardrail added directly in `.env.example` (not just this log entry, so it survives
+independently of any one session's memory): an explicit comment stating the file is tracked,
+real values must never go here, and pointing at this entry.
+
+## D36 — Re-verified 2026-08-23 in a fresh container: `CFBD_API_KEY` is live and confirmed AVAILABLE; `FANTASYPROS_API_KEY` is present but rejected by FantasyPros's own API, not a policy block
+
+D31 predicted this exact follow-up (both keys network-reachable and blocked only on credentials)
+and PROJECT_STATE.md's "Still not built" section explicitly flagged this as "pending confirmation
+from a fresh session" since an env-var change in this deployment's config only takes effect for a
+new container, not one already running. This session is that fresh container: `printenv` confirms
+both `FANTASYPROS_API_KEY` and `CFBD_API_KEY` are set (values not printed), and `alpha-squad
+sources status` was re-run to check what actually happens with them.
+
+**CFBD: genuinely AVAILABLE, real data confirmed.** `teams` (1931 rows) and `player_usage` (5197
+rows) returned real data immediately. `recruiting_players` initially errored `400 Bad Request`
+("year required when team not specified") — not a credentials or policy issue, just a pre-existing
+gap in `CfbdSource.default_health_params` (only `player_usage` passed a `year`). Fixed
+(`sources/cfbd.py`) to also pass `year=2025` for `recruiting_players`; re-ran and got 4120 real
+rows. All three CFBD datasets are now AVAILABLE with real data, using the same
+`Authorization: Bearer <key>` header `cfbd.py` already had in place per D3's original design
+intent (no other code change needed).
+
+**FantasyPros: key present and transmitted, but rejected by FantasyPros itself — not resolved.**
+`sources status` still reports `ERROR` (`403 Forbidden`) for both `consensus_rankings` and
+`projections`. To rule out a proxy-level block (the D3/D31-era failure mode, which
+`fantasypros.py` only catches as `httpx.ProxyError` → `SourceBlockedError`), called the real
+endpoint directly with `curl -D -` to inspect raw headers: the CONNECT tunnel succeeds
+(`HTTP/1.1 200 Connection Established`), and the `403` comes back from FantasyPros's own AWS
+infrastructure (`x-amzn-errortype: ForbiddenException`, `via: ... cloudfront.net`, body
+`{"message":"Forbidden"}`) — i.e. this is a real app-level auth rejection, not an egress block,
+and not an env-var-pickup problem (the key is confirmed present and is being sent as the
+`x-api-key` header exactly as `fantasypros.py` sends it). The key itself was sanity-checked for
+whitespace/quoting corruption (none found; 40 chars, no leading/trailing whitespace, no quote
+characters) and is not a network-layer problem, since CFBD's key against a different provider
+went through cleanly with the same session/proxy in the same run.
+
+**What's notable, and deliberately not guessed past:** the response body is byte-for-byte
+identical to D31's unauthenticated probe of the same endpoint (`{"message":"Forbidden"}`, same
+error type). An unauthenticated call and an authenticated-but-rejected call producing the exact
+same response is consistent with several different root causes this repo cannot distinguish from
+the outside — an invalid or expired key, a FantasyPros plan/tier that doesn't include API access,
+a wrong auth mechanism for this specific v2 endpoint, or (given D35's leak/rotation history)
+the possibility that the value now configured is not actually a freshly-rotated key. Per this
+project's rule against guessing past what's actually verified, none of these is asserted; the
+user was told directly which of the two keys needs their attention and why, rather than the
+adapter code being changed speculatively (e.g. trying a different header format) without evidence
+that would fix it.
+
+**What this changes:** `docs/DATA_SOURCES.md` updated — CFBD moved to the AVAILABLE section;
+FantasyPros's credential-gated entry updated to describe the new, more specific failure mode.
+`docs/TRACEABILITY.md`'s CFBD row updated to ✅ MET; FantasyPros's stays ⚠️ but with the updated
+reason. `docs/PROJECT_STATE.md`'s "pending confirmation from a fresh session" note resolved for
+CFBD, updated (not resolved) for FantasyPros.
+
+**What this doesn't change:** DynastyProcess/cfbfastR-data substitutes stay wired in as the
+operating path for FantasyPros's ECR signal (CFBD's college-production role can now also be
+served directly, but cfbfastR-data is left in place rather than removed — no product decision was
+made to prefer one over the other for existing pipeline code, and switching is out of scope for a
+credentials-verification pass). No code depends on live CFBD or FantasyPros calls yet; wiring
+either into the pipeline for something new is, per D31, a deliberate product decision left for
+direction rather than assumed here.
+
+## D37 — D36's FantasyPros `403 Forbidden` was a wrong adapter base URL, not a bad/unrotated key — fixed, confirmed AVAILABLE with real data
+
+D36 confirmed the key was present, correctly transmitted, and that the network layer was open
+(not a proxy/policy block), but deliberately stopped short of asserting a root cause for the
+`403 Forbidden` — it named several plausible explanations (invalid/expired key, wrong plan/tier,
+wrong auth mechanism, or, given D35's leak history, the key not actually having been rotated) and
+asked the user rather than guessing. The user confirmed the key in the environment was already
+the correctly-rotated one, which ruled out the D35-rotation explanation and narrowed the search.
+
+That narrowing made it worth checking the remaining explanations against FantasyPros's own
+documentation rather than continuing to treat this as unresolvable from inside the repo. A web
+search turned up FantasyPros's public API reference (`api.fantasypros.com/public/v2/docs`), which
+states the real base path is `https://api.fantasypros.com/public/v2/json` — `sources/fantasypros.py`
+had `https://api.fantasypros.com/v2/json` (missing `/public`). Verified directly with `curl`
+before touching code: the wrong path returns `403`/`ForbiddenException` from FantasyPros's real
+AWS API Gateway (byte-identical to D31's unauthenticated probe, which is what made it look like a
+credentials problem — a wrong-resource rejection and a bad-key rejection look the same from the
+outside), while the corrected `/public/v2/json` path returns real `200` data for both
+`consensus_rankings` (real player rankings, e.g. Ja'Marr Chase at WR1) and `projections` with the
+exact same key, unchanged.
+
+**Fix:** corrected `_BASE` in `sources/fantasypros.py`; no key rotation, header change, or other
+code change was needed. Re-ran `alpha-squad sources status`: both `fantasypros` datasets now
+report AVAILABLE with real data (10 rows/25 columns and 10 rows/7 columns for the default
+WR/ros health-check params). Also updated the module's docstring, which still described the old
+D3-era "blocked by proxy policy" state.
+
+**Regression coverage added:** `tests/integration/test_sources_live.py` previously had no
+`network`-marked test proving FantasyPros or CFBD are reachable with a real key — only a
+"without key" test existed for FantasyPros, and no live test at all for CFBD. Added
+`test_fantasypros_with_key_is_really_reachable` and `test_cfbd_with_key_is_really_reachable`
+(both skip rather than fail when no key is configured, since a paid/free key isn't guaranteed in
+every environment) so a regression in either adapter's URL, auth header, or the provider's own
+API surface gets caught by `make test-network` rather than silently reappearing. `make test`
+(222 passed) and `make lint` both stay clean.
+
+**What this changes:** `docs/DATA_SOURCES.md` — FantasyPros moved from "network-reachable but
+credential-gated" into the AVAILABLE section, describing the real root cause instead of the
+credentials-vs-policy framing D36 used while the cause was still unknown. `docs/TRACEABILITY.md`'s
+FantasyPros row moves from ⚠️ to ✅ MET. `docs/PROJECT_STATE.md`'s FantasyPros note updated to
+match — no longer "needs the user to check the key," since the key was never the problem.
+
+**What this doesn't change:** the same as D36 — DynastyProcess/cfbfastR-data substitutes stay
+wired in as the operating path in existing pipeline code; nothing currently calls the live
+FantasyPros or CFBD adapters outside health checks, and wiring either in for something new is a
+deliberate product decision left for direction, not assumed here. The broader lesson worth
+keeping: a `403` from a real API Gateway response and a `403` from a proxy/policy block can look
+identical from a single status code, and even a byte-identical error body across an unauthenticated
+and an authenticated-but-wrong-resource request doesn't by itself distinguish "bad key" from
+"bad URL" — checking the provider's own documentation before concluding either resolved this
+faster than continuing to guess between credential explanations.
+
+## D38 — Now-live FantasyPros/CFBD actually wired in: a new live FantasyPros market series, and a real (non-fuzzy) identity bridge that resolves D20's college-production gap
+
+D37 left both keys confirmed live but unused by any pipeline code beyond health checks —
+"wiring either in for something new is a deliberate product decision... left for direction, not
+assumed." Asked directly whether that wiring should now happen. Two separate decisions, each
+checked against real data before writing any code rather than assumed from the source becoming
+reachable:
+
+**FantasyPros: start a live snapshot series (user's chosen direction, over a cross-check-only or
+leave-unused alternative).** `market/consensus.py::build_market_snapshot` reads DynastyProcess's
+`fp_ecr_history` — a real *historical* time series that backtesting/EDGE (D16/D21) depend on for
+leakage-safe as-of joins. The live FantasyPros API has no lookback of its own — every call
+returns only *today's* rankings — so it can never be a drop-in replacement for that series; it
+can only be a new, separately-provenanced series accumulated forward from whenever it first
+runs, the same shape of problem `evidence/sleeper_trending.py` (D32) already solved for a
+different live-only source. Implementation: `market_snapshot` gained a `source` column
+(default `'dynastyprocess'`, PK extended to include it) so a live capture can never collide with
+or silently overwrite a DynastyProcess-sourced row for the same player/date/ecr_type — verified
+directly (inserted both for the identical key, both rows persisted, no clobber, INSERT is
+idempotent on re-run). `build_live_fantasypros_snapshot` fetches `consensus_rankings`
+(`position=ALL`, real data reveals `type=ROS` is silently ignored on this key's free tier — see
+below) and inserts as `source='fantasypros_live'`.
+
+**Real finding, not assumed:** requested `type=ROS` per FantasyPros's own documented enum
+(`SPORTRankingTypes` — confirmed valid, case-sensitive uppercase, via the real OpenAPI spec at
+`api.fantasypros.com/public/v2/docs/fantasypros_v2_public.yml`, D37's same doc). The live
+response's own `type`/`ranking_type_name` fields always echo back `"Draft"`/`"draft"` regardless
+of what's requested — checked with and without a `scoring` param, consistent both times. Rather
+than mislabel this as ROS data it doesn't actually contain, tagged it `ecr_type='draft_overall'`
+— an honest label for what's genuinely being captured (this key's free/public tier's Draft-type
+overall consensus), not a guess at what a higher tier might unlock. Also fixed in passing:
+`default_health_params`'s `type: "ros"` (lowercase) was being silently ignored by the real API
+the same way — the real enum values are uppercase; changed to `"ROS"` even though it doesn't
+change what tier serves, so the health check at least sends what it means to.
+
+**CFBD: yes, build the rookie feature (user's explicit direction).** D20 had already ruled out
+cfbfastR-data for college production — not for lack of a source, but because its numeric
+ESPN-style player IDs have no verified bridge to this project's nflverse-derived identity graph,
+and building one via name+school+season fuzzy matching was judged not worth the engineering cost
+given draft capital's own strength as a proxy. Before writing any rookie-modeling code, checked
+whether switching from cfbfastR-data to direct CFBD access changes that verdict — it doesn't on
+its own: cfbfastR-data is itself built by mirroring CFBD's own API, so its numeric IDs are the
+same underlying ID space D20 already found unbridged, not a fresh namespace.
+
+**What actually resolves it:** CFBD's `/draft/picks` endpoint returns both `collegeAthleteId` and
+`nflAthleteId` per real drafted player. Checked `collegeAthleteId` against DynastyProcess's
+`espn_id` for 4 real players (Caleb Williams, Jayden Daniels, Drake Maye, Marvin Harrison Jr.) —
+exact match, 4/4, no fuzzy logic involved: CFBD's numeric athlete ID *is* ESPN's athlete ID.
+`espn_id` was present in DynastyProcess's own crosswalk CSV but omitted from
+`identity/crosswalk.py`'s `DYNASTYPROCESS_ID_COLUMNS` — added it, one line, reusing the existing
+`insert_id_mappings` machinery unchanged. This is a real, verified, non-fuzzy identity bridge,
+not the "materially larger undertaking" D20 correctly avoided; it supersedes D20's verdict for
+CFBD specifically without contradicting D20's original reasoning about cfbfastR-data's own ID space.
+
+**CORRECTION (D39, 2026-08-23 — this paragraph as originally written was wrong).** The claim that
+`espn_id` was "never loaded into `player_id_map`" was false, and was never verified against a
+populated database (this container's DB was empty when D38 was written — `players` had 0 rows, so
+no crosswalk had ever actually been built here). `identity/canonical.py:32` has always loaded
+`espn_id` from nflverse's own `players` table. The first real `identity build` shows
+**16,771 `espn_id` mappings: 16,761 from `nflverse_players`, and only 10 net-new from the
+DynastyProcess column D38 added** (plus 6 cross-source conflicts correctly quarantined). So the
+espn_id↔CFBD bridge itself is real and holds at scale — that part of D38 stands and is what
+resolves D20 — but **D38's own code change contributed ~0.06% of it**; the bridge was already
+almost entirely present via nflverse. The DynastyProcess column is kept (it is harmless, adds 10
+genuine mappings, and surfaces 6 real cross-source disagreements rather than silently picking a
+winner), but D38 took credit for enabling a bridge that mostly already existed. The substantive
+new work in D38 was the CFBD ingestion + the leakage-safe `rookie_features` join, not the identity
+bridge.
+
+**Necessary prerequisite bug found and fixed first:** `sources/cfbd.py` and `sources/fantasypros.py`
+wrote every same-day snapshot to a `local_path` keyed only by dataset + captured-at date, ignoring
+query params — unlike `sources/file_release.py`'s existing `param_suffix` pattern. Fetching CFBD
+`player_usage` for multiple seasons (exactly what college-usage ingestion needs) would have
+silently overwritten each season's file on disk while `snapshot_registry` still recorded distinct
+rows pointing at the now-wrong content — a real provenance bug, caught before it could produce a
+single row of fabricated-by-omission data. Fixed both adapters to include a param suffix in the
+filename, matching `file_release.py`; added a regression test proving two same-day fetches with
+different params no longer collide.
+
+**Implementation:** `college_usage` (new table: player_id, season, usage_overall/pass/rush,
+source_snapshot_id) is built by `features/college_production.py::build_college_usage`, looping
+`CfbdSource.fetch("player_usage", year=...)` over every season a rookie in `players` actually
+needs (`seasons_needed_for_rookies`: `DISTINCT rookie_season - 1` for skill-position rookies),
+joined via `player_id_map WHERE id_type='espn_id'`. `features/rookie.py::build_rookie_features`
+LEFT JOINs `college_usage` on `(player_id, season = rookie_season - 1)` — the player's *final
+college season only*, never their own NFL season, the same leakage rule
+`landing_team_prior_pass_rate` already follows (verified with a regression test: a
+`college_usage` row that shares the rookie's *NFL* season number, not their college one, must
+not join in). `models/rookie/features.py`'s `FEATURES` gained `college_usage_overall/pass/rush`;
+missing values impute to 0.0, same convention already used for missing combine measurables.
+`FEATURE_VERSION` bumped `rookie_features_v1` -> `rookie_features_v2` so a future training run is
+correctly distinguished from anything trained on the old 12-feature set.
+
+**Verified against real data throughout, not assumed:** every new function was smoke-tested
+against the real live APIs before any unit test was written — `build_live_fantasypros_snapshot`
+correctly resolved Ja'Marr Chase's real WR1 overall rank via the real join; `build_college_usage`
+pulled Caleb Williams's real 2023 USC usage share (overall 0.624, pass 0.915, rush 0.222) via the
+real espn_id bridge; `build_rookie_features` correctly joined that through into `rookie_features`
+end-to-end. Offline regression coverage added afterward
+(`tests/unit/test_market_live_fantasypros.py`, `tests/unit/test_college_production.py`, new cases
+in `tests/unit/test_rookie_models.py`, plus the path-collision test in
+`tests/contracts/test_source_adapters.py`) mocks httpx with these exact real response shapes.
+`make test` (237 passed) and `make lint` both clean.
+
+**What this doesn't do:** no rookie model was retrained or re-evaluated against the new v2
+feature set — that requires a full pipeline run (`sources ingest` -> `identity build` ->
+`features build-college-usage` -> `features build` -> `models rookie train`) against real
+multi-season data, a heavier, separate operational step from wiring the feature in correctly and
+proving it joins leakage-safely. Until that run happens, `rookie_features_v2`'s three new columns
+exist, are correctly populated, and are in `FEATURES`, but no trained model has actually used
+them yet — this is deliberately not claimed as "the rookie model got better," only as "the
+missing signal is now real, correctly joined, and ready to train on." Also unchanged: the
+DynastyProcess/cfbfastR-data substitutes stay wired in as the operating path in existing
+pipeline code (no product decision was made to remove either), and per-expert FantasyPros
+weighting stays LIMITED regardless (D4) — this tier's consensus-only data doesn't touch that gap.
+
+## D39 — First real end-to-end pipeline run: college production measured and NOT adopted; three real bugs found, including a schema-migration gap that made D38 broken-on-upgrade
+
+D38 wired CFBD college production into `rookie_features` and bumped the feature set to v2, but
+explicitly did not claim the model improved — no model had been trained on it. This entry is
+that missing measurement, plus what running the real pipeline for the first time exposed. The
+database in this container was empty (`players` = 0 rows) before this run, so nothing in D38 had
+ever executed against real data end to end.
+
+**Pipeline actually run** (2012–2025): `sources ingest` (155 OK / 20 NOT_FOUND, all expected —
+2026 preseason and pre-2022 `ftn_charting`) → `identity build` (25,050 players) →
+`features build-college-usage` → `features build` (241,208 player-weeks, 26,816 player-seasons,
+1,360 rookie-seasons) → `train rookie --ablation`.
+
+### The measurement
+
+A naive "train v2 and look at the numbers" cannot answer this: `evaluation_results` and
+`classification_results` are keyed on (model_name, season|cohort, position), so a second training
+run silently overwrites the first and leaves no baseline. So `run_rookie_models` gained optional
+`features`/`feature_version`/`model_suffix` parameters (defaulting to production, so no existing
+caller changes), `models/rookie/ablation.py` pairs the two arms fold by fold, and
+`train rookie --ablation` runs both over identical folds with identical hyperparameters and seed.
+
+**Decision rule, fixed before any numbers were seen:** the breakout classifier is the
+decision-relevant output, so Brier governs; regression Spearman is secondary; adopt the college
+features only if the classifier improves.
+
+**Result — primary (draft classes 2019–2025, 28 paired folds each):**
+
+| metric | baseline | +college | delta | better |
+|---|---|---|---|---|
+| regression MAE (lower better) | 37.5379 | 37.5968 | +0.0589 | baseline |
+| regression Spearman (higher better) | 0.6182 | 0.6179 | −0.0003 | baseline |
+| breakout Brier (lower better) | 0.0678 | 0.0708 | +0.0030 | baseline |
+| breakout accuracy (higher better) | 0.8994 | 0.9005 | +0.0010 | +college |
+
+**Robustness check.** Coverage is heavily skewed — CFBD's `player/usage` returns nothing before
+2013, and real coverage of `rookie_features` runs 0% for classes 2012–2015, 5% (2016), 26%
+(2017), 56% (2018), then 83–97% for 2019–2025. Since `models/rookie/data.py` imputes a missing
+college value to 0.0, a plausible alternative explanation for the null result was a train/serve
+mismatch: models trained mostly on zero-imputed classes, then asked to predict classes where the
+feature is genuinely present. So the ablation was re-run restricted to classes where *both*
+training and target data are ≥83% covered (targets 2022–2025, training from 2019; 16 paired
+folds). That made it **worse, not better** — baseline wins all four metrics there
+(MAE +1.0585, Spearman −0.0016, Brier +0.0032, accuracy −0.0099). The coverage cliff is not the
+explanation; the signal simply is not there.
+
+**Decision: KEEP BASELINE.** `FEATURES` reverts to the 12-feature D20 set and `FEATURE_VERSION`
+back to `rookie_features_v1` — claiming v2 would misdescribe every model registered and every
+prediction written. What is deliberately *kept*: the CFBD ingestion, the `college_usage` table,
+the `rookie_features` columns, the espn_id bridge, `FEATURES_WITH_COLLEGE`, and the whole
+ablation harness. The data is real, correctly joined, and leakage-safe; the experiment is now
+one command to re-run (`train rookie --ablation`) if CFBD backfills older seasons or someone
+engineers a college feature with more signal than raw usage share. Reports:
+`reports/rookie_college_production_ablation.md` and `..._highcov.md`.
+
+An honest reading of D38 in hindsight: it was a well-built pipeline for a feature that does not
+earn its place. That is a normal experimental outcome, and the value delivered is the
+now-reproducible ability to ask the question, not a model improvement.
+
+### Three real bugs found by running it for real
+
+1. **`init_db` had no migration path — D38 was broken on upgrade.** Every DDL statement is
+   `CREATE TABLE IF NOT EXISTS`, which is idempotent for new tables but silently ignores a
+   *column* added to an existing one. D38 added `rookie_features.college_usage_*` and
+   `market_snapshot.source` (and widened market_snapshot's PRIMARY KEY) and was verified only
+   against fresh in-memory test databases — so the entire suite passed while any pre-existing
+   database would hard-crash: `features build` died with
+   `BinderException: Referenced update column college_usage_overall not found in table`, and
+   `market capture-live-fantasypros` would have failed the same way. Fixed with a real migration
+   path (`ADD_COLUMN_MIGRATIONS` + a guarded `market_snapshot` rebuild, since DuckDB cannot ALTER
+   a primary key) applied by `init_db`, and `tests/unit/test_schema_migrations.py` which builds
+   the *old* schema first — the one thing no other test in this suite does.
+
+2. **The ablation's own fold-pairing was wrong, and produced a plausible-looking false result.**
+   `run_rookie_models` trains one model per position, but `evaluate_and_record` reports each
+   one's headline row at `position='ALL'`. Keying folds on (class, position) therefore collapsed
+   all four position models onto one key and compared the candidate's QB model against the
+   baseline's TE model. The first run reported a **+13.69 MAE regression** — caught only because
+   that is implausible next to a −0.0003 Spearman delta, not because anything failed. Real
+   per-model deltas were ~0.06. Fixed by including the (suffix-stripped) model name in the fold
+   key; `tests/unit/test_rookie_ablation.py` asserts identical arms produce exactly zero delta,
+   which is what fails under the collapsing key.
+
+3. **`load_rookie_class_data` hardcoded `FEATURES` in its SELECT**, so once production reverted
+   to the 12-feature set the ablation's candidate arm got a DataFrame missing the columns it
+   asked for and died on a pandas `KeyError` at fit time. Now takes a `features` parameter.
+
+Two smaller ones, also from real execution: `_prediction_id` did not include `feature_version`,
+so two arms predicting the same player/class collided on `rookie_predictions`' primary key (the
+UNIQUE-targeted ON CONFLICT clause does not catch that); and `_register_model`'s
+`ON CONFLICT DO UPDATE` omitted `feature_version`, leaving a stale value on re-training.
+
+### D38 correction, and a pipeline-ordering trap
+
+`seasons_needed_for_rookies` had no lower bound, so it derived college seasons from the full
+nflverse history and issued ~40 real CFBD requests back to **1973**, every one returning an empty
+list (verified: 1973/1990/2004/2010 → `[]`, 2013 → 2991 rows). Floored at
+`CFBD_USAGE_FIRST_SEASON = 2013`. Separately, D38's claim that `espn_id` was "never loaded into
+`player_id_map`" was false and is corrected in place above — `identity/canonical.py:32` always
+loaded it from nflverse; of 16,771 espn_id mappings, 16,761 come from nflverse and only 10 from
+the column D38 added.
+
+**A fourth bug, found by running the actual app.** With the pipeline populated, the FastAPI
+backend and the React SPA were launched and driven in a real browser (all six views, plus a live
+draft recommendation and a rookie-comps drill-down). `GET /rookies` returned **every rookie once
+per trained model version** — `rookie_predictions` is legitimately keyed on
+(player, draft_class, model_version), and the ablation made that several versions, so Ashton
+Jeanty appeared three times with three different numbers. It reads as duplicate players, not as
+alternative models. The endpoint now filters to the production `FEATURE_VERSION` by default, with
+an optional `model_version` query param to inspect an arm. No test covered this and none would
+have: it only appears once more than one arm has been trained against the same database.
+
+Finally, D38 left a trap: `features build-college-usage` must run **between** `identity build`
+and `features build`, because `features build` is what joins `college_usage` into
+`rookie_features`. Running it after instead leaves the columns NULL, which `data.py` imputes to
+0.0 — i.e. the model trains on zeroed college features with no warning. There was no Makefile
+target and no README step for it, so `make ingest && make identity && make features && make train`
+did exactly that. Both now fixed.
+
+## D40 — The app was projecting an already-played rookie class; three chained defects kept the incoming 2026 class unprojectable
+
+Reported by the user against the running app in August 2026: the Rookies view showed the 2025
+class. That is a backtest, not a forecast — the 2025 season has been played. The incoming class
+(Fernando Mendoza, Ty Simpson, KC Concepcion et al.) was absent entirely. Three independent
+defects, each of which alone was sufficient to cause it:
+
+**1. nflverse's `players` file lags the draft, and `draft_picks` changed shape.** All 694
+`rookie_season=2026` rows in nflverse `players` have a NULL `draft_year`, while `draft_picks`
+already carries the full 257-pick 2026 draft. Draft capital is the single strongest rookie
+feature (D20), so without it the class cannot be projected meaningfully at all. Worse, the
+obvious join fails: `draft_picks.gsis_id` holds real gsis ids for 2022–2025 (262/259/257/257 rows,
+all `00-%`) but for 2026 holds **230 esb-style ids and zero real gsis ids** — real gsis ids are
+evidently assigned later. Fixed by COALESCEing draft capital from `draft_picks` inside
+`build_players_spine`, joining `gsis_id` with an `esb_id` fallback. Done inside the spine build
+rather than as a follow-up UPDATE because DuckDB implements UPDATE as delete+insert and refuses
+it on a table other tables hold foreign keys into, which `players` is (hit this for real).
+
+**2. The spine upsert could never refresh draft capital.** `ON CONFLICT (player_id) DO UPDATE`
+listed only display_name/position/position_group/last_season/status. A player who first enters
+`players` before their draft data is published — i.e. every incoming rookie — keeps NULL capital
+forever, no matter how many times identity is rebuilt. Now COALESCE-updates draft_round/pick/team,
+draft_year and rookie_season, so a later snapshot can fill a gap but never erase a known value.
+After the fix, 74 of the 234 2026 skill players carry real capital (Mendoza R1P1 LVR, Simpson
+R1P13 LAR, Concepcion R1P24 CLE); the remaining ~160 are genuine UDFAs and take the existing
+`UNDRAFTED_*_FALLBACK` path.
+
+**3. `rookie_features` structurally cannot hold an unplayed class.** It INNER JOINs
+`player_season_stats` on the rookie's *own* season and declares `rookie_year_ppr_points` /
+`breakout_top24` NOT NULL — correctly, because it is the labeled training set. So even with
+capital fixed, the 2026 class had nowhere to live. Added `rookie_projection_features` (same
+feature columns, no outcome) and `project_rookie_class()`, which trains on every labeled class
+before the target and writes `rookie_predictions` **without** any evaluation rows — there is no
+outcome to score against, and publishing a metric for an unplayed season would fabricate one.
+
+Kept as a separate table rather than relaxing `rookie_features` to nullable outcomes, so an
+unlabeled row can never be silently picked up as training data. The feature SQL itself is shared
+verbatim between the two builders (`_FEATURE_CTES`/`_FEATURE_SELECT`/`_FEATURE_JOINS`) and the
+imputation is shared between the two loaders (`_impute`): the labeled and unlabeled paths MUST
+compute features identically, since one trains the model and the other is what the model is asked
+to score, and divergence there would be silent and severe.
+
+**Result** (`alpha-squad train rookie-project --draft-class 2026`, trained on classes 2000–2025,
+234 players): Jeremiyah Love (RB, R1P3) 233.3 pts / 88% breakout; Carnell Tate (WR, R1P4) 202.8 /
+48%; Fernando Mendoza (QB, R1P1) 196.3 / 86%; Ty Simpson (QB, R1P13) 177.4 / 57%; KC Concepcion
+(WR, R1P24) 139.9 / 15%.
+
+**The stale default itself.** The UI hardcoded `useState(2025)`, which is how an already-played
+class was on screen. Hardcoding 2026 just re-breaks next August, so `GET /rookies/classes` now
+returns the classes that actually have predictions (newest first) and the view defaults to the
+newest. Three sibling views (Rankings, EDGE, League) still hardcode a 2025 season default; they
+are left as-is deliberately because the data behind them genuinely stops at 2025 — changing the
+default without generating 2026 rankings/EDGE would show an empty view, which is worse. That is
+recorded here as a known limitation rather than silently half-fixed.
+
+**A process note.** `npx tsc --noEmit` at the repo root reported success on frontend code that
+was actually broken (`get is not defined` — I had called a helper that does not exist). The root
+`tsconfig.json` is a project-references stub and type-checks nothing; the real check is
+`tsc -p tsconfig.app.json`. The error surfaced only when the page was driven in a real browser.
+Worth knowing before trusting a green typecheck here.

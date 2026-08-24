@@ -200,7 +200,13 @@ M4_BASELINES_DDL = [
         ecr_best DOUBLE,
         ecr_worst DOUBLE,
         source_snapshot_id VARCHAR,
-        PRIMARY KEY (player_id, scrape_date, ecr_type)
+        -- 'dynastyprocess' (default): DynastyProcess's fp_ecr_history mirror, the real
+        -- historical time series backtesting/EDGE depend on (D3/D16/D21). 'fantasypros_live'
+        -- (D38): today-only captures from the live FantasyPros API, accumulated forward from
+        -- 2026-08-23 -- a separate, provenance-tagged series, never blended into the
+        -- DynastyProcess-sourced rows, so no existing leakage-safety guarantee changes.
+        source VARCHAR NOT NULL DEFAULT 'dynastyprocess',
+        PRIMARY KEY (player_id, scrape_date, ecr_type, source)
     )
     """,
     # One row per (baseline/model, position, season, player) prediction, so the evaluation
@@ -360,9 +366,24 @@ M7_ROOKIE_DDL = [
         source_snapshot_id VARCHAR
     )
     """,
-    # College production is not included here — no verified ID bridge to cfbfastR-data
-    # exists (docs/DECISIONS.md D20). Draft capital + combine + landing spot are the v1
-    # rookie feature set; all cleanly identity-linked, no fuzzy matching.
+    # College production via CFBD, bridged by espn_id (docs/DECISIONS.md D38 -- verified
+    # against real data: CFBD's collegeAthleteId/player_usage.id/recruiting_players.athleteId
+    # are the same numeric ID as DynastyProcess's espn_id, no fuzzy matching, superseding
+    # D20's "no verified ID bridge" finding for cfbfastR-data's different ID namespace).
+    """
+    CREATE TABLE IF NOT EXISTS college_usage (
+        player_id VARCHAR NOT NULL,
+        season INTEGER NOT NULL,
+        usage_overall DOUBLE,
+        usage_pass DOUBLE,
+        usage_rush DOUBLE,
+        source_snapshot_id VARCHAR,
+        PRIMARY KEY (player_id, season)
+    )
+    """,
+    # Draft capital + combine + landing spot are the v1 rookie feature set (D20); college
+    # usage share (D38) extends it -- final college season only (rookie_season - 1), same
+    # never-the-rookie's-own-season leakage rule as landing_team_prior_pass_rate.
     """
     CREATE TABLE IF NOT EXISTS rookie_features (
         player_id VARCHAR PRIMARY KEY,
@@ -380,9 +401,39 @@ M7_ROOKIE_DDL = [
         weight DOUBLE,
         landing_team_prior_pass_rate DOUBLE,
         landing_team_prior_plays DOUBLE,
+        college_usage_overall DOUBLE,
+        college_usage_pass DOUBLE,
+        college_usage_rush DOUBLE,
         rookie_year_ppr_points DOUBLE NOT NULL,
         rookie_year_games INTEGER,
         breakout_top24 BOOLEAN NOT NULL,
+        built_at TIMESTAMP NOT NULL
+    )
+    """,
+    # Same feature columns as rookie_features, deliberately WITHOUT the outcome columns: this
+    # holds a draft class whose NFL season hasn't been played, so there is nothing to label it
+    # with (D40). Separate from rookie_features so an unlabeled row can never be picked up as
+    # training data -- rookie_features stays the labeled training set by construction.
+    """
+    CREATE TABLE IF NOT EXISTS rookie_projection_features (
+        player_id VARCHAR PRIMARY KEY,
+        draft_class INTEGER NOT NULL,
+        position VARCHAR NOT NULL,
+        draft_round INTEGER,
+        draft_pick INTEGER,
+        forty DOUBLE,
+        bench DOUBLE,
+        vertical DOUBLE,
+        broad_jump DOUBLE,
+        cone DOUBLE,
+        shuttle DOUBLE,
+        height DOUBLE,
+        weight DOUBLE,
+        landing_team_prior_pass_rate DOUBLE,
+        landing_team_prior_plays DOUBLE,
+        college_usage_overall DOUBLE,
+        college_usage_pass DOUBLE,
+        college_usage_rush DOUBLE,
         built_at TIMESTAMP NOT NULL
     )
     """,
@@ -685,3 +736,51 @@ ALL_DDL: list[str] = [
     *M11_AGENTS_DDL,
     *M13_SIMULATION_DDL,
 ]
+
+# ---------------------------------------------------------------------------
+# Migrations
+#
+# Every statement above is CREATE TABLE IF NOT EXISTS, which is idempotent for *new* tables
+# but silently does nothing to a table that already exists -- including when this file adds a
+# column to it. That gap shipped a real bug in D38: `rookie_features.college_usage_*` and
+# `market_snapshot.source` were added to the DDL and verified only against fresh in-memory
+# test databases, so on any pre-existing database `features build` hard-crashed with
+# `BinderException: Referenced update column college_usage_overall not found in table` and
+# `market capture-live-fantasypros` would have failed the same way. Found by running the real
+# pipeline against a real database for the first time (D39).
+#
+# ADD COLUMN IF NOT EXISTS is itself idempotent in DuckDB (verified), so these are safe to
+# re-run on every init_db, same contract as the CREATE statements.
+ADD_COLUMN_MIGRATIONS = [
+    "ALTER TABLE rookie_features ADD COLUMN IF NOT EXISTS college_usage_overall DOUBLE",
+    "ALTER TABLE rookie_features ADD COLUMN IF NOT EXISTS college_usage_pass DOUBLE",
+    "ALTER TABLE rookie_features ADD COLUMN IF NOT EXISTS college_usage_rush DOUBLE",
+]
+
+# market_snapshot needs more than an added column: D38 also widened its PRIMARY KEY to include
+# `source`, and DuckDB cannot ALTER a primary key in place. The table is fully reproducible
+# from stored snapshots (`alpha-squad market build`), so a pre-D38 table is rebuilt with the
+# current schema and its existing rows carried over tagged as 'dynastyprocess' -- which is
+# exactly what they are, since that was the only writer before D38.
+MARKET_SNAPSHOT_REBUILD = """
+ALTER TABLE market_snapshot RENAME TO market_snapshot_pre_d38;
+CREATE TABLE market_snapshot (
+    player_id VARCHAR NOT NULL,
+    scrape_date DATE NOT NULL,
+    ecr_type VARCHAR NOT NULL,
+    position VARCHAR,
+    ecr_rank DOUBLE NOT NULL,
+    ecr_best DOUBLE,
+    ecr_worst DOUBLE,
+    source_snapshot_id VARCHAR,
+    source VARCHAR NOT NULL DEFAULT 'dynastyprocess',
+    PRIMARY KEY (player_id, scrape_date, ecr_type, source)
+);
+INSERT INTO market_snapshot
+    (player_id, scrape_date, ecr_type, position, ecr_rank, ecr_best, ecr_worst,
+     source_snapshot_id, source)
+SELECT player_id, scrape_date, ecr_type, position, ecr_rank, ecr_best, ecr_worst,
+       source_snapshot_id, 'dynastyprocess'
+FROM market_snapshot_pre_d38;
+DROP TABLE market_snapshot_pre_d38;
+"""

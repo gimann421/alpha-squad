@@ -201,20 +201,53 @@ def build_players_spine(
     src = reader_expr(snap["local_path"])
     snapshot_id = snap["snapshot_id"]
 
+    # Draft capital is COALESCEd from `draft_picks` because nflverse's `players` file lags the
+    # draft for the newest class: verified against real data, all 694 rookie_season=2026 rows
+    # have a NULL draft_year while `draft_picks` already carries the full 257-pick 2026 draft.
+    # Draft capital is the strongest single rookie feature, so without this the incoming class
+    # cannot be projected at all (docs/DECISIONS.md D40).
+    #
+    # The join falls back to esb_id because `draft_picks.gsis_id` changes shape for the newest
+    # class -- 2022-2025 hold real gsis ids ('00-%'), 2026 holds 230 esb-style ids and zero real
+    # gsis ids (real ones are evidently assigned later). Done here, inside the spine build,
+    # rather than as a later UPDATE: DuckDB implements UPDATE as delete+insert and refuses it on
+    # a table other tables hold foreign keys into, which `players` is.
+    picks = require_snapshot(con, "nflverse", "draft_picks")
+    picks_src = reader_expr(picks["local_path"])
+    con.execute(
+        f"""
+        CREATE OR REPLACE TEMP TABLE draft_capital AS
+        SELECT source_id, any_value(round) AS round, any_value(pick) AS pick,
+               any_value(team) AS team
+        FROM (
+            SELECT gsis_id AS source_id, round, pick, team
+            FROM {picks_src}
+            WHERE gsis_id IS NOT NULL AND round IS NOT NULL
+        )
+        GROUP BY source_id
+        """
+    )
+
     con.execute(
         f"""
         CREATE OR REPLACE TEMP TABLE spine_source AS
         SELECT
-            gsis_id,
-            display_name, first_name, last_name,
-            position, position_group,
-            birth_date,
-            college_name,
-            draft_year, draft_round, draft_pick, draft_team,
-            rookie_season, last_season, status,
-            pfr_id, espn_id, otc_id, esb_id, nfl_id, smart_id, pff_id
-        FROM {src}
-        WHERE gsis_id IS NOT NULL
+            p.gsis_id,
+            p.display_name, p.first_name, p.last_name,
+            p.position, p.position_group,
+            p.birth_date,
+            p.college_name,
+            p.draft_year,
+            COALESCE(p.draft_round, dc.round) AS draft_round,
+            COALESCE(p.draft_pick, dc.pick) AS draft_pick,
+            COALESCE(p.draft_team, dc.team) AS draft_team,
+            p.rookie_season, p.last_season, p.status,
+            p.pfr_id, p.espn_id, p.otc_id, p.esb_id, p.nfl_id, p.smart_id, p.pff_id
+        FROM {src} p
+        LEFT JOIN draft_capital dc
+               ON dc.source_id = p.gsis_id
+               OR (p.draft_round IS NULL AND dc.source_id = p.esb_id)
+        WHERE p.gsis_id IS NOT NULL
         """
     )
 
@@ -237,6 +270,16 @@ def build_players_spine(
             position_group = excluded.position_group,
             last_season = excluded.last_season,
             status = excluded.status,
+            -- Draft capital has to refresh on re-run, not just on first insert: a rookie
+            -- enters `players` before the draft data for their class is published, so a row
+            -- first written with NULL capital would otherwise keep it forever -- which is
+            -- exactly what left the 2026 class unprojectable (D40). COALESCE so a later
+            -- snapshot that has gone NULL can never erase a value already known.
+            draft_round = COALESCE(excluded.draft_round, players.draft_round),
+            draft_pick = COALESCE(excluded.draft_pick, players.draft_pick),
+            draft_team = COALESCE(excluded.draft_team, players.draft_team),
+            draft_year = COALESCE(excluded.draft_year, players.draft_year),
+            rookie_season = COALESCE(excluded.rookie_season, players.rookie_season),
             source_snapshot_id = excluded.source_snapshot_id
         """
     )

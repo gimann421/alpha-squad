@@ -14,7 +14,7 @@ milestone. See `docs/TRACEABILITY.md` for the acceptance-criteria-level mapping.
 | M4 Baselines + evaluation | DONE | 3 baselines (previous-year, weighted-2yr, ECR-implied) walk-forward evaluated 2018-2025 against 21,421 real player-seasons and 210,730 real market snapshots; shared evaluation harness (MAE/RMSE/R²/Spearman/top-N hit rate/tier accuracy) reused by every later milestone; 65 offline + 10 network tests passing. **One number in this milestone's report was wrong and got corrected in M5 — see D19.** |
 | M5 Established-player ML | DONE | Position-specific Ridge/CatBoost/XGBoost + opportunity-only + team-environment-only + ensemble, both weekly (in-season) and season-level (preseason, apples-to-apples vs M4); team_week_stats/features extend the M3 panel; model_registry tracks version/validation; 70 offline + 12 network tests passing. One real evaluation-harness bug found and fixed (D19), affecting M4's reports too. |
 | M6 Uncertainty + calibration | DONE | Split-conformal p10/p25/median/p75/p90 + Monte Carlo top-12/24 probabilities on the M5 season-level CatBoost model; walk-forward 3-way split (train/calibrate/target) so calibration is genuinely out-of-sample; real measured coverage_10_90 mostly 0.72-0.90 (target 0.80) across 2019-2025/QB-RB-WR-TE — legitimately well-calibrated, not just plausible-looking; 82 offline + 13 network tests passing |
-| M7 Rookie/prospect intelligence | DONE | Draft capital + combine + prior-season landing-spot features (college production LIMITED — no verified ID bridge to cfbfastR exists, D20); CatBoost regression (rookie-year PPR) + classifier (top-24 breakout, Brier-scored) walk-forward by draft class; nearest-neighbor historical comps; 1,077 real rookie-seasons, 88 offline + 15 network tests passing; two real bugs found and fixed (combine height stored as "6-0" string, comps dtype crash) |
+| M7 Rookie/prospect intelligence | DONE | Draft capital + combine + prior-season landing-spot features (college production LIMITED — D20 found no verified ID bridge to cfbfastR; D38 built a real CFBD/espn_id-bridged one, and **D39 measured it and did not adopt it** — neutral-to-worse on every metric, so the production feature set stays at the 12-feature D20 baseline); CatBoost regression (rookie-year PPR) + classifier (top-24 breakout, Brier-scored) walk-forward by draft class; nearest-neighbor historical comps; 1,077 real rookie-seasons, 88 offline + 15 network tests passing; two real bugs found and fixed (combine height stored as "6-0" string, comps dtype crash) |
 | M8 Market + EDGE | DONE | market_snapshot extended to ro/do/rsf/dsf (2QB-aware); dynasty_values (681 real players, 97.6% identity coverage); EDGE (rank/points/probability edge, BUY/HOLD/SELL/WATCH) gated so a raw rank discrepancy alone can never produce BUY/SELL (D21); historical EDGE validation shows the real BUY cohort beat market-implied points in 3 of 4 scored seasons 2022-2025 (recomputed in M13 after a data-correctness fix — see D28 — numbers below reflect the M13-era figures); 102 offline + 18 network tests passing (both suites reran clean end-to-end after this milestone) |
 | M9 Evidence engine | DONE | 4 real Strong-tier detectors (depth-chart move, injury self/teammate-opportunity, roster transaction, usage-share shift) on officially-sourced nflverse data; 33,311 real events across 2019-2025; bounded (±15%) evidence-adjusted weekly projections, never overwriting the base M5 prediction; wired as a real (mostly-neutral-in-practice) veto into M8's EDGE gate (D23); 123 offline + 21 network tests passing (verified via `pytest -m "not network"` / `-m network` directly, not estimated) |
 | M10 League decision engine | DONE | Real value-based-drafting replacement/scarcity derived from the league's own lineup config (verified: 2QB target league produces 20 real dedicated QB starters on real 2025 data, exactly 10 teams x 2 QB slots); draft/waiver/dynasty-trade recommendations with alternatives, roster fit, next-pick survival probability, and real evidence-driven value-spike bidding; the M7 rookie-prediction fallback was confirmed live against a real rookie-only player; 152 offline + 26 network tests passing |
@@ -32,6 +32,14 @@ milestone. See `docs/TRACEABILITY.md` for the acceptance-criteria-level mapping.
   **Update (D31, 2026-08-22): the environment's network policy changed. `sleeper` is now
   genuinely AVAILABLE with real data; `fantasypros`/`cfbd` are now network-reachable too and
   blocked only on the still-missing API keys, not policy — see `docs/DATA_SOURCES.md`.**
+  **Update (D36, 2026-08-23): `cfbd` moved from NO_CREDENTIALS to genuinely AVAILABLE — a real
+  `CFBD_API_KEY` is live, verified with real data across all 3 datasets. `fantasypros` is not
+  resolved the same way: a real `FANTASYPROS_API_KEY` is present and being sent, but FantasyPros's
+  own API rejects it (`403 Forbidden`), so it stays blocked, now for a different, more specific
+  reason than a missing key — see `docs/DATA_SOURCES.md`.**
+  **Update (D37, 2026-08-23): `fantasypros` is now also genuinely AVAILABLE — the `403 Forbidden`
+  was a wrong adapter base URL (missing `/public`), not a bad or unrotated key; fixed, both
+  datasets confirmed live with real data — see `docs/DATA_SOURCES.md`.**
 - `snapshot_registry` + `source_health_log` tables in DuckDB; every fetch writes an immutable
   file under `data/raw/<source>/<dataset>/captured_at=<date>/...` and is content-hashed.
 - `alpha-squad sources status` and `alpha-squad sources ingest --season-start Y --season-end Y`
@@ -197,6 +205,18 @@ milestone. See `docs/TRACEABILITY.md` for the acceptance-criteria-level mapping.
   than this milestone's budget justified, especially since draft capital already
   substantially proxies for it (D20). Not fabricated via a shaky join; documented as a real
   gap with a defensible fallback.
+  **Update (D38, 2026-08-23): the identity bridge exists after all — CFBD's own numeric athlete
+  IDs are the same ID as `espn_id`, verified against real players with zero fuzzy matching.
+  `college_usage` (season usage share, via CFBD) is joined into `rookie_features` for each
+  rookie's final college season only, leakage-safe.**
+  **Update (D39, same day): the feature was then actually measured, and rejected.** Over
+  identical walk-forward folds the college features were neutral-to-slightly-worse on every
+  metric that matters (breakout Brier +0.0030 vs baseline; worse on all four metrics when
+  restricted to draft classes with ≥83% coverage). `FEATURES` reverts to the 12-feature D20
+  baseline and `FEATURE_VERSION` to `rookie_features_v1`. The data pipeline, the bridge and the
+  ablation harness are all kept — the experiment re-runs with
+  `alpha-squad train rookie --ablation`. So college production remains LIMITED, but now for a
+  measured reason rather than a missing-source one. See D39.
 - CatBoostRegressor (rookie-year PPR points) + CatBoostClassifier (top-24 breakout,
   Brier-scored) walk-forward strictly by draft class (train on classes < C, predict C).
   Real results: regression Spearman mostly 0.4-0.8 (rookie prediction is inherently noisier
@@ -582,24 +602,53 @@ codebase's own `FLEX_ELIGIBILITY` registry: Sleeper's real superflex slot is spe
 a new unit test, not live data, and fixed additively (both spellings now registered, so no
 existing manual YAML using the unspaced form breaks).
 
-**Honesty about verification status:** the Sleeper hydration logic is unit-tested against a
-realistic fixture built from Sleeper's documented public API shape, and the code path is real and
-wired end to end — but it has NOT yet been run against a real Sleeper league, because the user
-has not yet supplied a real league ID despite indicating they would. A live test
-(`tests/integration/test_sleeper_league_context_live.py`) is written and ready: it skips itself
-with a clear message unless `ALPHA_SQUAD_TEST_SLEEPER_LEAGUE_ID` is set, and specifically asserts
-`unrecognized_flex_slots == []` — the exact check that would catch the `SUPER_FLEX`-style mistake
-for real, not just plausibly. Until that runs, treat the Sleeper field mapping as implemented and
-tested-as-far-as-possible, not as confirmed-correct-against-real-data.
-
 11 new offline tests (222 total: 6 `resolve_league`/registry unit tests, 4 Sleeper-context
-mapping unit tests, 1 API registry test) and 1 new live network test (40 total, currently
-skipped pending a real league ID).
+mapping unit tests, 1 API registry test) and 1 new live network test (40 total).
+
+**Update (D34, same day):** the user supplied two real Sleeper league ids. The live test above
+ran against both for real and passed, including `unrecognized_flex_slots == []` — confirming the
+`SUPER_FLEX` fix (and the rest of `FLEX_ELIGIBILITY`) against real data, not just the documented
+API shape. Both are now registered (`dilworth`: 12-team redraft/1QB/PPR; `boys_of_fall`: 10-team
+dynasty/2QB/PPR) and switchable exactly like `target_league`. The Sleeper field mapping is no
+longer "implemented but unverified" — it is verified.
+
+**Update (D35, same day):** separately, real `FANTASYPROS_API_KEY`/`CFBD_API_KEY` values were
+briefly committed to the tracked `.env.example` on `main` (a mistake, not this project's design —
+the intended path is a gitignored `.env` or the deployment's own env-var config) and, since this
+repo is public, were live-exposed until fixed. Fixed on `main` (`aa9e841`, restoring placeholders,
+with the user's explicit go-ahead since `main` is outside this project's designated branch) and a
+durable guardrail comment added directly in `.env.example` itself. The user was told to rotate
+both keys at their providers regardless of the repo fix, since a repo-side fix cannot undo a
+credential already having been public. See D35 for the full account.
+
+**Update (D36, 2026-08-23):** re-verified in a fresh container. `CFBD_API_KEY` is confirmed picked
+up and live — all 3 CFBD datasets (`teams`, `player_usage`, `recruiting_players`) return real
+data; direct CFBD access is now AVAILABLE, no longer pending. `FANTASYPROS_API_KEY` is also
+confirmed picked up (present, sent as the `x-api-key` header) but FantasyPros's own API rejects it
+(`403 Forbidden`) — network policy is not the blocker (confirmed via raw response headers showing
+a real AWS API Gateway/CloudFront response, not a proxy error), so this is not a repeat of the
+"not yet picked up" state; it needs the user to check the key itself at FantasyPros's dashboard.
+See D36 for the full account.
+
+**Update (D37, 2026-08-23):** the FantasyPros `403 Forbidden` above was not a key problem — the
+user confirmed the key was already correctly rotated, which prompted checking FantasyPros's own
+API docs instead of continuing to suspect the key. `sources/fantasypros.py`'s base URL was missing
+a `/public` path segment. Fixed; both FantasyPros datasets now confirmed AVAILABLE with real data.
+Direct FantasyPros access is no longer pending or blocked. See D37 for the full account.
 
 **Still not built:** manual/non-Sleeper league configs for the user's other leagues — needs the
 actual league details (teams, scoring, roster slots) from the user, not supplied yet.
 
 ## Known limitations (see docs/DECISIONS.md for full reasoning)
+- **Update (D37, 2026-08-23):** FantasyPros is now also fully AVAILABLE — the `403 Forbidden`
+  reported below (D36) was a wrong adapter base URL, not a bad/unrotated key; fixed. Both CFBD
+  and FantasyPros now return real data with their configured keys. See `docs/DATA_SOURCES.md`
+  for the current, authoritative status.
+- **Update (D36, 2026-08-23):** CFBD is now fully AVAILABLE with a live `CFBD_API_KEY` (real data
+  confirmed across all 3 datasets). FantasyPros still isn't — a `FANTASYPROS_API_KEY` is present
+  and being sent, but FantasyPros's own API rejects it with `403 Forbidden`; this is not a policy
+  block, and root cause isn't established (needs the user to check the key). See `docs/DATA_SOURCES.md`
+  for the current, authoritative status.
 - **Update (D31, 2026-08-22):** the line below described the environment as it stood through
   M13. The network policy has since changed: Sleeper is now genuinely AVAILABLE (no code
   change needed — verified with real data), and FantasyPros/CFBD are network-reachable and
@@ -607,18 +656,21 @@ actual league details (teams, scoring, roster slots) from the user, not supplied
   and ESPN (unused) are the only sources still actually inert. See `docs/DATA_SOURCES.md` for
   the current, authoritative status.
 - FantasyPros API, CollegeFootballData, KeepTradeCut, ESPN direct APIs were `BLOCKED_BY_POLICY`
-  in this environment through M13; Sleeper has since cleared, the other three have not (or, for
-  FantasyPros/CFBD, need credentials now that the network layer is open). Verified open-data
+  in this environment through M13; Sleeper, CFBD, and FantasyPros have since cleared (D31/D36/D37),
+  KeepTradeCut and ESPN have not. Verified open-data
   substitutes are wired in regardless (docs/DATA_SOURCES.md). Adapters for the still-blocked
   sources are implemented but inert.
 - Per-expert accuracy weighting: LIMITED to source-level weighting (D4).
 - Automated news/social evidence ingestion: LIMITED to structured official signals (D5).
 - ADP-implied baseline: LIMITED to the ECR-implied substitute; no independent ADP series is
   reachable (D16).
-- Rookie college production: LIMITED — no verified ID bridge from cfbfastR-data's numeric
-  ESPN-style player IDs to the rest of the identity graph, and its "player_stats" dataset is
-  raw play-by-play, not aggregated season totals (D20). Rookie model v1 uses draft capital +
-  combine + landing spot, all cleanly identity-linked.
+- Rookie college production: LIMITED, now for a *measured* reason rather than a missing source.
+  D20 found no verified ID bridge from cfbfastR-data's numeric IDs; D38 built a real one via
+  CFBD/`espn_id` and ingested the data; **D39 ran the ablation and did not adopt it** — college
+  usage share is neutral-to-slightly-worse than the 12-feature baseline over identical
+  walk-forward folds, including when restricted to high-coverage draft classes. Production stays
+  on draft capital + combine + landing spot. Re-measurable any time via
+  `train rookie --ablation` (reports/rookie_college_production_ablation.md).
 - EDGE `evidence_score`: LIMITED to a disclosed neutral placeholder (0.5) until M9's evidence
   engine exists; never used to gate an action (D21).
 - EDGE is single-season/redraft-horizon only (`rsf`), matching the M6 model's own horizon; a
@@ -654,3 +706,54 @@ actual league details (teams, scoring, roster slots) from the user, not supplied
   calibration gates in aggregate; this is a downstream reminder that aggregate MAE doesn't
   guarantee cross-position relative calibration, worth revisiting in a future model-refinement
   pass — not addressed in M10, which correctly allocates flex by whatever values it is given.
+
+## Post-M13: first real end-to-end pipeline run, and the college-production feature measured and rejected (D39)
+
+The database in this container was empty before this run — D38's work had never executed against
+real data. The full pipeline was run for the first time (2012–2025): 155 successful source
+fetches, 25,050 players, 241,208 player-weeks, 26,816 player-seasons, 1,360 rookie-seasons,
+5,566 college-usage rows across 1,541 players.
+
+**The headline result is a negative one, and that is the point.** D38's CFBD college-production
+features were measured against the pre-D38 baseline over identical walk-forward folds, under a
+decision rule fixed before any numbers were seen, and **did not earn their place**: breakout
+Brier +0.0030 (worse), regression Spearman −0.0003, MAE +0.0589. A robustness check restricted to
+draft classes where the feature is ≥83% populated — testing whether zero-imputation of
+low-coverage classes was masking a real signal — came out worse still, with the baseline winning
+all four metrics. `FEATURES` reverted to the 12-feature D20 set; the data pipeline, identity
+bridge and ablation harness are all kept so the question re-runs with one command.
+
+**Running it for real surfaced three bugs that no test caught**, the most serious being that
+`init_db` had no migration path: every DDL statement is `CREATE TABLE IF NOT EXISTS`, which
+silently ignores a *column* added to an existing table. D38 was therefore broken-on-upgrade for
+any pre-existing database — `features build` hard-crashed — while the entire test suite passed,
+because every other test builds a fresh in-memory database. Also fixed: the ablation's own
+fold-pairing (which produced a plausible-looking but fabricated +13.69 MAE result before being
+caught as implausible), and `load_rookie_class_data` hardcoding the production feature list.
+`tests/unit/test_schema_migrations.py` now builds the *old* schema first — the one case the suite
+never exercised. 254 offline tests passing. See D39 for the full account.
+
+
+## Post-M13: the incoming rookie class is now projectable (D40)
+
+The app was showing the 2025 rookie class in August 2026 — a backtest presented as a forecast,
+with the incoming class missing entirely. Three chained defects: nflverse's `players` file lags
+the draft (all 694 `rookie_season=2026` rows have NULL draft capital) while `draft_picks` already
+has the full 2026 draft but keys it on `esb_id` rather than `gsis_id` for that class only; the
+spine upsert could never refresh draft capital once a row existed; and `rookie_features` is by
+construction a *labeled* table that cannot hold a class whose season hasn't been played.
+
+Fixed with an esb_id-fallback COALESCE in the spine build, a COALESCE-refresh on the upsert, and
+a new `rookie_projection_features` + `alpha-squad train rookie-project --draft-class 2026`, which
+writes predictions but deliberately no evaluation metrics (there is no outcome to score against).
+The feature SQL and the imputation are shared verbatim between the labeled and unlabeled paths so
+they cannot drift. The UI now asks the API which classes exist and defaults to the newest instead
+of a hardcoded year.
+
+2026 projection (trained on classes 2000-2025, 234 players): Jeremiyah Love 233.3 / 88%,
+Carnell Tate 202.8 / 48%, Fernando Mendoza 196.3 / 86%, Ty Simpson 177.4 / 57%, KC Concepcion
+139.9 / 15%. 259 offline tests passing.
+
+**Known limitation:** Rankings, EDGE and League still default to the 2025 season, because the
+data behind them genuinely stops at 2025 — projecting the 2026 NFL season for established players
+is separate work. Changing those defaults without generating the data would show empty views.
