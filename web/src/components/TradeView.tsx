@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { api } from "../api";
 import { useLatestSeason } from "../hooks";
 import type { DecisionResponse, LeagueSummary } from "../types";
+import { PlayerPicker } from "./PlayerPicker";
 
 const LAST_LEAGUE_STORAGE_KEY = "alpha-squad:last-league-id";
 
@@ -109,9 +110,10 @@ export function TradeView() {
         <label>
           Season <input type="number" value={season} onChange={(e) => setSeason(Number(e.target.value))} />
         </label>
-        <label>
-          Player ID <input value={playerId} onChange={(e) => setPlayerId(e.target.value)} placeholder="00-0012345" />
-        </label>
+        <span className="picker-field">
+          <span className="picker-field-label">Player</span>
+          <PlayerPicker value={playerId} onChange={setPlayerId} />
+        </span>
         <label>
           ECR type <input value={ecrType} onChange={(e) => setEcrType(e.target.value)} placeholder="rsf" />
         </label>

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { api } from "../api";
 import { useLatestSeason } from "../hooks";
 import type { DecisionResponse, LeagueSummary } from "../types";
+import { PlayerPicker } from "./PlayerPicker";
 
 const LAST_LEAGUE_STORAGE_KEY = "alpha-squad:last-league-id";
 
@@ -116,9 +117,10 @@ export function WaiverView() {
         <label>
           Week <input type="number" value={week} onChange={(e) => setWeek(Number(e.target.value))} />
         </label>
-        <label>
-          Player ID <input value={playerId} onChange={(e) => setPlayerId(e.target.value)} placeholder="00-0012345" />
-        </label>
+        <span className="picker-field">
+          <span className="picker-field-label">Player</span>
+          <PlayerPicker value={playerId} onChange={setPlayerId} />
+        </span>
         <label>
           Roster positions{" "}
           <input value={rosterPositions} onChange={(e) => setRosterPositions(e.target.value)} placeholder="QB,RB" />
