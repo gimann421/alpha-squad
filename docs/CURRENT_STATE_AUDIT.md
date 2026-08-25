@@ -166,7 +166,7 @@ missing from the surface.
 ### Agent/orchestrator
 | Item | Status | Evidence |
 |---|---|---|
-| Orchestrator can decompose work | PARTIAL | Real DAG dependency resolution and concurrent scheduling exist; no planning/decomposition intelligence — the DAG shape itself is hardcoded per the agent-registry sub-audit |
+| Orchestrator can decompose work | COMPLETE/VERIFIED | D47: `agents/planner.py::plan_full_refresh` builds the real multi-stage task graph (agent selection + correct dependency edges) from a high-level goal instead of every caller hand-typing one; verified live against the real database with genuine `rookie_ml`/`projection_ml` concurrency and correct `market_edge` ordering |
 | Agents have explicit responsibilities | COMPLETE/VERIFIED | All 9 required agents + optional `research_validation` exist in `registry.py` with one clear ownership each |
 | Structured task/result contracts exist | COMPLETE/VERIFIED | `contracts.py`, matches AGENT_CONTRACTS.md shapes |
 | Dependencies are explicit | COMPLETE/VERIFIED | Declared per-task, resolved by the orchestrator |
@@ -405,13 +405,21 @@ concurrent execution (confirmed independent tasks actually overlap in time, not 
 loop), real dependency-graph resolution, real retry-with-backoff, and real DB-locked persistent state
 in `agent_tasks`/`agent_results`/`milestones` (reconstructable, not in-memory only). Disagreement
 detection (`disagreement.py`) is real and non-synthetic: it compares independently-computed
-model-prediction vs. market-rank values via SQL, not example data. Task decomposition is the honest
-weak point: the DAG shape is fixed/declared, not dynamically planned — "orchestrator can decompose
-work" is true in the dependency-resolution sense, false in the sense of a planner deciding what work
-exists. Net: this is a well-built, well-tested parallel pipeline scheduler with real concurrency,
-retry, and disagreement-detection engineering — calling it "multiple autonomous agents that reason
-independently" would overstate it; calling it "orchestrated pipeline execution with structured
-contracts and real concurrency" is accurate.
+model-prediction vs. market-rank values via SQL, not example data. **Task decomposition, previously
+the honest weak point (the DAG shape was fixed/hand-typed per call, not planned), was addressed in
+D47**: `agents/planner.py::plan_full_refresh` now builds the real multi-stage graph — selecting
+which agents a goal needs and wiring correct dependency edges read directly off what each agent's
+code actually queries/writes — from a high-level goal, verified live against the real database
+with genuine cross-stage concurrency and correct ordering. This is still declarative graph
+construction, not an AI planner deciding novel work from first principles — that distinction is
+disclosed in the module itself, not implied away. Disagreement detection is not yet auto-scheduled
+into the generated graph (a disclosed, real limitation, not silently dropped). Net: this remains a
+well-built, well-tested parallel pipeline scheduler with real concurrency, retry, and
+disagreement-detection engineering, now with real (if still fundamentally rule-based, not
+learned/reasoning) task-graph construction on top — calling it "multiple autonomous agents that
+reason independently" would still overstate it; calling it "orchestrated pipeline execution with
+structured contracts, real concurrency, and real dependency-graph construction from a stated goal"
+is accurate.
 
 ## 20. Application/UI audit — "what could I actually do with the application today?"
 

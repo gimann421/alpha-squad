@@ -122,13 +122,13 @@ state at the time each milestone was first built.
 
 | Criterion | Status | Where |
 |---|---|---|
-| Orchestrator can decompose work | ✅ | `agents/orchestrator.py::run_pipeline`, topological readiness batches |
+| Orchestrator can decompose work | ✅ | `agents/orchestrator.py::run_pipeline`, topological readiness batches; as of D47, `agents/planner.py::plan_full_refresh` builds the real multi-task graph (which agents apply + correct dependency edges) from a high-level goal rather than every caller hand-typing one, verified against the real database (`alpha-squad orchestrate run`) |
 | Agents have explicit responsibilities | ✅ | `agents/registry.py::AGENT_REGISTRY`, 9 named agents |
 | Structured task/result contracts exist | ✅ | `agents/contracts.py` mirrors `AGENT_CONTRACTS.md` |
 | Dependencies are explicit | ✅ | `Task.depends_on` |
 | Independent tasks can run in parallel | ✅ | `ThreadPoolExecutor`; `tests/unit/test_agents.py::test_independent_tasks_run_concurrently` (timing-based) |
 | Provenance is preserved across agent outputs | ✅ | `Result` contract fields |
-| Critique/review can be invoked | ✅ | `run_evaluation_qa` agent |
+| Critique/review can be invoked | ✅ | `run_evaluation_qa` agent; as of D47, `plan_full_refresh` auto-schedules one QA review task per position after `projection_ml` rather than QA being a fully separate, never-auto-invoked path |
 | Agent disagreements are explicitly resolved | ✅ | `agents/disagreement.py`, both majority and minority positions preserved |
 | Evaluation/QA can reject unsupported claims | ✅ | `REJECT` task state, forces `UNVALIDATED` |
 | Agent failures are retried/recovered or surfaced | ✅ | `MAX_RETRIES = 2`, `BACKOFF_SECONDS`, `FAILED` state |

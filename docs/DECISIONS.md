@@ -1533,3 +1533,51 @@ rendered exactly as stored, no console errors.
 Regression-tested (`tests/unit/test_api.py::TestWeeklyRankingsSurfaceEvidenceAdjustment`, 3 new
 cases, including one proving the sort order uses the adjusted value and not the base value --
 the whole point of this change). 287 offline tests passing (up from 284).
+
+## D47 — Real task decomposition/dependency discovery for the orchestrator (P7)
+
+`docs/CURRENT_STATE_AUDIT.md`'s honest finding: "the DAG shape is fixed/declared, not
+dynamically planned" -- `orchestrator.py::run_pipeline` already does real dependency resolution,
+retry/backoff, and genuine concurrent dispatch (unit-tested, unchanged, not touched here), but
+every caller had to hand-type a `list[Task]` with `depends_on` edges themselves; the only
+existing example (`orchestrate demo`) was a fixed 2-task demo. Per the P7 instructions this was
+scoped to work on ("only after the more important product/data/model gaps are addressed" --
+true after D41-D46) and explicitly NOT to replace the scheduler with a new framework.
+
+Added `agents/planner.py::plan_full_refresh`: given a high-level goal (season range, which
+optional stages to include), builds the real multi-task graph -- selecting which of the 8
+functional agents in `AGENT_REGISTRY` apply (AGENT_CONTRACTS.md's "select appropriate agents")
+and wiring each one's `depends_on` to the real upstream task it actually needs
+(AGENT_CONTRACTS.md's "dependencies are explicit"), read directly off what each agent's
+`registry.py` implementation queries/writes rather than guessed -- e.g. `market_edge` depends on
+`projection_ml` because `market/edge.py`'s EDGE build reads `uncertainty_predictions`, which
+only `projection_ml`'s `run_uncertainty` call writes; `rookie_ml` depends only on `identity`
+(not on `projection_ml`), which is what makes it genuinely eligible to run concurrently with
+projection rather than being forced to wait on it. Also auto-schedules one `evaluation_qa`
+review task per position after `projection_ml` (AGENT_CONTRACTS.md's "invoke critique") --
+previously QA review was a fully separate, never-auto-invoked path.
+
+This is explicitly declarative dependency-graph construction, not an AI planner and not a new
+execution model -- `run_pipeline` itself is byte-for-byte unchanged. Disclosed limitation, not
+silently dropped: disagreement detection (`agents/disagreement.py`) is not yet auto-scheduled as
+a dependent task -- it remains the separate `orchestrate disagreements` command, since wiring it
+in correctly (it needs both `projection_ml` and `market_edge`'s *committed* output, and its own
+result shape doesn't fit the `Task`/`Result` contract without changes to `disagreement.py`
+itself) was judged a real follow-up rather than something to do half-correctly under this pass.
+
+Added `alpha-squad orchestrate run` (planner-powered; `orchestrate demo` untouched, still the
+original minimal 2-task example). **Verified against the real database**, not just stub agents:
+`alpha-squad orchestrate run --run-id planner-verify-1 --season-start 2025 --season-end 2025
+--min-train-season 2020 --no-include-evidence --no-include-qa` completed all 5 real tasks
+(data → identity → {rookie, projection} → market-edge) -- the completion order in the printed
+report shows `rookie` finishing before `projection` despite `projection` being declared first,
+confirming they genuinely raced concurrently rather than running in declaration order, and
+`market-edge` correctly only started after `projection` had actually committed
+`uncertainty_predictions`.
+
+Regression- and integration-tested (`tests/unit/test_planner.py`, 12 new cases): structural
+tests on the generated graph's edges, plus tests that actually run the generated plan through
+the real `run_pipeline` with stub agents (same pattern `test_agents.py`'s existing orchestrator
+tests use) -- including one proving `rookie_ml`/`projection_ml` start within 0.2s of each other
+(genuine concurrency, not accidentally-sequential) and one proving `market_edge` never starts
+before `projection_ml` completes. 299 offline tests passing (up from 287).

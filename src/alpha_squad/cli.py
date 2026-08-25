@@ -15,6 +15,7 @@ from alpha_squad.agents.disagreement import (
     resolve_and_record,
 )
 from alpha_squad.agents.orchestrator import run_pipeline
+from alpha_squad.agents.planner import plan_full_refresh
 from alpha_squad.agents.state import reconstruct_run
 from alpha_squad.config.settings import get_settings
 from alpha_squad.evidence.events import build_evidence_events_range
@@ -1443,7 +1444,10 @@ def orchestrate_demo(
         ),
     ]
     report = run_pipeline(settings, run_id, tasks)
+    _print_orchestrated_run_report(run_id, report)
 
+
+def _print_orchestrated_run_report(run_id: str, report) -> None:
     table = Table(title=f"Orchestrated run {run_id}")
     for col in ("task_id", "agent", "status", "confidence"):
         table.add_column(col)
@@ -1459,6 +1463,49 @@ def orchestrate_demo(
     for task_id in report.order:
         for f in report.results[task_id].findings:
             console.print(f"  [{task_id}] {f}")
+
+
+@orchestrate_app.command("run")
+def orchestrate_run(
+    run_id: str = typer.Option(..., help="Identifier for this orchestrated run"),
+    season_start: int = typer.Option(2020, help="First target season to refresh"),
+    season_end: int = typer.Option(2025, help="Last target season to refresh"),
+    min_train_season: int = typer.Option(2015, help="Earliest season usable for training data"),
+    class_start: int | None = typer.Option(
+        None, help="First rookie draft class (default: season_start)"
+    ),
+    class_end: int | None = typer.Option(
+        None, help="Last rookie draft class (default: season_end)"
+    ),
+    ecr_type: str = typer.Option(DEFAULT_ECR_TYPE, help="Market series for EDGE"),
+    include_rookie: bool = typer.Option(True, help="Include the rookie_ml stage"),
+    include_market_edge: bool = typer.Option(True, help="Include the market_edge stage"),
+    include_evidence: bool = typer.Option(True, help="Include the news_evidence stage"),
+    include_qa: bool = typer.Option(
+        True, help="Auto-schedule an evaluation_qa review per position"
+    ),
+) -> None:
+    """Real task decomposition (D47): builds the full universal-intelligence-refresh task
+    graph from these parameters (`agents/planner.py::plan_full_refresh` -- selects which
+    agents apply and wires the real dependency edges between them) and runs it through the
+    unchanged real orchestrator. `orchestrate demo` remains available as the original minimal
+    2-task example; this is the real multi-stage entry point."""
+    settings = get_settings()
+    tasks = plan_full_refresh(
+        run_id,
+        season_start,
+        season_end,
+        min_train_season=min_train_season,
+        class_start=class_start,
+        class_end=class_end,
+        ecr_type=ecr_type,
+        include_rookie=include_rookie,
+        include_market_edge=include_market_edge,
+        include_evidence=include_evidence,
+        include_qa=include_qa,
+    )
+    report = run_pipeline(settings, run_id, tasks)
+    _print_orchestrated_run_report(run_id, report)
 
 
 @orchestrate_app.command("status")
