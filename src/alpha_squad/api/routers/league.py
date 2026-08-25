@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 
 from alpha_squad.api.deps import get_db
 from alpha_squad.api.schemas import (
+    ActionCenterResponse,
     DecisionResponse,
     DraftRequest,
     DropCandidateRow,
@@ -24,6 +25,7 @@ from alpha_squad.api.schemas import (
     TradePackageRequest,
     TradePackageResponse,
     TradeRequest,
+    TradeSignalRow,
     WaiverRequest,
     WaiverTargetRow,
 )
@@ -39,7 +41,11 @@ from alpha_squad.league.draft import recommend_draft_pick
 from alpha_squad.league.replacement import load_season_projections
 from alpha_squad.league.roster import roster_need
 from alpha_squad.league.roster_import import resolve_roster_positions, teams_for_league
-from alpha_squad.league.roster_intelligence import build_my_team_report, recommend_drops
+from alpha_squad.league.roster_intelligence import (
+    build_action_center,
+    build_my_team_report,
+    recommend_drops,
+)
 from alpha_squad.league.trade import (
     PickAsset,
     TradePackageSide,
@@ -212,6 +218,93 @@ def get_drop_candidates(
         )
         for c in candidates
     ]
+
+
+@router.get("/{league_id}/actions", response_model=ActionCenterResponse)
+def get_action_center(
+    league_id: str,
+    season: int = Query(...),
+    week: int = Query(...),
+    roster_id: int = Query(..., description="Real team id, from GET /league/{id}/teams"),
+    add_top_n: int = Query(10, le=50),
+    drop_top_n: int = Query(5, le=20),
+    ecr_type: str = Query("rsf"),
+    con: duckdb.DuckDBPyConnection = Depends(get_db),
+) -> ActionCenterResponse:
+    """ "What should I pay attention to right now?" -- pure aggregation of the waiver-target,
+    drop-candidate, and per-rostered-player EDGE signals above (D53); see
+    league/roster_intelligence.py::build_action_center's docstring for why the three groups
+    aren't forced onto one fabricated cross-type ranking."""
+    league = _league_or_404(league_id, con)
+    try:
+        report = build_action_center(
+            con,
+            league,
+            season,
+            week,
+            roster_id,
+            add_top_n=add_top_n,
+            drop_top_n=drop_top_n,
+            ecr_type=ecr_type,
+        )
+    except RuntimeError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
+
+    add_ids = [r.player_id for r in report.adds]
+    names: dict[str, str | None] = {}
+    if add_ids:
+        placeholders = ", ".join("?" for _ in add_ids)
+        names = dict(
+            con.execute(
+                f"SELECT player_id, display_name FROM players WHERE player_id IN ({placeholders})",
+                add_ids,
+            ).fetchall()
+        )
+
+    return ActionCenterResponse(
+        league_id=report.league_id,
+        roster_id=report.roster_id,
+        season=report.season,
+        adds=[
+            WaiverTargetRow(
+                player_id=r.player_id,
+                display_name=names.get(r.player_id),
+                position=r.position,
+                expected_points=r.expected_points,
+                meaningful_role_probability=r.meaningful_role_probability,
+                dynasty_value=r.dynasty_value,
+                value_spike_probability=r.value_spike_probability,
+                marginal_value=r.marginal_value,
+                roster_fit_multiplier=r.roster_fit_multiplier,
+                competing_bid_likelihood=r.competing_bid_likelihood,
+                recommended_bid=r.recommended_bid,
+                reasons=r.reasons,
+            )
+            for r in report.adds
+        ],
+        drops=[
+            DropCandidateRow(
+                player_id=c.player_id,
+                display_name=c.display_name,
+                position=c.position,
+                marginal_value=c.marginal_value,
+                reasons=c.reasons,
+            )
+            for c in report.drops
+        ],
+        trade_signals=[
+            TradeSignalRow(
+                player_id=s.player_id,
+                display_name=s.display_name,
+                position=s.position,
+                edge_action=s.edge_action,
+                rank_edge=s.rank_edge,
+                dynasty_value=s.dynasty_value,
+                summary=s.summary,
+            )
+            for s in report.trade_signals
+        ],
+    )
 
 
 @router.get("/{league_id}/context")

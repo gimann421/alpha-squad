@@ -294,6 +294,25 @@ class WaiverTargetRow(BaseModel):
     reasons: list[str]
 
 
+class TradeSignalRow(BaseModel):
+    player_id: str
+    display_name: str | None
+    position: str | None
+    edge_action: str
+    rank_edge: int | None
+    dynasty_value: float | None
+    summary: str
+
+
+class ActionCenterResponse(BaseModel):
+    league_id: str
+    roster_id: int
+    season: int
+    adds: list[WaiverTargetRow]
+    drops: list[DropCandidateRow]
+    trade_signals: list[TradeSignalRow]
+
+
 class DecisionResponse(BaseModel):
     decision_id: str
     recommendation: str

@@ -9,7 +9,11 @@ import pytest
 
 from alpha_squad.config.settings import Settings
 from alpha_squad.league.context import LeagueContext
-from alpha_squad.league.roster_intelligence import build_my_team_report, recommend_drops
+from alpha_squad.league.roster_intelligence import (
+    build_action_center,
+    build_my_team_report,
+    recommend_drops,
+)
 from alpha_squad.models.uncertainty.run import MODEL_VERSION as UNCERTAINTY_MODEL_VERSION
 from alpha_squad.storage.db import init_db
 from tests.fixtures.httpx_fakes import FakeGetResponse
@@ -78,6 +82,19 @@ def con():
     connection.execute(
         "INSERT INTO dynasty_values (player_id, scrape_date, age, value_2qb, updated_at) "
         "VALUES ('rb1', '2026-08-01', 24.0, 8000, current_timestamp)"
+    )
+    # A real free agent -- projected, but never rostered by anyone -- so rank_waiver_targets
+    # (via build_action_center) has a real "adds" candidate to surface.
+    connection.execute(
+        "INSERT INTO players (player_id, gsis_id, display_name, position) VALUES "
+        "('fa1', 'gsis_fa1', 'Free Agent One', 'WR')"
+    )
+    connection.execute(
+        "INSERT INTO uncertainty_predictions (prediction_id, player_id, season, position, "
+        "model_version, feature_version, point_prediction, top24_prob, calibration_season, "
+        "predicted_at) VALUES "
+        "('pred_fa1', 'fa1', ?, 'WR', ?, 'fv1', 120.0, 0.3, ?, current_timestamp)",
+        [SEASON, UNCERTAINTY_MODEL_VERSION, SEASON - 1],
     )
     yield connection
     connection.close()
@@ -186,3 +203,23 @@ class TestRecommendDrops:
         _fake_get(monkeypatch)
         candidates = recommend_drops(con, _league(), SEASON, roster_id=1, top_n=0)
         assert candidates == []
+
+
+class TestBuildActionCenter:
+    """D53: pure aggregation of already-real engines, grouped by action type."""
+
+    def test_aggregates_real_adds_drops_and_trade_signals(self, con, settings, monkeypatch):
+        _fake_get(monkeypatch)
+        report = build_action_center(con, _league(), SEASON, week=5, roster_id=1)
+
+        assert [a.player_id for a in report.adds] == ["fa1"]
+        assert [d.player_id for d in report.drops] == ["wr3"]
+        assert [s.player_id for s in report.trade_signals] == ["rb1"]
+        assert report.trade_signals[0].edge_action == "BUY"
+        assert "undervalues" in report.trade_signals[0].summary
+
+    def test_no_buy_sell_edge_rows_means_no_trade_signals(self, con, settings, monkeypatch):
+        con.execute("DELETE FROM edge_snapshot")
+        _fake_get(monkeypatch)
+        report = build_action_center(con, _league(), SEASON, week=5, roster_id=1)
+        assert report.trade_signals == []

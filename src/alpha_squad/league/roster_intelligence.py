@@ -24,6 +24,7 @@ from alpha_squad.league.replacement import (
 )
 from alpha_squad.league.roster import roster_need
 from alpha_squad.league.roster_import import TeamRoster, teams_for_league
+from alpha_squad.league.waiver import WaiverRecommendation, rank_waiver_targets
 from alpha_squad.market.edge import DEFAULT_ECR_TYPE
 from alpha_squad.models.uncertainty.run import MODEL_VERSION as UNCERTAINTY_MODEL_VERSION
 
@@ -226,3 +227,79 @@ def recommend_drops(
             )
         )
     return candidates
+
+
+@dataclass
+class TradeSignal:
+    player_id: str
+    display_name: str | None
+    position: str | None
+    edge_action: str
+    rank_edge: int | None
+    dynasty_value: float | None
+    summary: str
+
+
+@dataclass
+class ActionCenterReport:
+    league_id: str
+    roster_id: int
+    season: int
+    adds: list[WaiverRecommendation] = field(default_factory=list)
+    drops: list[DropCandidate] = field(default_factory=list)
+    trade_signals: list[TradeSignal] = field(default_factory=list)
+
+
+def build_action_center(
+    con: duckdb.DuckDBPyConnection,
+    league: LeagueContext,
+    season: int,
+    week: int,
+    roster_id: int,
+    *,
+    add_top_n: int = 10,
+    drop_top_n: int = 5,
+    ecr_type: str = DEFAULT_ECR_TYPE,
+) -> ActionCenterReport:
+    """ "What should I pay attention to right now?" -- pure aggregation of three already-real
+    engines (`rank_waiver_targets`, `recommend_drops`, and the per-rostered-player EDGE actions
+    `build_my_team_report` already joins in), grouped by action type rather than forced onto one
+    fabricated cross-type score: a FAAB dollar amount, a bench VORP deficit, and a market rank
+    edge are not the same unit, so ranking ADD vs. DROP vs. TRADE against each other with a made-
+    up composite number would be exactly the kind of untested precision CLAUDE.md warns against.
+    Each group is internally ranked by its own already-real, already-tested metric."""
+    adds = rank_waiver_targets(con, league, season, week, roster_id, top_n=add_top_n)
+    drops = recommend_drops(con, league, season, roster_id, top_n=drop_top_n, ecr_type=ecr_type)
+
+    report = build_my_team_report(con, league, season, roster_id, ecr_type=ecr_type)
+    trade_signals: list[TradeSignal] = []
+    for p in report.players:
+        if p.edge_action not in ("BUY", "SELL"):
+            continue
+        name = p.display_name or p.player_id
+        if p.rank_edge is not None:
+            direction = "undervalues" if p.edge_action == "BUY" else "overvalues"
+            summary = f"Market {direction} {name} by {abs(p.rank_edge)} rank(s)"
+        else:
+            summary = f"{p.edge_action} signal on {name}"
+        trade_signals.append(
+            TradeSignal(
+                player_id=p.player_id,
+                display_name=p.display_name,
+                position=p.position,
+                edge_action=p.edge_action,
+                rank_edge=p.rank_edge,
+                dynasty_value=p.dynasty_value,
+                summary=summary,
+            )
+        )
+    trade_signals.sort(key=lambda s: -abs(s.rank_edge) if s.rank_edge is not None else 0)
+
+    return ActionCenterReport(
+        league_id=league.league_id,
+        roster_id=roster_id,
+        season=season,
+        adds=adds,
+        drops=drops,
+        trade_signals=trade_signals,
+    )
