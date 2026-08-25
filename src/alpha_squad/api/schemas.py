@@ -271,6 +271,14 @@ class SimulationResponse(BaseModel):
     players: list[PlayerSimResultRow]
 
 
+class DropCandidateRow(BaseModel):
+    player_id: str
+    display_name: str | None
+    position: str | None
+    marginal_value: float | None
+    reasons: list[str]
+
+
 class WaiverTargetRow(BaseModel):
     player_id: str
     display_name: str | None

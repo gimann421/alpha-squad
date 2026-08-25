@@ -176,3 +176,53 @@ def build_my_team_report(
         replacement_levels=levels,
         total_projected_points=total_points,
     )
+
+
+@dataclass
+class DropCandidate:
+    player_id: str
+    display_name: str | None
+    position: str | None
+    marginal_value: float | None
+    reasons: list[str]
+
+
+def recommend_drops(
+    con: duckdb.DuckDBPyConnection,
+    league: LeagueContext,
+    season: int,
+    roster_id: int,
+    *,
+    top_n: int = 5,
+    ecr_type: str = DEFAULT_ECR_TYPE,
+) -> list[DropCandidate]:
+    """ "Who can I drop?" -- the worst bench players on a real roster by marginal value over the
+    league's real replacement pool (the same VORP `build_my_team_report` already computes; no
+    new scoring here, just picking the bottom of the existing bench). Never considers a starter
+    a drop candidate, even a weak one -- dropping a starter isn't a "who's expendable" decision,
+    it's a roster-construction decision this function doesn't make."""
+    report = build_my_team_report(con, league, season, roster_id, ecr_type=ecr_type)
+    bench = [p for p in report.players if not p.is_starter]
+    bench.sort(key=lambda p: p.marginal_value if p.marginal_value is not None else float("-inf"))
+
+    candidates: list[DropCandidate] = []
+    for p in bench[:top_n]:
+        if p.marginal_value is not None:
+            reasons = [
+                f"bench player, marginal value {p.marginal_value:+.1f} pts "
+                f"vs {p.position or 'its position'} replacement"
+            ]
+        else:
+            reasons = ["bench player with no current projection on record"]
+        if p.dynasty_value is not None:
+            reasons.append(f"dynasty value (2QB) {p.dynasty_value:.0f}")
+        candidates.append(
+            DropCandidate(
+                player_id=p.player_id,
+                display_name=p.display_name,
+                position=p.position,
+                marginal_value=p.marginal_value,
+                reasons=reasons,
+            )
+        )
+    return candidates

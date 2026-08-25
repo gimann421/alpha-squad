@@ -462,6 +462,59 @@ class TestLeague:
         assert row["display_name"] == "Free Agent WR"
         assert row["reasons"]
 
+    def test_drop_candidates_endpoint_returns_only_the_real_bench_player(
+        self, con, client, monkeypatch
+    ):
+        import httpx
+
+        from tests.fixtures.httpx_fakes import FakeGetResponse
+
+        _seed_player(con, "asq_starter", "Starter WR", "WR")
+        _seed_player(con, "asq_bench", "Bench WR", "WR")
+        for pid, pts in [("asq_starter", 200.0), ("asq_bench", 20.0)]:
+            con.execute(
+                "INSERT INTO uncertainty_predictions (prediction_id, player_id, season, "
+                "position, model_version, feature_version, point_prediction, top24_prob, "
+                "calibration_season, predicted_at) VALUES "
+                "(?, ?, 2025, 'WR', 'uncertainty_catboost_v1', 'fv1', ?, 0.1, 2024, current_timestamp)",
+                [f"pred_{pid}", pid, pts],
+            )
+        con.execute(
+            "INSERT INTO player_id_map (id_type, id_value, player_id, source) VALUES "
+            "('sleeper_id', 'sl_starter', 'asq_starter', 'test'), "
+            "('sleeper_id', 'sl_bench', 'asq_bench', 'test')"
+        )
+        league_body = {
+            "league_id": "444",
+            "total_rosters": 1,
+            "roster_positions": ["WR", "BN"],
+            "scoring_settings": {},
+            "settings": {"type": 0, "waiver_budget": 100},
+        }
+        rosters_body = [{"roster_id": 1, "owner_id": "u1", "players": ["sl_starter", "sl_bench"]}]
+        users_body = [{"user_id": "u1", "display_name": "me", "metadata": {}}]
+
+        def fake_get(url, **kwargs):
+            import json as _json
+
+            if url.endswith("/rosters"):
+                body = rosters_body
+            elif url.endswith("/users"):
+                body = users_body
+            else:
+                body = league_body
+            return FakeGetResponse(200, body, _json.dumps(body).encode())
+
+        monkeypatch.setattr(httpx, "get", fake_get)
+        client.post("/league/register", json={"sleeper_league_id": "444", "league_id": "dc_test"})
+
+        r = client.get("/league/dc_test/drop-candidates", params={"season": 2025, "roster_id": 1})
+        assert r.status_code == 200
+        body = r.json()
+        assert [row["player_id"] for row in body] == ["asq_bench"]
+        assert body[0]["display_name"] == "Bench WR"
+        assert body[0]["reasons"]
+
     def test_draft_endpoint_calls_the_real_recommend_draft_pick_and_persists_a_decision(
         self, con, client
     ):

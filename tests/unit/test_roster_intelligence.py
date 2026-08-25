@@ -9,7 +9,7 @@ import pytest
 
 from alpha_squad.config.settings import Settings
 from alpha_squad.league.context import LeagueContext
-from alpha_squad.league.roster_intelligence import build_my_team_report
+from alpha_squad.league.roster_intelligence import build_my_team_report, recommend_drops
 from alpha_squad.models.uncertainty.run import MODEL_VERSION as UNCERTAINTY_MODEL_VERSION
 from alpha_squad.storage.db import init_db
 from tests.fixtures.httpx_fakes import FakeGetResponse
@@ -165,3 +165,24 @@ class TestBuildMyTeamReport:
         yaml_league = LeagueContext(league_id="target_league", format="dynasty", teams=10)
         with pytest.raises(RuntimeError, match="no real per-team roster source"):
             build_my_team_report(con, yaml_league, SEASON, roster_id=1)
+
+
+class TestRecommendDrops:
+    def test_only_the_real_bench_player_is_a_drop_candidate(self, con, settings, monkeypatch):
+        _fake_get(monkeypatch)
+        candidates = recommend_drops(con, _league(), SEASON, roster_id=1, top_n=5)
+
+        assert [c.player_id for c in candidates] == ["wr3"]
+        assert candidates[0].reasons
+
+    def test_never_recommends_dropping_a_starter(self, con, settings, monkeypatch):
+        _fake_get(monkeypatch)
+        candidates = recommend_drops(con, _league(), SEASON, roster_id=1, top_n=20)
+
+        starters = {"qb1", "rb1", "rb2", "rb3", "wr1", "wr2", "te1"}
+        assert not (starters & {c.player_id for c in candidates})
+
+    def test_top_n_limits_the_result(self, con, settings, monkeypatch):
+        _fake_get(monkeypatch)
+        candidates = recommend_drops(con, _league(), SEASON, roster_id=1, top_n=0)
+        assert candidates == []

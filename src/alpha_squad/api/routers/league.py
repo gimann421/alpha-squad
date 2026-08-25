@@ -13,6 +13,7 @@ from alpha_squad.api.deps import get_db
 from alpha_squad.api.schemas import (
     DecisionResponse,
     DraftRequest,
+    DropCandidateRow,
     LeagueSummary,
     LeagueTeamsResponse,
     MyTeamPlayerRow,
@@ -38,7 +39,7 @@ from alpha_squad.league.draft import recommend_draft_pick
 from alpha_squad.league.replacement import load_season_projections
 from alpha_squad.league.roster import roster_need
 from alpha_squad.league.roster_import import resolve_roster_positions, teams_for_league
-from alpha_squad.league.roster_intelligence import build_my_team_report
+from alpha_squad.league.roster_intelligence import build_my_team_report, recommend_drops
 from alpha_squad.league.trade import (
     PickAsset,
     TradePackageSide,
@@ -183,6 +184,34 @@ def get_my_team(
         replacement_levels=report.replacement_levels,
         total_projected_points=report.total_projected_points,
     )
+
+
+@router.get("/{league_id}/drop-candidates", response_model=list[DropCandidateRow])
+def get_drop_candidates(
+    league_id: str,
+    season: int = Query(...),
+    roster_id: int = Query(..., description="Real team id, from GET /league/{id}/teams"),
+    top_n: int = Query(5, le=20),
+    ecr_type: str = Query("rsf"),
+    con: duckdb.DuckDBPyConnection = Depends(get_db),
+) -> list[DropCandidateRow]:
+    """ "Who can I drop?" -- the worst real bench players by marginal value over replacement
+    (league/roster_intelligence.py::recommend_drops), never a starter."""
+    league = _league_or_404(league_id, con)
+    try:
+        candidates = recommend_drops(con, league, season, roster_id, top_n=top_n, ecr_type=ecr_type)
+    except RuntimeError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
+    return [
+        DropCandidateRow(
+            player_id=c.player_id,
+            display_name=c.display_name,
+            position=c.position,
+            marginal_value=c.marginal_value,
+            reasons=c.reasons,
+        )
+        for c in candidates
+    ]
 
 
 @router.get("/{league_id}/context")
