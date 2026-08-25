@@ -309,6 +309,33 @@ class TestLeague:
         assert r.status_code == 404
 
 
+class TestLatestSeasons:
+    """D48: the real newest season each table has data for, so the frontend can default to
+    it instead of a hardcoded value that silently goes stale every year (the same failure
+    mode D40 already fixed once for the rookie-class default)."""
+
+    def test_returns_the_real_max_season_per_table(self, con, client):
+        con.execute(
+            "INSERT INTO uncertainty_predictions (prediction_id, player_id, season, position, "
+            "model_version, feature_version, point_prediction, calibration_season, predicted_at) "
+            "VALUES ('p1', 'x1', 2024, 'WR', 'v1', 'fv1', 100.0, 2023, current_timestamp), "
+            "('p2', 'x2', 2025, 'WR', 'v1', 'fv1', 100.0, 2024, current_timestamp)"
+        )
+        r = client.get("/seasons/latest")
+        assert r.status_code == 200
+        body = r.json()
+        assert body["uncertainty"] == 2025
+
+    def test_empty_tables_return_null_not_an_error(self, client):
+        r = client.get("/seasons/latest")
+        assert r.status_code == 200
+        body = r.json()
+        assert body["uncertainty"] is None
+        assert body["edge"] is None
+        assert body["evidence"] is None
+        assert body["weekly"] is None
+
+
 class TestProvenance:
     def test_unknown_id_reports_not_found_rather_than_erroring(self, client):
         r = client.get("/provenance/totally-made-up-id")

@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useState } from "react";
+import { useLatestSeason } from "../hooks";
 import { api } from "../api";
 import type { EdgeRow } from "../types";
 import { AsyncSection, Badge } from "./common";
@@ -6,7 +7,9 @@ import { AsyncSection, Badge } from "./common";
 const ACTIONS = ["", "BUY", "SELL", "HOLD", "WATCH"];
 
 export function EdgeView() {
-  const [season, setSeason] = useState(2025);
+  const latestSeason = useLatestSeason("edge", 2025);
+  const [season, setSeason] = useState(latestSeason);
+  useEffect(() => setSeason(latestSeason), [latestSeason]);
   const [action, setAction] = useState("BUY");
   const [rows, setRows] = useState<EdgeRow[] | null>(null);
   const [loading, setLoading] = useState(false);

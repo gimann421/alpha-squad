@@ -1,12 +1,15 @@
 import { useEffect, useState } from "react";
 import { api } from "../api";
+import { useLatestSeason } from "../hooks";
 import type { RankingRow, WeeklyRankingRow } from "../types";
 import { AsyncSection } from "./common";
 
 const POSITIONS = ["", "QB", "RB", "WR", "TE"];
 
 function PreseasonRankings() {
-  const [season, setSeason] = useState(2025);
+  const latestSeason = useLatestSeason("uncertainty", 2025);
+  const [season, setSeason] = useState(latestSeason);
+  useEffect(() => setSeason(latestSeason), [latestSeason]);
   const [position, setPosition] = useState("");
   const [rows, setRows] = useState<RankingRow[] | null>(null);
   const [loading, setLoading] = useState(false);
@@ -84,7 +87,9 @@ function PreseasonRankings() {
 }
 
 function WeeklyRankings() {
-  const [season, setSeason] = useState(2025);
+  const latestSeason = useLatestSeason("weekly", 2025);
+  const [season, setSeason] = useState(latestSeason);
+  useEffect(() => setSeason(latestSeason), [latestSeason]);
   const [week, setWeek] = useState(8);
   const [position, setPosition] = useState("");
   const [rows, setRows] = useState<WeeklyRankingRow[] | null>(null);

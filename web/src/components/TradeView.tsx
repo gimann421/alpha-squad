@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "../api";
+import { useLatestSeason } from "../hooks";
 import type { DecisionResponse, LeagueSummary } from "../types";
 
 const LAST_LEAGUE_STORAGE_KEY = "alpha-squad:last-league-id";
@@ -15,7 +16,9 @@ export function TradeView() {
     }
   });
 
-  const [season, setSeason] = useState(2025);
+  const latestSeason = useLatestSeason("edge", 2025);
+  const [season, setSeason] = useState(latestSeason);
+  useEffect(() => setSeason(latestSeason), [latestSeason]);
   const [playerId, setPlayerId] = useState("");
   const [ecrType, setEcrType] = useState("rsf");
   const [decision, setDecision] = useState<DecisionResponse | null>(null);

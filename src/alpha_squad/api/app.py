@@ -18,6 +18,7 @@ from alpha_squad.api.routers import (
     provenance,
     rankings,
     rookies,
+    seasons,
 )
 
 app = FastAPI(
@@ -46,6 +47,7 @@ app.include_router(evidence.router)
 app.include_router(league.router)
 app.include_router(provenance.router)
 app.include_router(health.router)
+app.include_router(seasons.router)
 
 
 @app.get("/")

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "../api";
+import { useLatestSeason } from "../hooks";
 import type { DecisionResponse, LeagueContext, LeagueSummary } from "../types";
 import { AsyncSection } from "./common";
 
@@ -20,7 +21,9 @@ export function LeagueView() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const [season, setSeason] = useState(2025);
+  const latestSeason = useLatestSeason("uncertainty", 2025);
+  const [season, setSeason] = useState(latestSeason);
+  useEffect(() => setSeason(latestSeason), [latestSeason]);
   const [rosterPositions, setRosterPositions] = useState("QB");
   const [availableIds, setAvailableIds] = useState("");
   const [nextPick, setNextPick] = useState(10);

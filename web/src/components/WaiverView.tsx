@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "../api";
+import { useLatestSeason } from "../hooks";
 import type { DecisionResponse, LeagueSummary } from "../types";
 
 const LAST_LEAGUE_STORAGE_KEY = "alpha-squad:last-league-id";
@@ -15,7 +16,9 @@ export function WaiverView() {
     }
   });
 
-  const [season, setSeason] = useState(2025);
+  const latestSeason = useLatestSeason("uncertainty", 2025);
+  const [season, setSeason] = useState(latestSeason);
+  useEffect(() => setSeason(latestSeason), [latestSeason]);
   const [week, setWeek] = useState(1);
   const [playerId, setPlayerId] = useState("");
   const [rosterPositions, setRosterPositions] = useState("QB");

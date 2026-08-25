@@ -100,4 +100,9 @@ export const api = {
   getProvenance: (entityId: string) => getJson<ProvenanceResponse>(`/provenance/${entityId}`),
 
   getSourceHealth: () => getJson<SourceHealthRow[]>("/health/sources"),
+
+  getLatestSeasons: () =>
+    getJson<{ uncertainty: number | null; weekly: number | null; edge: number | null; evidence: number | null }>(
+      "/seasons/latest",
+    ),
 };

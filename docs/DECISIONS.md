@@ -1581,3 +1581,48 @@ the real `run_pipeline` with stub agents (same pattern `test_agents.py`'s existi
 tests use) -- including one proving `rookie_ml`/`projection_ml` start within 0.2s of each other
 (genuine concurrency, not accidentally-sequential) and one proving `market_edge` never starts
 before `projection_ml` completes. 299 offline tests passing (up from 287).
+
+## D48 — Auto-detect the newest season with real data (`GET /seasons/latest`), and an unexplained local-DB data loss found while verifying it
+
+**The hardening fix.** Six frontend views (`RankingsView` x2, `EdgeView`, `EvidenceView`,
+`LeagueView`, `TradeView`, `WaiverView`) hardcoded a season default (mostly `2025`, one
+inconsistently `2024`) -- the same failure mode D40 already fixed once for the rookie-class
+default (a hardcoded value silently going stale every season rollover; `EvidenceView`'s
+already-inconsistent `2024` while everything else said `2025` was itself a small real symptom of
+this). Added `GET /seasons/latest` (`api/routers/seasons.py`, D48) returning the real max season
+per relevant table (`uncertainty_predictions`/`weekly_projection_snapshot`/`edge_snapshot`/
+`evidence_events`), and one shared frontend hook (`web/src/hooks.ts::useLatestSeason`) instead of
+six components each re-implementing the same fetch-on-mount-with-fallback (ACCEPTANCE_CRITERIA.md:
+no duplicated logic). Regression-tested (`tests/unit/test_api.py::TestLatestSeasons`, 2 new
+cases, including the empty-database case returning null rather than erroring).
+
+**What happened while verifying it live.** Mid-verification, `data/alpha_squad.duckdb` (and
+`data/raw/`) were found empty/absent -- every table 0 rows, the file itself freshly small
+(1.5MB) with a "just recreated" mtime, not a corrupted larger file. This is *after* this same
+session had directly confirmed real data in it multiple times (25,052 real players from a fresh
+`orchestrate run` identity build, 453 real uncertainty predictions, 291 real evidence deltas,
+etc. -- all with real numbers already recorded in D43/D46/D47 above, which remain accurate
+historical records of what those runs actually produced at the time).
+
+I investigated before writing this off as environmental: grepped all of `src/` for
+`DELETE FROM`/`TRUNCATE` (none outside the one disclosed `D38` migration's own table rename, not
+applicable here); checked for a stray `.wal` file (none); checked every test file for an
+un-isolated `Settings()` call that might target the real default `db_path` (found three in
+`tests/unit/test_features.py`, but they pass an explicit in-memory `con` to the function under
+test and never open a connection *from* `settings.db_path` -- not the cause); checked for
+concurrent/orphaned server processes, a `TMPDIR` misconfiguration pointing `tmp_path` at `data/`,
+and a `data/` symlink (none of these). No `git clean`/`reset --hard`/`rm -rf data` was run this
+session -- confirmed by reviewing this session's own actions. **I could not identify a definite
+root cause**, and am recording that honestly rather than guessing one to sound conclusive.
+
+**Why this doesn't threaten the work itself.** `data/` is gitignored specifically because it is
+"reproducible from `alpha-squad ingest`" (CLAUDE.md) -- nothing unique was lost, no git history,
+no code, no committed decision -- and every test in this suite uses an isolated `:memory:` or
+`tmp_path` database, so the full 301-test offline suite is unaffected and still genuinely green.
+This entry exists so a future session doesn't waste time re-diagnosing the same mystery, and so
+the user knows the local dev database currently needs a rebuild: `make ingest && make identity &&
+make college-usage && make features && make market && make train && make edge` (README/Makefile
+order) restores it. Not attempted in this session: a full rebuild is a long-running operation and
+out of scope for finishing the remaining audit backlog; the code changes in D43/D45/D46/D47/D48
+were each already verified against real data at the time they were built, before this was found,
+and that verification is not invalidated by a later, separate data-loss event.
