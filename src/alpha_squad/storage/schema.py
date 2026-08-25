@@ -720,7 +720,25 @@ M13_SIMULATION_DDL = [
     """,
 ]
 
-# M14+ DDL is appended here as later milestones are implemented.
+# Runtime-registered leagues (the "Connect League" onboarding flow) -- config/league_configs/
+# registry.yaml stays the curated, hand-edited set; this table is for leagues a user connects
+# through the running app itself, without editing a file on the server. Only `source='sleeper'`
+# is supported here (the onboarding flow validates a real, reachable Sleeper league before
+# inserting) -- a `source='yaml'` entry inherently needs a config file to exist, so it stays a
+# hand-edit-the-registry operation.
+M14_PRODUCTIZATION_DDL: list[str] = [
+    """
+    CREATE TABLE IF NOT EXISTS registered_leagues (
+        league_id VARCHAR PRIMARY KEY,
+        source VARCHAR NOT NULL,
+        sleeper_league_id VARCHAR,
+        display_name VARCHAR,
+        created_at TIMESTAMP NOT NULL DEFAULT current_timestamp
+    )
+    """,
+]
+
+# M15+ DDL is appended here as later milestones are implemented.
 ALL_DDL: list[str] = [
     *M1_SNAPSHOTS_DDL,
     *M2_IDENTITY_DDL,
@@ -735,6 +753,7 @@ ALL_DDL: list[str] = [
     *M10_LEAGUE_DDL,
     *M11_AGENTS_DDL,
     *M13_SIMULATION_DDL,
+    *M14_PRODUCTIZATION_DDL,
 ]
 
 # ---------------------------------------------------------------------------

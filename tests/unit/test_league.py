@@ -128,6 +128,105 @@ class TestResolveLeague:
         assert list_registered_leagues(tmp_path / "nope.yaml") == {}
 
 
+class TestRegisterSleeperLeague:
+    """D53: the "Connect League" onboarding action -- validates a real Sleeper league by
+    actually loading it, then persists it so resolve_league/list_registered_leagues see it
+    without any file edit."""
+
+    def test_registers_a_real_reachable_league_and_makes_it_resolvable(
+        self, con, settings, monkeypatch
+    ):
+        import httpx
+
+        from alpha_squad.league.context import register_sleeper_league
+
+        body = {
+            "league_id": "999888777",
+            "name": "My New League",
+            "season": "2026",
+            "total_rosters": 10,
+            "roster_positions": ["QB", "RB", "RB", "WR", "WR", "TE", "FLEX", "BN", "BN"],
+            "scoring_settings": {"rec": 1.0},
+            "settings": {"type": 2, "waiver_budget": 100},
+        }
+
+        def fake_get(url, **kwargs):
+            import json as _json
+
+            from tests.fixtures.httpx_fakes import FakeGetResponse
+
+            return FakeGetResponse(200, body, _json.dumps(body).encode())
+
+        monkeypatch.setattr(httpx, "get", fake_get)
+
+        league = register_sleeper_league(
+            con, "999888777", settings=settings, league_id="my_new_league"
+        )
+        assert league.teams == 10
+        assert league.format == "dynasty"
+
+        registry = list_registered_leagues(con=con)
+        assert registry["my_new_league"]["source"] == "sleeper"
+        assert registry["my_new_league"]["sleeper_league_id"] == "999888777"
+
+        resolved = resolve_league("my_new_league", con=con, settings=settings)
+        assert resolved.teams == 10
+
+    def test_registering_the_same_league_again_updates_rather_than_duplicates(
+        self, con, settings, monkeypatch
+    ):
+        import httpx
+
+        from alpha_squad.league.context import register_sleeper_league
+
+        body = {
+            "league_id": "111",
+            "name": "Original Name",
+            "total_rosters": 8,
+            "roster_positions": ["QB", "BN"],
+            "scoring_settings": {},
+            "settings": {"type": 0},
+        }
+
+        def fake_get(url, **kwargs):
+            import json as _json
+
+            from tests.fixtures.httpx_fakes import FakeGetResponse
+
+            return FakeGetResponse(200, body, _json.dumps(body).encode())
+
+        monkeypatch.setattr(httpx, "get", fake_get)
+
+        register_sleeper_league(con, "111", settings=settings, league_id="dupe_test")
+        register_sleeper_league(con, "111", settings=settings, league_id="dupe_test")
+
+        n = con.execute(
+            "SELECT count(*) FROM registered_leagues WHERE league_id = 'dupe_test'"
+        ).fetchone()[0]
+        assert n == 1
+
+    def test_unreachable_league_raises_rather_than_registering_anyway(
+        self, con, settings, monkeypatch
+    ):
+        import httpx
+
+        from alpha_squad.league.context import register_sleeper_league
+        from alpha_squad.sources.base import SourceError
+
+        def fake_get_404(url, **kwargs):
+            from tests.fixtures.httpx_fakes import FakeGetResponse
+
+            return FakeGetResponse(404, None, b"not found")
+
+        monkeypatch.setattr(httpx, "get", fake_get_404)
+
+        with pytest.raises(SourceError):
+            register_sleeper_league(con, "does-not-exist", settings=settings)
+
+        n = con.execute("SELECT count(*) FROM registered_leagues").fetchone()[0]
+        assert n == 0
+
+
 def _flat_league(teams, lineup, bench=6, faab=100) -> LeagueContext:
     return LeagueContext(
         league_id="test",
@@ -267,6 +366,13 @@ def con():
     init_db(connection)
     yield connection
     connection.close()
+
+
+@pytest.fixture
+def settings(tmp_path):
+    from alpha_squad.config.settings import Settings
+
+    return Settings(data_dir=tmp_path / "data", db_path=tmp_path / "data" / "x.duckdb")
 
 
 def _seed_uncertainty(con, player_id, season, position, point_pred, confidence=0.8, top24_prob=0.3):

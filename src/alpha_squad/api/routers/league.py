@@ -14,16 +14,27 @@ from alpha_squad.api.schemas import (
     DecisionResponse,
     DraftRequest,
     LeagueSummary,
+    LeagueTeamsResponse,
+    RegisterLeagueRequest,
+    RosterPlayerRow,
+    TeamRosterRow,
     TradePackageRequest,
     TradePackageResponse,
     TradeRequest,
     WaiverRequest,
 )
-from alpha_squad.league.context import LeagueContext, list_registered_leagues, resolve_league
+from alpha_squad.config.settings import get_settings
+from alpha_squad.league.context import (
+    LeagueContext,
+    list_registered_leagues,
+    register_sleeper_league,
+    resolve_league,
+)
 from alpha_squad.league.decisions import record_decision
 from alpha_squad.league.draft import recommend_draft_pick
 from alpha_squad.league.replacement import load_season_projections
 from alpha_squad.league.roster import roster_need
+from alpha_squad.league.roster_import import resolve_roster_positions, teams_for_league
 from alpha_squad.league.trade import (
     PickAsset,
     TradePackageSide,
@@ -48,11 +59,12 @@ def _league_or_404(league_id: str, con: duckdb.DuckDBPyConnection) -> LeagueCont
 
 
 @router.get("", response_model=list[LeagueSummary])
-def list_leagues() -> list[LeagueSummary]:
-    """Every league this deployment knows about -- the seamless-switching listing (D33) the
-    frontend's league selector reads to populate its dropdown, matching
+def list_leagues(con: duckdb.DuckDBPyConnection = Depends(get_db)) -> list[LeagueSummary]:
+    """Every league this deployment knows about -- the curated YAML set plus anything
+    connected at runtime through the app (`registered_leagues`, D53) -- the seamless-switching
+    listing (D33) the frontend's league selector reads to populate its dropdown, matching
     `alpha-squad league list`."""
-    registry = list_registered_leagues()
+    registry = list_registered_leagues(con=con)
     return [
         LeagueSummary(
             league_id=league_id,
@@ -65,6 +77,60 @@ def list_leagues() -> list[LeagueSummary]:
     ]
 
 
+@router.post("/register", response_model=LeagueSummary)
+def register_league(
+    body: RegisterLeagueRequest, con: duckdb.DuckDBPyConnection = Depends(get_db)
+) -> LeagueSummary:
+    """The "Connect League" onboarding action (D53): validates a real Sleeper league is
+    reachable (never trusts the id blind) and persists it so it shows up in `list_leagues`
+    from then on. A bad/unreachable league id returns 422 with the real underlying error,
+    never a silent no-op."""
+    try:
+        league = register_sleeper_league(con, body.sleeper_league_id, league_id=body.league_id)
+    except RuntimeError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
+    # The registered (URL-addressable) id, not `league.league_id` -- those differ whenever a
+    # friendly id was requested, since LeagueContext.league_id always reflects Sleeper's own
+    # real league id (the same existing behavior every YAML-registered `source: sleeper` entry
+    # already has, e.g. "dilworth" -> a LeagueContext whose own .league_id is the raw Sleeper id).
+    registered_id = body.league_id or league.league_id
+    return LeagueSummary(league_id=registered_id, source="sleeper", detail=body.sleeper_league_id)
+
+
+@router.get("/{league_id}/teams", response_model=LeagueTeamsResponse)
+def get_league_teams(
+    league_id: str, con: duckdb.DuckDBPyConnection = Depends(get_db)
+) -> LeagueTeamsResponse:
+    """Every real team in this league, with real rostered players (D53) -- the onboarding
+    "pick your team" listing, and the same data the dashboard/my-team/action-center endpoints
+    resolve `roster_id` against. A `source: yaml` league has no multi-team data source at all
+    (one hand-maintained config, not a full league of real rosters) -- `supported=false` with
+    an empty team list, never a fabricated roster."""
+    league = _league_or_404(league_id, con)
+    teams = teams_for_league(con, get_settings(), league)
+    if teams is None:
+        return LeagueTeamsResponse(league_id=league_id, supported=False, teams=[])
+    return LeagueTeamsResponse(
+        league_id=league_id,
+        supported=True,
+        teams=[
+            TeamRosterRow(
+                roster_id=t.roster_id,
+                owner_display_name=t.owner_display_name,
+                team_name=t.team_name,
+                players=[
+                    RosterPlayerRow(
+                        player_id=p.player_id, display_name=p.display_name, position=p.position
+                    )
+                    for p in t.players
+                ],
+                unmapped_count=len(t.unmapped_sleeper_ids),
+            )
+            for t in teams
+        ],
+    )
+
+
 @router.get("/{league_id}/context")
 def get_league_context(league_id: str, con: duckdb.DuckDBPyConnection = Depends(get_db)) -> dict:
     return _league_or_404(league_id, con).model_dump()
@@ -74,10 +140,19 @@ def get_league_context(league_id: str, con: duckdb.DuckDBPyConnection = Depends(
 def get_roster_need(
     league_id: str,
     roster_positions: str = Query("", description="Comma-separated positions, e.g. 'QB,RB,RB'"),
+    roster_id: int | None = Query(
+        None, description="Real team id (Sleeper leagues only) -- overrides roster_positions"
+    ),
     con: duckdb.DuckDBPyConnection = Depends(get_db),
 ) -> dict:
     league = _league_or_404(league_id, con)
-    positions = [p.strip() for p in roster_positions.split(",") if p.strip()]
+    fallback = [p.strip() for p in roster_positions.split(",") if p.strip()]
+    try:
+        positions = resolve_roster_positions(
+            con, get_settings(), league, roster_id=roster_id, fallback=fallback
+        )
+    except RuntimeError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
     return {
         "league_id": league_id,
         "roster_positions": positions,
@@ -96,11 +171,14 @@ def post_draft(
         projections, _ = load_season_projections(con, body.season)
         available = set(projections)
     try:
+        roster_positions = resolve_roster_positions(
+            con, get_settings(), league, roster_id=body.roster_id, fallback=body.roster_positions
+        )
         rec = recommend_draft_pick(
             con,
             league,
             body.season,
-            body.roster_positions,
+            roster_positions,
             available,
             body.next_pick_overall,
             body.ecr_type,
@@ -136,8 +214,11 @@ def post_waiver(
 ) -> DecisionResponse:
     league = _league_or_404(league_id, con)
     try:
+        roster_positions = resolve_roster_positions(
+            con, get_settings(), league, roster_id=body.roster_id, fallback=body.roster_positions
+        )
         rec = recommend_waiver_pickup(
-            con, league, body.season, body.week, body.player_id, body.roster_positions
+            con, league, body.season, body.week, body.player_id, roster_positions
         )
     except RuntimeError as e:
         raise HTTPException(status_code=422, detail=str(e)) from e

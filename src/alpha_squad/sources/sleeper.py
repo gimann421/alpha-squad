@@ -30,6 +30,7 @@ _ENDPOINTS = {
     "league": "/league/{league_id}",
     "league_rosters": "/league/{league_id}/rosters",
     "league_drafts": "/league/{league_id}/drafts",
+    "league_users": "/league/{league_id}/users",
 }
 
 

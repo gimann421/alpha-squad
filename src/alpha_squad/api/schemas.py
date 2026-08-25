@@ -125,6 +125,31 @@ class LeagueSummary(BaseModel):
     detail: str | None = None
 
 
+class RegisterLeagueRequest(BaseModel):
+    sleeper_league_id: str
+    league_id: str | None = None
+
+
+class RosterPlayerRow(BaseModel):
+    player_id: str
+    display_name: str | None
+    position: str | None
+
+
+class TeamRosterRow(BaseModel):
+    roster_id: int
+    owner_display_name: str | None
+    team_name: str | None
+    players: list[RosterPlayerRow]
+    unmapped_count: int
+
+
+class LeagueTeamsResponse(BaseModel):
+    league_id: str
+    supported: bool
+    teams: list[TeamRosterRow]
+
+
 class ProvenanceResponse(BaseModel):
     entity_type: str
     entity_id: str
@@ -135,6 +160,7 @@ class ProvenanceResponse(BaseModel):
 class DraftRequest(BaseModel):
     season: int
     roster_positions: list[str] = []
+    roster_id: int | None = None
     available_player_ids: list[str] | None = None
     next_pick_overall: int | None = None
     ecr_type: str = "rsf"
@@ -146,6 +172,7 @@ class WaiverRequest(BaseModel):
     week: int
     player_id: str
     roster_positions: list[str] = []
+    roster_id: int | None = None
 
 
 class TradeRequest(BaseModel):

@@ -29,7 +29,12 @@ from alpha_squad.features.college_production import (
 from alpha_squad.features.rookie import build_rookie_projection_features
 from alpha_squad.identity.canonical import build_identity
 from alpha_squad.identity.exceptions import list_exceptions
-from alpha_squad.league.context import DEFAULT_LEAGUE_ID, list_registered_leagues, resolve_league
+from alpha_squad.league.context import (
+    DEFAULT_LEAGUE_ID,
+    list_registered_leagues,
+    register_sleeper_league,
+    resolve_league,
+)
 from alpha_squad.league.decisions import record_decision
 from alpha_squad.league.draft import recommend_draft_pick
 from alpha_squad.league.replacement import (
@@ -1164,12 +1169,17 @@ def evidence_build_sleeper_trending(
 
 @league_app.command("list")
 def league_list() -> None:
-    """List every registered league (config/league_configs/registry.yaml) -- the seamless
+    """List every registered league: config/league_configs/registry.yaml's curated set plus
+    any connected at runtime through the app (`registered_leagues`, D53) -- the seamless
     "which league am I about to run this for" check before any draft/waiver/trade/replacement
-    command. Add a league by editing that file: a `source: yaml` entry points at a local
-    config, a `source: sleeper` entry is hydrated live from a real Sleeper league on every
-    use (docs/DECISIONS.md D33)."""
-    registry = list_registered_leagues()
+    command. Add a league by editing the YAML file (a `source: yaml` entry points at a local
+    config, a `source: sleeper` entry is hydrated live on every use, D33) or by running
+    `alpha-squad league register-sleeper`."""
+    settings = get_settings()
+    con = get_connection(settings)
+    init_db(con)
+    registry = list_registered_leagues(con=con)
+    con.close()
     if not registry:
         console.print(
             "[yellow]no leagues registered in config/league_configs/registry.yaml[/yellow]"
@@ -1184,6 +1194,34 @@ def league_list() -> None:
         detail = entry.get("path") if source == "yaml" else entry.get("sleeper_league_id")
         table.add_row(league_id, source, str(detail))
     console.print(table)
+
+
+@league_app.command("register-sleeper")
+def league_register_sleeper(
+    sleeper_league_id: str = typer.Argument(..., help="Numeric id from the league's Sleeper URL"),
+    league_id: str | None = typer.Option(
+        None, help="Friendly id to register it under (defaults to the real Sleeper league id)"
+    ),
+) -> None:
+    """Connect a real Sleeper league at runtime (D53), the CLI counterpart to the app's
+    "Connect League" onboarding flow (`POST /league/register`). Validates the league is real
+    and reachable before persisting -- fails loudly rather than registering a broken id."""
+    settings = get_settings()
+    con = get_connection(settings)
+    init_db(con)
+    try:
+        league = register_sleeper_league(
+            con, sleeper_league_id, settings=settings, league_id=league_id
+        )
+    except (RuntimeError, SourceError) as e:
+        console.print(f"[red]{e}[/red]")
+        con.close()
+        raise typer.Exit(code=1) from e
+    console.print(
+        f"[green]Registered[/green] {league.league_id!r} "
+        f"({league.format}, {league.teams} teams) as league id {league_id or league.league_id!r}"
+    )
+    con.close()
 
 
 @league_app.command("replacement")

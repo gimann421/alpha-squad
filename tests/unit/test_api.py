@@ -231,9 +231,120 @@ class TestLeague:
             entry["league_id"] == "target_league" and entry["source"] == "yaml" for entry in body
         )
 
+    def test_register_league_validates_and_persists_then_shows_up_in_list(
+        self, con, client, monkeypatch
+    ):
+        import httpx
+
+        from tests.fixtures.httpx_fakes import FakeGetResponse
+
+        body = {
+            "league_id": "555",
+            "name": "API Test League",
+            "total_rosters": 6,
+            "roster_positions": ["QB", "RB", "WR", "BN"],
+            "scoring_settings": {"rec": 1.0},
+            "settings": {"type": 2, "waiver_budget": 100},
+        }
+
+        def fake_get(url, **kwargs):
+            import json as _json
+
+            return FakeGetResponse(200, body, _json.dumps(body).encode())
+
+        monkeypatch.setattr(httpx, "get", fake_get)
+
+        r = client.post(
+            "/league/register",
+            json={"sleeper_league_id": "555", "league_id": "api_test_league"},
+        )
+        assert r.status_code == 200
+        assert r.json()["league_id"] == "api_test_league"
+
+        listed = client.get("/league").json()
+        assert any(entry["league_id"] == "api_test_league" for entry in listed)
+
+    def test_register_league_unreachable_returns_422_not_a_silent_success(
+        self, client, monkeypatch
+    ):
+        import httpx
+
+        from tests.fixtures.httpx_fakes import FakeGetResponse
+
+        monkeypatch.setattr(httpx, "get", lambda url, **kwargs: FakeGetResponse(404, None, b""))
+
+        r = client.post("/league/register", json={"sleeper_league_id": "does-not-exist"})
+        assert r.status_code == 422
+
     def test_unknown_league_id_returns_404_not_a_fabricated_answer(self, client):
         r = client.get("/league/not-a-real-league/context")
         assert r.status_code == 404
+
+    def test_teams_endpoint_unsupported_for_a_yaml_league(self, client):
+        r = client.get("/league/target_league/teams")
+        assert r.status_code == 200
+        body = r.json()
+        assert body["supported"] is False
+        assert body["teams"] == []
+
+    def test_teams_endpoint_returns_real_bridged_rosters_for_a_sleeper_league(
+        self, con, client, monkeypatch
+    ):
+        import httpx
+
+        from tests.fixtures.httpx_fakes import FakeGetResponse
+
+        _seed_player(con, "asq_qb1", "Real QB", "QB")
+        con.execute(
+            "INSERT INTO player_id_map (id_type, id_value, player_id, source) "
+            "VALUES ('sleeper_id', '6813', 'asq_qb1', 'test')"
+        )
+        league_body = {
+            "league_id": "777",
+            "name": "Teams Test League",
+            "total_rosters": 2,
+            "roster_positions": ["QB", "BN"],
+            "scoring_settings": {"rec": 1.0},
+            "settings": {"type": 2, "waiver_budget": 100},
+        }
+        rosters_body = [
+            {"roster_id": 1, "owner_id": "u1", "players": ["6813"]},
+            {"roster_id": 2, "owner_id": "u2", "players": []},
+        ]
+        users_body = [
+            {"user_id": "u1", "display_name": "gimann", "metadata": {"team_name": "Squad A"}},
+            {"user_id": "u2", "display_name": "rival", "metadata": {}},
+        ]
+
+        def fake_get(url, **kwargs):
+            import json as _json
+
+            if url.endswith("/rosters"):
+                body = rosters_body
+            elif url.endswith("/users"):
+                body = users_body
+            else:
+                body = league_body
+            return FakeGetResponse(200, body, _json.dumps(body).encode())
+
+        monkeypatch.setattr(httpx, "get", fake_get)
+
+        reg = client.post(
+            "/league/register", json={"sleeper_league_id": "777", "league_id": "teams_test"}
+        )
+        assert reg.status_code == 200
+
+        r = client.get("/league/teams_test/teams")
+        assert r.status_code == 200
+        body = r.json()
+        assert body["supported"] is True
+        assert len(body["teams"]) == 2
+        team1 = next(t for t in body["teams"] if t["roster_id"] == 1)
+        assert team1["owner_display_name"] == "gimann"
+        assert team1["team_name"] == "Squad A"
+        assert team1["players"] == [
+            {"player_id": "asq_qb1", "display_name": "Real QB", "position": "QB"}
+        ]
 
     def test_get_context_returns_the_real_target_league_config(self, client):
         r = client.get("/league/target_league/context")
@@ -246,6 +357,48 @@ class TestLeague:
         r = client.get("/league/target_league/roster", params={"roster_positions": "QB"})
         assert r.status_code == 200
         assert r.json()["need"]["QB"] > 0  # only 1 of 2 required QB slots filled
+
+    def test_roster_id_on_a_yaml_league_returns_422_rather_than_silently_ignoring_it(self, client):
+        r = client.get("/league/target_league/roster", params={"roster_id": 1})
+        assert r.status_code == 422
+
+    def test_roster_id_on_a_sleeper_league_derives_real_positions(self, con, client, monkeypatch):
+        import httpx
+
+        from tests.fixtures.httpx_fakes import FakeGetResponse
+
+        _seed_player(con, "asq_qb1", "Real QB", "QB")
+        con.execute(
+            "INSERT INTO player_id_map (id_type, id_value, player_id, source) "
+            "VALUES ('sleeper_id', '6813', 'asq_qb1', 'test')"
+        )
+        league_body = {
+            "league_id": "888",
+            "total_rosters": 1,
+            "roster_positions": ["QB", "BN"],
+            "scoring_settings": {},
+            "settings": {"type": 2},
+        }
+        rosters_body = [{"roster_id": 1, "owner_id": "u1", "players": ["6813"]}]
+        users_body = [{"user_id": "u1", "display_name": "gimann", "metadata": {}}]
+
+        def fake_get(url, **kwargs):
+            import json as _json
+
+            if url.endswith("/rosters"):
+                body = rosters_body
+            elif url.endswith("/users"):
+                body = users_body
+            else:
+                body = league_body
+            return FakeGetResponse(200, body, _json.dumps(body).encode())
+
+        monkeypatch.setattr(httpx, "get", fake_get)
+        client.post("/league/register", json={"sleeper_league_id": "888", "league_id": "rid_test"})
+
+        r = client.get("/league/rid_test/roster", params={"roster_id": 1})
+        assert r.status_code == 200
+        assert r.json()["roster_positions"] == ["QB"]
 
     def test_draft_endpoint_calls_the_real_recommend_draft_pick_and_persists_a_decision(
         self, con, client
