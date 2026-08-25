@@ -71,6 +71,144 @@ class TestPlayers:
         assert [p["player_id"] for p in r2.json()] == ["p2"]
 
 
+class TestPlayerDetail:
+    """D53: distinguishes universal player value from league-specific value, per
+    PRODUCT_SPEC.md's Application section -- no new scoring, just joining real tables/
+    already-tested M6-M10 functions per player."""
+
+    def test_404s_for_unknown_player(self, client):
+        r = client.get("/players/nope/detail", params={"season": 2025})
+        assert r.status_code == 404
+
+    def test_universal_value_without_a_league(self, con, client):
+        _seed_player(con, "p1", "Full Detail Player", "WR")
+        con.execute(
+            "INSERT INTO uncertainty_predictions (prediction_id, player_id, season, position, "
+            "model_version, feature_version, point_prediction, p10, p90, confidence, top24_prob, "
+            "calibration_season, predicted_at) VALUES "
+            "('pred1', 'p1', 2025, 'WR', 'uncertainty_catboost_v1', 'fv1', 200.0, 160.0, 250.0, "
+            "0.8, 0.6, 2024, current_timestamp)"
+        )
+        con.execute(
+            "INSERT INTO edge_snapshot (edge_id, player_id, season, position, ecr_type, "
+            "model_version, model_rank, market_rank, rank_edge, evidence_score, action, "
+            "reasons_json, built_at) VALUES "
+            "('e1', 'p1', 2025, 'WR', 'rsf', 'edge_v1', 5, 20, 15, 0.5, 'BUY', "
+            "'[\"real reason\"]', current_timestamp)"
+        )
+        con.execute(
+            "INSERT INTO evidence_events (event_id, player_id, season, week, event_date, "
+            "captured_at, event_type, source, strength_label, strength, direction, "
+            "structured_impact_json, summary) VALUES "
+            "('ev1', 'p1', 2025, 3, '2025-09-20', current_timestamp, 'usage_share_shift', "
+            "'test', 'STRONG', 0.9, 1, '{}', 'real evidence summary')"
+        )
+
+        r = client.get("/players/p1/detail", params={"season": 2025})
+        assert r.status_code == 200
+        body = r.json()
+        assert body["display_name"] == "Full Detail Player"
+        assert body["ranking"]["point_prediction"] == pytest.approx(200.0)
+        assert body["edge"]["action"] == "BUY"
+        assert body["edge"]["reasons"] == ["real reason"]
+        assert len(body["recent_evidence"]) == 1
+        assert body["recent_evidence"][0]["summary"] == "real evidence summary"
+        assert body["league_value"] is None
+
+    def test_no_ranking_or_edge_on_record_is_null_not_an_error(self, con, client):
+        _seed_player(con, "p1", "Sparse Player", "TE")
+        r = client.get("/players/p1/detail", params={"season": 2025})
+        assert r.status_code == 200
+        body = r.json()
+        assert body["ranking"] is None
+        assert body["edge"] is None
+        assert body["recent_evidence"] == []
+        assert body["rookie"] is None
+
+    def test_rookie_info_populated_from_rookie_season(self, con, client):
+        con.execute(
+            "INSERT INTO players (player_id, gsis_id, display_name, position, rookie_season) "
+            "VALUES ('p1', 'gsis_p1', 'Rookie Player', 'RB', 2026)"
+        )
+        con.execute(
+            "INSERT INTO rookie_predictions (prediction_id, player_id, draft_class, position, "
+            "model_version, predicted_rookie_points, breakout_probability, predicted_at) VALUES "
+            "('rp1', 'p1', 2026, 'RB', 'rookie_v1', 140.0, 0.35, current_timestamp)"
+        )
+        r = client.get("/players/p1/detail", params={"season": 2026})
+        assert r.status_code == 200
+        body = r.json()
+        assert body["rookie"]["draft_class"] == 2026
+        assert body["rookie"]["predicted_rookie_points"] == pytest.approx(140.0)
+
+    def test_unknown_league_id_404s(self, con, client):
+        _seed_player(con, "p1", "X", "WR")
+        r = client.get(
+            "/players/p1/detail", params={"season": 2025, "league_id": "not-a-real-league"}
+        )
+        assert r.status_code == 404
+
+    def test_league_value_uses_the_real_dynasty_trade_recommendation(self, con, client):
+        _seed_player(con, "p1", "Trade Target", "RB")
+        con.execute(
+            "INSERT INTO dynasty_values (player_id, scrape_date, age, value_2qb, updated_at) "
+            "VALUES ('p1', '2026-08-01', 24.0, 5000, current_timestamp)"
+        )
+        r = client.get("/players/p1/detail", params={"season": 2025, "league_id": "target_league"})
+        assert r.status_code == 200
+        body = r.json()
+        assert body["league_value"]["league_id"] == "target_league"
+        assert body["league_value"]["trade_action"] in ("BUY", "SELL", "HOLD", "WATCH")
+        assert body["league_value"]["is_mine"] is None
+
+    def test_is_mine_reflects_the_real_roster(self, con, client, monkeypatch):
+        import httpx
+
+        from tests.fixtures.httpx_fakes import FakeGetResponse
+
+        _seed_player(con, "asq_mine", "My Player", "WR")
+        _seed_player(con, "asq_theirs", "Their Player", "WR")
+        con.execute(
+            "INSERT INTO player_id_map (id_type, id_value, player_id, source) VALUES "
+            "('sleeper_id', 'sl_mine', 'asq_mine', 'test')"
+        )
+        league_body = {
+            "league_id": "222",
+            "total_rosters": 1,
+            "roster_positions": ["WR", "BN"],
+            "scoring_settings": {},
+            "settings": {"type": 0},
+        }
+        rosters_body = [{"roster_id": 1, "owner_id": "u1", "players": ["sl_mine"]}]
+        users_body = [{"user_id": "u1", "display_name": "me", "metadata": {}}]
+
+        def fake_get(url, **kwargs):
+            import json as _json
+
+            if url.endswith("/rosters"):
+                body = rosters_body
+            elif url.endswith("/users"):
+                body = users_body
+            else:
+                body = league_body
+            return FakeGetResponse(200, body, _json.dumps(body).encode())
+
+        monkeypatch.setattr(httpx, "get", fake_get)
+        client.post("/league/register", json={"sleeper_league_id": "222", "league_id": "im_test"})
+
+        r_mine = client.get(
+            "/players/asq_mine/detail",
+            params={"season": 2025, "league_id": "im_test", "roster_id": 1},
+        )
+        assert r_mine.json()["league_value"]["is_mine"] is True
+
+        r_theirs = client.get(
+            "/players/asq_theirs/detail",
+            params={"season": 2025, "league_id": "im_test", "roster_id": 1},
+        )
+        assert r_theirs.json()["league_value"]["is_mine"] is False
+
+
 class TestRankingsAreADirectProjection:
     """The literal Gate 8 test: the API must not re-derive or re-rank -- it must return
     exactly the stored uncertainty_predictions row."""

@@ -111,6 +111,67 @@ class EvidenceRow(BaseModel):
     source: str
 
 
+class PlayerRankingInfo(BaseModel):
+    season: int
+    point_prediction: float
+    p10: float | None
+    p25: float | None
+    median: float | None
+    p75: float | None
+    p90: float | None
+    top12_prob: float | None
+    top24_prob: float | None
+    confidence: float | None
+    model_version: str
+
+
+class PlayerEdgeInfo(BaseModel):
+    season: int
+    ecr_type: str
+    model_rank: int
+    market_rank: int
+    rank_edge: int
+    action: str
+    reasons: list[str]
+
+
+class PlayerRookieInfo(BaseModel):
+    draft_class: int
+    predicted_rookie_points: float | None
+    breakout_probability: float | None
+
+
+class PlayerLeagueValue(BaseModel):
+    league_id: str
+    is_mine: bool | None
+    roster_need: float | None
+    trade_action: str | None
+    trade_reasons: list[str]
+    age_adjusted_dynasty_value: float | None
+
+
+class PlayerDetailFull(BaseModel):
+    player_id: str
+    display_name: str | None
+    position: str | None
+    college_name: str | None
+    draft_year: int | None
+    status: str | None
+    gsis_id: str
+    birth_date: str | None
+    draft_round: int | None
+    draft_pick: int | None
+    draft_team: str | None
+    rookie_season: int | None
+    last_season: int | None
+    id_map: dict[str, str]
+    ranking: PlayerRankingInfo | None
+    edge: PlayerEdgeInfo | None
+    recent_evidence: list[EvidenceRow]
+    rookie: PlayerRookieInfo | None
+    league_value: PlayerLeagueValue | None
+
+
 class SourceHealthRow(BaseModel):
     source: str
     dataset: str
