@@ -19,6 +19,7 @@ from alpha_squad.api.routers import (
     rankings,
     rookies,
     seasons,
+    simulate,
 )
 
 app = FastAPI(
@@ -48,6 +49,7 @@ app.include_router(league.router)
 app.include_router(provenance.router)
 app.include_router(health.router)
 app.include_router(seasons.router)
+app.include_router(simulate.router)
 
 
 @app.get("/")

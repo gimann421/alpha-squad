@@ -72,24 +72,18 @@ items with no listed dependency can start immediately.
   artifact nothing reads. Revisit if `/rankings` is ever extended to read established-model output
   directly.
 
-### P1-4 (new): Wire the Monte Carlo simulation engine into the API/UI
+### ~~P1-4: Wire the Monte Carlo simulation engine into the API/UI~~ — CLOSED (D49)
 
-- **Problem:** `models/simulation/correlated.py` is real, tested (unit + live integration tests),
-  and has been exercised against real data — but has no FastAPI endpoint and no UI surface at all.
-  It is CLI-only (`alpha-squad simulate team-season`). This is now the **only** remaining instance
-  of the "built but invisible" pattern that used to describe four separate capabilities
-  (waiver/trade/roster-need/simulation) at the start of this hardening pass — the other three
-  closed via D44/D48.
-- **Dependencies:** None — purely additive, following the exact pattern D44 already established
-  for waiver/trade (a schema + router endpoint, an `api.ts` wrapper, a new view/tab).
-- **Recommended sequencing:** Add `GET /simulate/team-season?team=&season=` (or `POST`, since a
-  real run takes real compute — consider whether to run synchronously or persist-and-poll given
-  `n_simulations` can be large) wrapping `simulate_team_season`, a `SimulationView.tsx` tab showing
-  team/player-level mean/p10/p90 and the `qb_wr1_correlation` diagnostic. Reuse `record_simulation_run`
-  for persistence, matching the existing `team_simulation_runs` table.
-- **Acceptance criteria:** From the running app, a user can request a real team-season simulation
-  and see real per-player point estimates with real uncertainty bands and the correlation
-  diagnostic — Playwright-verified against the real app, per this project's UI-testing standard.
+- `POST /simulate/team-season` wraps the exact `simulate_team_season` the CLI calls (no parallel
+  logic), plus a new `SimulationView.tsx` tab. Verifying it live surfaced a real, separate gap:
+  `team_week_points` (the real-final-score table the simulation's covariance draw depends on) was
+  completely empty in this deployment — `build_team_week_points` existed and was tested but had
+  never been wired to a CLI command, so it never survived a database rebuild. Fixed the root
+  cause: added `alpha-squad features build-team-scores` + a `make team-scores` runbook step, then
+  ran it for real (7,326 rows, matching `team_week_stats`). Verified end-to-end via both the CLI
+  and the running app (Playwright): a real KC/2025 simulation returns real named players (Patrick
+  Mahomes, Travis Kelce, ...), real uncertainty bands, and a real QB/WR1 stack correlation
+  (0.335), with a real persisted `team_simulation_runs` row.
 
 ---
 
@@ -165,11 +159,14 @@ items with no listed dependency can start immediately.
 
 ## Notes on sequencing across what's left
 
-- **P1-4 (simulation UI)** is now the highest-value remaining item and the lowest-risk: the
-  server-side logic already exists and is tested, exactly the same shape of gap D44/D48 already
-  closed for four other capabilities. Good first pick for the next session.
-- **P2-3 (network suite in CI)** and **P3-1/P3-2** are all genuinely low-risk, low-urgency, and
-  can be done in any order or skipped without materially affecting the product.
+- All four "built but invisible" capabilities identified at the start of this hardening pass
+  (waiver/trade/roster-need/simulation) are now closed (D44/D48/D49). What remains is genuinely
+  low-risk, low-urgency work, not another wave of the same pattern.
+- **P2-3 (network suite in CI)** and **P3-1/P3-2** can be done in any order, or skipped without
+  materially affecting the product. **P3-1** (CLAUDE.md's stale data-source note) is the
+  smallest and safest — pure documentation, no code risk — and a reasonable next pick if a
+  session wants a quick, safe win before tackling P2-3's user-decision dependency or P3-2's
+  actual modeling work.
 - **P0-1** requires no further code work — the repo-side decision is settled (D35/D42). The only
   open thread is a conversation with the user about provider-side key rotation status, not
   something to schedule as engineering work.

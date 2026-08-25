@@ -6,6 +6,7 @@ import { HealthView } from "./components/HealthView";
 import { LeagueView } from "./components/LeagueView";
 import { RankingsView } from "./components/RankingsView";
 import { RookiesView } from "./components/RookiesView";
+import { SimulationView } from "./components/SimulationView";
 import { TradeView } from "./components/TradeView";
 import { WaiverView } from "./components/WaiverView";
 
@@ -17,6 +18,7 @@ const TABS = [
   { id: "league", label: "League", render: () => <LeagueView /> },
   { id: "waiver", label: "Waiver", render: () => <WaiverView /> },
   { id: "trade", label: "Trade", render: () => <TradeView /> },
+  { id: "simulation", label: "Simulation", render: () => <SimulationView /> },
   { id: "health", label: "Source Health", render: () => <HealthView /> },
 ] as const;
 

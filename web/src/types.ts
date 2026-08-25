@@ -128,6 +128,30 @@ export interface LeagueContext {
   source?: string;
 }
 
+export interface PlayerSimResultRow {
+  player_id: string;
+  display_name: string | null;
+  position: string;
+  mean_points: number;
+  std_points: number;
+  p10: number;
+  p50: number;
+  p90: number;
+}
+
+export interface SimulationResponse {
+  run_id: string;
+  team: string;
+  season: number;
+  n_simulations: number;
+  n_weeks: number;
+  mean_team_points: number;
+  std_team_points: number;
+  qb_wr1_correlation: number | null;
+  same_position_correlation: number | null;
+  players: PlayerSimResultRow[];
+}
+
 export interface DecisionResponse {
   decision_id: string;
   recommendation: string;

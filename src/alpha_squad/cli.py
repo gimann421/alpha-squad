@@ -73,6 +73,7 @@ from alpha_squad.models.simulation.correlated import (
     record_simulation_run,
     simulate_team_season,
 )
+from alpha_squad.models.simulation.team_scores import build_team_week_points
 from alpha_squad.models.uncertainty.run import run_uncertainty, score_with_persisted_model
 from alpha_squad.sources.base import SourceError, SourceHealth, SourceStatus, utcnow
 from alpha_squad.sources.registry import all_adapters
@@ -371,6 +372,34 @@ def features_build_college_usage() -> None:
         raise typer.Exit(code=1) from e
     console.print(f"seasons ingested: [green]{seasons}[/green]")
     console.print(f"college_usage rows upserted: [green]{n}[/green]")
+    con.close()
+
+
+@features_app.command("build-team-scores")
+def features_build_team_scores(
+    season_start: int = typer.Option(
+        2012, help="First season (matches `features build`'s own default)"
+    ),
+    season_end: int = typer.Option(2025, help="Last season with a real pbp snapshot ingested"),
+) -> None:
+    """Build `team_week_points` (real final scores per team/season/week, from nflverse pbp's
+    running score columns) for the given season range -- the real historical team-points
+    series `simulate_team_season`'s environment draw is calibrated against. This is a
+    separate table from `features build`'s team_week_stats (same pbp source, different
+    derivation), so it needs its own step; without it, simulation has no team-points history
+    to sample from and always reports "not enough real history" regardless of team. Requires
+    `sources ingest` to have already fetched pbp for this range."""
+    settings = get_settings()
+    con = get_connection(settings)
+    init_db(con)
+    seasons = list(range(season_start, season_end + 1))
+    try:
+        n = build_team_week_points(con, settings, seasons)
+    except RuntimeError as e:
+        console.print(f"[red]{e}[/red]")
+        con.close()
+        raise typer.Exit(code=1) from e
+    console.print(f"team_week_points rows upserted: [green]{n}[/green]")
     con.close()
 
 

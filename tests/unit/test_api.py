@@ -309,6 +309,135 @@ class TestLeague:
         assert r.status_code == 404
 
 
+class TestSimulation:
+    """P1-4: the same real `simulate_team_season` the CLI's `simulate team-season` calls,
+    over a synthetic history shaped like tests/unit/test_simulation.py's fixture -- proving
+    the API is a thin wrapper (no parallel simulation logic), not re-testing the Monte Carlo
+    math itself (that's test_simulation.py's job)."""
+
+    TEAM = "TST"
+    HIST_SEASON = 2024
+    SIM_SEASON = 2025
+    _HISTORY = [
+        (55, 0.50, 20.0),
+        (60, 0.55, 24.0),
+        (65, 0.60, 28.0),
+        (70, 0.65, 32.0),
+        (50, 0.45, 16.0),
+        (58, 0.52, 22.0),
+        (63, 0.58, 26.0),
+        (68, 0.62, 30.0),
+        (52, 0.48, 18.0),
+        (66, 0.61, 29.0),
+    ]
+
+    def _seed_history(self, con):
+        from datetime import date, timedelta
+
+        for wk, (plays, pass_rate, points) in enumerate(self._HISTORY, start=1):
+            game_id = f"{self.HIST_SEASON}_{wk:02d}_{self.TEAM}_OPP"
+            game_date = date(self.HIST_SEASON, 9, 1) + timedelta(weeks=wk - 1)
+            con.execute(
+                "INSERT INTO games (game_id, season, week, game_type, game_date, home_team, "
+                "away_team) VALUES (?, ?, ?, 'REG', ?, ?, 'OPP') ON CONFLICT DO NOTHING",
+                [game_id, self.HIST_SEASON, wk, game_date, self.TEAM],
+            )
+            con.execute(
+                "INSERT INTO team_week_stats (team, season, week, game_id, game_date, plays, "
+                "pass_rate) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                [self.TEAM, self.HIST_SEASON, wk, game_id, game_date, float(plays), pass_rate],
+            )
+            con.execute(
+                "INSERT INTO team_week_points (team, season, week, game_id, points) "
+                "VALUES (?, ?, ?, ?, ?)",
+                [self.TEAM, self.HIST_SEASON, wk, game_id, points],
+            )
+
+    def _seed_player_week(self, con, player_id, display_name, position, week, **kw):
+        from datetime import date, timedelta
+
+        game_id = f"{self.SIM_SEASON}_{week:02d}_{self.TEAM}_OPP"
+        game_date = date(self.SIM_SEASON, 9, 1) + timedelta(weeks=week - 1)
+        con.execute(
+            "INSERT INTO players (player_id, gsis_id, display_name, position) VALUES "
+            "(?, ?, ?, ?) ON CONFLICT DO NOTHING",
+            [player_id, f"00-test-{player_id}", display_name, position],
+        )
+        con.execute(
+            "INSERT INTO games (game_id, season, week, game_type, game_date, home_team, "
+            "away_team) VALUES (?, ?, ?, 'REG', ?, ?, 'OPP') ON CONFLICT DO NOTHING",
+            [game_id, self.SIM_SEASON, week, game_date, self.TEAM],
+        )
+        con.execute(
+            "INSERT INTO team_week_stats (team, season, week, game_id, game_date, plays, "
+            "pass_rate) VALUES (?, ?, ?, ?, ?, 60.0, 0.6) ON CONFLICT DO NOTHING",
+            [self.TEAM, self.SIM_SEASON, week, game_id, game_date],
+        )
+        con.execute(
+            "INSERT INTO player_week_stats (player_id, season, week, game_id, game_date, "
+            "team, position, targets, carries, fantasy_points_ppr, offense_snap_pct, "
+            "source_snapshot_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'test')",
+            [
+                player_id,
+                self.SIM_SEASON,
+                week,
+                game_id,
+                game_date,
+                self.TEAM,
+                position,
+                kw.get("targets", 0.0),
+                kw.get("carries", 0.0),
+                kw.get("fantasy_points_ppr", 0.0),
+                kw.get("offense_snap_pct"),
+            ],
+        )
+
+    def test_endpoint_calls_the_real_simulate_team_season_and_persists_a_run(self, con, client):
+        self._seed_history(con)
+        for wk in range(1, 5):
+            self._seed_player_week(
+                con, "wr1", "Wide Receiver One", "WR", wk, targets=8.0, fantasy_points_ppr=14.0
+            )
+            self._seed_player_week(
+                con,
+                "qb1",
+                "Quarterback One",
+                "QB",
+                wk,
+                fantasy_points_ppr=18.0,
+                offense_snap_pct=0.95,
+            )
+
+        r = client.post(
+            "/simulate/team-season",
+            json={"team": self.TEAM, "season": self.SIM_SEASON, "n_simulations": 200, "seed": 1},
+        )
+        assert r.status_code == 200
+        body = r.json()
+        assert body["team"] == self.TEAM
+        assert body["n_simulations"] == 200
+        assert body["run_id"].startswith("sim_")
+        player_ids = {p["player_id"] for p in body["players"]}
+        assert player_ids == {"wr1", "qb1"}
+        wr1 = next(p for p in body["players"] if p["player_id"] == "wr1")
+        assert wr1["display_name"] == "Wide Receiver One"
+        assert wr1["mean_points"] > 0
+        assert wr1["p10"] <= wr1["p50"] <= wr1["p90"]
+
+        stored = con.execute(
+            "SELECT team, season, n_simulations FROM team_simulation_runs WHERE run_id = ?",
+            [body["run_id"]],
+        ).fetchone()
+        assert stored == (self.TEAM, self.SIM_SEASON, 200)
+
+    def test_insufficient_history_returns_422_not_a_fabricated_result(self, client):
+        r = client.post(
+            "/simulate/team-season",
+            json={"team": "ZZZ", "season": 2025, "n_simulations": 50},
+        )
+        assert r.status_code == 422
+
+
 class TestLatestSeasons:
     """D48: the real newest season each table has data for, so the frontend can default to
     it instead of a hardcoded value that silently goes stale every year (the same failure

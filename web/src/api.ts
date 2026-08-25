@@ -16,6 +16,7 @@ import type {
   RankingRow,
   RookieComp,
   RookieRow,
+  SimulationResponse,
   SourceHealthRow,
   WeeklyRankingRow,
 } from "./types";
@@ -96,6 +97,14 @@ export const api = {
   ) => postJson<DecisionResponse>(`/league/${leagueId}/waivers`, body),
   postTrade: (leagueId: string, body: { season: number; player_id: string; ecr_type?: string }) =>
     postJson<DecisionResponse>(`/league/${leagueId}/trade`, body),
+
+  postSimulation: (body: {
+    team: string;
+    season: number;
+    n_simulations?: number;
+    n_weeks?: number;
+    seed?: number;
+  }) => postJson<SimulationResponse>("/simulate/team-season", body),
 
   getProvenance: (entityId: string) => getJson<ProvenanceResponse>(`/provenance/${entityId}`),
 

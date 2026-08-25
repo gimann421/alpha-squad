@@ -36,6 +36,7 @@ make identity      # build the canonical player_id spine + crosswalk
 make college-usage # CFBD college production, espn_id-bridged (needs CFBD_API_KEY) -- must run
                    # BEFORE `features`, which is what joins it into rookie_features
 make features      # as-of feature store: games, player/team week stats, engineered features
+make team-scores  # real final team scores per team/season/week (needed by `simulate`)
 make market      # FantasyPros ECR (via DynastyProcess) + dynasty market values
 make train       # walk-forward established-player ML, uncertainty/calibration, rookie models
 make evaluate    # baseline evaluation report (reports/baseline_evaluation.md)

@@ -65,7 +65,7 @@ state at the time each milestone was first built.
 | CatBoost exists | ✅ | `ml_catboost` in `MODEL_SPECS` |
 | XGBoost challenger exists or is explicitly rejected with evidence | ✅ | `ml_xgboost`; compared against every other component in `evaluation_results`, real numbers in `reports/established_ml_evaluation.md` |
 | Opportunity modeling exists | ✅ | `ml_opportunity_only` |
-| Team environment modeling exists | ✅ | `ml_team_environment_only` (M5); correlated team-season simulation (M13, `models/simulation/`) |
+| Team environment modeling exists | ✅ | `ml_team_environment_only` (M5); correlated team-season simulation (M13, `models/simulation/`), served live via `POST /simulate/team-season` + `SimulationView.tsx` (D49) |
 | Rookie model is separate from established-player model | ✅ | `models/rookie/` is a fully separate pipeline/feature set, walk-forward by draft class |
 | Rookie breakout probability exists | ✅ | `ml_rookie_breakout_*` classifiers |
 | Draft capital is explicit | ✅ | `models/rookie/features.py` draft-capital/pick-value-curve feature |

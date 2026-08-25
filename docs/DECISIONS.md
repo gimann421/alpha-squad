@@ -1650,3 +1650,51 @@ got back a real FAAB bid ($17.14), real meaningful-role probability (0.98), and 
 (marginal value, roster fit, competing-bid likelihood, dynasty value), with a real decision
 recorded (`dec_914f2d93508d4252`). 301 offline tests unaffected (frontend-only change; no new
 backend surface, `GET /players` already existed and was already tested).
+
+## D49 — Wire the Monte Carlo simulation engine into the API/UI (closes P1-4); found and fixed the real reason it always reported "not enough history"
+
+`models/simulation/correlated.py::simulate_team_season` was real, tested, and CLI-only
+(`alpha-squad simulate team-season`) -- the last of the four "built but invisible" capabilities
+this hardening pass set out to close (waiver/trade/roster-need closed D44/D48; this was the
+remainder). Added `POST /simulate/team-season` (`api/routers/simulate.py`) wrapping the exact
+same function the CLI calls -- no parallel simulation logic -- persisting via the existing
+`record_simulation_run` and enriching player rows with `display_name` via a `players` join, the
+same pattern `edge.py` already uses. Frontend: `SimulationView.tsx`, a new "Simulation" tab
+(team/season/n_simulations inputs, a "Run simulation" button since a real Monte Carlo run is
+real compute, not a cheap read -- POST, not GET, matching the CLI's own one-shot-command
+treatment of it). `tests/unit/test_api.py::TestSimulation`, 2 new cases (a real synthetic-history
+run proving the endpoint round-trips through `simulate_team_season` and persists a
+`team_simulation_runs` row; a 422 for insufficient history rather than a fabricated result).
+
+**A real, separate gap found verifying this against the live database, not a synthetic test:**
+every team/season combination reported "not enough real history" regardless of team, because
+`team_week_points` (the real final-score table `_team_environment_history`'s covariance draw is
+calibrated against) was completely empty in this deployment -- 0 rows. `models/simulation/
+team_scores.py::build_team_week_points` (real, tested against a mocked pbp snapshot in
+`tests/integration/test_simulation_live.py`) existed but had never been wired to any CLI command;
+an earlier session's D8/D29 note describes backfilling it, but that was a one-off ad-hoc
+invocation, not a reproducible step, and did not survive this database being rebuilt since (D39's
+full pipeline rebuild ran `sources ingest`/`identity build`/`features build` but had no step that
+would have populated it). This violates CLAUDE.md's "reproducible from `alpha-squad ingest`"
+standard for a real, load-bearing table, not just a preseason cosmetic gap -- so fixed the root
+cause rather than working around it: added `alpha-squad features build-team-scores` (a thin CLI
+wrapper around the existing function, mirroring `build-college-usage`'s pattern) and a
+`make team-scores` target between `features` and `market` in both the `Makefile` and `README.md`'s
+runbook. Ran it for real: `team_week_points` now has 7,326 rows (season 2012-2025), exactly
+matching `team_week_stats`'s row count for the same real pbp-derived source.
+
+**Verified end-to-end, twice:** CLI (`alpha-squad simulate team-season --team KC --season 2025
+--n-simulations 500`) returned a real result -- mean team points 433.1 (std 41.3), qb_wr1_correlation
+0.345 -- over real 2012-2024 KC history. Then the same thing through the running app (Playwright,
+real backend + frontend, real data): searched nothing (team is a free-text abbreviation, no
+picker needed for 32 known values), ran KC/2025/1000 simulations, got back real named players
+(Patrick Mahomes 354.6 mean QB points, Travis Kelce 222.8 TE, Rashee Rice 172.6 WR, ...), a real
+QB/WR1 stack correlation (0.335), and a real persisted run id (`sim_8cd9bd68d07e31c8`) --
+screenshot-verified. 303 offline tests pass (301 + 2 new); `make lint` clean.
+
+**Scope note:** this closes P1-4, the last item in `docs/IMPLEMENTATION_GAP_ANALYSIS.md`'s
+"built but invisible" list. What's left in that file after this (P2-3 network-suite-in-CI,
+P3-1 CLAUDE.md's stale data-source note, P3-2 expert-accuracy weighting) are all disclosed as
+low-risk/low-urgency, and P0-1 needs no further code (a user conversation about key rotation,
+not engineering work) -- see that file's own "Notes on sequencing" section, updated alongside
+this entry.

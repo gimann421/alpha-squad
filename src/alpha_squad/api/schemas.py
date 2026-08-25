@@ -181,6 +181,38 @@ class TradePackageResponse(BaseModel):
     side_b_reasons: list[str]
 
 
+class SimulationRequest(BaseModel):
+    team: str
+    season: int
+    n_simulations: int = 1000
+    n_weeks: int = 17
+    seed: int = 42
+
+
+class PlayerSimResultRow(BaseModel):
+    player_id: str
+    display_name: str | None
+    position: str
+    mean_points: float
+    std_points: float
+    p10: float
+    p50: float
+    p90: float
+
+
+class SimulationResponse(BaseModel):
+    run_id: str
+    team: str
+    season: int
+    n_simulations: int
+    n_weeks: int
+    mean_team_points: float
+    std_team_points: float
+    qb_wr1_correlation: float | None
+    same_position_correlation: float | None
+    players: list[PlayerSimResultRow]
+
+
 class DecisionResponse(BaseModel):
     decision_id: str
     recommendation: str
