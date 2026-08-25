@@ -159,7 +159,7 @@ D35 credential exposure (a decision, not a code fix), and the lower-value P2/P3 
 | FantasyPros ECR is a market baseline | COMPLETE/VERIFIED | Dual-sourced: DynastyProcess historical mirror + live FantasyPros series |
 | ADP tracked when available | IMPLEMENTED/UNVERIFIED | Present in schema; not independently re-verified this run |
 | Sleeper/KTC treated as separate signals, not truth | COMPLETE/VERIFIED | `source` column on `market_snapshot`; DynastyProcess substitutes KTC's dynasty-value role explicitly, not blended silently |
-| Expert weighting uses demonstrated accuracy where data permits | NOT IMPLEMENTED | No expert-accuracy-weighting logic found in `market/` this run |
+| Expert weighting uses demonstrated accuracy where data permits | LIMITED (empirically confirmed, D51) | Real per-expert identity is unavailable even from the live paid FantasyPros API (confirmed via a real call, not assumed); the coarser proxy (`ecr_best`/`ecr_worst` dispersion) was measured against 1,925 real player-seasons and found no consistent relationship with market accuracy — not adopted |
 | Rank edge, points edge, probability edge exist | COMPLETE/VERIFIED | `edge.py`; probability edge via uncertainty model's `top24_prob` |
 | Raw ranking discrepancy alone cannot produce a strong EDGE | COMPLETE/VERIFIED | `classify_action` requires rank AND points edge to agree, above threshold, plus confidence floor and evidence non-veto — regression-tested |
 | BUY/HOLD/SELL/WATCH are evidence-backed | COMPLETE/VERIFIED (gate exists) / PARTIAL (usually neutral in practice) | Evidence-veto gate real; per EDGE sub-audit, the veto is rarely the deciding factor in practice since evidence coverage is sparse |
@@ -559,7 +559,7 @@ rather than deleted, so this section stays an accurate record of what was found 
 
 See `docs/IMPLEMENTATION_GAP_ANALYSIS.md` for the full item-by-item breakdown with dependencies,
 sequencing, and acceptance criteria — it has been refreshed alongside this section. Summary,
-current as of D50:
+current as of D51:
 
 - **P0:** ~~Resolve the leaked-key Git-history exposure~~ **the decision itself was already made
   (D35, at the time of the original leak: user explicitly declined a history rewrite)** — D42
@@ -580,7 +580,10 @@ current as of D50:
 - **P3:** ~~Refresh CLAUDE.md's stale data-source-status note~~ **done (D50)**. ~~Add an
   "in-season/ROS re-projection" loop if not already covered~~ **done (D46)** — the pipeline
   existed but had never been run against this deployment's data or served anywhere; both are now
-  true. Remaining: expert-accuracy weighting for market signal blending.
+  true. ~~Add expert-accuracy weighting to market-signal blending~~ **measured and resolved
+  LIMITED (D51)** — real per-expert data is confirmed unavailable even from the live paid API, and
+  the coarser proxy the data does permit showed no reliable signal against 1,925 real
+  player-seasons; not adopted, per the same standard D39 established. No P3 items remain open.
 
 Also closed this pass, not originally in the P0-P3 list: real task decomposition/dependency
 discovery for the orchestrator (D47, was flagged as a genuine weak point in §19); a dead-code
@@ -632,11 +635,11 @@ every capability originally flagged as "built but invisible" is now wired in. It
 own provider-side action — a narrower, disclosed gap rather than an open question about whether
 the core system works.
 
-**Completion percentage: roughly 85–90%** of ACCEPTANCE_CRITERIA.md's items now land at
-COMPLETE/VERIFIED (up from the original audit's 65–70% estimate) — D41/D43/D44/D45/D46/D47/D48/D49
-each moved multiple rows off PARTIAL/IMPLEMENTED-UNVERIFIED. The remaining gaps are narrow and
-specific (the D35 decision, a handful of P2/P3 items) rather than distributed evenly across the
-system.
+**Completion percentage: roughly 90%** of ACCEPTANCE_CRITERIA.md's items now land at
+COMPLETE/VERIFIED or empirically-confirmed LIMITED (up from the original audit's 65–70% estimate)
+— D41/D43/D44/D45/D46/D47/D48/D49/D50/D51 each moved multiple rows off PARTIAL/IMPLEMENTED-
+UNVERIFIED/NOT-IMPLEMENTED. The only remaining gaps are the D35 decision (not a code fix) and
+P2-3 (network suite in CI, needs a user credential decision).
 
 **Strongest component:** the established-player ML pipeline and its walk-forward evaluation
 methodology — genuinely leakage-safe, genuinely outperforms baselines, and, as of D43, actually
@@ -655,10 +658,10 @@ mixed) should be treated as a snapshot of one run against one market-data vintag
 fact — re-run `alpha-squad edge backtest` after any material data refresh rather than citing the
 numbers in `docs/DECISIONS.md` D41 indefinitely.
 
-**Most important next thing to build:** nothing product-critical remains queued. The lowest-risk
-next actions are P2-3 (network suite in CI, needs a user credential decision) and P3-2
-(expert-accuracy weighting for market blending) — see `docs/IMPLEMENTATION_GAP_ANALYSIS.md`'s
-"Notes on sequencing" for the disclosed tradeoffs.
+**Most important next thing to build:** nothing product-critical remains queued, and nothing left
+in the backlog is autonomously actionable without a user decision. The one remaining item, P2-3
+(network suite in CI), needs the user to decide whether to provision real API credentials as
+GitHub Actions secrets — see `docs/IMPLEMENTATION_GAP_ANALYSIS.md`'s "Notes on sequencing."
 
 **One recommended next action:** confirm with the user whether the D35-leaked API keys have
 actually been rotated at their providers. The repo-side decision (no history rewrite, per D35/D42)

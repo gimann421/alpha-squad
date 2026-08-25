@@ -1713,3 +1713,54 @@ neither is required by PRODUCT_SPEC.md's core outputs. Rewrote the note to match
 `docs/DATA_SOURCES.md`'s current narrative, cite D31/D36-D38 alongside D3, and keep the
 "re-verify with `sources status`" instruction (still good practice, since the policy has already
 changed once and may again). No code changed; 303 offline tests and lint unaffected.
+
+## D51 — Expert-accuracy weighting: measured with real live data, confirmed LIMITED (closes P3-2)
+
+`ACCEPTANCE_CRITERIA.md`: "Expert weighting uses demonstrated accuracy where data permits."
+`PRODUCT_SPEC.md`'s Market section calls for "expert rankings weighted by demonstrated accuracy."
+D4 (this project's first session) marked this LIMITED on the reasoning that individual expert
+identity requires the (then-blocked) FantasyPros API. That blocker is gone (D37) -- **re-checked
+with a real live call against the paid API this session**: `consensus_rankings` returns
+`rank_ecr`/`rank_min`/`rank_max`/`rank_ave`/`rank_std`/`total_experts` per player, never a
+per-expert breakdown or expert identity. Confirmed empirically, not assumed: FantasyPros's public
+API tier (even paid, even live) does not expose which named expert contributed which rank, only
+consensus statistics -- so true per-expert weighting remains genuinely unbuildable with data this
+project can access, not merely unbuilt.
+
+`market_snapshot.ecr_best`/`ecr_worst` (real per-player min/max rank across the anonymous experts
+behind DynastyProcess's historical ECR series) is the coarser signal "where data permits" actually
+allows: how much the experts contributing to a consensus rank agree with each other. Rather than
+assume this dispersion doesn't predict anything (or assume it does and wire it in), **measured
+it** against real outcomes, reusing this project's own already-tested infrastructure end to end:
+for every preseason `rsf` snapshot with a real season to compare against (2022-2025, n=1,925 real
+player-seasons), computed the real `ecr_worst - ecr_best` spread and the real relative error
+between `_market_implied_points_curve`'s (already-tested, D8/M8) implied points and real
+`player_season_stats.total_fantasy_points_ppr`, then split each rank tercile at its median spread
+and compared tight-consensus vs. wide-consensus relative error (Mann-Whitney U):
+
+| Rank tier | n | tight-consensus mean rel. error | wide-consensus mean rel. error | p-value |
+|---|---|---|---|---|
+| Top 50 | 200 | 0.294 | 0.296 | 0.804 (no effect) |
+| 51-150 | 397 | 0.342 | 0.424 | 0.006 (tight is *more* accurate) |
+| 151+ | 1,323 | 0.753 | 0.671 | <0.001 (tight is *less* accurate) |
+
+The raw pooled spearman(spread, relative error) looked promising at first (-0.34) but that number
+is confounded by rank itself (both spread and relative error independently correlate with rank) --
+the rank-tier-controlled comparison above is the real test, and it **reverses sign** between the
+51-150 and 151+ tiers. There is no consistent, monotonic, generalizable relationship between
+expert-consensus tightness and market accuracy in the real data. Applying the same standard this
+project already committed to for exactly this situation (D39's pre-registered "measure, and if the
+signal doesn't hold up, say so rather than force it in"): **not adopted.** No change to
+`edge.py`'s market-rank computation or gating logic -- the existing hard rule (rank AND points
+edge must agree, D21) is untouched, and no unreliable weighting was added on top of it.
+
+**Reproduction:** for each season with both a preseason `rsf` `market_snapshot` and
+`player_season_stats`, join on `player_id`, compute `ecr_worst - ecr_best` and
+`abs(actual - curve.predict(ecr_rank)) / max(curve.predict(ecr_rank), 20)` using
+`market/edge.py::_market_implied_points_curve`, then split by rank tercile at the median spread
+within each tercile and compare with `scipy.stats.mannwhitneyu`. No new permanent module was
+added for this -- unlike D39's rookie ablation, there is no adopted feature to build ongoing
+comparison infrastructure around, and adding one for a rejected hypothesis would be exactly the
+unnecessary complexity CLAUDE.md's engineering standards warn against. `docs/TRACEABILITY.md`
+updated to mark this criterion LIMITED with this empirical justification, replacing D4's original
+data-availability-only reasoning. No code changed; 303 offline tests and lint unaffected.

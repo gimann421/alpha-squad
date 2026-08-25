@@ -138,14 +138,16 @@ items with no listed dependency can start immediately.
   `docs/DATA_SOURCES.md`'s current narrative, citing D31/D36-D38. Only KeepTradeCut and ESPN
   remain unreachable, neither required by PRODUCT_SPEC.md's core outputs.
 
-### P3-2: Add expert-accuracy weighting to market-signal blending
+### ~~P3-2: Add expert-accuracy weighting to market-signal blending~~ — CLOSED/LIMITED (D51)
 
-- **Problem:** PRODUCT_SPEC.md calls for "expert weighting uses demonstrated accuracy where data
-  permits"; no such logic exists in `market/` today. **Still open.**
-- **Dependencies:** Benefits from the EDGE backtest artifact existing first (now true, D41), since
-  expert accuracy is itself a historical-performance measurement.
-- **Acceptance criteria:** Market blending demonstrably weights a source differently based on a
-  measured historical-accuracy statistic for that source, not a fixed constant.
+- Measured rather than assumed: re-confirmed live that even the paid FantasyPros API exposes only
+  consensus statistics, never per-expert identity, so true per-expert weighting is genuinely
+  unbuildable with data this project can access. The coarser proxy the real data does permit
+  (`ecr_best`/`ecr_worst` expert-agreement dispersion) was measured against 1,925 real
+  player-seasons (2022-2025) and found to have no consistent relationship with market accuracy —
+  it reverses sign between rank tiers. Applied this project's own D39 standard (measure, and if
+  the signal doesn't hold up, say so rather than force it in): **not adopted.** No change to
+  `edge.py`'s gating logic. See D51 for the full methodology and numbers.
 
 ### ~~P3-3: Add an explicit in-season/ROS re-projection loop, if genuinely absent~~ — CLOSED (D46)
 
@@ -158,11 +160,10 @@ items with no listed dependency can start immediately.
 ## Notes on sequencing across what's left
 
 - All four "built but invisible" capabilities identified at the start of this hardening pass
-  (waiver/trade/roster-need/simulation) are now closed (D44/D48/D49), and the one pure-
-  documentation item (P3-1) is closed too (D50). What remains is **P2-3** (network suite in CI,
-  needs a user credential decision — propose it rather than doing it unilaterally) and **P3-2**
-  (expert-accuracy weighting, real modeling work but no user decision needed) — both genuinely
-  low-risk, low-urgency, and can be done in either order.
+  (waiver/trade/roster-need/simulation) are now closed (D44/D48/D49), the pure-documentation item
+  (P3-1) is closed (D50), and P3-2 has been measured and honestly resolved as LIMITED (D51) rather
+  than left simply "not done." The only item left in this file is **P2-3** (network suite in CI),
+  which needs a user credential decision — propose it rather than doing it unilaterally.
 - **P0-1** requires no further code work — the repo-side decision is settled (D35/D42). The only
   open thread is a conversation with the user about provider-side key rotation status, not
   something to schedule as engineering work.
