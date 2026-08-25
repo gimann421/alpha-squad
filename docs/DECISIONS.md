@@ -1764,3 +1764,18 @@ comparison infrastructure around, and adding one for a rejected hypothesis would
 unnecessary complexity CLAUDE.md's engineering standards warn against. `docs/TRACEABILITY.md`
 updated to mark this criterion LIMITED with this empirical justification, replacing D4's original
 data-availability-only reasoning. No code changed; 303 offline tests and lint unaffected.
+
+## D52 — Final validation: re-ran the full live/network integration suite after the D41-D51 pass
+
+Section 17 of this hardening pass's directive calls for re-running live/network integration
+tests as part of final validation, not just trusting that nothing broke. None of D41-D51 touched
+a source adapter, but this hadn't been directly re-confirmed against real external services since
+before this pass started, so ran it for real rather than assuming: `make test-network` (`pytest -m
+network`, real calls to nflverse/DynastyProcess/cfbfastR/ffopportunity/Sleeper/FantasyPros/CFBD,
+no mocks) -- **41 passed, 1 skipped, 0 failed**, ~25 minutes. The one skip is
+`test_sleeper_league_context_live.py`'s test needing a specific real league config not present in
+this environment, an expected/pre-existing skip, not a new failure. This reconfirms every
+live-source claim made across D41-D51 (Sleeper/FantasyPros/CFBD availability, the real KC 2025
+simulation, real league workflows, etc.) against actual external services at the end of the pass,
+not just at the moment each was first built. Closes the "run relevant live integration tests"
+final-validation step; no code changed.

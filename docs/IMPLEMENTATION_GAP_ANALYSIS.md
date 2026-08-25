@@ -1,8 +1,8 @@
 # Alpha Squad — Implementation Gap Analysis
 
 Companion to `docs/CURRENT_STATE_AUDIT.md`. Originally written 2026-08-24 (commit `e0ca6c3`);
-refreshed 2026-08-25 after a P0-P2/P4/P5/P7/P8 hardening pass (`docs/DECISIONS.md` D41-D48) closed
-most of the original list. Each item still reflects what is **actually missing today** — not a
+refreshed 2026-08-25 after a P0-P8 hardening pass (`docs/DECISIONS.md` D41-D52) closed every item
+except P2-3, which needs a user decision. Each item still reflects what is **actually missing today** — not a
 re-statement of the original spec. Closed items are kept (marked `CLOSED`, struck through) rather
 than deleted, so this file stays an accurate record of what was found and what changed, not just a
 snapshot of what's currently outstanding. Items are ordered P0 (do first / highest risk) → P3
