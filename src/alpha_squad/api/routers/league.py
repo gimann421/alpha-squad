@@ -15,6 +15,8 @@ from alpha_squad.api.schemas import (
     DraftRequest,
     LeagueSummary,
     LeagueTeamsResponse,
+    MyTeamPlayerRow,
+    MyTeamResponse,
     RegisterLeagueRequest,
     RosterPlayerRow,
     TeamRosterRow,
@@ -35,6 +37,7 @@ from alpha_squad.league.draft import recommend_draft_pick
 from alpha_squad.league.replacement import load_season_projections
 from alpha_squad.league.roster import roster_need
 from alpha_squad.league.roster_import import resolve_roster_positions, teams_for_league
+from alpha_squad.league.roster_intelligence import build_my_team_report
 from alpha_squad.league.trade import (
     PickAsset,
     TradePackageSide,
@@ -128,6 +131,56 @@ def get_league_teams(
             )
             for t in teams
         ],
+    )
+
+
+@router.get("/{league_id}/my-team", response_model=MyTeamResponse)
+def get_my_team(
+    league_id: str,
+    season: int = Query(...),
+    roster_id: int = Query(..., description="Real team id, from GET /league/{id}/teams"),
+    ecr_type: str = Query("rsf"),
+    con: duckdb.DuckDBPyConnection = Depends(get_db),
+) -> MyTeamResponse:
+    """ "What's wrong with my roster?" -- every rostered player joined with real projection/
+    uncertainty/EDGE/dynasty-value (M6/M8), plus real positional need/scarcity/replacement
+    level (M10) and a real starter/bench split computed for this team's own roster alone. No
+    new scoring logic -- see league/roster_intelligence.py's module docstring."""
+    league = _league_or_404(league_id, con)
+    try:
+        report = build_my_team_report(con, league, season, roster_id, ecr_type=ecr_type)
+    except RuntimeError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
+    return MyTeamResponse(
+        league_id=report.league_id,
+        roster_id=report.roster_id,
+        season=report.season,
+        owner_display_name=report.owner_display_name,
+        team_name=report.team_name,
+        players=[
+            MyTeamPlayerRow(
+                player_id=p.player_id,
+                display_name=p.display_name,
+                position=p.position,
+                projection=p.projection,
+                p10=p.p10,
+                p90=p.p90,
+                confidence=p.confidence,
+                top24_prob=p.top24_prob,
+                market_rank=p.market_rank,
+                rank_edge=p.rank_edge,
+                edge_action=p.edge_action,
+                dynasty_value=p.dynasty_value,
+                marginal_value=p.marginal_value,
+                is_starter=p.is_starter,
+            )
+            for p in report.players
+        ],
+        unmapped_player_count=report.unmapped_player_count,
+        positional_needs=report.positional_needs,
+        positional_scarcity=report.positional_scarcity,
+        replacement_levels=report.replacement_levels,
+        total_projected_points=report.total_projected_points,
     )
 
 

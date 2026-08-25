@@ -150,6 +150,37 @@ class LeagueTeamsResponse(BaseModel):
     teams: list[TeamRosterRow]
 
 
+class MyTeamPlayerRow(BaseModel):
+    player_id: str
+    display_name: str | None
+    position: str | None
+    projection: float | None
+    p10: float | None
+    p90: float | None
+    confidence: float | None
+    top24_prob: float | None
+    market_rank: int | None
+    rank_edge: int | None
+    edge_action: str | None
+    dynasty_value: float | None
+    marginal_value: float | None
+    is_starter: bool
+
+
+class MyTeamResponse(BaseModel):
+    league_id: str
+    roster_id: int
+    season: int
+    owner_display_name: str | None
+    team_name: str | None
+    players: list[MyTeamPlayerRow]
+    unmapped_player_count: int
+    positional_needs: dict[str, float]
+    positional_scarcity: dict[str, float]
+    replacement_levels: dict[str, float]
+    total_projected_points: float
+
+
 class ProvenanceResponse(BaseModel):
     entity_type: str
     entity_id: str
