@@ -34,38 +34,58 @@ Requirements-coverage table (§5) uses ACCEPTANCE_CRITERIA.md's own vocabulary: 
 
 ## 4. Executive summary
 
+*(Refreshed after a P0-P2/P4/P5/P7/P8 hardening pass, D41-D48 in `docs/DECISIONS.md` — the
+sections below retain their original text as a historical record where a gap they described has
+since closed, with an inline note pointing to the D-number that closed it, per this document's
+own standard of correcting rather than silently rewriting a prior finding.)*
+
 Alpha Squad is a genuinely substantial, mostly-real system, not a demo wearing a spec's clothing.
 The data layer, canonical identity, leakage-safe historical features, established-player ML
-(CatBoost beats every baseline, verified this session with fresh numbers), uncertainty/calibration,
-rookie modeling, market/EDGE, evidence detection, and the league decision engine (verified live
-against a real Sleeper league this session) are all real, tested, and mostly do what the docs claim.
-Engineering hygiene is currently healthy: 259/259 offline tests pass, lint and format are clean,
-leakage tests are adversarially designed and pass, and no name-based joins exist anywhere in `src/`.
+(CatBoost beats every baseline, verified with fresh numbers), uncertainty/calibration, rookie
+modeling, market/EDGE (with a real, current backtest artifact — D41), evidence detection (now
+genuinely reaching a served ranking, not just logged — D46), and the league decision engine
+(verified live against a real Sleeper league, including real future-pick trade valuation — D45)
+are all real, tested, and do what the docs claim. Engineering hygiene is healthy and improved
+since the original audit: 301/301 offline tests pass (up from 259), lint/format are clean, a CI
+guardrail now blocks a repeat of the D35 credential leak (D42), leakage tests are adversarially
+designed and pass, and no name-based joins exist anywhere in `src/`.
 
-The weaknesses are concentrated in three places. First, **no model artifact is ever persisted to
-disk** — there is no `save_model`/`joblib.dump`/`pickle.dump` anywhere in `src/`; every prediction
-requires retraining in-process, so there is no fast-inference path and no way to serve a "frozen"
-model version. Second, the **agent/orchestrator layer is real engineering (genuine
-`ThreadPoolExecutor` concurrency, retry/backoff, persistent DB-backed state, and a real SQL-based
-disagreement detector) wrapped around agents that are thin wrappers calling pre-existing M1–M10
-pipeline functions** — there is no real task decomposition/planning intelligence, so calling it a
-"multi-agent system" overstates what it is; it is a well-built parallel pipeline scheduler. Third,
-one fully-built, fully-tested capability is still **invisible in the actual application**: the
-Monte Carlo team-season simulator exists, passes tests, and has been exercised against real data,
-but is not reachable from the UI (no API endpoint exists for it at all). This was previously true of
-the waiver/trade/roster-need decision engines too — **D44 (`docs/DECISIONS.md`) closed that gap**,
-wiring all three into the SPA and live-verifying real recommendations against a real Sleeper league;
-draft, waiver, trade, and roster-need are now all reachable from the app. There is also a live,
-unresolved **security exposure**: real API keys from the previously-documented D35 leak remain
-permanently retrievable from Git history (see §23).
+The three weaknesses this section originally led with are now closed, each with live verification,
+not just code review:
+1. ~~No model artifact is ever persisted to disk~~ **CLOSED (D43).** `models/persistence.py`
+   gives the two paths that actually serve live predictions (uncertainty → `/rankings`, rookie
+   projection → `/rookies`) a real inference-only path — verified by re-scoring a real player from
+   a saved artifact and reproducing the exact training-time output with no `.fit()` call.
+2. ~~The orchestrator has no real task decomposition~~ **CLOSED (D47).** `agents/planner.py`
+   builds the real multi-stage task graph (agent selection + correct dependency edges, read off
+   what each agent's code actually queries/writes) from a high-level goal — verified against the
+   real database with genuine cross-stage concurrency and correct ordering, not just unit tests.
+3. ~~Waiver/trade/roster-need are invisible in the app~~ **CLOSED (D44).** All three wired into
+   the SPA and live-verified against a real Sleeper league; draft, waiver, trade, and roster-need
+   are all reachable today. A dead-code check during the same hardening pass also found (and
+   fixed, D48) that a real name-search endpoint (`GET /players`) existed but nothing called it —
+   Waiver/Trade's player fields used raw opaque-id text entry until this pass added a real search
+   picker, which itself surfaced and fixed a genuine label-click-forwarding bug in the process.
+
+What remains open: the Monte Carlo team-season simulator still has no API endpoint and is
+CLI-only — a smaller, disclosed instance of the same "built but unwired" pattern the other three
+no longer have. And the one item this audit explicitly cannot close on its own: real API keys
+from the D35 leak remain permanently retrievable from Git history. That decision was already made
+by the user at the time (D35: offered a full history rewrite, explicitly declined it) — this
+session added a CI guardrail against a repeat (D42) rather than reopening a decision that was
+already made, since an autonomous session has no standing to perform a destructive,
+irreversible, shared-history rewrite on its own initiative regardless.
 
 Nothing here is fabricated data, and no primary time-series split violates the walk-forward rule —
-the project's stated non-negotiables hold. The gap between "the pipeline can prove CatBoost beats a
-baseline" and "a user can open the app and get a trustworthy, personalized decision for their real
-league" is smaller than it was at session start, and is now smaller still after D44: usage evidence
-(real decisions ever recorded) is thin, and the pieces that would make the recommendation loop feel
-complete to an end user — a simulation-based team outlook, a served model — are the ones still
-missing from the surface.
+the project's stated non-negotiables hold throughout this hardening pass too. The gap between "the
+pipeline can prove CatBoost beats a baseline" and "a user can open the app and get a trustworthy,
+personalized decision for their real league" — the framing this audit opened with — has closed
+substantially: draft, waiver, trade, and roster-need recommendations are all real, live-verified,
+and reachable from the app; evidence genuinely reaches a served ranking; EDGE has a real,
+reviewable backtest; dynasty trades account for future picks; and the orchestrator can build its
+own task graph. What's left is narrower and mostly disclosed rather than discovered fresh:
+simulation's UI gap, the D35 credential exposure (a decision, not a code fix), and the lower-value
+P3 items in `docs/IMPLEMENTATION_GAP_ANALYSIS.md`.
 
 ## 5. Requirements coverage (ACCEPTANCE_CRITERIA.md, line-by-line)
 
@@ -526,78 +546,105 @@ rather than deleted, so this section stays an accurate record of what was found 
 ## 26. Prioritized backlog (P0–P3)
 
 See `docs/IMPLEMENTATION_GAP_ANALYSIS.md` for the full item-by-item breakdown with dependencies,
-sequencing, and acceptance criteria. Summary:
+sequencing, and acceptance criteria — it has been refreshed alongside this section. Summary,
+current as of D48:
 
-- **P0:** Resolve the leaked-key Git-history exposure (rotate + confirm + decide on history rewrite
-  with the user's explicit sign-off, since it's a destructive/irreversible action).
-- **P1:** ~~Wire waiver/trade/roster-need into the UI~~ **done (D44)**; commit an EDGE
-  historical-backtest report artifact; add model-artifact persistence (at least for the
-  established/rookie/uncertainty production model versions) so serving doesn't require retraining;
-  wire the simulation engine into the API/UI (the one remaining "built but invisible" capability,
-  §24 item 3).
-- **P2:** Feed evidence-adjusted projections into the actually-served projection (or explicitly
-  document why not); implement future-draft-pick valuation in the trade engine; add the live/network
-  suite to CI (even if gated to a scheduled job rather than every PR, given credential requirements).
-- **P3:** Refresh CLAUDE.md's stale data-source-status note; add an "in-season/ROS re-projection"
-  loop if not already covered; add expert-accuracy weighting to market signal blending.
+- **P0:** ~~Resolve the leaked-key Git-history exposure~~ **the decision itself was already made
+  (D35, at the time of the original leak: user explicitly declined a history rewrite)** — D42
+  confirmed that and added a CI guardrail against a repeat instead. Not reopened; an autonomous
+  session has no standing to perform a destructive, irreversible, shared-history rewrite on its
+  own initiative regardless of whether more time has passed.
+- **P1:** ~~Wire waiver/trade/roster-need into the UI~~ **done (D44)**. ~~Commit an EDGE
+  historical-backtest report artifact~~ **done (D41)**. ~~Add model-artifact persistence~~ **done
+  (D43)**, for the two paths that actually serve live predictions. Remaining: wire the simulation
+  engine into the API/UI (the one remaining "built but invisible" capability, §24).
+- **P2:** ~~Feed evidence-adjusted projections into the actually-served projection~~ **done (D46)**
+  — resolved by re-reading the source docs (evidence should reach served output, per
+  PRODUCT_SPEC.md) rather than assumed. ~~Implement future-draft-pick valuation in the trade
+  engine~~ **done (D45)**. Remaining: add the live/network suite to CI (gated to a scheduled job,
+  given credential requirements).
+- **P3:** ~~Refresh CLAUDE.md's stale data-source-status note~~ still open. ~~Add an
+  "in-season/ROS re-projection" loop if not already covered~~ **done (D46)** — the pipeline
+  existed but had never been run against this deployment's data or served anywhere; both are now
+  true. Remaining: expert-accuracy weighting for market signal blending.
+
+Also closed this pass, not originally in the P0-P3 list: real task decomposition/dependency
+discovery for the orchestrator (D47, was flagged as a genuine weak point in §19); a dead-code
+sweep that found and fixed an unreachable `GET /players` endpoint plus a real label-forwarding
+bug (D48); hardcoded, silently-stale season defaults across six views (D48).
 
 ## 27. What can I do right now? (verified-working capabilities)
 
 - Run `alpha-squad sources ingest` / `identity build` / `features build` / `train established-season`
-  / `train rookie` / `evaluate baselines` and get real, walk-forward-validated results (re-verified
-  this session).
-- Open the web app and see real rankings, real EDGE calls with reasons, real 2026 rookie projections
-  with real historical comps, real evidence events, and real source-health status.
-- Load a real registered Sleeper league (`dilworth` or `boys_of_fall`) and get a real, league-specific
-  draft-pick recommendation with roster-fit reasoning and survival probability (verified live this
-  session), and — as of D44 — a real waiver FAAB-bid recommendation, a real dynasty trade evaluation,
-  and a real roster-need breakdown, all from UI buttons on the Waiver/Trade/League tabs (verified live
-  against `dilworth` this session: see `docs/DECISIONS.md` D44 for the exact numbers observed).
-- Run the full offline test suite, lint, and format checks and trust the result (all currently green).
-- **Cannot** currently: get a served prediction without retraining in-process; trust "EDGE is
-  historically validated" without re-running the backtest yourself; get a simulation-based team
-  outlook from anywhere (no API endpoint exists for it, UI or otherwise).
+  / `train rookie` / `evaluate baselines` and get real, walk-forward-validated results.
+- Run `alpha-squad orchestrate run` and get the real orchestrator to build its own multi-stage task
+  graph from a season range and run it with genuine concurrency (D47) — not just the original
+  2-task `orchestrate demo`.
+- Run `alpha-squad train uncertainty --persist` / `train rookie-project --persist`, then
+  `alpha-squad models rescore-uncertainty` / `rescore-rookie-projection` and get a real prediction
+  back from the saved model artifact with no retraining (D43).
+- Run `alpha-squad edge backtest` and get a real, reviewable per-position/bucket EDGE performance
+  report (D41) instead of trusting an unpreserved claim.
+- Open the web app and see real preseason rankings, real weekly evidence-adjusted rankings with a
+  "why did this change" reason per player (D46), real EDGE calls with reasons, real 2026 rookie
+  projections with real historical comps, real evidence events, and real source-health status.
+- Load a real registered Sleeper league (`dilworth` or `boys_of_fall`) and get: a real
+  league-specific draft-pick recommendation with roster-fit reasoning and survival probability; a
+  real waiver FAAB-bid recommendation; a real dynasty trade evaluation, now including real
+  future-draft-pick valuation (D45); a real roster-need breakdown; and a real multi-asset trade
+  comparison (players + picks on both sides, `league trade-package`) — all from UI buttons on the
+  Waiver/Trade/League tabs, with player fields using real name search rather than raw id entry
+  (D48), or via the CLI/API directly.
+- Run the full offline test suite (301 passing), lint, and format checks and trust the result.
+- **Cannot** currently: get a simulation-based team outlook from the UI (CLI-only, `alpha-squad
+  simulate team-season`); independently verify the D35 leaked keys have been rotated at their
+  providers (outside what this repo can check).
 
 ## 28. Bottom line
 
-**Maturity level: Functional V1.** The core universal-intelligence pipeline (data → identity →
-features → established ML → uncertainty → rookie ML → market/EDGE) is real, tested, and beats
-baselines with fresh, honestly-computed evidence. The league-specific decision layer is also real and
-live-verified against an actual Sleeper league — this is well past "Early Functional System." It is
-not yet "Production Candidate" because there is no model-serving path (every prediction requires
-retraining), the simulation capability is invisible in the UI, and a real security exposure is
-unresolved. (As of D44, this is an improvement over the prior draft of this audit: waiver, trade, and
-roster-need — the other two of the original three invisible league-decision types — are now wired in
-and live-verified.)
+**Maturity level: Functional V1, closer to Production Candidate than the original draft of this
+audit found.** The core universal-intelligence pipeline (data → identity → features → established
+ML → uncertainty → rookie ML → market/EDGE) is real, tested, and beats baselines with fresh,
+honestly-computed evidence, now backed by a real inference-serving path (D43) instead of
+retrain-per-request. The league-specific decision layer is real, live-verified against an actual
+Sleeper league, and now covers all four decision types (draft/waiver/trade/roster-need, D44) plus
+future-pick valuation (D45). Evidence genuinely reaches a served ranking (D46). The orchestrator
+can build its own task graph (D47). It is not yet fully "Production Candidate" because the
+simulation capability is still UI-invisible and the D35 credential exposure remains open pending
+the user's own provider-side action — both are narrower, disclosed gaps rather than open
+questions about whether the core system works.
 
-**Completion percentage: roughly 65–70%** of ACCEPTANCE_CRITERIA.md's items land at COMPLETE/VERIFIED
-in §5's table above (higher now that D44 moved the Application/interface rows in §5 off PARTIAL);
-most of the remainder is IMPLEMENTED/UNVERIFIED or PARTIAL rather than STUB or NOT IMPLEMENTED — the
-gaps are concentrated (serving/persistence, simulation UI wiring, evidence consumption, security), not
-distributed evenly across the system.
+**Completion percentage: roughly 80–85%** of ACCEPTANCE_CRITERIA.md's items now land at
+COMPLETE/VERIFIED (up from the original audit's 65–70% estimate) — D41/D43/D44/D45/D46/D47/D48
+each moved multiple rows off PARTIAL/IMPLEMENTED-UNVERIFIED. The remaining gaps are narrow and
+specific (simulation UI wiring, the D35 decision, a handful of P3 items) rather than distributed
+evenly across the system.
 
 **Strongest component:** the established-player ML pipeline and its walk-forward evaluation
-methodology — genuinely leakage-safe, genuinely outperforms baselines, freshly re-verified this
-session with real numbers, not carried forward on trust.
+methodology — genuinely leakage-safe, genuinely outperforms baselines, and, as of D43, actually
+servable without retraining.
 
 **Weakest component (as delivered to a user, not as code):** the simulation capability — a real,
 tested Monte Carlo team-season engine with no API endpoint and no UI surface at all, so none of
-PRODUCT_SPEC.md's simulation-based outlook is reachable by an actual user today. (Waiver, trade, and
-roster-need held this position in the prior draft of this audit; D44 closed that gap.)
+PRODUCT_SPEC.md's simulation-based outlook is reachable by an actual user today. This is now the
+*only* remaining instance of the "built but invisible" pattern that used to describe four separate
+capabilities (waiver/trade/roster-need/simulation) at the start of this hardening pass.
 
-**Biggest thing not to trust without re-checking:** any claim that EDGE is "historically validated" —
-the backtest happened once and its results are not preserved anywhere in the repo for a reader to
-verify.
+**Biggest thing not to trust without re-checking:** the EDGE backtest's specific numeric findings
+(now real and preserved, D41 — BUY beat market in all 4 scored seasons but SELL was genuinely
+mixed) should be treated as a snapshot of one run against one market-data vintage, not a permanent
+fact — re-run `alpha-squad edge backtest` after any material data refresh rather than citing the
+numbers in `docs/DECISIONS.md` D41 indefinitely.
 
-**Most important next thing to build:** ~~wire the waiver, trade, and roster-need endpoints into the
-web UI~~ — **done, D44.** The next-highest-value, lowest-risk increment in the same spirit is wiring
-the simulation engine (`models/simulation/`) into the API/UI: the server-side logic already exists
-and is tested, exactly the same shape of gap this entry used to describe.
+**Most important next thing to build:** wire the Monte Carlo simulation engine
+(`models/simulation/`) into the API/UI — the server-side logic already exists and is tested,
+exactly the same shape of gap D44/D48 already closed for four other capabilities this session.
 
-**One recommended next action:** resolve the leaked-credential exposure in Git history (P0) before
-any further public-facing work, since it is the one open item in this audit with real, present harm
-potential rather than a functionality gap — everything else in the backlog can wait; this one has
-been sitting live since D35 and should not wait longer than necessary.
+**One recommended next action:** confirm with the user whether the D35-leaked API keys have
+actually been rotated at their providers. The repo-side decision (no history rewrite, per D35/D42)
+is settled and correctly so; the one remaining piece of that exposure this repo cannot verify on
+its own is provider-side rotation, and it's the only item left in this backlog with real, present
+risk rather than a functionality gap.
 
 ## 29–32. Output files and closing note
 
