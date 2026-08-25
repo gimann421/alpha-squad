@@ -3,7 +3,7 @@
 Living summary of what is implemented, validated, and outstanding. Updated at the end of every
 milestone. See `docs/TRACEABILITY.md` for the acceptance-criteria-level mapping.
 
-## Status: M13 complete (every milestone in the approved plan implemented, tested, and traced to ACCEPTANCE_CRITERIA.md — docs/TRACEABILITY.md); M14 post-audit hardening pass complete (D41-D52) except P2-3, which needs a user decision on provisioning live-source credentials for CI
+## Status: M13 complete (every milestone in the approved plan implemented, tested, and traced to ACCEPTANCE_CRITERIA.md — docs/TRACEABILITY.md); M14 post-audit hardening pass complete (D41-D52) except P2-3, which needs a user decision on provisioning live-source credentials for CI; M15 user-facing productization complete (D53)
 
 | Milestone | Status | Notes |
 |---|---|---|
@@ -22,6 +22,7 @@ milestone. See `docs/TRACEABILITY.md` for the acceptance-criteria-level mapping.
 | M12 API + frontend | DONE | FastAPI over the real M1-M11 pipeline (8 routers, every field a direct projection of an already-persisted table or an M10 function call, zero parallel logic); React+Vite+TS SPA (6 real, live-data views); verified end-to-end in a real Chromium browser via Playwright against real persisted data, including the literal Gate 8 test (killed the API process, reloaded, confirmed a real fetch error rather than stale/fabricated content); 189 offline + 33 network tests passing |
 | M13 Hardening | DONE | correlated team-season Monte Carlo simulation (D8 deferred item, `models/simulation/`); found and fixed a real cross-cutting data bug affecting M4-M10 (postseason games silently pooled into every "season" aggregate since M3, D28) — rebuilt the affected tables and retrained every downstream model; found and fixed two simulation-design bugs (QB anchored to the wrong shared variable, a share-denominator mismatch, D29) plus a real RNG-reproducibility bug; fixed a stale README/Makefile and added CI (D30); wrote docs/TRACEABILITY.md; 204 offline + 37 network tests passing |
 | M14 Post-audit hardening | IN PROGRESS | Working the `docs/CURRENT_STATE_AUDIT.md`/`docs/IMPLEMENTATION_GAP_ANALYSIS.md` P0-P3 backlog. **P0** (security): D35's history-rewrite decision was already made and declined by the user at the time -- not reopened; added a durable CI guardrail (`scripts/check_no_secrets.py`, D42) instead. **P1-1** (UI wiring, D44): waiver/trade/roster-need wired into the SPA, live-verified against a real Sleeper league. **P1-2** (EDGE backtest, D41): `alpha-squad edge backtest` + `reports/edge_backtest.md`, real per-position/bucket breakdown, BUY beat market in all 4 scored seasons 2022-2025. **P1-3** (model persistence, D43): `models/persistence.py` closes the audit's single biggest architectural finding (no model was ever saved to disk) for the two paths that actually serve live predictions (uncertainty → `/rankings`, rookie projection → `/rookies`); verified against the real database. **P2** (dynasty future-pick valuation, D45): `pick_value`/`evaluate_trade_package`, a documented heuristic anchored to real `dynasty_values` data, verified live. **P4+P5 together** (evidence → served intelligence + in-season/ROS, D46): re-read PRODUCT_SPEC.md/ARCHITECTURE.md to confirm evidence should reach served output (not just gate EDGE); ran the real weekly established-ML pipeline (never before executed in this deployment) and the evidence-adjustment pass against real 2025 data, then added `GET /rankings/weekly` + a UI mode — verified live in a real browser with a real evidence-driven adjustment rendered. **P7** (orchestrator task decomposition, D47): `agents/planner.py::plan_full_refresh` builds the real multi-stage task graph from a high-level goal (agent selection + correct dependency edges, read off what each agent's code actually queries/writes) instead of every caller hand-typing one; `alpha-squad orchestrate run` verified against the real database with genuine `rookie_ml`/`projection_ml` concurrency and correct `market_edge` ordering. **P8** (application hardening, D48): `GET /seasons/latest` + a shared `useLatestSeason` hook so every view defaults to the real newest season instead of a hardcoded one; `PlayerPicker.tsx` makes the previously-dead `GET /players` reachable from Waiver/Trade, fixing a real HTML `<label>`-click-forwarding bug found live. **P1-4** (simulation UI, D49): `POST /simulate/team-season` + `SimulationView.tsx` — the last of the four "built but invisible" capabilities (waiver/trade/roster-need/simulation) identified at the start of this hardening pass, now all closed. Verifying it live surfaced and fixed a real gap: `team_week_points` was empty in this deployment because `build_team_week_points` had never been wired to a CLI command; added `alpha-squad features build-team-scores` and ran it for real (7,326 rows). 303 offline tests passing (up from 262 at audit time). **P3-1** (stale CLAUDE.md data-source note, D50): re-verified live against a fresh `alpha-squad sources status` run (Sleeper/FantasyPros/CFBD all AVAILABLE) and rewrote the note to match `docs/DATA_SOURCES.md`. **P3-2** (expert-accuracy weighting, D51): re-confirmed live that even the paid FantasyPros API exposes only consensus statistics, never per-expert identity; measured the coarser proxy the data does permit (`ecr_best`/`ecr_worst` dispersion) against 1,925 real player-seasons and found no consistent relationship with market accuracy (reverses sign between rank tiers) — not adopted, per the same measure-and-reject standard D39 established. Remaining backlog: P2-3 (network suite in CI), which needs a user credential decision and is the only item left that isn't autonomously actionable. **Final validation** (D52): re-ran the full live/network integration suite against real external services after the whole pass — 41 passed, 1 pre-existing skip, 0 failures — reconfirming every live-source claim made across D41-D51, not just trusting nothing broke. |
+| M15 User-facing productization | DONE | Real Sleeper league onboarding (`POST /league/register`, validated live before persisting), real roster import/bridging, My Team roster intelligence, Action Center (ranked ADD/DROP/TRADE), batch waiver ranking, Player Detail (universal vs. my-league value), Draft/Dashboard/multi-asset Trade-package views — all thin reads of already-tested M1-M13 tables/M10 functions, zero new decision logic. Found and fixed 6 real bugs by exercising the real app end to end with Playwright against a real Sleeper league (`boys_of_fall`), not by code review: 3 DuckDB/refetch concurrency bugs, a Sleeper snapshot-filename collision, a non-atomic-write torn-read race (reproduced directly: 5,292 torn reads/~2,000 concurrent reads with the old pattern, 0 with the fix), and a UI unmount-before-paint bug. See D53. 350 offline tests passing (up from 303); lint + `tsc --noEmit` clean. |
 
 ## M1 summary
 - Adapters: `nflverse` (15 datasets), `dynastyprocess` (4), `cfbfastr` (1), `ffopportunity` (1)
@@ -758,3 +759,33 @@ Carnell Tate 202.8 / 48%, Fernando Mendoza 196.3 / 86%, Ty Simpson 177.4 / 57%, 
 **Known limitation:** Rankings, EDGE and League still default to the 2025 season, because the
 data behind them genuinely stops at 2025 — projecting the 2026 NFL season for established players
 is separate work. Changing those defaults without generating the data would show empty views.
+
+## M15 summary — user-facing productization (D53)
+
+Full detail in D53. The short version: the intelligence existed (M1-M14) but nothing let an actual
+fantasy manager connect their real league and be told what to do. This milestone is the connect →
+understand → analyze → decide → explain path, built entirely on top of already-tested M1-M13
+tables and M10 recommendation functions — no new scoring or decision logic anywhere, frontend or
+backend.
+
+New: runtime Sleeper league onboarding (validated live before persisting, `registered_leagues`
+table), real roster import bridged to canonical player ids, My Team roster intelligence, an Action
+Center (ranked ADD/DROP/TRADE — three lists, not one fabricated composite score), batch waiver
+ranking, a Player Detail view that explicitly separates universal player value from my-league
+value for the same player, and Draft/Dashboard/multi-asset Trade-package views. A shared
+`LeagueProvider` context replaced every view's own independent league dropdown.
+
+Exercising the whole thing end to end with Playwright against a real backend and a real Sleeper
+league (rather than trusting the code) found and fixed six real bugs: three DuckDB/refetch
+concurrency issues (`init_db` running per-request instead of once at startup; `build_action_center`
+re-fetching the live roster 3-4x per request; `duckdb.connect()` itself racing under concurrent
+requests), a Sleeper snapshot-filename collision (missing the `param_suffix` fix already applied to
+the other three source adapters), a non-atomic snapshot write that raced under concurrent
+same-key reads (reproduced directly: 5,292 torn reads out of ~2,000 concurrent reads against the
+old pattern, 0 against the fix), and a UI bug where a success confirmation was unmounted in the
+same render batch that set it, so it never painted. Every fix has a regression test verified to
+fail without the fix.
+
+350 offline tests passing (up from 303); `make lint` clean; `tsc --noEmit` clean. Not built:
+runtime "connect" for a manual/YAML league — `teams_for_league` returns `None` rather than
+fabricating a roster for it, and the UI says so rather than showing a broken or fake roster.

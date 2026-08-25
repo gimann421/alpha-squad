@@ -1779,3 +1779,124 @@ live-source claim made across D41-D51 (Sleeper/FantasyPros/CFBD availability, th
 simulation, real league workflows, etc.) against actual external services at the end of the pass,
 not just at the moment each was first built. Closes the "run relevant live integration tests"
 final-validation step; no code changed.
+
+## D53 — User-facing productization: connect a real league, get real recommendations, with explanations
+
+M12/M14 (D41-D52) had already built the intelligence and exposed most of it behind API endpoints,
+but there was no coherent path for an actual fantasy manager to connect their real league and be
+told what to do — the audit's own framing ("substantial but partially inert"). This phase's
+explicit brief: **connect, understand, analyze, decide, explain** — and "your job is to CONNECT
+AND PRODUCTIZE," not rebuild. Every number in every new view below is a direct read of an
+already-tested M1-M13 table or a direct call into an already-tested M10 recommendation function;
+no new scoring/decision logic was written anywhere in this pass, frontend or backend.
+
+**New real capability, not previously reachable by any user:**
+- **Runtime league onboarding** (`POST /league/register`, `league/context.py::register_sleeper_league`):
+  validates a Sleeper league is real and reachable (a live fetch) before persisting it to a new
+  `registered_leagues` DB table, distinct from the curated `registry.yaml` set — a league
+  connected this way is immediately usable everywhere else in the app. `ConnectLeaguePanel.tsx` is
+  the UI for this; `alpha-squad league register-sleeper` is the CLI counterpart.
+- **Real roster import** (`league/roster_import.py::fetch_sleeper_rosters`): pulls real
+  `/league/{id}/rosters` and `/league/{id}/users` from Sleeper (two endpoints added to
+  `sources/sleeper.py`'s `_ENDPOINTS`), bridges Sleeper's numeric player ids to canonical
+  `asq_<hash>` ids via the existing `player_id_map` crosswalk, and persists a snapshot. Backs
+  `GET /league/{id}/teams` and every roster-aware endpoint below.
+- **My Team / roster intelligence** (`league/roster_intelligence.py::build_my_team_report`,
+  `GET /league/{id}/my-team`): the real roster joined with real uncertainty/EDGE/dynasty-value per
+  player, with starter/bench computed by reusing M10's `compute_league_starters` scoped to a
+  synthetic one-team league — the exact same value-based-drafting algorithm the whole-league
+  calculation uses, applied to just the user's own roster rather than a second implementation.
+- **Drop candidates** (`recommend_drops`, `GET /league/{id}/drop-candidates`): worst-VORP bench
+  players, structurally excluding anyone the same M10 algorithm marked a starter.
+- **Action Center** (`build_action_center`, `GET /league/{id}/actions`) — the phase's own framing
+  of "most important user-facing feature": ranked ADD (FAAB dollars)/DROP (VORP)/TRADE (rank-edge)
+  lists. Deliberately three separately-ranked lists, not one fabricated cross-type score — ADD,
+  DROP and TRADE signals are different units (dollars, replacement value, rank movement) and
+  forcing them onto one scale would be exactly the untested precision CLAUDE.md warns against.
+- **Batch waiver ranking** (`rank_waiver_targets`, `GET /league/{id}/waiver-targets`): the same
+  `recommend_waiver_pickup` M10 function run across a VORP-prefiltered candidate pool
+  (`DEFAULT_WAIVER_PREFILTER_N = 80`) instead of one player at a time, so the Action Center's ADD
+  list and the standalone Waiver tab are both real ranked output, not a single-player tool
+  pretending to be a list.
+- **Player Detail** (`GET /players/{id}/detail`, `PlayerDetailView.tsx`): the phase's explicit
+  requirement to distinguish **universal player value** (projection/uncertainty/market/EDGE/
+  evidence/rookie info — the same everywhere) from **my-league value** (dynasty trade action,
+  roster fit — genuinely different per league for the same player) in one view, both computed by
+  existing endpoints/functions and merged, not recomputed.
+- **Draft view** (`DraftView.tsx`), **Dashboard** (`DashboardView.tsx`), and an upgraded **Trade**
+  view (`TradeView.tsx`) adding real multi-asset package evaluation (`evaluate_trade_package`,
+  D45) with an ACCEPT/REJECT/CONSIDER verdict phrased from the user's chosen side — all thin
+  presentation over existing endpoints; `available_player_ids` in `DraftView.tsx` is the one
+  client-side computation in this whole pass, and it is pure set-subtraction (already-ranked
+  players minus already-drafted), not a decision.
+- A shared `LeagueProvider`/`useLeague()` React context (league id, roster id, real team list,
+  localStorage-persisted per league) replaces every view independently holding its own league
+  dropdown, and a `PlayerSelectionProvider`/`PlayerLink` context lets any player name anywhere in
+  the app jump straight to its Player Detail tab.
+
+**Five real bugs found by exercising the real app end to end (Playwright against the real backend
+and a real Sleeper league, `boys_of_fall`), not by code review — every one reproduced, root-caused,
+fixed, and covered by a regression test verified to fail without the fix:**
+
+1. **`init_db` (DDL migrations) ran on every request**, not once. `api/deps.py::get_db()` called
+   `init_db(con)` per-request; two concurrent requests racing on `ALTER TABLE` raised a real
+   `TransactionException: write-write conflict`. Fixed by moving `init_db()` into a new FastAPI
+   `lifespan` (`api/app.py`) that runs it exactly once at startup.
+2. **`build_action_center` re-fetched the live Sleeper roster 3-4 times per request** — its three
+   sub-calls (`rank_waiver_targets`, `recommend_drops`, `build_my_team_report`) each independently
+   called `teams_for_league`. Fixed by threading an optional `teams: list[TeamRoster] | None`
+   parameter through all three so `build_action_center` fetches once and passes it down;
+   regression test asserts exactly one `/rosters` fetch.
+3. **`duckdb.connect()` itself is not safe to call concurrently against the same file** — two
+   requests arriving close together raised a real `BinderException: Unique file handle conflict`.
+   Fixed by opening one shared base connection at lifespan startup and deriving per-request
+   connections via `base_connection.cursor()` — DuckDB's own documented-safe way to hand out an
+   independent connection per request from one already-open database, confirmed via
+   `tests/unit/test_api_concurrency.py`'s `ThreadPoolExecutor`-driven regression tests against a
+   real `TestClient(app)` lifespan (not the `dependency_overrides` pattern the rest of the API
+   suite uses, which never exercises this code path at all).
+4. **`sleeper.py`'s league-scoped snapshot filenames omitted every param** — `league`/
+   `league_rosters`/`league_drafts`/`league_users` all wrote to `captured_at=<date>/<dataset>.json`
+   with no `league_id` in the path, so registering a second real Sleeper league collided with the
+   first's file on disk. The exact same class of bug had already been fixed in `cfbd.py`/
+   `fantasypros.py`/`file_release.py` (an earlier `param_suffix` fix); `sleeper.py` was missed
+   because its league_id-taking endpoints were added afterward. Found live as a `JSONDecodeError`
+   reading a snapshot the registration flow had just corrupted; fixed with the same
+   `param_suffix` pattern; regression test in `tests/contracts/test_source_adapters.py`.
+5. **`dest.write_bytes(resp.content)` in `sleeper.py`/`cfbd.py`/`fantasypros.py` is not atomic** —
+   it truncates the destination file in place, so a concurrent read can observe a torn (empty or
+   partial) file mid-write. This matters even after fixing #4, because two different registered
+   `league_id`s can point at the *same* underlying real Sleeper league (identical snapshot key),
+   so a concurrent read genuinely does race a concurrent write for that key in normal use — still
+   observed live as `JSONDecodeError: Expecting value: line 1 column 1` after #4 was fixed.
+   Reproduced directly: hammering the old `dest.write_bytes()` pattern with concurrent
+   writer/reader threads over ~2,000 reads against one shared 5KB file produced **5,292 torn
+   reads**; the same test against the fix produced zero. Fixed with a new
+   `sources/base.py::write_bytes_atomic()` (write to a uniquely-named temp file, then
+   `Path.replace()` — atomic on the same filesystem) — the pattern `sources/http.py`'s
+   `http_get_to_file` already used, now applied to the three adapters that instead wrote in
+   place. Regression test in `tests/unit/test_source_base.py`, verified to fail reliably (every
+   run) against the old pattern and pass reliably against the fix.
+6. **A UI-only bug**, not a backend one: `ConnectLeaguePanel.tsx` called `onConnected()` (which
+   sets `showConnect=false` in the parent, unmounting the panel) in the same synchronous state
+   batch as `setConnected(result.league_id)`, so React committed the parent's re-render — panel
+   already gone — before the "Connected as ..." confirmation message the user is meant to see
+   ever painted. The registration itself always worked; the confirmation just never appeared.
+   Fixed with a 1500ms `setTimeout` before `onConnected()` so the message has a beat on screen.
+
+**Live verification**, all against the real `boys_of_fall` Sleeper league (a real 2QB dynasty
+league) through the real backend, via Playwright driving real Chromium against real dev servers —
+not mocked intelligence: register a brand-new league through the actual Connect League form and
+confirm it persists into the league dropdown; My Team roster intelligence; Action Center adds/
+drops/trade signals; Player Detail (universal + my-league value + a real 10-row evidence
+timeline); Draft recommendation (real VORP/confidence/survival-probability); standalone Waiver
+tab producing a real FAAB bid with real reasons; multi-asset Trade package (two players + a future
+pick per side) producing a real ACCEPT/REJECT/CONSIDER verdict with real side values and reasons.
+
+**Explicitly not built:** a manual/YAML league (`source: yaml`) has no runtime "connect" flow —
+`teams_for_league` returns `None` rather than fabricating roster data for it, and the UI shows
+"no real per-team roster data" instead of a broken or fake roster view, consistent with this
+project's standing rule against fabricated data.
+
+350 offline tests passing (up from 303 at the start of this pass); `make lint` clean
+(ruff + `check_no_secrets.py`); TypeScript compiles clean (`tsc --noEmit`).

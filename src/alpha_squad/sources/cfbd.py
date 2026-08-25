@@ -20,6 +20,7 @@ from alpha_squad.sources.base import (
     SourceError,
     sha256_file,
     utcnow,
+    write_bytes_atomic,
 )
 
 _BASE = "https://api.collegefootballdata.com"
@@ -78,7 +79,7 @@ class CfbdSource(SourceAdapter):
             / f"{param_suffix}_{dataset}.json"
         )
         dest.parent.mkdir(parents=True, exist_ok=True)
-        dest.write_bytes(resp.content)
+        write_bytes_atomic(dest, resp.content)
 
         body = resp.json()
         rows = len(body) if isinstance(body, list) else 1

@@ -18,7 +18,7 @@ from alpha_squad.league.replacement import (
     replacement_level,
 )
 from alpha_squad.league.roster import roster_fit_multiplier, roster_need
-from alpha_squad.league.roster_import import roster_positions_for, teams_for_league
+from alpha_squad.league.roster_import import TeamRoster, roster_positions_for, teams_for_league
 from alpha_squad.models.uncertainty.run import MODEL_VERSION as UNCERTAINTY_MODEL_VERSION
 
 MAX_BID_FRACTION_OF_BUDGET = 0.40
@@ -155,11 +155,15 @@ def rank_waiver_targets(
     positions: set[str] | None = None,
     top_n: int = 25,
     prefilter_n: int = DEFAULT_WAIVER_PREFILTER_N,
+    teams: list[TeamRoster] | None = None,
 ) -> list[WaiverRecommendation]:
     """Every real free agent (a player projected this season who isn't on ANY real roster in
     this league, per `roster_import.py`) scored the exact same way `recommend_waiver_pickup`
     already scores a single player -- this is the Action Center's "who should I add" data, not
-    a new decision engine. `positions=None` considers every position.
+    a new decision engine. `positions=None` considers every position. `teams`, when given,
+    skips the real live-Sleeper roster fetch and uses the caller's already-fetched list instead
+    (see `roster_intelligence.py::build_action_center`, which fetches it once for three
+    sub-reports rather than each independently re-fetching the same live data).
 
     Deliberate tradeoff, disclosed rather than hidden: `recommend_waiver_pickup` recomputes
     league-wide replacement level/scarcity on every call, so calling it once per candidate is
@@ -168,7 +172,8 @@ def rank_waiver_targets(
     to keep the expensive per-candidate scoring bounded rather than run against every free agent
     in the pool, which can be several hundred in a real dynasty league."""
     projections, proj_positions = load_season_projections(con, season)
-    teams = teams_for_league(con, get_settings(), league)
+    if teams is None:
+        teams = teams_for_league(con, get_settings(), league)
     if teams is None:
         raise RuntimeError(
             f"league {league.league_id!r} has no real per-team roster source "

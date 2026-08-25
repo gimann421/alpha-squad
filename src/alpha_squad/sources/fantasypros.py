@@ -21,6 +21,7 @@ from alpha_squad.sources.base import (
     SourceError,
     sha256_file,
     utcnow,
+    write_bytes_atomic,
 )
 
 _BASE = "https://api.fantasypros.com/public/v2/json/nfl"
@@ -81,7 +82,7 @@ class FantasyProsSource(SourceAdapter):
             / f"{param_suffix}_{dataset}.json"
         )
         dest.parent.mkdir(parents=True, exist_ok=True)
-        dest.write_bytes(resp.content)
+        write_bytes_atomic(dest, resp.content)
 
         body = resp.json()
         players = body.get("players", body) if isinstance(body, dict) else body

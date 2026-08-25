@@ -147,3 +147,70 @@ tr:hover {
 .player-picker-results li:hover {
   background: #f6f8fa;
 }
+
+.league-selector-bar {
+  border: 1px solid #d0d7de;
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+  background: #f6f8fa;
+}
+
+.league-selector-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: end;
+}
+
+.league-selector-controls label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.85rem;
+}
+
+.league-selector-controls select {
+  padding: 0.35rem 0.5rem;
+  border: 1px solid #d0d7de;
+  border-radius: 6px;
+  min-width: 10rem;
+}
+
+.controls button.secondary,
+.league-selector-controls button.secondary {
+  background: white;
+  color: #1f2328;
+}
+
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1rem;
+  align-items: start;
+}
+
+.action-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.action-list li {
+  border: 1px solid #eaeef2;
+  border-radius: 6px;
+  padding: 0.5rem 0.7rem;
+}
+
+.player-link {
+  background: none;
+  border: none;
+  padding: 0;
+  color: #0969da;
+  cursor: pointer;
+  font: inherit;
+  text-decoration: underline;
+}

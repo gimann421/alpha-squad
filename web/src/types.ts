@@ -159,6 +159,7 @@ export interface DecisionResponse {
   expected_value: number | null;
   confidence: number | null;
   reasons: string[];
+  action?: string | null;
 }
 
 export interface ProvenanceResponse {
@@ -166,4 +167,171 @@ export interface ProvenanceResponse {
   entity_id: string;
   found: boolean;
   record: Record<string, string | null> | null;
+}
+
+export interface RosterPlayerRow {
+  player_id: string;
+  display_name: string | null;
+  position: string | null;
+}
+
+export interface TeamRosterRow {
+  roster_id: number;
+  owner_display_name: string | null;
+  team_name: string | null;
+  players: RosterPlayerRow[];
+  unmapped_count: number;
+}
+
+export interface LeagueTeamsResponse {
+  league_id: string;
+  supported: boolean;
+  teams: TeamRosterRow[];
+}
+
+export interface MyTeamPlayerRow {
+  player_id: string;
+  display_name: string | null;
+  position: string | null;
+  projection: number | null;
+  p10: number | null;
+  p90: number | null;
+  confidence: number | null;
+  top24_prob: number | null;
+  market_rank: number | null;
+  rank_edge: number | null;
+  edge_action: string | null;
+  dynasty_value: number | null;
+  marginal_value: number | null;
+  is_starter: boolean;
+}
+
+export interface MyTeamResponse {
+  league_id: string;
+  roster_id: number;
+  season: number;
+  owner_display_name: string | null;
+  team_name: string | null;
+  players: MyTeamPlayerRow[];
+  unmapped_player_count: number;
+  positional_needs: Record<string, number>;
+  positional_scarcity: Record<string, number>;
+  replacement_levels: Record<string, number>;
+  total_projected_points: number;
+}
+
+export interface DropCandidateRow {
+  player_id: string;
+  display_name: string | null;
+  position: string | null;
+  marginal_value: number | null;
+  reasons: string[];
+}
+
+export interface WaiverTargetRow {
+  player_id: string;
+  display_name: string | null;
+  position: string;
+  expected_points: number;
+  meaningful_role_probability: number | null;
+  dynasty_value: number | null;
+  value_spike_probability: number;
+  marginal_value: number;
+  roster_fit_multiplier: number;
+  competing_bid_likelihood: number;
+  recommended_bid: number;
+  reasons: string[];
+}
+
+export interface TradeSignalRow {
+  player_id: string;
+  display_name: string | null;
+  position: string | null;
+  edge_action: string;
+  rank_edge: number | null;
+  dynasty_value: number | null;
+  summary: string;
+}
+
+export interface ActionCenterResponse {
+  league_id: string;
+  roster_id: number;
+  season: number;
+  adds: WaiverTargetRow[];
+  drops: DropCandidateRow[];
+  trade_signals: TradeSignalRow[];
+}
+
+export interface PlayerRankingInfo {
+  season: number;
+  point_prediction: number;
+  p10: number | null;
+  p25: number | null;
+  median: number | null;
+  p75: number | null;
+  p90: number | null;
+  top12_prob: number | null;
+  top24_prob: number | null;
+  confidence: number | null;
+  model_version: string;
+}
+
+export interface PlayerEdgeInfo {
+  season: number;
+  ecr_type: string;
+  model_rank: number;
+  market_rank: number;
+  rank_edge: number;
+  action: string;
+  reasons: string[];
+}
+
+export interface PlayerRookieInfo {
+  draft_class: number;
+  predicted_rookie_points: number | null;
+  breakout_probability: number | null;
+}
+
+export interface PlayerLeagueValue {
+  league_id: string;
+  is_mine: boolean | null;
+  roster_need: number | null;
+  trade_action: string | null;
+  trade_reasons: string[];
+  age_adjusted_dynasty_value: number | null;
+}
+
+export interface PlayerDetailFull extends PlayerDetail {
+  ranking: PlayerRankingInfo | null;
+  edge: PlayerEdgeInfo | null;
+  recent_evidence: EvidenceRow[];
+  rookie: PlayerRookieInfo | null;
+  league_value: PlayerLeagueValue | null;
+}
+
+export interface PickAssetRequest {
+  round: number;
+  pick_in_round?: number | null;
+  years_out?: number;
+}
+
+export interface TradePackageSideRequest {
+  player_ids: string[];
+  picks: PickAssetRequest[];
+}
+
+export interface TradePackageRequest {
+  season: number;
+  side_a: TradePackageSideRequest;
+  side_b: TradePackageSideRequest;
+  ecr_type?: string;
+}
+
+export interface TradePackageResponse {
+  side_a_value: number;
+  side_b_value: number;
+  delta: number;
+  favors: "side_a" | "side_b" | "even";
+  side_a_reasons: string[];
+  side_b_reasons: string[];
 }

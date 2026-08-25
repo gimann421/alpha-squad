@@ -12,10 +12,15 @@ export function PlayerPicker({
   value,
   onChange,
   placeholder = "Search player by name…",
+  displayLabel,
 }: {
   value: string;
   onChange: (playerId: string) => void;
   placeholder?: string;
+  // Shown instead of the raw player_id when `value` was set externally (e.g. PlayerLink
+  // jumping the Player Detail tab straight to a player_id, bypassing this picker's own
+  // search-and-pick flow) rather than through a search-and-pick here.
+  displayLabel?: string | null;
 }) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<PlayerSummary[] | null>(null);
@@ -48,9 +53,12 @@ export function PlayerPicker({
   }
 
   if (selected || (value && !query)) {
+    const label = selected
+      ? `${selected.display_name ?? selected.player_id} (${selected.position ?? "?"})`
+      : (displayLabel ?? value);
     return (
       <span>
-        {selected ? `${selected.display_name ?? selected.player_id} (${selected.position ?? "?"})` : value}{" "}
+        {label}{" "}
         <button type="button" onClick={clear}>
           change
         </button>

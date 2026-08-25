@@ -675,3 +675,19 @@ This file (`docs/CURRENT_STATE_AUDIT.md`) and `docs/IMPLEMENTATION_GAP_ANALYSIS.
 required deliverables of this audit. No implementation work was performed to produce them beyond
 these two documentation files. This audit does not begin backlog work; see the accompanying summary
 message for the stop point.
+
+## Postscript (2026-08-25): productization phase (M15, D53)
+
+Everything above is this audit's original snapshot and is kept as written. A later, separate
+phase (M15) took the intelligence this audit found "substantial but partially inert" and built the
+actual connect → understand → analyze → decide → explain path a real fantasy manager uses: runtime
+Sleeper league onboarding, My Team roster intelligence, an Action Center (ranked ADD/DROP/TRADE),
+batch waiver ranking, a Player Detail view separating universal from my-league value, and Draft/
+Dashboard/multi-asset Trade-package views — all thin reads over the already-validated pipeline this
+audit assessed, no new decision logic. Exercising the whole thing end to end with Playwright
+against a real backend and a real Sleeper league (rather than trusting the code, the same standard
+this audit itself modeled) found and fixed 6 further real bugs, three of them real concurrency
+races that would have affected any real deployed user. Full account in `docs/DECISIONS.md` D53 and
+`docs/PROJECT_STATE.md`'s M15 section. This audit's own "most important next thing to build"
+conclusion above (nothing product-critical remained queued) was about the M1-M14 backlog
+specifically, not a claim that the product was user-usable yet — M15 is what closes that gap.

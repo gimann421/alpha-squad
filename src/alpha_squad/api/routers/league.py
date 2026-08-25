@@ -500,6 +500,7 @@ def post_trade(
         expected_value=rec.age_adjusted_value,
         confidence=None,
         reasons=rec.reasons,
+        action=rec.action,
     )
 
 

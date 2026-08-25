@@ -381,3 +381,4 @@ class DecisionResponse(BaseModel):
     expected_value: float | None
     confidence: float | None
     reasons: list[str]
+    action: str | None = None

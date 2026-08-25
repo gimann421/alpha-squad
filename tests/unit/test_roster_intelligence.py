@@ -111,7 +111,7 @@ def _league() -> LeagueContext:
     )
 
 
-def _fake_get(monkeypatch):
+def _fake_get(monkeypatch, call_log: list[str] | None = None):
     rosters_body = [
         {
             "roster_id": 1,
@@ -124,6 +124,8 @@ def _fake_get(monkeypatch):
     def fake_get(url, **kwargs):
         import json as _json
 
+        if call_log is not None:
+            call_log.append(url)
         if url.endswith("/rosters"):
             body = rosters_body
         elif url.endswith("/users"):
@@ -223,3 +225,17 @@ class TestBuildActionCenter:
         _fake_get(monkeypatch)
         report = build_action_center(con, _league(), SEASON, week=5, roster_id=1)
         assert report.trade_signals == []
+
+    def test_fetches_the_live_roster_exactly_once_not_per_sub_report(
+        self, con, settings, monkeypatch
+    ):
+        """Regression test: build_action_center used to compose rank_waiver_targets +
+        recommend_drops + build_my_team_report, each independently re-fetching the same live
+        Sleeper roster -- found live via Playwright (3-4 redundant calls per request, real
+        added latency and a real source of transient failures under concurrent load)."""
+        call_log: list[str] = []
+        _fake_get(monkeypatch, call_log)
+        build_action_center(con, _league(), SEASON, week=5, roster_id=1)
+
+        roster_fetches = [url for url in call_log if url.endswith("/rosters")]
+        assert len(roster_fetches) == 1, f"expected exactly 1 live roster fetch, got {call_log}"

@@ -167,3 +167,10 @@ items with no listed dependency can start immediately.
 - **P0-1** requires no further code work — the repo-side decision is settled (D35/D42). The only
   open thread is a conversation with the user about provider-side key rotation status, not
   something to schedule as engineering work.
+- **Note (2026-08-25):** a separate, later phase (M15, `docs/DECISIONS.md` D53) productized the
+  intelligence this backlog hardened — real Sleeper league onboarding, My Team/Action Center/
+  Player Detail/Draft/multi-asset Trade views — and found/fixed 6 further real bugs the same way
+  this pass did (exercising the real app with Playwright, not code review). It is a separate body
+  of work from the P0-P3 items above, not a continuation of this file's backlog; see D53 and
+  `docs/PROJECT_STATE.md`'s M15 section for the full account. P2-3 (network suite in CI) remains
+  the only item in *this* file still open.

@@ -77,8 +77,15 @@ def build_my_team_report(
     roster_id: int,
     *,
     ecr_type: str = DEFAULT_ECR_TYPE,
+    teams: list[TeamRoster] | None = None,
 ) -> MyTeamReport:
-    teams = teams_for_league(con, get_settings(), league)
+    """`teams`, when given, skips the real live-Sleeper roster fetch (`teams_for_league`) and
+    uses the caller's already-fetched list instead -- `build_action_center` passes its own
+    single fetch through to every sub-report this way, rather than each one independently
+    re-fetching the same live roster data (found via Playwright against the real app: an
+    Action Center request was making 3-4 redundant live Sleeper calls internally)."""
+    if teams is None:
+        teams = teams_for_league(con, get_settings(), league)
     if teams is None:
         raise RuntimeError(
             f"league {league.league_id!r} has no real per-team roster source "
@@ -196,13 +203,14 @@ def recommend_drops(
     *,
     top_n: int = 5,
     ecr_type: str = DEFAULT_ECR_TYPE,
+    teams: list[TeamRoster] | None = None,
 ) -> list[DropCandidate]:
     """ "Who can I drop?" -- the worst bench players on a real roster by marginal value over the
     league's real replacement pool (the same VORP `build_my_team_report` already computes; no
     new scoring here, just picking the bottom of the existing bench). Never considers a starter
     a drop candidate, even a weak one -- dropping a starter isn't a "who's expendable" decision,
     it's a roster-construction decision this function doesn't make."""
-    report = build_my_team_report(con, league, season, roster_id, ecr_type=ecr_type)
+    report = build_my_team_report(con, league, season, roster_id, ecr_type=ecr_type, teams=teams)
     bench = [p for p in report.players if not p.is_starter]
     bench.sort(key=lambda p: p.marginal_value if p.marginal_value is not None else float("-inf"))
 
@@ -267,11 +275,25 @@ def build_action_center(
     fabricated cross-type score: a FAAB dollar amount, a bench VORP deficit, and a market rank
     edge are not the same unit, so ranking ADD vs. DROP vs. TRADE against each other with a made-
     up composite number would be exactly the kind of untested precision CLAUDE.md warns against.
-    Each group is internally ranked by its own already-real, already-tested metric."""
-    adds = rank_waiver_targets(con, league, season, week, roster_id, top_n=add_top_n)
-    drops = recommend_drops(con, league, season, roster_id, top_n=drop_top_n, ecr_type=ecr_type)
+    Each group is internally ranked by its own already-real, already-tested metric.
 
-    report = build_my_team_report(con, league, season, roster_id, ecr_type=ecr_type)
+    Fetches the real live Sleeper roster exactly once and passes it to all three sub-reports --
+    without this, each of `rank_waiver_targets`/`recommend_drops`/`build_my_team_report` would
+    independently re-fetch the same live data (found via Playwright against the real app: this
+    endpoint was making 3-4 redundant live Sleeper API calls internally, real added latency and
+    a real source of transient failures under concurrent load)."""
+    teams = teams_for_league(con, get_settings(), league)
+    if teams is None:
+        raise RuntimeError(
+            f"league {league.league_id!r} has no real per-team roster source "
+            "(only Sleeper-connected leagues support roster_id)"
+        )
+    adds = rank_waiver_targets(con, league, season, week, roster_id, top_n=add_top_n, teams=teams)
+    drops = recommend_drops(
+        con, league, season, roster_id, top_n=drop_top_n, ecr_type=ecr_type, teams=teams
+    )
+
+    report = build_my_team_report(con, league, season, roster_id, ecr_type=ecr_type, teams=teams)
     trade_signals: list[TradeSignal] = []
     for p in report.players:
         if p.edge_action not in ("BUY", "SELL"):

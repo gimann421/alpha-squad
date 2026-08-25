@@ -683,6 +683,23 @@ class TestLeague:
         )
         assert r.status_code == 422
 
+    def test_trade_endpoint_returns_the_real_action(self, con, client):
+        con.execute(
+            "INSERT INTO dynasty_values (player_id, scrape_date, age, value_2qb, updated_at) "
+            "VALUES ('star', '2026-08-01', 24.0, 9000, current_timestamp)"
+        )
+        con.execute(
+            "INSERT INTO edge_snapshot (edge_id, player_id, season, position, ecr_type, "
+            "model_version, model_rank, market_rank, rank_edge, evidence_score, action, "
+            "reasons_json, built_at) VALUES "
+            "('e1', 'star', 2025, 'WR', 'rsf', 'edge_v1', 5, 20, 15, 0.5, 'BUY', '[]', current_timestamp)"
+        )
+        r = client.post("/league/target_league/trade", json={"season": 2025, "player_id": "star"})
+        assert r.status_code == 200
+        body = r.json()
+        assert body["action"] == "BUY"
+        assert body["expected_value"] == pytest.approx(9000)
+
     def test_trade_package_endpoint_calls_the_real_evaluate_trade_package(self, con, client):
         con.execute(
             "INSERT INTO dynasty_values (player_id, scrape_date, age, value_2qb, updated_at) "
