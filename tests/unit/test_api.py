@@ -107,6 +107,75 @@ class TestRankingsAreADirectProjection:
         assert [row["player_id"] for row in r.json()] == ["p2", "p3", "p1"]
 
 
+class TestWeeklyRankingsSurfaceEvidenceAdjustment:
+    """D46: `/rankings/weekly` is the closed loop the audit found missing -- evidence
+    computed a bounded adjustment (M9) but nothing served it. This must return the real
+    adjusted value (not the raw base) when a projection_deltas row exists, and fall back to
+    the base value untouched when it doesn't."""
+
+    def test_returns_the_evidence_adjusted_value_when_a_delta_exists(self, con, client):
+        _seed_player(con, "p1", "Adjusted Player", "WR")
+        con.execute(
+            "INSERT INTO weekly_projection_snapshot "
+            "(player_id, season, week, model_name, position, predicted_points, built_at) "
+            "VALUES ('p1', 2025, 8, 'ml_catboost', 'WR', 10.0, current_timestamp)"
+        )
+        con.execute(
+            "INSERT INTO projection_deltas "
+            "(delta_id, player_id, season, week, base_model_name, base_value, adjusted_value, "
+            "adjustment_pct, evidence_score, reason, evidence_ids_json, built_at) "
+            "VALUES ('d1', 'p1', 2025, 8, 'ml_catboost', 10.0, 11.5, 0.15, 1.0, "
+            "'real evidence reason', '[]', current_timestamp)"
+        )
+        r = client.get("/rankings/weekly", params={"season": 2025, "week": 8})
+        assert r.status_code == 200
+        body = r.json()
+        assert len(body) == 1
+        assert body[0]["base_value"] == pytest.approx(10.0)
+        assert body[0]["adjusted_value"] == pytest.approx(11.5)
+        assert body[0]["adjustment_pct"] == pytest.approx(0.15)
+        assert body[0]["reason"] == "real evidence reason"
+
+    def test_falls_back_to_the_unadjusted_base_value_when_no_delta_exists(self, con, client):
+        _seed_player(con, "p1", "No Evidence Player", "RB")
+        con.execute(
+            "INSERT INTO weekly_projection_snapshot "
+            "(player_id, season, week, model_name, position, predicted_points, built_at) "
+            "VALUES ('p1', 2025, 8, 'ml_catboost', 'RB', 7.0, current_timestamp)"
+        )
+        r = client.get("/rankings/weekly", params={"season": 2025, "week": 8})
+        body = r.json()
+        assert len(body) == 1
+        assert body[0]["base_value"] == pytest.approx(7.0)
+        assert body[0]["adjusted_value"] == pytest.approx(7.0)
+        assert body[0]["adjustment_pct"] is None
+        assert body[0]["reason"] is None
+
+    def test_orders_by_the_evidence_adjusted_value_not_the_base_value(self, con, client):
+        _seed_player(con, "low_base_big_boost", "Riser", "WR")
+        _seed_player(con, "high_base_no_evidence", "Faller", "WR")
+        con.execute(
+            "INSERT INTO weekly_projection_snapshot "
+            "(player_id, season, week, model_name, position, predicted_points, built_at) VALUES "
+            "('low_base_big_boost', 2025, 8, 'ml_catboost', 'WR', 8.0, current_timestamp), "
+            "('high_base_no_evidence', 2025, 8, 'ml_catboost', 'WR', 9.0, current_timestamp)"
+        )
+        con.execute(
+            "INSERT INTO projection_deltas "
+            "(delta_id, player_id, season, week, base_model_name, base_value, adjusted_value, "
+            "adjustment_pct, evidence_score, reason, evidence_ids_json, built_at) "
+            "VALUES ('d1', 'low_base_big_boost', 2025, 8, 'ml_catboost', 8.0, 9.2, 0.15, 1.0, "
+            "'boosted', '[]', current_timestamp)"
+        )
+        r = client.get("/rankings/weekly", params={"season": 2025, "week": 8})
+        # Base-value order would put high_base_no_evidence (9.0) first; adjusted-value order
+        # (9.2 vs 9.0) must put low_base_big_boost first instead.
+        assert [row["player_id"] for row in r.json()] == [
+            "low_base_big_boost",
+            "high_base_no_evidence",
+        ]
+
+
 class TestEdgeIsADirectProjection:
     def test_edge_returns_the_exact_stored_action_and_reasons(self, con, client):
         _seed_player(con, "p1", "Edge Player", "WR")

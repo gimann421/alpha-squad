@@ -39,6 +39,20 @@ export interface RankingRow {
   feature_version: string;
 }
 
+export interface WeeklyRankingRow {
+  player_id: string;
+  display_name: string | null;
+  position: string;
+  season: number;
+  week: number;
+  base_value: number;
+  adjusted_value: number;
+  adjustment_pct: number | null;
+  evidence_score: number | null;
+  reason: string | null;
+  model_name: string;
+}
+
 export interface RookieRow {
   player_id: string;
   display_name: string | null;

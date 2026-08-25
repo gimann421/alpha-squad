@@ -20,7 +20,7 @@ state at the time each milestone was first built.
 | Redraft preseason projections/rankings exist | ✅ | `models/established/season_level.py` (M5), `models/baselines/` (M4); `/rankings` API, `RankingsView` |
 | Dynasty rookie rankings exist | ✅ | `models/rookie/train.py` (M7); `/rookies` API, `RookiesView` |
 | Dynasty overall rankings exist | ✅ | `market/dynasty_values.py` (dynasty market value) blended with EDGE via `league/trade.py` |
-| In-season/ROS rankings exist | ✅ | `models/established/train.py::_persist_weekly_projections`, evidence-adjusted via `evidence/prior_update.py` (M9) |
+| In-season/ROS rankings exist | ✅ | `models/established/train.py::_persist_weekly_projections`, evidence-adjusted via `evidence/prior_update.py` (M9), served via `GET /rankings/weekly` and `RankingsView.tsx`'s "Weekly" mode (D46 — previously the pipeline was real but had never been run against this deployment's data and nothing served it; now both are true, verified live) |
 | Projection ranges and probabilities exist | ✅ | `models/uncertainty/` (M6): p10/p25/p50/p75/p90, top-12/24 probability |
 | EDGE scores exist | ✅ | `market/edge.py` (M8) |
 | Evidence/provenance explains material outliers | ✅ | `evidence/events.py`, `projection_deltas` (M9); `/provenance/{id}` |
@@ -99,7 +99,7 @@ state at the time each milestone was first built.
 | Evidence strength is structured | ✅ | `evidence/taxonomy.py` |
 | Strong/medium/weak hierarchy is implemented | ⚠️ | Strong tier has 4 real detectors on officially-sourced nflverse data; Weak tier now has one real detector too (`social_media_buzz` via Sleeper trending adds/drops, D32) — real community momentum, timestamped and bounded like every other evidence input; Medium remains registered vocabulary with a manual-entry path but no reachable text/news source (D5, D22) |
 | News does not directly overwrite model projections | ✅ | `evidence/prior_update.py::apply_evidence_adjustment`, bounded to `MAX_ADJUSTMENT_PCT = 0.15`; tested |
-| Material projection changes have reasons | ✅ | `projection_deltas.reason` + `evidence_ids` |
+| Material projection changes have reasons | ✅ | `projection_deltas.reason` + `evidence_ids`, reachable end-to-end via `GET /rankings/weekly` and the UI's "Why" column as of D46 (not just written to a table nothing read) |
 
 ## League decision engine
 

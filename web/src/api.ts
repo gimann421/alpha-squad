@@ -17,6 +17,7 @@ import type {
   RookieComp,
   RookieRow,
   SourceHealthRow,
+  WeeklyRankingRow,
 } from "./types";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
@@ -56,6 +57,9 @@ export const api = {
 
   getRankings: (params: { season: number; position?: string; limit?: number }) =>
     getJson<RankingRow[]>("/rankings", params),
+
+  getWeeklyRankings: (params: { season: number; week: number; position?: string; limit?: number }) =>
+    getJson<WeeklyRankingRow[]>("/rankings/weekly", params),
 
   getRookieClasses: () => getJson<number[]>("/rookies/classes"),
   getRookies: (params: { draft_class: number; position?: string; limit?: number }) =>

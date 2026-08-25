@@ -1489,3 +1489,47 @@ wide, sensible margin, not a coin flip.
 Regression-tested (`tests/unit/test_league.py::TestPickValue`/`TestEvaluateTradePackage`, 9 new
 cases) and API-tested (`tests/unit/test_api.py`, 2 new cases) -- 284 offline tests passing
 (up from 273).
+
+## D46 — Evidence reaches served rankings: `GET /rankings/weekly` (closes P4 and P5 together)
+
+`docs/CURRENT_STATE_AUDIT.md` flagged two separate-looking gaps that turned out to be the same
+underlying one. Re-checked the architectural intent before assuming either resolution branch of
+P4's instructions applied: PRODUCT_SPEC.md's Evidence section says "current information updates
+the prior; it does not automatically override it," and ARCHITECTURE.md's pipeline diagram places
+Evidence between {Projection ML, Rookie ML, Market} and Ensemble/EDGE, upstream of "Universal
+Player Intelligence" -- i.e. evidence is supposed to reach what gets served, not just gate EDGE.
+So this is the "implement it" branch, not the "document evidence-veto-only by design" branch.
+
+Investigating why it didn't already: M9's real bounded (±15%) evidence adjustment
+(`evidence/prior_update.py::apply_evidence_adjustment`/`run_prior_update`) operates on
+`weekly_projection_snapshot` -- M5's **in-season weekly** established-ML projections -- writing
+`projection_deltas`, never mutating the base. That's the right grain: evidence detectors only
+ever produce in-season events (D23), so a weekly cadence is exactly where evidence timing
+actually lines up, unlike the season-level preseason uncertainty model behind `/rankings`
+(D23's real, structural timing mismatch there stands as documented). But `weekly_projection_snapshot`
+had **never been populated in this deployment** -- `train established` (the weekly command,
+distinct from `train established-season`) had never been run -- so `projection_deltas` had
+nothing to adjust regardless of how good the evidence-adjustment code was, and no endpoint
+served either table as a ranked view. This is the same root cause as P5's "in-season/ROS
+intelligence" gap: not a missing modeling capability (the walk-forward-safe weekly pipeline
+already existed and is real), but a missing production run plus a missing serving endpoint.
+
+Fix: ran `alpha-squad train established --season-start 2025 --season-end 2025` against the real
+database (6,037 real weekly predictions, 2025 weeks 1-19), then `alpha-squad evidence
+update-projections --season 2025 --week 8` (291 real deltas, 95 materially adjusted --
+e.g. Ja'Marr Chase +13.5% on a real target-share spike, Patrick Mahomes -13.5% on a real
+snap-share drop, Mac Jones +13.5% on a real teammate-injury opportunity). Added
+`GET /rankings/weekly` (`api/routers/rankings.py`) -- a direct LEFT JOIN of
+`weekly_projection_snapshot`/`projection_deltas`, **ordered by the evidence-adjusted value**,
+falling back to the unadjusted base for players with no evidence that week. Added the
+`RankingsView.tsx` "Weekly (evidence-adjusted)" mode showing base/adjusted/change/reason per
+player -- a user can now literally answer "why did this player's ranking change this week?"
+from the UI, which PRODUCT_SPEC.md's Evidence section calls for directly.
+
+Verified in a real browser (Playwright, not just the API): started the real backend + frontend,
+navigated to the new mode, and confirmed a real row (Patrick Mahomes, -13.5%, real reason text)
+rendered exactly as stored, no console errors.
+
+Regression-tested (`tests/unit/test_api.py::TestWeeklyRankingsSurfaceEvidenceAdjustment`, 3 new
+cases, including one proving the sort order uses the adjusted value and not the base value --
+the whole point of this change). 287 offline tests passing (up from 284).

@@ -78,12 +78,12 @@ missing from the surface.
 | In-season/ROS rankings | PARTIAL | Established model supports season-level projection; no explicit in-season/ROS re-projection loop verified this run |
 | Projection ranges and probabilities | COMPLETE/VERIFIED | `reports/calibration_report.md`: real out-of-sample p10/p90 coverage, 0.657–0.870 range vs 0.80 target |
 | EDGE scores | COMPLETE/VERIFIED | `market/edge.py::classify_action`, gated (see §15), regression-tested |
-| Evidence/provenance explains material outliers | IMPLEMENTED/UNVERIFIED | Evidence detectors real (§16); "explains outliers" specifically not demonstrated end-to-end |
+| Evidence/provenance explains material outliers | COMPLETE/VERIFIED | D46: `GET /rankings/weekly` + `RankingsView.tsx`'s "Weekly" mode surfaces real evidence-adjusted values with reasons, verified live in a real browser |
 | League-specific recommendations | COMPLETE/VERIFIED | Draft/waiver/trade all verified live against a real Sleeper league this session (§17–18) |
 | Draft decisions | COMPLETE/VERIFIED | `draft.py::recommend_draft_pick`, live-tested |
 | Waiver/FAAB decisions | COMPLETE/VERIFIED | `waiver.py`, live-tested; D44 wired it into `WaiverView.tsx` and recorded real `waiver_bid` decisions from the UI (previously zero) |
 | Roster-aware decisions | COMPLETE/VERIFIED | Roster-fit math is real; D44 added a UI surface (`LeagueView.tsx`'s "Roster need" section) that calls it (§20) |
-| Recommendation changes are explainable | IMPLEMENTED/UNVERIFIED | `reasons` lists exist on draft/waiver/EDGE outputs; no dedicated "what changed and why" view |
+| Recommendation changes are explainable | COMPLETE/VERIFIED | `reasons` lists exist on draft/waiver/trade/EDGE outputs (D44 confirmed rendered in the UI); D46 adds the dedicated "what changed and why" view for weekly projections specifically (`RankingsView.tsx`'s "Weekly" mode), verified live |
 
 ### Data
 | Item | Status | Evidence |
@@ -146,7 +146,7 @@ missing from the surface.
 | Evidence strength is structured | COMPLETE/VERIFIED | Strong/Medium/Weak tiers implemented |
 | Strong/medium/weak hierarchy implemented | COMPLETE/VERIFIED | 4 Strong-tier detectors (depth-chart, injury, roster transaction, usage-share shift) + 1 Weak-tier (Sleeper trending) |
 | News does not directly overwrite model projections | COMPLETE/VERIFIED | Bounded (±15%) evidence-adjustment is a separate, disclosed adjustment, not a projection overwrite |
-| Material projection changes have reasons | PARTIAL | The bounded evidence-adjusted-projection logic is real but **not consumed downstream** except by EDGE's veto gate — it does not feed the served projection itself |
+| Material projection changes have reasons | COMPLETE/VERIFIED | D46: the bounded evidence-adjusted-projection logic now feeds `GET /rankings/weekly`, the actually-served weekly ranking, not just EDGE's veto gate — verified live with real reasons rendered |
 
 ### League decision engine
 | Item | Status | Evidence |
@@ -246,7 +246,7 @@ that description reasonably well, short of real task decomposition (see §19).
 | `src/alpha_squad/models/rookie/` | Draft capital + combine + landing spot model, historical comps, unplayed-class projection path | Real, D40-fixed |
 | `src/alpha_squad/models/simulation/` | Correlated team-season Monte Carlo | Real, tested (`tests/unit/test_simulation.py`, `tests/integration/test_simulation_live.py`), **CLI-only, zero API/UI exposure** |
 | `src/alpha_squad/market/` | Market snapshot, isotonic curve, EDGE classification | Real, gated, regression-tested |
-| `src/alpha_squad/evidence/` | 5 evidence detectors, bounded adjustment logic | Real detectors; adjustment not consumed downstream |
+| `src/alpha_squad/evidence/` | 5 evidence detectors, bounded adjustment logic | Real detectors; adjustment now feeds `GET /rankings/weekly` (D46), not just EDGE's veto gate |
 | `src/alpha_squad/league/` | context/decisions/draft/replacement/trade/waiver | Real, live-verified against a real Sleeper league this session |
 | `src/alpha_squad/agents/` | contracts/registry/orchestrator/disagreement/state | Real scheduler engineering; agents are thin pipeline wrappers |
 | `src/alpha_squad/api/` | FastAPI routers per domain | Real, thin, no logic duplication |
@@ -345,13 +345,18 @@ strength of what's currently on disk.
 
 Real detectors: 4 Strong-tier (depth-chart change, injury, roster transaction, usage-share shift) + 1
 Weak-tier (Sleeper trending). A real, bounded (±15%) evidence-adjusted-projection function exists and
-is correctly implemented, but **it is not consumed downstream** — it does not feed the served
-projection or ranking anywhere in the pipeline. The only place evidence actually influences output is
-EDGE's veto gate (`EVIDENCE_CONTRADICTION_THRESHOLD`), and per the EDGE sub-audit that gate is usually
-neutral in practice because evidence coverage per player is sparse. **Conclusion: this system stores
-and computes evidence for real, but evidence does not yet materially influence the projections,
-rankings, or the bulk of EDGE decisions that a user actually sees** — only the minority of cases where
-strong contradicting evidence exists and coincides with an otherwise-qualifying EDGE candidate.
+is correctly implemented. **As of D46, it is consumed downstream**: `GET /rankings/weekly` serves the
+evidence-adjusted weekly value (falling back to the unadjusted base for players with no evidence that
+week), ordered by the adjusted value, with reasons — verified live in a real browser. The gap D46
+closed was structural, not conceptual: the weekly pipeline this depends on (`weekly_projection_snapshot`)
+had simply never been run against this deployment's data, so there was nothing for evidence to adjust
+regardless of how correct the adjustment code was. EDGE's veto gate (`EVIDENCE_CONTRADICTION_THRESHOLD`)
+remains a separate, still-usually-neutral-in-practice consumer (per the EDGE sub-audit) — that
+finding stands; it's the *only* consumer that changed. **Conclusion: this system stores, computes,
+and now genuinely serves evidence-adjusted output for the weekly/in-season projection path** — the
+season-level preseason path (`/rankings`) remains unaffected by evidence, correctly, since evidence
+detectors only ever produce in-season events (D23) and adjusting a preseason number with in-season
+evidence would not be a coherent operation.
 
 ## 17. League context audit (target league: 10 teams, 2QB/2RB/2WR/1TE/2FLEX)
 
@@ -484,9 +489,10 @@ rather than deleted, so this section stays an accurate record of what was found 
 4. ~~No committed EDGE historical-backtest report~~ **RESOLVED (D41)** — `alpha-squad edge
    backtest` + `reports/edge_backtest.md`, real per-position/bucket breakdown, run against
    current live-sourced data.
-5. **Evidence-adjusted projections are computed but not consumed** (§16) — still open; the
-   architectural question (should evidence feed the served projection, or stay EDGE-veto-only by
-   design) has not yet been explicitly resolved and documented.
+5. ~~Evidence-adjusted projections are computed but not consumed~~ **RESOLVED (D46)** — the
+   architectural question was resolved by re-reading the source docs (PRODUCT_SPEC.md: "current
+   information updates the prior") rather than assumed: evidence should reach served output, and
+   now does, via `GET /rankings/weekly`, verified live.
 6. ~~`LeagueContext.future_picks` is loaded but never read by the trade engine`~~ **RESOLVED
    (D45)** — real future-pick valuation (`pick_value`/`evaluate_trade_package`), verified against
    real dynasty-value data; `future_picks` itself remains intentionally unread since it is always
@@ -504,7 +510,7 @@ rather than deleted, so this section stays an accurate record of what was found 
 | Reproducible historical predictions (ARCHITECTURE.md §13) | A prediction reconstructable from stored snapshots | Inputs are reconstructable; no frozen prediction artifact exists to reconstruct | No inference-time reproducibility, only training-input reproducibility | High |
 | Multi-agent system with independent reasoning (AGENT_CONTRACTS.md) | Agents that decompose, critique, and resolve disagreement | Real scheduler/concurrency/state around agents that are thin pipeline-function wrappers | No real per-agent reasoning; the "intelligence" is the pipeline functions themselves, not the agents | Medium |
 | Historical EDGE performance evaluated (PRODUCT_SPEC.md) | A documented backtest a reader can check | Backtest was run once; no artifact committed | Claim currently unverifiable from the repo alone | Medium |
-| Evidence materially influences projections (PRODUCT_SPEC.md) | Evidence adjusts what's actually served | Evidence computed and bounded, but not consumed downstream except as an EDGE veto (usually neutral) | Evidence is closer to "logged" than "acted on" | Medium |
+| Evidence materially influences projections (PRODUCT_SPEC.md) | Evidence adjusts what's actually served | **RESOLVED (D46):** `GET /rankings/weekly` serves the evidence-adjusted value, ordered by it, with reasons — verified live | None remaining for the weekly path; season-level `/rankings` correctly stays unadjusted (evidence is in-season only) | Closed |
 | Dynasty decisions account for future value (ACCEPTANCE_CRITERIA.md) | Future draft-pick value modeled | **RESOLVED (D45):** real `pick_value`/`evaluate_trade_package`, verified live | None remaining; `future_picks` itself stays unread by design (always empty, no data source) | Closed |
 | Waiver/trade/roster-need reachable from the app (ACCEPTANCE_CRITERIA.md, Application section) | Every league decision type usable from the UI | **RESOLVED (D44):** draft, waiver, trade, and roster-need all wired into the SPA and live-verified against a real Sleeper league | None remaining for these three decision types; simulation (a separate, never-in-scope-for-this-row capability) is still unwired — see §24 item 3 | Closed |
 | Secrets never committed (ARCHITECTURE.md §15) | No API keys ever in tracked history | Current tree clean, but real keys from D35 remain in Git history permanently | Live exposure on a public remote | High |

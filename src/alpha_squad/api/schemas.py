@@ -47,6 +47,20 @@ class RankingRow(BaseModel):
     feature_version: str
 
 
+class WeeklyRankingRow(BaseModel):
+    player_id: str
+    display_name: str | None
+    position: str
+    season: int
+    week: int
+    base_value: float
+    adjusted_value: float
+    adjustment_pct: float | None
+    evidence_score: float | None
+    reason: str | None
+    model_name: str
+
+
 class RookieRow(BaseModel):
     player_id: str
     display_name: str | None
