@@ -400,6 +400,68 @@ class TestLeague:
         assert r.status_code == 200
         assert r.json()["roster_positions"] == ["QB"]
 
+    def test_waiver_targets_endpoint_excludes_rostered_players(self, con, client, monkeypatch):
+        import httpx
+
+        from tests.fixtures.httpx_fakes import FakeGetResponse
+
+        _seed_player(con, "asq_rostered", "Rostered WR", "WR")
+        _seed_player(con, "asq_free_agent", "Free Agent WR", "WR")
+        for pid, pts in [("asq_rostered", 200.0), ("asq_free_agent", 180.0)]:
+            con.execute(
+                "INSERT INTO uncertainty_predictions (prediction_id, player_id, season, "
+                "position, model_version, feature_version, point_prediction, top24_prob, "
+                "calibration_season, predicted_at) VALUES "
+                "(?, ?, 2025, 'WR', 'uncertainty_catboost_v1', 'fv1', ?, 0.3, 2024, current_timestamp)",
+                [f"pred_{pid}", pid, pts],
+            )
+        con.execute(
+            "INSERT INTO player_id_map (id_type, id_value, player_id, source) VALUES "
+            "('sleeper_id', 'sl_rostered', 'asq_rostered', 'test')"
+        )
+        league_body = {
+            "league_id": "999",
+            "total_rosters": 2,
+            "roster_positions": ["WR", "BN"],
+            "scoring_settings": {},
+            "settings": {"type": 0, "waiver_budget": 100},
+        }
+        rosters_body = [
+            {"roster_id": 1, "owner_id": "u1", "players": ["sl_rostered"]},
+            {"roster_id": 2, "owner_id": "u2", "players": []},
+        ]
+        users_body = [
+            {"user_id": "u1", "display_name": "them", "metadata": {}},
+            {"user_id": "u2", "display_name": "me", "metadata": {}},
+        ]
+
+        def fake_get(url, **kwargs):
+            import json as _json
+
+            if url.endswith("/rosters"):
+                body = rosters_body
+            elif url.endswith("/users"):
+                body = users_body
+            else:
+                body = league_body
+            return FakeGetResponse(200, body, _json.dumps(body).encode())
+
+        monkeypatch.setattr(httpx, "get", fake_get)
+        client.post("/league/register", json={"sleeper_league_id": "999", "league_id": "wt_test"})
+
+        r = client.get(
+            "/league/wt_test/waiver-targets",
+            params={"season": 2025, "week": 5, "roster_id": 2},
+        )
+        assert r.status_code == 200
+        body = r.json()
+        ids = [row["player_id"] for row in body]
+        assert "asq_rostered" not in ids
+        assert "asq_free_agent" in ids
+        row = next(row for row in body if row["player_id"] == "asq_free_agent")
+        assert row["display_name"] == "Free Agent WR"
+        assert row["reasons"]
+
     def test_draft_endpoint_calls_the_real_recommend_draft_pick_and_persists_a_decision(
         self, con, client
     ):

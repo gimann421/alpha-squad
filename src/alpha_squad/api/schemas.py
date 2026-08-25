@@ -271,6 +271,21 @@ class SimulationResponse(BaseModel):
     players: list[PlayerSimResultRow]
 
 
+class WaiverTargetRow(BaseModel):
+    player_id: str
+    display_name: str | None
+    position: str
+    expected_points: float
+    meaningful_role_probability: float | None
+    dynasty_value: float | None
+    value_spike_probability: float
+    marginal_value: float
+    roster_fit_multiplier: float
+    competing_bid_likelihood: float
+    recommended_bid: float
+    reasons: list[str]
+
+
 class DecisionResponse(BaseModel):
     decision_id: str
     recommendation: str

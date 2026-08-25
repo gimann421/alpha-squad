@@ -8,17 +8,21 @@ from dataclasses import dataclass
 
 import duckdb
 
+from alpha_squad.config.settings import get_settings
 from alpha_squad.evidence.prior_update import aggregate_evidence
 from alpha_squad.league.context import LeagueContext
 from alpha_squad.league.replacement import (
     load_season_projections,
+    marginal_value_over_replacement,
     positional_scarcity,
     replacement_level,
 )
 from alpha_squad.league.roster import roster_fit_multiplier, roster_need
+from alpha_squad.league.roster_import import roster_positions_for, teams_for_league
 from alpha_squad.models.uncertainty.run import MODEL_VERSION as UNCERTAINTY_MODEL_VERSION
 
 MAX_BID_FRACTION_OF_BUDGET = 0.40
+DEFAULT_WAIVER_PREFILTER_N = 80
 
 
 @dataclass
@@ -139,3 +143,56 @@ def recommend_waiver_pickup(
         recommended_bid=recommended_bid,
         reasons=reasons,
     )
+
+
+def rank_waiver_targets(
+    con: duckdb.DuckDBPyConnection,
+    league: LeagueContext,
+    season: int,
+    week: int,
+    roster_id: int,
+    *,
+    positions: set[str] | None = None,
+    top_n: int = 25,
+    prefilter_n: int = DEFAULT_WAIVER_PREFILTER_N,
+) -> list[WaiverRecommendation]:
+    """Every real free agent (a player projected this season who isn't on ANY real roster in
+    this league, per `roster_import.py`) scored the exact same way `recommend_waiver_pickup`
+    already scores a single player -- this is the Action Center's "who should I add" data, not
+    a new decision engine. `positions=None` considers every position.
+
+    Deliberate tradeoff, disclosed rather than hidden: `recommend_waiver_pickup` recomputes
+    league-wide replacement level/scarcity on every call, so calling it once per candidate is
+    real redundant work. Fine at real league scale (a handful of DuckDB queries x tens of
+    candidates is sub-second) -- `prefilter_n` (a cheap raw-VORP sort first) exists specifically
+    to keep the expensive per-candidate scoring bounded rather than run against every free agent
+    in the pool, which can be several hundred in a real dynasty league."""
+    projections, proj_positions = load_season_projections(con, season)
+    teams = teams_for_league(con, get_settings(), league)
+    if teams is None:
+        raise RuntimeError(
+            f"league {league.league_id!r} has no real per-team roster source "
+            "(only Sleeper-connected leagues support ranked waiver targets)"
+        )
+    my_roster_positions = roster_positions_for(teams, roster_id)
+    rostered_ids = {p.player_id for t in teams for p in t.players}
+
+    vorp = marginal_value_over_replacement(league, projections, proj_positions)
+    free_agents = [
+        pid
+        for pid in projections
+        if pid not in rostered_ids and (positions is None or proj_positions.get(pid) in positions)
+    ]
+    free_agents.sort(key=lambda pid: -vorp.get(pid, float("-inf")))
+
+    recommendations: list[WaiverRecommendation] = []
+    for player_id in free_agents[:prefilter_n]:
+        try:
+            recommendations.append(
+                recommend_waiver_pickup(con, league, season, week, player_id, my_roster_positions)
+            )
+        except RuntimeError:
+            continue  # no evaluable projection for this player after all -- skip, don't crash
+
+    recommendations.sort(key=lambda r: (-r.recommended_bid, -r.marginal_value))
+    return recommendations[:top_n]

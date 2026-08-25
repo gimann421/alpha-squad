@@ -24,6 +24,7 @@ from alpha_squad.api.schemas import (
     TradePackageResponse,
     TradeRequest,
     WaiverRequest,
+    WaiverTargetRow,
 )
 from alpha_squad.config.settings import get_settings
 from alpha_squad.league.context import (
@@ -44,7 +45,7 @@ from alpha_squad.league.trade import (
     evaluate_trade_package,
     recommend_dynasty_trade,
 )
-from alpha_squad.league.waiver import recommend_waiver_pickup
+from alpha_squad.league.waiver import rank_waiver_targets, recommend_waiver_pickup
 
 router = APIRouter(prefix="/league", tags=["league"])
 
@@ -295,6 +296,61 @@ def post_waiver(
         confidence=rec.meaningful_role_probability,
         reasons=rec.reasons,
     )
+
+
+@router.get("/{league_id}/waiver-targets", response_model=list[WaiverTargetRow])
+def get_waiver_targets(
+    league_id: str,
+    season: int = Query(...),
+    week: int = Query(...),
+    roster_id: int = Query(..., description="Real team id, from GET /league/{id}/teams"),
+    position: str | None = Query(None, description="Restrict to one position, e.g. 'RB'"),
+    top_n: int = Query(25, le=100),
+    con: duckdb.DuckDBPyConnection = Depends(get_db),
+) -> list[WaiverTargetRow]:
+    """Every real free agent ranked by the exact same `recommend_waiver_pickup` scoring a
+    single-player lookup already uses (league/waiver.py::rank_waiver_targets) -- the Action
+    Center's "who should I add" data source, not a second decision engine."""
+    league = _league_or_404(league_id, con)
+    try:
+        recs = rank_waiver_targets(
+            con,
+            league,
+            season,
+            week,
+            roster_id,
+            positions={position} if position else None,
+            top_n=top_n,
+        )
+    except RuntimeError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
+
+    names: dict[str, str | None] = {}
+    if recs:
+        placeholders = ", ".join("?" for _ in recs)
+        names = dict(
+            con.execute(
+                f"SELECT player_id, display_name FROM players WHERE player_id IN ({placeholders})",
+                [r.player_id for r in recs],
+            ).fetchall()
+        )
+    return [
+        WaiverTargetRow(
+            player_id=r.player_id,
+            display_name=names.get(r.player_id),
+            position=r.position,
+            expected_points=r.expected_points,
+            meaningful_role_probability=r.meaningful_role_probability,
+            dynasty_value=r.dynasty_value,
+            value_spike_probability=r.value_spike_probability,
+            marginal_value=r.marginal_value,
+            roster_fit_multiplier=r.roster_fit_multiplier,
+            competing_bid_likelihood=r.competing_bid_likelihood,
+            recommended_bid=r.recommended_bid,
+            reasons=r.reasons,
+        )
+        for r in recs
+    ]
 
 
 @router.post("/{league_id}/trade", response_model=DecisionResponse)

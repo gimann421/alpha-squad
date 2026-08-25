@@ -30,7 +30,7 @@ from alpha_squad.league.trade import (
     pick_value,
     recommend_dynasty_trade,
 )
-from alpha_squad.league.waiver import recommend_waiver_pickup
+from alpha_squad.league.waiver import rank_waiver_targets, recommend_waiver_pickup
 from alpha_squad.models.uncertainty.run import MODEL_VERSION as UNCERTAINTY_MODEL_VERSION
 from alpha_squad.storage.db import init_db
 
@@ -446,6 +446,86 @@ class TestRecommendWaiverPickup:
         assert rec.marginal_value < 0
         assert rec.value_spike_probability > 0.5
         assert rec.recommended_bid > 0
+
+
+class TestRankWaiverTargets:
+    """D53: the Action Center's "who should I add" data -- real free agents (not rostered on
+    ANY real team) ranked by the exact same scoring `recommend_waiver_pickup` already does for
+    one player."""
+
+    LEAGUE_ID = "waiver_rank_test"
+
+    def _league(self) -> LeagueContext:
+        return LeagueContext(
+            league_id=self.LEAGUE_ID,
+            format="dynasty",
+            teams=2,
+            lineup={"WR": 1},
+            faab={"budget": 100},
+            source="sleeper",
+            sleeper_league_id=self.LEAGUE_ID,
+        )
+
+    def _fake_get(self, monkeypatch, rostered_sleeper_ids):
+        import httpx
+
+        from tests.fixtures.httpx_fakes import FakeGetResponse
+
+        rosters = [
+            {"roster_id": 1, "owner_id": "u1", "players": rostered_sleeper_ids},
+            {"roster_id": 2, "owner_id": "u2", "players": []},
+        ]
+        users = [{"user_id": "u1", "display_name": "me", "metadata": {}}]
+
+        def fake_get(url, **kwargs):
+            import json as _json
+
+            if url.endswith("/rosters"):
+                body = rosters
+            elif url.endswith("/users"):
+                body = users
+            else:
+                raise AssertionError(f"unexpected url {url}")
+            return FakeGetResponse(200, body, _json.dumps(body).encode())
+
+        monkeypatch.setattr(httpx, "get", fake_get)
+
+    def _seed_bridged_player(self, con, player_id, position, points, sleeper_id):
+        _seed_uncertainty(con, player_id, 2025, position, points)
+        con.execute(
+            "INSERT INTO players (player_id, gsis_id, display_name, position) VALUES "
+            "(?, ?, ?, ?) ON CONFLICT DO NOTHING",
+            [player_id, f"gsis_{player_id}", player_id, position],
+        )
+        con.execute(
+            "INSERT INTO player_id_map (id_type, id_value, player_id, source) VALUES "
+            "('sleeper_id', ?, ?, 'test')",
+            [sleeper_id, player_id],
+        )
+
+    def test_excludes_rostered_players_and_ranks_free_agents(self, con, monkeypatch):
+        self._seed_bridged_player(con, "rostered_wr", "WR", 300, "sl_rostered")
+        self._seed_bridged_player(con, "fa_best", "WR", 250, "sl_fa_best")
+        self._seed_bridged_player(con, "fa_worst", "WR", 60, "sl_fa_worst")
+        self._fake_get(monkeypatch, ["sl_rostered"])
+
+        results = rank_waiver_targets(con, self._league(), 2025, 5, roster_id=2)
+
+        ids = [r.player_id for r in results]
+        assert "rostered_wr" not in ids
+        assert ids[0] == "fa_best"
+
+    def test_position_filter_restricts_candidates(self, con, monkeypatch):
+        self._seed_bridged_player(con, "fa_wr", "WR", 200, "sl_wr")
+        self._seed_bridged_player(con, "fa_rb", "RB", 200, "sl_rb")
+        self._fake_get(monkeypatch, [])
+
+        results = rank_waiver_targets(con, self._league(), 2025, 5, roster_id=2, positions={"WR"})
+        assert {r.player_id for r in results} == {"fa_wr"}
+
+    def test_unsupported_league_raises(self, con):
+        with pytest.raises(RuntimeError, match="no real per-team roster source"):
+            rank_waiver_targets(con, load_league_context(), 2025, 5, roster_id=1)
 
 
 class TestAgeCurveMultiplier:
