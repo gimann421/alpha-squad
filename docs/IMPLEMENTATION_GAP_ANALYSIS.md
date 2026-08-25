@@ -130,15 +130,13 @@ items with no listed dependency can start immediately.
 
 ## P3 — Low risk, do opportunistically
 
-### P3-1: Refresh CLAUDE.md's stale data-source-status note
+### ~~P3-1: Refresh CLAUDE.md's stale data-source-status note~~ — CLOSED (D50)
 
-- **Problem:** CLAUDE.md still describes Sleeper/FantasyPros/CFBD as blocked by egress policy;
-  this was resolved by D36/D37 and re-confirmed live multiple times since (most recently via
-  live Sleeper league loads in D44/D48's browser verification). **Still open** — the one
-  remaining item from the original P3 list that hasn't been touched.
-- **Dependencies:** None.
-- **Acceptance criteria:** CLAUDE.md's data section matches current reality; the "re-verify with
-  `alpha-squad sources status`" instruction stays (still good practice).
+- CLAUDE.md's `## Data` section cited only D3 (the original 2026-08-20 probe) and described
+  Sleeper/FantasyPros/CFBD as policy-blocked. Re-verified live with a fresh `alpha-squad sources
+  status` run before editing — all three report `AVAILABLE` — and rewrote the note to match
+  `docs/DATA_SOURCES.md`'s current narrative, citing D31/D36-D38. Only KeepTradeCut and ESPN
+  remain unreachable, neither required by PRODUCT_SPEC.md's core outputs.
 
 ### P3-2: Add expert-accuracy weighting to market-signal blending
 
@@ -160,13 +158,11 @@ items with no listed dependency can start immediately.
 ## Notes on sequencing across what's left
 
 - All four "built but invisible" capabilities identified at the start of this hardening pass
-  (waiver/trade/roster-need/simulation) are now closed (D44/D48/D49). What remains is genuinely
-  low-risk, low-urgency work, not another wave of the same pattern.
-- **P2-3 (network suite in CI)** and **P3-1/P3-2** can be done in any order, or skipped without
-  materially affecting the product. **P3-1** (CLAUDE.md's stale data-source note) is the
-  smallest and safest — pure documentation, no code risk — and a reasonable next pick if a
-  session wants a quick, safe win before tackling P2-3's user-decision dependency or P3-2's
-  actual modeling work.
+  (waiver/trade/roster-need/simulation) are now closed (D44/D48/D49), and the one pure-
+  documentation item (P3-1) is closed too (D50). What remains is **P2-3** (network suite in CI,
+  needs a user credential decision — propose it rather than doing it unilaterally) and **P3-2**
+  (expert-accuracy weighting, real modeling work but no user decision needed) — both genuinely
+  low-risk, low-urgency, and can be done in either order.
 - **P0-1** requires no further code work — the repo-side decision is settled (D35/D42). The only
   open thread is a conversation with the user about provider-side key rotation status, not
   something to schedule as engineering work.

@@ -15,9 +15,10 @@ docstrings. This is an audit only — no implementation changes were made to pro
 Read in full: `CLAUDE.md`, `PRODUCT_SPEC.md`, `ARCHITECTURE.md`, `IMPLEMENTATION_PLAN.md`,
 `ACCEPTANCE_CRITERIA.md`, `AGENT_CONTRACTS.md`, `CLAUDE_CODE_LEAD_PROMPT.md`. No material
 contradictions between them; `CLAUDE_CODE_LEAD_PROMPT.md` is a more verbose restatement of the same
-requirements. One doc is stale: `CLAUDE.md`'s data-source-status note says direct Sleeper/
-FantasyPros/CFBD calls are blocked by egress policy — false as of D36/D37, both now confirmed
-reachable and live-tested (see §8, §22).
+requirements. `CLAUDE.md`'s data-source-status note originally said direct Sleeper/FantasyPros/CFBD
+calls were blocked by egress policy — false as of D36/D37, both confirmed reachable and
+live-tested (see §8, §22) — **RESOLVED (D50):** the note has been rewritten to match current
+reality.
 
 ## 3. Status definitions used below
 
@@ -208,7 +209,7 @@ D35 credential exposure (a decision, not a code fix), and the lower-value P2/P3 
 ### Engineering quality
 | Item | Status | Evidence |
 |---|---|---|
-| CLAUDE.md contains durable project instructions | COMPLETE/VERIFIED | Present, mostly current (one stale note, §1) |
+| CLAUDE.md contains durable project instructions | COMPLETE/VERIFIED | Present and current (D50 fixed the one stale note, §1) |
 | README documents setup and workflows | IMPLEMENTED/UNVERIFIED | Present; not line-by-line verified against current CLI this run |
 | Data/model/validation docs exist | COMPLETE/VERIFIED | `docs/DATA_SOURCES.md`, `docs/DECISIONS.md`, `docs/PROJECT_STATE.md`, `docs/TRACEABILITY.md` |
 | Tests run automatically/continuously | COMPLETE/VERIFIED | `.github/workflows/ci.yml` runs `make lint && make test` on push/PR |
@@ -537,8 +538,9 @@ rather than deleted, so this section stays an accurate record of what was found 
    instead, per D45's reasoning.
 7. **CI does not run the live/network-marked test suite** (§21) — still open; the Sleeper/league
    integration claims currently depend on someone manually running them, not an automated gate.
-8. **CLAUDE.md's data-source-status note is stale** (§1) — minor, but a misleading instruction to a
-   future session that isn't aware the blockers it describes were resolved.
+8. ~~CLAUDE.md's data-source-status note is stale~~ **RESOLVED (D50)** — rewritten to match
+   `docs/DATA_SOURCES.md`'s current narrative, re-verified live against a fresh `sources status`
+   run before editing.
 
 ## 25. Requirements vs. Reality
 
@@ -557,7 +559,7 @@ rather than deleted, so this section stays an accurate record of what was found 
 
 See `docs/IMPLEMENTATION_GAP_ANALYSIS.md` for the full item-by-item breakdown with dependencies,
 sequencing, and acceptance criteria — it has been refreshed alongside this section. Summary,
-current as of D49:
+current as of D50:
 
 - **P0:** ~~Resolve the leaked-key Git-history exposure~~ **the decision itself was already made
   (D35, at the time of the original leak: user explicitly declined a history rewrite)** — D42
@@ -575,7 +577,7 @@ current as of D49:
   PRODUCT_SPEC.md) rather than assumed. ~~Implement future-draft-pick valuation in the trade
   engine~~ **done (D45)**. Remaining: add the live/network suite to CI (gated to a scheduled job,
   given credential requirements).
-- **P3:** ~~Refresh CLAUDE.md's stale data-source-status note~~ still open. ~~Add an
+- **P3:** ~~Refresh CLAUDE.md's stale data-source-status note~~ **done (D50)**. ~~Add an
   "in-season/ROS re-projection" loop if not already covered~~ **done (D46)** — the pipeline
   existed but had never been run against this deployment's data or served anywhere; both are now
   true. Remaining: expert-accuracy weighting for market signal blending.
@@ -654,9 +656,9 @@ fact — re-run `alpha-squad edge backtest` after any material data refresh rath
 numbers in `docs/DECISIONS.md` D41 indefinitely.
 
 **Most important next thing to build:** nothing product-critical remains queued. The lowest-risk
-next actions are P2-3 (network suite in CI, needs a user credential decision), P3-1 (a stale
-CLAUDE.md note — pure documentation), and P3-2 (expert-accuracy weighting for market blending) —
-see `docs/IMPLEMENTATION_GAP_ANALYSIS.md`'s "Notes on sequencing" for the disclosed tradeoffs.
+next actions are P2-3 (network suite in CI, needs a user credential decision) and P3-2
+(expert-accuracy weighting for market blending) — see `docs/IMPLEMENTATION_GAP_ANALYSIS.md`'s
+"Notes on sequencing" for the disclosed tradeoffs.
 
 **One recommended next action:** confirm with the user whether the D35-leaked API keys have
 actually been rotated at their providers. The repo-side decision (no history rewrite, per D35/D42)

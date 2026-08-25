@@ -1698,3 +1698,18 @@ P3-1 CLAUDE.md's stale data-source note, P3-2 expert-accuracy weighting) are all
 low-risk/low-urgency, and P0-1 needs no further code (a user conversation about key rotation,
 not engineering work) -- see that file's own "Notes on sequencing" section, updated alongside
 this entry.
+
+## D50 — Refresh CLAUDE.md's stale data-source-status note (closes P3-1)
+
+Pure documentation, no code risk, exactly as flagged in D49's "Notes on sequencing." CLAUDE.md's
+`## Data` section still described Sleeper/FantasyPros/CFBD as blocked by this environment's
+egress policy (citing only D3, the original 2026-08-20 probe) -- stale since D31 (2026-08-22, the
+policy itself changed) and D36/D37 (2026-08-23, `CFBD_API_KEY`/`FANTASYPROS_API_KEY` supplied and
+confirmed live). Re-verified with a fresh `alpha-squad sources status` run before editing (not
+assumed from old docs): all three report `AVAILABLE` right now, alongside every nflverse/
+DynastyProcess/cfbfastR/ffopportunity dataset. Only KeepTradeCut (no formal adapter, a site not
+an API) and the ESPN public API (an app-level 403, unused either way) remain unreachable, and
+neither is required by PRODUCT_SPEC.md's core outputs. Rewrote the note to match
+`docs/DATA_SOURCES.md`'s current narrative, cite D31/D36-D38 alongside D3, and keep the
+"re-verify with `sources status`" instruction (still good practice, since the policy has already
+changed once and may again). No code changed; 303 offline tests and lint unaffected.
