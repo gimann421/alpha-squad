@@ -691,3 +691,20 @@ races that would have affected any real deployed user. Full account in `docs/DEC
 `docs/PROJECT_STATE.md`'s M15 section. This audit's own "most important next thing to build"
 conclusion above (nothing product-critical remained queued) was about the M1-M14 backlog
 specifically, not a claim that the product was user-usable yet — M15 is what closes that gap.
+
+## Postscript (2026-08-26): empirical validation phase (M16, D54)
+
+M15 made the intelligence usable; M16 tested, adversarially, whether it is actually *good* —
+this audit's own methodology extended from "does the code exist and run" to "does it beat
+strong baselines on real historical outcomes." It found a genuine, previously-undetected product
+bug this audit's code-level review could not have caught: `recommend_draft_pick`'s real draft
+output loses to plain market consensus in every real historical season tested, because a
+deliberately-bounded roster-fit multiplier cannot stop the recommender from stacking one
+position (9 QBs; 11 WRs and 0 QBs, in two real trials) once that position's VORP runs hot for
+several consecutive picks. This does not change this audit's "Strongest component" finding above
+(the established-player ML pipeline's *point-value* accuracy is separately re-confirmed as
+beating every baseline, D54) — the newly-found gap is specifically in the decision-logic layer
+that turns good values into a pick sequence, not in the values themselves. Full account in
+`docs/DECISIONS.md` D54, `docs/ALPHA_VS_BASELINES_EVALUATION.md`, and `docs/PROJECT_STATE.md`'s
+M16 section. The fix is not yet implemented — tracked as the project's current top recommended
+action, ahead of P2-3 in `docs/IMPLEMENTATION_GAP_ANALYSIS.md`.

@@ -789,3 +789,43 @@ fail without the fix.
 350 offline tests passing (up from 303); `make lint` clean; `tsc --noEmit` clean. Not built:
 runtime "connect" for a manual/YAML league — `teams_for_league` returns `None` rather than
 fabricating a roster for it, and the UI says so rather than showing a broken or fake roster.
+
+## M16 summary — empirical validation & benchmarking phase (D54)
+
+M15 productized the intelligence; M16 asked the harder question the product-facing work never
+answered: does Alpha's intelligence actually produce better fantasy-football decisions than
+strong, reasonable baselines, adversarially tested rather than assumed? Full methodology in
+`docs/EVALUATION_PLAN.md`, real-data constraints in `docs/EVALUATION_LIMITATIONS.md`, full
+results in `docs/ALPHA_VS_BASELINES_EVALUATION.md`, and the pre-registered-before-results
+commitments plus a condensed results summary in `docs/DECISIONS.md` D54.
+
+New `src/alpha_squad/evaluation/` package (8 modules, each also an `alpha-squad evaluate <name>`
+CLI command): projection benchmarking against 3 baselines, a 5-tier market-inefficiency
+stratification, a reusable historical draft-simulation engine (4 strategies x 5 real seasons x
+10 draft slots), waiver-tier value discovery, rookie-vs-baseline benchmarking by round tier,
+dynasty pick-value/age-curve validation against real outcomes, trade-evidence extraction, and
+failure analysis. Every threshold, strategy, and season range was fixed in source and documented
+in D54 *before* being run against real data.
+
+**The headline result is unfavorable, and reported as such.** Alpha's underlying player-value
+model (`ml_season_catboost`) beats every baseline on MAE at every position — the modeling layer
+is validated. But the real historical draft simulation shows `alpha_league_aware` (the actual
+production draft recommender) losing to plain market consensus on mean starter points in **all
+5 real seasons tested**, and even losing to `alpha_bpa` (identical player values, no league
+context) — league-aware context currently makes draft decisions worse, not better. Root-caused
+by inspecting real drafted rosters (not left as an unexplained number): the recommender
+stacked 9 QBs into a 2-QB-starting league in one real trial, and 11 WRs/0 QBs in another,
+because `roster_fit_multiplier`'s deliberate [0.7, 1.3] bound (so a marginal roster need can
+never invert a large talent gap) cannot correct hard enough once one position's VORP runs hot
+for several consecutive picks. This is a decision-logic bug, not a modeling one, and is the
+single most actionable finding of this phase — not yet fixed, tracked as this project's next
+recommended action.
+
+Two other results are worth flagging: the 5-tier market-inefficiency test validates the
+existing EDGE evidence gate (D21) specifically — raw disagreement magnitude alone is *not*
+monotonic with outcome, only the evidence-gated BUY/SELL tier is — and Alpha's rookie model's
+real edge is concentrated in late rounds (5-7) where draft capital alone is weak, while
+early/mid rounds remain a genuine draft-capital-baseline win. Two real software bugs (a
+position-misclassification and a season-intersection bug in `projection_benchmark.py`, plus a
+`zip(..., strict=True)` crash that only triggers on a cleanly monotonic result) were found and
+fixed by this phase's own test suite before any number was treated as final — see D54.

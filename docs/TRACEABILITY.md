@@ -170,6 +170,32 @@ state at the time each milestone was first built.
 | Recommendation explanations show relevant evidence/provenance | ✅ | reasons rendered alongside every recommendation; `PlayerDetailView.tsx`'s "why did this change" evidence timeline (D53) |
 | UI does not duplicate or bypass core model/decision logic | ✅ | D27; every API field traces to a persisted table or a direct M10 function call — verified literally by killing the API process and confirming the UI breaks rather than serving stale data. D53 kept this true through productization: the one client-side computation added (`DraftView.tsx`'s `available_player_ids`) is pure set-subtraction over already-ranked/already-drafted ids, not a decision |
 
+## Empirical validation (M16, D54)
+
+M15's "does the feature exist and run" rows above are necessary but not sufficient — this
+section maps each of the empirical-validation directive's own required questions to the
+module/test/report that answers it, and its own honest verdict (**VALIDATED** / **PROMISING**
+/ **INCONCLUSIVE** / **FAILED, cause identified** / **NOT YET EVALUATED**), matching the
+taxonomy `docs/PROJECT_STATE.md`'s M16 section and `docs/DECISIONS.md` D54 use. This is a
+different axis than ✅/⚠️/❌ above: a row can be ✅ MET above (the feature works and is wired
+up) and still **FAILED** here (the feature, exercised against real historical outcomes,
+produces worse decisions than a baseline).
+
+| Question | Verdict | Module / test | Report |
+|---|---|---|---|
+| Does player intelligence beat simple baselines? | **VALIDATED** | `evaluation/projection_benchmark.py`, `tests/unit/test_evaluation_projection_benchmark.py` | `reports/projection_benchmark.md` |
+| Is the EDGE model-vs-market signal useful? | **PROMISING** (BUY); **INCONCLUSIVE** (SELL) | `market/edge.py` (M8), re-run this phase | `reports/edge_backtest.md` |
+| Does disagreement magnitude alone carry predictive information? | **INCONCLUSIVE** — not monotonic absent the evidence gate; validates the D21 gate itself instead | `evaluation/market_inefficiency.py`, `tests/unit/test_evaluation_market_inefficiency.py` | `reports/market_inefficiency.md` |
+| Does league-aware decision-making improve on generic/BPA rankings? | **FAILED, cause identified** — scores below both `market_consensus` and `alpha_bpa` | `evaluation/draft_simulation.py`, `tests/unit/test_evaluation_draft_simulation.py` | `reports/draft_simulation.md` |
+| Do draft recommendations outperform market consensus? | **FAILED, cause identified** — root-caused to `roster_fit_multiplier`'s bound allowing position-stacking; see `docs/IMPLEMENTATION_GAP_ANALYSIS.md` P1-0 | same as above | same as above |
+| Do waiver/FAAB recommendations create useful value? | **INCONCLUSIVE** — real proxy only, no historical bidding log exists in this environment | `evaluation/waiver_evaluation.py`, `tests/unit/test_evaluation_waiver.py` | `reports/waiver_tier_evaluation.md` |
+| Does rookie evaluation beat baselines? | **MIXED, by round tier** — late rounds (5-7) validated as an Alpha win; early/mid rounds remain a draft-capital-baseline win | `evaluation/rookie_benchmark.py`, `tests/unit/test_evaluation_rookie_benchmark.py` | `reports/rookie_benchmark.md` |
+| Do dynasty pick-value/age-curve heuristics match real outcomes? | **PROMISING** (pick value direction); **INCONCLUSIVE** (age-curve ages, confounded by survivorship bias, named explicitly rather than resolved) | `evaluation/dynasty_validation.py`, `tests/unit/test_evaluation_dynasty_validation.py` | `reports/dynasty_heuristic_validation.md` |
+| Does trade/roster intelligence improve decisions? | **NOT YET EVALUATED** (causal attribution) / inherits EDGE's evidence (action quality) | `evaluation/trade_evaluation.py`, `tests/unit/test_evaluation_trade_evaluation.py` | `reports/trade_evaluation.md` |
+| Where does Alpha fail, and why? | Answered directly — draft-decision-logic bug, root cause named | `evaluation/failure_analysis.py`, `tests/unit/test_evaluation_failure_analysis.py` | `reports/failure_analysis.md` |
+| Evaluation framework itself is leakage-safe and reproducible | ✅ MET | walk-forward season filters throughout (`season < target`/`year(scrape_date) < target`); every unit test above uses synthetic `:memory:` DuckDB fixtures, not real data, so framework correctness is verified independently of any specific historical result |
+| Evaluation methodology committed before results, not tuned after | ✅ MET | `docs/DECISIONS.md` D54's "Committed before results" list, written and committed before any evaluation command was run against the real database |
+
 ## Completion standard
 
 Every criterion above is either ✅ MET (backed by real data, a passing test, and — for

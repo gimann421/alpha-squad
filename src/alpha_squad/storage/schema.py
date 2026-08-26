@@ -738,6 +738,29 @@ M14_PRODUCTIZATION_DDL: list[str] = [
     """,
 ]
 
+# D54: the empirical-validation phase. One row per simulated historical draft
+# (season, strategy, draft_slot) -- see evaluation/draft_simulation.py's module docstring for
+# why draft_slot is a dimension (every real slot drafts under every strategy, so no single
+# lucky/unlucky slot drives an apparent result) and why only the drafted_player_ids plus the
+# two real-outcome-scored metrics are persisted (the raw per-pick reasoning is reproducible on
+# demand from the same walk-forward inputs; persisting it here would just be a second,
+# driftable copy).
+M16_EVALUATION_DDL = [
+    """
+    CREATE TABLE IF NOT EXISTS draft_simulation_results (
+        season INTEGER NOT NULL,
+        strategy VARCHAR NOT NULL,
+        draft_slot INTEGER NOT NULL,
+        drafted_player_ids_json VARCHAR NOT NULL,
+        total_roster_points DOUBLE NOT NULL,
+        starter_points DOUBLE NOT NULL,
+        framework_version VARCHAR NOT NULL,
+        evaluated_at TIMESTAMP NOT NULL,
+        PRIMARY KEY (season, strategy, draft_slot, framework_version)
+    )
+    """,
+]
+
 # M15+ DDL is appended here as later milestones are implemented.
 ALL_DDL: list[str] = [
     *M1_SNAPSHOTS_DDL,
@@ -754,6 +777,7 @@ ALL_DDL: list[str] = [
     *M11_AGENTS_DDL,
     *M13_SIMULATION_DDL,
     *M14_PRODUCTIZATION_DDL,
+    *M16_EVALUATION_DDL,
 ]
 
 # ---------------------------------------------------------------------------

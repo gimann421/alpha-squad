@@ -36,6 +36,34 @@ items with no listed dependency can start immediately.
 
 ## P1 — High value, ready to build
 
+### P1-0: Fix `recommend_draft_pick`'s roster-balance failure (found by M16 evaluation, D54)
+
+- **What was found:** A real historical draft simulation (`src/alpha_squad/evaluation/
+  draft_simulation.py`, `docs/DECISIONS.md` D54) showed the actual production draft
+  recommender (`alpha_league_aware`) losing to plain market consensus on mean starter points
+  in **all 5 real seasons tested** (2021-2025), and also losing to `alpha_bpa` (identical
+  player values, no league context) — league-aware context is currently making draft decisions
+  *worse*. Root-caused by inspecting real drafted rosters: the recommender stacked 9 QBs into a
+  league that starts 2 in one real 2021 trial, and 11 WRs/0 QBs in a real 2025 trial.
+- **Why it happens:** `roster_fit_multiplier` in `league/roster.py` is deliberately bounded to
+  [0.7, 1.3] so that a marginal roster need can never invert a large talent gap — a reasonable
+  design goal in isolation. But that same bound means once one position's VORP genuinely runs
+  hotter than others for several consecutive picks, the fit multiplier cannot correct hard
+  enough, and the engine keeps taking that position past what any real roster can start. Bench
+  players who never start still count toward `total_roster_points`, which is why the
+  total-points shortfall (366 pts) is smaller than the starter-points shortfall (387 pts) —
+  the value is there, just stranded on the bench.
+- **What's needed:** A stronger correction than a fixed multiplier bound once a position is
+  already full at the roster-slot level — e.g. a hard or steeply-scaling penalty once
+  drafted-at-position count reaches the league's real starting requirement for that position,
+  not just a proportional fit adjustment. Needs its own before/after run of
+  `alpha-squad evaluate draft-simulation` to confirm the fix actually closes the gap against
+  market consensus, not just changes the failure mode.
+- **Dependencies:** None — the evaluation harness to verify a fix already exists.
+- **Acceptance criteria:** `alpha_league_aware` beats or matches `market_consensus` on mean
+  starter points across the same 5 real seasons this finding was measured on, without
+  re-tuning the evaluation's own thresholds/strategies to produce that result.
+
 ### ~~P1-1: Wire waiver, trade, and roster-need recommendations into the web UI~~ — CLOSED (D44)
 
 - Waiver, trade, and roster-need are all wired into the SPA (`WaiverView.tsx`, `TradeView.tsx`, a
@@ -173,4 +201,11 @@ items with no listed dependency can start immediately.
   this pass did (exercising the real app with Playwright, not code review). It is a separate body
   of work from the P0-P3 items above, not a continuation of this file's backlog; see D53 and
   `docs/PROJECT_STATE.md`'s M15 section for the full account. P2-3 (network suite in CI) remains
-  the only item in *this* file still open.
+  the only item in *this* file still open from that pass.
+- **Note (2026-08-26):** a further phase (M16, D54) empirically evaluated the productized
+  system against strong baselines rather than assuming it was good because it ran, and found a
+  new, real, well-evidenced gap: **P1-0** above, the draft recommender's roster-balance bug.
+  This is now the highest-value item in this file — more concrete and more actionable than
+  P2-3, since its root cause and acceptance test are already established by the evaluation
+  harness itself. See `docs/DECISIONS.md` D54 and `docs/ALPHA_VS_BASELINES_EVALUATION.md` for
+  the full evidence.

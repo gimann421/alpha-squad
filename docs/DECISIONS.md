@@ -1900,3 +1900,99 @@ project's standing rule against fabricated data.
 
 350 offline tests passing (up from 303 at the start of this pass); `make lint` clean
 (ruff + `check_no_secrets.py`); TypeScript compiles clean (`tsc --noEmit`).
+
+## D54 — Empirical validation phase: methodology committed before results (results appended below)
+
+M15 productized the intelligence; this phase asks the harder question directly: does Alpha's
+intelligence actually produce better fantasy-football decisions than strong, reasonable
+baselines? Per the phase's own explicit instruction ("do not tune the evaluation methodology
+after seeing results... do not cherry-pick... if a simple baseline beats Alpha, report that
+honestly"), this entry's methodology section was written and committed *before* any of this
+phase's evaluation commands were run against real data — the same pre-registration discipline
+D39 established for the rookie-ablation decision rule, now applied phase-wide.
+
+**New package**: `src/alpha_squad/evaluation/` — `config.py` (versioned config stamped into
+every report), `projection_benchmark.py`, `market_inefficiency.py`, `draft_simulation.py`,
+`waiver_evaluation.py`, `rookie_benchmark.py`, `dynasty_validation.py`, `trade_evaluation.py`,
+`failure_analysis.py`. Every module is also an `alpha-squad evaluate <name>` CLI command. See
+`docs/EVALUATION_PLAN.md` for the full design and `docs/EVALUATION_LIMITATIONS.md` for what
+this environment's real data genuinely cannot support (no historical FAAB-bidding log, no
+historical dynasty-value time series, no ADP series, no historical back-series for FantasyPros
+point projections — each traced to a specific real gap, not assumed).
+
+**Committed before results, not adjusted after:**
+- Market-inefficiency 5-tier thresholds: `|rank_edge| >= 6` mild, `>= 16` strong, confidence
+  `>= 0.75` high-confidence; BUY/SELL actions (already evidence-gated by D21) are the
+  evidence-backed tier by construction.
+- Waiver-tier pool: real preseason overall ECR rank `> 150` (or no consensus rank at all) =
+  "a standard league wouldn't have rostered this player." Top-K = 20.
+- Draft simulation: one team (every one of the league's 10 slots, once per season) drafts
+  under the strategy being tested; the other 9 always draft real historical market consensus
+  (best-remaining-ECR) — a fixed, realistic opponent field so only the team-in-question's
+  strategy varies across trials. Four strategies: `market_consensus`, `generic_prior_year`
+  (real prior-season points, a non-market generic ranking), `alpha_bpa` (Alpha's own
+  predicted points, no league context), `alpha_league_aware` (the real `recommend_draft_pick`).
+  Real seasons 2021-2025 (`uncertainty_predictions`' actual walk-forward coverage) — not
+  widened to make the sample look bigger, not narrowed to exclude an inconvenient season.
+- Dynasty heuristics: draft classes 2012-2023 for pick-value (needs 3 real post-rookie
+  seasons per class), 2012-2025 for age curves, both against real `player_season_stats`.
+
+**A real bug found building this phase's own report generator, before it ever touched
+production data:** `projection_benchmark.py`'s first draft derived every model's position
+purely from its *name* (Alpha's season-level models encode position in the model name,
+e.g. `ml_season_catboost_wr`), which silently mapped every baseline's row to
+`position='ALL'` regardless of its real per-position value in the `position` column — baselines
+would never have appeared in the by-position comparison table at all. A second bug: the
+season-intersection check only intersected model families that had *any* row, so a model
+family with zero rows anywhere (which should force the whole comparison to LIMITED/empty)
+was silently excluded from the intersection instead of correctly emptying it. Both caught by
+`tests/unit/test_evaluation_projection_benchmark.py`, written before this phase's report was
+ever run against the real database, and fixed before any real number was reported.
+
+### Results
+
+All eight `alpha-squad evaluate <name>` commands were run against the real database (real
+seasons, no synthetic substitutions); full numbers, per-section detail, and the eleven
+directive questions answered directly are in `docs/ALPHA_VS_BASELINES_EVALUATION.md`. Summary,
+reported exactly as found — two of these are unfavorable to Alpha's current implementation:
+
+- **VALIDATED.** `ml_season_catboost` has the lowest MAE of any model (baseline or Alpha) at
+  every position (QB/RB/WR/TE), real 2021-2025 window — Alpha's underlying player-value model
+  is genuinely good. The EDGE evidence gate (D21) is also validated directly: the 5-tier
+  market-inefficiency breakdown shows raw disagreement magnitude alone (tiers 1-3, no gate) is
+  *not* monotonic with outcome, while the evidence-gated BUY/SELL tier is clearly positive —
+  the gate is doing real work, not just adding friction. Pick-value's (D45) directional
+  assumption is also confirmed: real rookie-season points decline monotonically across all 7
+  real draft rounds.
+- **PROMISING.** EDGE's BUY signal beat the market in 3 of 4 scored seasons (2022-2024),
+  though 2025 was its first negative season on record. Alpha's rookie model beats every
+  baseline specifically in late rounds (5-7, MAE 28.7 vs. best baseline 30.4), where draft
+  capital alone is a weak signal.
+- **FAILED, with an identified, actionable root cause — the headline unfavorable finding.**
+  `alpha_league_aware` (the real `recommend_draft_pick`, used in a historical draft
+  simulation against a fixed market-consensus opponent field) lost to plain
+  `market_consensus` on mean starter points in **all 5 real seasons tested** (2021-2025;
+  pooled 1633.1 vs. 2020.1), and also scored below `alpha_bpa` (identical player values, no
+  league context) — league-aware context currently makes decisions *worse*, not better.
+  Root-caused by inspecting real drafted rosters, not left unexplained: `alpha_league_aware`
+  drafted 9 QBs into a league that starts 2 in one real 2021 trial, and 11 WRs/0 QBs in a real
+  2025 trial. `roster_fit_multiplier` is deliberately bounded to [0.7, 1.3] (`league/roster.py`)
+  so a marginal roster need can never invert a large talent gap — but that same bound cannot
+  correct hard enough once one position's VORP runs hot for several consecutive picks, and the
+  engine stacks that position far past what a real roster can start. This is a decision-logic
+  bug in how good player values become a 17-pick sequence, not a modeling problem (§1 shows the
+  values themselves are good) — the most actionable finding of this phase.
+- **INCONCLUSIVE.** SELL signal reliability (mixed sign by season); disagreement magnitude
+  alone absent the evidence gate; waiver-tier value discovery as a full answer to FAAB quality
+  (no historical bidding log exists in this environment — see `docs/EVALUATION_LIMITATIONS.md`);
+  the age-curve heuristic's (D25) specific decline ages, confounded by real survivorship bias
+  (every late-age cell has n ≤ 8); early/mid-round rookie evaluation vs. draft capital alone.
+- **NOT YET EVALUATED.** FAAB bid efficiency and causal trade-outcome attribution — both need
+  real transaction/history data this environment does not have.
+
+Two real software bugs were found and fixed *during* this phase, before any result was treated
+as final (see above and their own regression tests): the `projection_benchmark.py`
+position-misclassification and season-intersection bugs, and a `zip(..., strict=True)` crash
+in `dynasty_validation.py`/`market_inefficiency.py` that only triggers on a cleanly monotonic
+(i.e. "good") result. None of these were methodology changes made after seeing unfavorable
+results — the pre-committed thresholds and strategies above were not touched.
