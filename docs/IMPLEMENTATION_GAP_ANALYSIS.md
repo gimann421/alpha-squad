@@ -41,18 +41,26 @@ items with no listed dependency can start immediately.
 - **What was found:** A real historical draft simulation (`src/alpha_squad/evaluation/
   draft_simulation.py`, `docs/DECISIONS.md` D54) showed the actual production draft
   recommender (`alpha_league_aware`) losing to plain market consensus on mean starter points
-  in **all 5 real seasons tested** (2021-2025), and also losing to `alpha_bpa` (identical
-  player values, no league context) — league-aware context is currently making draft decisions
-  *worse*. Root-caused by inspecting real drafted rosters: the recommender stacked 9 QBs into a
-  league that starts 2 in one real 2021 trial, and 11 WRs/0 QBs in a real 2025 trial.
+  in **every one of the 5 real seasons tested** (2021-2025, pooled 1644.5 vs. 2020.7),
+  never winning a single season outright, and scoring below `alpha_bpa` (identical player
+  values, no league context) on pooled *total* roster points (2680.0 vs. 2756.1) — though it
+  *beats* `alpha_bpa` on pooled *starter* points (1644.5 vs. 1429.1), so league-aware context
+  is not making every decision worse, just net worse overall. Root-caused by inspecting real
+  drafted rosters: the recommender drafted 7 QBs and zero RBs into a league starting 2 of each
+  in one real 2021 trial, and 12 WRs against only 3 QBs in a real 2025 trial. These specific
+  numbers were re-verified after fixing two real bugs found via a follow-up leakage/
+  reproducibility audit of the draft-simulation path itself (a missing season filter in
+  `next_pick_survival_probability`, and non-deterministic tie-breaking over Python `set`s) —
+  the numbers above are the corrected, reproducibility-confirmed (byte-identical across two
+  separate process runs) result, not the original ones.
 - **Why it happens:** `roster_fit_multiplier` in `league/roster.py` is deliberately bounded to
   [0.7, 1.3] so that a marginal roster need can never invert a large talent gap — a reasonable
   design goal in isolation. But that same bound means once one position's VORP genuinely runs
   hotter than others for several consecutive picks, the fit multiplier cannot correct hard
-  enough, and the engine keeps taking that position past what any real roster can start. Bench
-  players who never start still count toward `total_roster_points`, which is why the
-  total-points shortfall (366 pts) is smaller than the starter-points shortfall (387 pts) —
-  the value is there, just stranded on the bench.
+  enough, and the engine keeps taking that position (or starving another) past what any real
+  roster can start. Bench players who never start still count toward `total_roster_points`,
+  which is why the total-points shortfall (255.1 pts pooled) is smaller than the
+  starter-points shortfall (376.2 pts pooled) — the value is there, just stranded on the bench.
 - **What's needed:** A stronger correction than a fixed multiplier bound once a position is
   already full at the roster-slot level — e.g. a hard or steeply-scaling penalty once
   drafted-at-position count reaches the league's real starting requirement for that position,

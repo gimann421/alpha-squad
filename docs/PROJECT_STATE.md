@@ -810,22 +810,38 @@ in D54 *before* being run against real data.
 **The headline result is unfavorable, and reported as such.** Alpha's underlying player-value
 model (`ml_season_catboost`) beats every baseline on MAE at every position — the modeling layer
 is validated. But the real historical draft simulation shows `alpha_league_aware` (the actual
-production draft recommender) losing to plain market consensus on mean starter points in **all
-5 real seasons tested**, and even losing to `alpha_bpa` (identical player values, no league
-context) — league-aware context currently makes draft decisions worse, not better. Root-caused
-by inspecting real drafted rosters (not left as an unexplained number): the recommender
-stacked 9 QBs into a 2-QB-starting league in one real trial, and 11 WRs/0 QBs in another,
-because `roster_fit_multiplier`'s deliberate [0.7, 1.3] bound (so a marginal roster need can
-never invert a large talent gap) cannot correct hard enough once one position's VORP runs hot
-for several consecutive picks. This is a decision-logic bug, not a modeling one, and is the
-single most actionable finding of this phase — not yet fixed, tracked as this project's next
-recommended action.
+production draft recommender) losing to plain market consensus on mean starter points in
+**every one of the 5 real seasons tested**, never winning a single season outright, and scoring
+below `alpha_bpa` (identical player values, no league context) on pooled total roster points
+(though it *beats* `alpha_bpa` on pooled starter points — a real, mixed nuance: league context
+helps the started lineup, it just strands more value on the bench overall). Root-caused by
+inspecting real drafted rosters (not left as an unexplained number): the recommender drafted 7
+QBs and zero RBs into a league starting 2 of each in one real trial, and 12 WRs against only 3
+QBs in another, because `roster_fit_multiplier`'s deliberate [0.7, 1.3] bound (so a marginal
+roster need can never invert a large talent gap) cannot correct hard enough once one position's
+VORP runs hot for several consecutive picks. This is a decision-logic bug, not a modeling one,
+and is the single most actionable finding of this phase — not yet fixed, tracked as this
+project's next recommended action.
+
+This finding was independently re-verified after the fact, prompted by a direct question about
+whether pre-2025 training data was genuinely separated from 2025 outcomes: that audit found and
+fixed two real bugs in the draft-simulation path itself (not methodology changes) —
+`next_pick_survival_probability` had no season scoping at all (a historical draft could see
+market data recorded years later), and several `min`/`max`/`.sort()` calls broke ties over
+Python `set`s with no secondary key, which is non-deterministic across process runs because
+`PYTHONHASHSEED` is unset here and real ties are common in the data. Both fixed with regression
+tests, then verified (not assumed) by re-running the simulation twice in separate processes and
+confirming byte-identical reports. The corrected numbers required one factual fix — an earlier
+claim that market consensus won outright in all 5 seasons was wrong; it wins 4 of 5, with
+`generic_prior_year` edging it out in 2025 specifically — but the core finding (Alpha's draft
+engine never wins) is unchanged and now rests on a leak-free, reproducible basis.
 
 Two other results are worth flagging: the 5-tier market-inefficiency test validates the
 existing EDGE evidence gate (D21) specifically — raw disagreement magnitude alone is *not*
 monotonic with outcome, only the evidence-gated BUY/SELL tier is — and Alpha's rookie model's
 real edge is concentrated in late rounds (5-7) where draft capital alone is weak, while
-early/mid rounds remain a genuine draft-capital-baseline win. Two real software bugs (a
-position-misclassification and a season-intersection bug in `projection_benchmark.py`, plus a
-`zip(..., strict=True)` crash that only triggers on a cleanly monotonic result) were found and
-fixed by this phase's own test suite before any number was treated as final — see D54.
+early/mid rounds remain a genuine draft-capital-baseline win. Four real software bugs (a
+position-misclassification and a season-intersection bug in `projection_benchmark.py`, the two
+draft-simulation bugs above, plus a `zip(..., strict=True)` crash that only triggers on a
+cleanly monotonic result) were found and fixed by this phase's own test suite before any
+number was treated as final — see D54.

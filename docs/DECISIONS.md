@@ -1971,17 +1971,34 @@ reported exactly as found — two of these are unfavorable to Alpha's current im
 - **FAILED, with an identified, actionable root cause — the headline unfavorable finding.**
   `alpha_league_aware` (the real `recommend_draft_pick`, used in a historical draft
   simulation against a fixed market-consensus opponent field) lost to plain
-  `market_consensus` on mean starter points in **all 5 real seasons tested** (2021-2025;
-  pooled 1633.1 vs. 2020.1), and also scored below `alpha_bpa` (identical player values, no
-  league context) — league-aware context currently makes decisions *worse*, not better.
+  `market_consensus` on mean starter points in **every one of the 5 real seasons tested**
+  (2021-2025; pooled 1644.5 vs. 2020.7) and never won a single season outright. On pooled
+  *total* roster points it also scored below `alpha_bpa` (identical player values, no league
+  context: 2680.0 vs. 2756.1) — though it *beats* `alpha_bpa` on pooled *starter* points
+  (1644.5 vs. 1429.1), a real, mixed nuance: league context measurably improves the started
+  lineup, it just also strands more value on the bench overall (see the root cause below).
   Root-caused by inspecting real drafted rosters, not left unexplained: `alpha_league_aware`
-  drafted 9 QBs into a league that starts 2 in one real 2021 trial, and 11 WRs/0 QBs in a real
-  2025 trial. `roster_fit_multiplier` is deliberately bounded to [0.7, 1.3] (`league/roster.py`)
-  so a marginal roster need can never invert a large talent gap — but that same bound cannot
-  correct hard enough once one position's VORP runs hot for several consecutive picks, and the
-  engine stacks that position far past what a real roster can start. This is a decision-logic
-  bug in how good player values become a 17-pick sequence, not a modeling problem (§1 shows the
+  drafted 7 QBs and zero RBs (of 17 picks, into a league starting 2 of each) in one real 2021
+  trial, and 12 WRs against only 3 QBs in a real 2025 trial. `roster_fit_multiplier` is
+  deliberately bounded to [0.7, 1.3] (`league/roster.py`) so a marginal roster need can never
+  invert a large talent gap — but that same bound cannot correct hard enough once one
+  position's VORP runs hot for several consecutive picks, and the engine stacks that position
+  (or starves another) far past what a real roster can start. This is a decision-logic bug in
+  how good player values become a 17-pick sequence, not a modeling problem (§1 shows the
   values themselves are good) — the most actionable finding of this phase.
+  **This finding was independently re-verified after the fact**, prompted by a direct question
+  about whether the evaluation was genuinely leak-free: found and fixed two real bugs in the
+  draft-simulation path itself (not methodology changes) — `next_pick_survival_probability`
+  had no season scoping at all (a historical draft could see market data from years later),
+  and `min`/`max`/`.sort()` tie-breaks over Python `set`s had no secondary key, which is
+  non-deterministic across process runs because `PYTHONHASHSEED` is unset here and real ties
+  are common in the data. Both fixed with regression tests; the simulation was then re-run
+  twice in separate processes and produced byte-identical reports, confirming the corrected
+  numbers above are genuinely reproducible. The one factual correction this required: an
+  earlier draft of this document claimed `market_consensus` won outright in all 5 seasons —
+  it actually wins 4 of 5, with `generic_prior_year` (a non-market baseline) edging it out in
+  2025 specifically. `alpha_league_aware` still never wins any season, so the core finding is
+  unchanged and now rests on firmer ground.
 - **INCONCLUSIVE.** SELL signal reliability (mixed sign by season); disagreement magnitude
   alone absent the evidence gate; waiver-tier value discovery as a full answer to FAAB quality
   (no historical bidding log exists in this environment — see `docs/EVALUATION_LIMITATIONS.md`);
@@ -1990,9 +2007,10 @@ reported exactly as found — two of these are unfavorable to Alpha's current im
 - **NOT YET EVALUATED.** FAAB bid efficiency and causal trade-outcome attribution — both need
   real transaction/history data this environment does not have.
 
-Two real software bugs were found and fixed *during* this phase, before any result was treated
-as final (see above and their own regression tests): the `projection_benchmark.py`
-position-misclassification and season-intersection bugs, and a `zip(..., strict=True)` crash
+Four real software bugs were found and fixed *during* this phase, before any result was
+treated as final (see above and their own regression tests): the `projection_benchmark.py`
+position-misclassification and season-intersection bugs, the draft-simulation leakage and
+non-determinism bugs described above, and a `zip(..., strict=True)` crash
 in `dynasty_validation.py`/`market_inefficiency.py` that only triggers on a cleanly monotonic
 (i.e. "good") result. None of these were methodology changes made after seeing unfavorable
 results — the pre-committed thresholds and strategies above were not touched.

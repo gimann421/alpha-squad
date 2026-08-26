@@ -700,8 +700,12 @@ strong baselines on real historical outcomes." It found a genuine, previously-un
 bug this audit's code-level review could not have caught: `recommend_draft_pick`'s real draft
 output loses to plain market consensus in every real historical season tested, because a
 deliberately-bounded roster-fit multiplier cannot stop the recommender from stacking one
-position (9 QBs; 11 WRs and 0 QBs, in two real trials) once that position's VORP runs hot for
-several consecutive picks. This does not change this audit's "Strongest component" finding above
+position (7 QBs and zero RBs; 12 WRs against 3 QBs, in two real trials) once that position's
+VORP runs hot for several consecutive picks. (This finding was independently re-verified after
+a follow-up audit found and fixed two further real bugs in the draft-simulation harness itself
+— a missing season filter and non-deterministic tie-breaking — confirmed via byte-identical
+results across separate re-runs; see D54's "Results" section.) This does not change this
+audit's "Strongest component" finding above
 (the established-player ML pipeline's *point-value* accuracy is separately re-confirmed as
 beating every baseline, D54) — the newly-found gap is specifically in the decision-logic layer
 that turns good values into a pick sequence, not in the values themselves. Full account in
