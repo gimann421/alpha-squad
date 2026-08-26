@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
+from uuid import uuid4
 
 
 class SourceStatus(StrEnum):
@@ -57,6 +58,21 @@ class SourceNotFoundError(SourceError):
 
 def utcnow() -> datetime:
     return datetime.now(UTC)
+
+
+def write_bytes_atomic(dest: Path, content: bytes) -> None:
+    """Write `content` to `dest` via a same-directory temp file + `Path.replace()` (atomic
+    rename on the same filesystem), instead of `dest.write_bytes()`. `write_bytes()` opens
+    in truncate mode: two concurrent fetches for the *same* (dataset, params) snapshot key
+    -- a real case here, since two league_ids can point at the same underlying real Sleeper
+    league -- can interleave a truncate from one write with a read from the other, producing
+    a torn (partial/empty) file. Found live via Playwright as a `JSONDecodeError` reading a
+    snapshot mid-write under real concurrent app traffic; `sources/http.py`'s
+    `http_get_to_file` already used this pattern, this closes the same gap in the three
+    adapters (sleeper/cfbd/fantasypros) that instead wrote in place."""
+    tmp_dest = dest.with_name(f"{dest.name}.{uuid4().hex}.part")
+    tmp_dest.write_bytes(content)
+    tmp_dest.replace(dest)
 
 
 def sha256_file(path: Path) -> str:

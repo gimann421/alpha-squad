@@ -58,6 +58,17 @@ nav button.active {
   font-size: 0.85rem;
 }
 
+/* Same layout as `.controls label`, but a plain <span> rather than a real <label> --
+   PlayerPicker nests its own interactive input/list/button, and wrapping that in a real
+   <label> triggers the browser's implicit label-click-forwarding behavior, which resets
+   PlayerPicker's internal selection state on every click inside it (D48). */
+.controls .picker-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.85rem;
+}
+
 .controls input,
 .controls select {
   padding: 0.35rem 0.5rem;
@@ -110,4 +121,96 @@ tr:hover {
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
+}
+
+.player-picker-results {
+  position: absolute;
+  z-index: 10;
+  background: white;
+  border: 1px solid #d0d7de;
+  border-radius: 6px;
+  margin: 2px 0 0 0;
+  padding: 0.25rem 0;
+  list-style: none;
+  min-width: 220px;
+  max-height: 220px;
+  overflow-y: auto;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.player-picker-results li {
+  padding: 0.35rem 0.6rem;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.player-picker-results li:hover {
+  background: #f6f8fa;
+}
+
+.league-selector-bar {
+  border: 1px solid #d0d7de;
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+  background: #f6f8fa;
+}
+
+.league-selector-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: end;
+}
+
+.league-selector-controls label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.85rem;
+}
+
+.league-selector-controls select {
+  padding: 0.35rem 0.5rem;
+  border: 1px solid #d0d7de;
+  border-radius: 6px;
+  min-width: 10rem;
+}
+
+.controls button.secondary,
+.league-selector-controls button.secondary {
+  background: white;
+  color: #1f2328;
+}
+
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1rem;
+  align-items: start;
+}
+
+.action-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.action-list li {
+  border: 1px solid #eaeef2;
+  border-radius: 6px;
+  padding: 0.5rem 0.7rem;
+}
+
+.player-link {
+  background: none;
+  border: none;
+  padding: 0;
+  color: #0969da;
+  cursor: pointer;
+  font: inherit;
+  text-decoration: underline;
 }

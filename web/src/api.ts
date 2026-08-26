@@ -5,18 +5,28 @@
 // that as a real error state rather than falling back to stale/fabricated data.
 
 import type {
+  ActionCenterResponse,
   DecisionResponse,
+  DropCandidateRow,
   EdgeRow,
   EvidenceRow,
   LeagueContext,
   LeagueSummary,
+  LeagueTeamsResponse,
+  MyTeamResponse,
   PlayerDetail,
+  PlayerDetailFull,
   PlayerSummary,
   ProvenanceResponse,
   RankingRow,
   RookieComp,
   RookieRow,
+  SimulationResponse,
   SourceHealthRow,
+  TradePackageRequest,
+  TradePackageResponse,
+  WaiverTargetRow,
+  WeeklyRankingRow,
 } from "./types";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
@@ -53,9 +63,16 @@ export const api = {
   listPlayers: (params?: { position?: string; q?: string; limit?: number }) =>
     getJson<PlayerSummary[]>("/players", params),
   getPlayer: (playerId: string) => getJson<PlayerDetail>(`/players/${playerId}`),
+  getPlayerDetail: (
+    playerId: string,
+    params: { season: number; ecr_type?: string; league_id?: string; roster_id?: number },
+  ) => getJson<PlayerDetailFull>(`/players/${playerId}/detail`, params),
 
   getRankings: (params: { season: number; position?: string; limit?: number }) =>
     getJson<RankingRow[]>("/rankings", params),
+
+  getWeeklyRankings: (params: { season: number; week: number; position?: string; limit?: number }) =>
+    getJson<WeeklyRankingRow[]>("/rankings/weekly", params),
 
   getRookieClasses: () => getJson<number[]>("/rookies/classes"),
   getRookies: (params: { draft_class: number; position?: string; limit?: number }) =>
@@ -70,16 +87,42 @@ export const api = {
     getJson<EvidenceRow[]>("/evidence", params),
 
   listLeagues: () => getJson<LeagueSummary[]>("/league"),
+  registerLeague: (body: { sleeper_league_id: string; league_id?: string }) =>
+    postJson<LeagueSummary>("/league/register", body),
+  getLeagueTeams: (leagueId: string) => getJson<LeagueTeamsResponse>(`/league/${leagueId}/teams`),
   getLeagueContext: (leagueId: string) => getJson<LeagueContext>(`/league/${leagueId}/context`),
-  getRosterNeed: (leagueId: string, rosterPositions: string) =>
-    getJson<{ need: Record<string, number> }>(`/league/${leagueId}/roster`, {
-      roster_positions: rosterPositions,
-    }),
+  getRosterNeed: (leagueId: string, params: { roster_positions?: string; roster_id?: number }) =>
+    getJson<{ need: Record<string, number>; roster_positions: string[] }>(
+      `/league/${leagueId}/roster`,
+      params,
+    ),
+  getMyTeam: (leagueId: string, params: { season: number; roster_id: number; ecr_type?: string }) =>
+    getJson<MyTeamResponse>(`/league/${leagueId}/my-team`, params),
+  getWaiverTargets: (
+    leagueId: string,
+    params: { season: number; week: number; roster_id: number; position?: string; top_n?: number },
+  ) => getJson<WaiverTargetRow[]>(`/league/${leagueId}/waiver-targets`, params),
+  getDropCandidates: (
+    leagueId: string,
+    params: { season: number; roster_id: number; top_n?: number; ecr_type?: string },
+  ) => getJson<DropCandidateRow[]>(`/league/${leagueId}/drop-candidates`, params),
+  getActionCenter: (
+    leagueId: string,
+    params: {
+      season: number;
+      week: number;
+      roster_id: number;
+      add_top_n?: number;
+      drop_top_n?: number;
+      ecr_type?: string;
+    },
+  ) => getJson<ActionCenterResponse>(`/league/${leagueId}/actions`, params),
   postDraft: (
     leagueId: string,
     body: {
       season: number;
       roster_positions?: string[];
+      roster_id?: number;
       available_player_ids?: string[];
       next_pick_overall?: number;
       ecr_type?: string;
@@ -88,12 +131,33 @@ export const api = {
   ) => postJson<DecisionResponse>(`/league/${leagueId}/draft`, body),
   postWaiver: (
     leagueId: string,
-    body: { season: number; week: number; player_id: string; roster_positions?: string[] },
+    body: {
+      season: number;
+      week: number;
+      player_id: string;
+      roster_positions?: string[];
+      roster_id?: number;
+    },
   ) => postJson<DecisionResponse>(`/league/${leagueId}/waivers`, body),
   postTrade: (leagueId: string, body: { season: number; player_id: string; ecr_type?: string }) =>
     postJson<DecisionResponse>(`/league/${leagueId}/trade`, body),
+  postTradePackage: (leagueId: string, body: TradePackageRequest) =>
+    postJson<TradePackageResponse>(`/league/${leagueId}/trade-package`, body),
+
+  postSimulation: (body: {
+    team: string;
+    season: number;
+    n_simulations?: number;
+    n_weeks?: number;
+    seed?: number;
+  }) => postJson<SimulationResponse>("/simulate/team-season", body),
 
   getProvenance: (entityId: string) => getJson<ProvenanceResponse>(`/provenance/${entityId}`),
 
   getSourceHealth: () => getJson<SourceHealthRow[]>("/health/sources"),
+
+  getLatestSeasons: () =>
+    getJson<{ uncertainty: number | null; weekly: number | null; edge: number | null; evidence: number | null }>(
+      "/seasons/latest",
+    ),
 };

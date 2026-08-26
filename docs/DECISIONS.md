@@ -1254,3 +1254,649 @@ was actually broken (`get is not defined` — I had called a helper that does no
 `tsconfig.json` is a project-references stub and type-checks nothing; the real check is
 `tsc -p tsconfig.app.json`. The error surfaced only when the page was driven in a real browser.
 Worth knowing before trusting a green typecheck here.
+
+## D41 — Reviewable EDGE backtest artifact (`edge backtest`, `reports/edge_backtest.md`)
+
+`docs/CURRENT_STATE_AUDIT.md`'s P1-2 gap: `edge validate`'s per-(season, action) backtest logic
+was real (`evaluate_historical_edge`) but had never been re-run against the current live-sourced
+market data in this deployment, so no report existed to review. Confirmed `reports/` is
+gitignored by design (CLAUDE.md: reproducible from the pipeline, never committed) — the actual
+gap was that the report had never been generated, not that it existed but wasn't committed.
+
+Added `evaluate_historical_edge_detailed`/`write_edge_backtest_report` (`market/edge.py`) and
+`alpha-squad edge backtest` (`cli.py`). Reuses `evaluate_historical_edge`'s exact walk-forward
+market-implied-points methodology (same `_market_implied_points_curve`, trained only on
+strictly-prior seasons) rather than reimplementing a different backtest — just slices the same
+underlying (actual, market-implied) pairs by position and by rank-edge/points-edge/confidence
+magnitude bucket, and writes methodology/limitations/failure-modes sections alongside the
+tables. Unit-tested (`tests/unit/test_edge.py::TestEvaluateHistoricalEdgeDetailed`, 4 new cases).
+
+**Real result, run 2026-08-24 against 2022–2025 (1543 signals, 659 players, `ecr_type=rsf`):**
+BUY beat market-implied points in **all 4** scored seasons (+27.2 / +19.2 / +18.8 / +4.7 pts —
+positive throughout, though declining in magnitude, worth watching but not treated as a problem
+here since the direction never flipped). SELL was genuinely mixed: correctly negative
+(underperformed as expected) in 2022–2023, roughly neutral in 2024, and wrong-direction in 2025.
+Reported as-is, not smoothed over, per CLAUDE.md's no-hidden-failure rule; the model was not
+re-tuned against this result. `docs/TRACEABILITY.md`'s Market/EDGE row updated to point at both
+reports and summarize the current numbers instead of a stale prior claim ("3 of 4 seasons").
+
+## D42 — P0 security follow-up: no history rewrite performed (already decided in D35); added a durable CI guardrail instead
+
+`docs/CURRENT_STATE_AUDIT.md`'s P0 flagged the D35 leaked-key exposure as still live in Git
+history and asked for either a history rewrite with explicit user sign-off, or an explicit
+documented decision not to. Re-reading D35 itself: **that decision was already made** --
+the user was offered a full `git filter-repo` + force-push history purge at the time and
+**explicitly declined it**, on the reasoning that it is strictly more invasive than the file fix
+(rewrites shared history, orphans every existing clone) and still would not undo the actual
+exposure (only provider-side key rotation does that, which is outside what this repo can verify
+or perform). The user was told directly, more than once, to rotate both keys at FantasyPros and
+CFBD. Nothing in this session changes that picture or reopens that decision -- there is no new
+information here that would justify re-litigating a decision the user already made, and this
+autonomous session does not have standing to perform a destructive, irreversible, shared-history
+rewrite on its own initiative regardless. **No history rewrite was performed.**
+
+What *is* new and safe: a durable, non-destructive guardrail against a repeat. Added
+`scripts/check_no_secrets.py` (`make check-secrets`, now part of `make lint`, so CI enforces it
+on every push/PR): scans every git-tracked `*.env.example` file for a secret-shaped key
+(`*_KEY`/`*_SECRET`/`*_TOKEN`/`*_PASSWORD`/`*_CREDENTIAL`) with a non-empty value and fails the
+build if it finds one -- verified against a synthetic fixture that reproduces D35's exact
+pattern (real key committed to `.env.example`) and confirmed it catches it (exit 1). Unit-tested
+(`tests/unit/test_check_no_secrets.py`, 5 cases; one real bug in the first draft -- an anchored
+`.match()` where a `.search()`-on-suffix was needed -- was caught by these tests before commit,
+not after). Also fixed `.env.example`'s stale D33/D34 cross-reference (should have been D35) and
+its stale "Sleeper/FantasyPros/CFBD blocked by egress policy" note, both superseded by D36/D37.
+
+This closes the "was a decision even made" ambiguity the audit raised (yes, in D35) and adds a
+guardrail so the same failure mode can't recur silently. It does not and cannot verify whether
+the user has actually rotated the two leaked keys at their respective providers -- that remains
+outside what this repo can check, exactly as D35 already stated.
+
+## D43 — Model artifact persistence: the missing inference-only serving path (P1-3)
+
+`docs/CURRENT_STATE_AUDIT.md`'s biggest architectural finding: no model was ever saved to disk
+anywhere in this codebase (`grep` for `save_model`/`joblib.dump`/`pickle.dump` in `src/` found
+nothing) -- every prediction the API served, including `/rankings` (backed by
+`uncertainty_predictions`) and `/rookies` (backed by `rookie_predictions`), existed only because
+some CLI run had trained a model, scored it, and thrown the fitted object away in the same
+process. There was no way to refresh even one player's prediction without re-running the entire
+multi-season/multi-decade walk-forward training loop.
+
+Added `src/alpha_squad/models/persistence.py`: generic save/load for CatBoost regressors and
+classifiers (native `.cbm` format under `models/{model_version}/{model_name}_{position}.cbm`,
+gitignored like everything else under `models/`), plus a `model_registry` upsert carrying the
+artifact path and (for models whose serving story needs more than the point prediction, like
+uncertainty's conformal quantiles) the calibration residuals as JSON. New nullable columns
+`model_registry.artifact_path`/`calibration_residuals_json` via the standard `ADD_COLUMN_MIGRATIONS`
+path -- existing rows are unaffected.
+
+Wired into the two actual serving paths, both opt-in via a `persist` flag (default off for
+`run_uncertainty`'s own walk-forward *evaluation* callers -- no reason to write dozens of
+intermediate historical artifacts to disk just to compute backtest metrics -- default **on** for
+the CLI's real production commands):
+- `models/uncertainty/run.py::run_uncertainty(persist=True)` + new
+  `score_with_persisted_model(con, position, season, feature_rows)` -- loads the saved model and
+  calibration residuals, scores new feature rows, reconstructs the exact same p10-p90/top-12/24
+  output with no `.fit()` call.
+- `models/rookie/train.py::project_rookie_class(persist=True)` + new
+  `score_rookie_projection_with_persisted_model(con, position, draft_class, feature_rows)` --
+  same idea for the forward (unplayed-class) rookie projection; also fixed a pre-existing gap
+  where the classifier was never registered in `model_registry` at all (only the regressor was).
+
+CLI: `train uncertainty`/`train rookie-project` both default to `--persist` now (real usage
+should always leave a servable artifact behind); two new commands,
+`alpha-squad models rescore-uncertainty` and `alpha-squad models rescore-rookie-projection`,
+demonstrate the actual inference-only path end to end.
+
+**Verified against the real database, not just synthetic fixtures:** ran
+`alpha-squad train uncertainty --season-start 2025 --season-end 2025 --persist` (453 predictions,
+real coverage numbers written to `reports/calibration_report.md`), confirmed a real `.cbm` file
++ calibration residuals landed in `model_registry`, then ran
+`alpha-squad models rescore-uncertainty --position WR --season 2025 --player-ids <real player>`
+and got back the same point/p10/p90 the training run had stored, with no retraining. Same for
+rookies: ran `alpha-squad train rookie-project --draft-class 2026 --persist` (234 predictions,
+real 2026 class), then `alpha-squad models rescore-rookie-projection --position QB --draft-class
+2026 --player-ids <Fernando Mendoza's player_id>` and got back exactly 196.3 pts / 86% breakout
+-- the same numbers the training run produced, reproduced purely from the loaded artifact.
+
+Regression-tested (`tests/unit/test_uncertainty_run.py::TestPersistedModelInference`,
+`tests/unit/test_rookie_models.py::TestRookieProjectionPersistedInference`, 6 new cases): proves
+byte-exact reproduction of training-time predictions from the persisted artifact, and that
+scoring without a prior persist raises `FileNotFoundError` rather than failing silently or
+fabricating output.
+
+Scope decision: established-player season-level/weekly models (`models/established/`) were left
+unpersisted. Unlike uncertainty (`/rankings`) and the rookie projection (`/rookies`), nothing in
+the API currently serves established-model output live -- it feeds `evaluation_results` for
+reporting/comparison only -- so persisting it would add a servable artifact nothing reads yet.
+Flagged in `docs/IMPLEMENTATION_GAP_ANALYSIS.md` as a follow-up if/when `/rankings` is extended
+to read established-model output directly rather than only the uncertainty model's.
+
+## D44 — Wired waiver, trade, and roster-need into the UI (`docs/CURRENT_STATE_AUDIT.md`'s largest Application/interface gap)
+
+The audit found real, tested, live-verified league-decision logic for waiver/FAAB
+(`league/waiver.py::recommend_waiver_pickup`), dynasty trade (`league/trade.py::recommend_dynasty_trade`),
+and roster need (`league/roster.py::roster_need`), all exposed via FastAPI
+(`api/routers/league.py`) and already covered by `api.postWaiver`/`api.postTrade`/`api.getRosterNeed`
+in `web/src/api.ts` — but with no UI view calling any of the three. Only the draft form in
+`LeagueView.tsx` was reachable. Frontend-only change, per the assignment's hard constraint; nothing
+under `src/alpha_squad/` was touched.
+
+**Added `web/src/components/WaiverView.tsx`** (new): league selector (same
+`localStorage`/`listLeagues` pattern as `LeagueView.tsx`, sharing the same
+`alpha-squad:last-league-id` key so the selected league persists across tabs), season/week/player-id/
+roster-positions inputs, calls `api.postWaiver`. The result card labels `expected_value` as
+"Recommended FAAB bid" and `confidence` as "Meaningful-role (top-24) probability" rather than generic
+names, since that's what `post_waiver` actually maps them from (`league.py:142-156`) — a generic
+label would have misrepresented what the number means.
+
+**Added `web/src/components/TradeView.tsx`** (new): same conventions, calls `api.postTrade`. Read
+`league/trade.py::recommend_dynasty_trade`'s real signature first — it evaluates one player's
+age-adjusted dynasty value/EDGE action, not a multi-player trade package — so the form takes a single
+`player_id`, not two "sides" of a trade; the panel's copy says so explicitly rather than implying a
+capability the backend doesn't have. Noticed but did **not** fix (frontend-only constraint): 
+`recommend_dynasty_trade`'s `TradeRecommendation.action` (BUY/HOLD/SELL/WATCH) is computed but never
+copied into `DecisionResponse` by `post_trade` (`league.py:159-184`) — only `player_id`,
+`age_adjusted_value`, and `reasons` cross the API boundary. The action is usually still recoverable
+from the `reasons` text (`market/edge.py`'s gating function prefixes the winning branch's reason with
+`"BUY:"`/`"SELL:"`), but a client that wanted the clean enum value cannot get one today. Flagging
+this as a real, minor backend gap rather than fixing it or fabricating an action badge client-side
+from parsed text.
+
+**`LeagueView.tsx`**: added a "Roster need" section directly under the league-context card, calling
+`api.getRosterNeed(leagueId, rosterPositions)` on a new "Check roster need" button. Reused the
+existing `rosterPositions` input (moved it out of the draft-recommendation controls into this shared
+section, since both the roster-need call and the draft call already read the same state variable) —
+per the assignment, deliberately not duplicated. Renders `need` as a small position/score table.
+Confirmed the draft recommendation still works unchanged after the input's relocation (same
+`recommend_draft_pick` call, same state variable, just moved which JSX block renders the `<input>`).
+
+**`App.tsx`**: registered "Waiver" and "Trade" tabs in `TABS`, same pattern as the existing six.
+
+**Verification.** `npm run build` (`tsc -b && vite build`, the real typecheck per the prior session's
+process note above) and `npm run lint` (oxlint) both clean — zero errors; lint's only output is four
+pre-existing `react/set-state-in-effect` warnings in files this change didn't touch
+(EdgeView/RankingsView/EvidenceView/RookiesView), at 0 exit code.
+
+Then actually drove it: started the real backend (`make serve`, DuckDB copied from the already-
+populated `data/alpha_squad.duckdb`, since this session ran in a fresh worktree with no prior
+ingest) and the real frontend (`npm run dev`), and used Playwright (Chromium at
+`/opt/pw-browsers`, installed into an ephemeral `uv run --with playwright` environment since neither
+the Python nor the Node project had the `playwright` package itself, only the browser binary) against
+the real `dilworth` Sleeper league:
+
+- **Roster need** (`QB,RB,RB,WR,WR,TE`): rendered `QB 0.60, RB 0.60, WR 0.60, TE 0.60, K 1.00, DEF
+  1.00` — real numbers from `roster_need`, not placeholders.
+- **Draft** (season 2025, next pick #10): still recommends `asq_583ef9bed022a35b` with VORP/roster-
+  fit/confidence/survival-probability reasons, unchanged after the input relocation.
+- **Waiver** (season 2025, week 10, `asq_567a2eee58dd0e15` = Derrick Henry, roster `QB,RB`):
+  recommended FAAB bid **$26.66**, meaningful-role probability **0.88**, with real reasons ("marginal
+  value +65.5 pts above RB replacement (139.7)", "competing-bid likelihood 72%", "dynasty value (2QB)
+  1237", etc.).
+- **Trade** (season 2025, `asq_567a2eee58dd0e15`, ecr_type `rsf`): age-adjusted dynasty value **371**,
+  with real reasons including "age 32.6 at RB: age-curve multiplier 0.30 (documented heuristic ...
+  D25)" and "current dynasty value (2QB): 1237".
+
+No console errors on any tab. All four decisions were also confirmed by direct `curl` against the
+running API before and independent of the browser pass, so the browser result reflects the real
+pipeline, not a UI-only mock.
+
+`make test`: **259 passed, 42 deselected** — identical to `docs/CURRENT_STATE_AUDIT.md` §21's
+directly-reproduced baseline (that section's number, not the differing "267" figure quoted second-hand
+in this session's task brief, which does not match anything actually reproducible in this repo at
+this commit). Confirms zero drift under `src/alpha_squad/`, as required — this was a frontend-only
+change.
+
+`docs/TRACEABILITY.md`'s Application/interface section and `docs/CURRENT_STATE_AUDIT.md` §5/§20
+updated to cite this work and retire the PARTIAL status on the two rows this closed; §20 also notes
+the one related gap this did *not* close (a simulation-based team-outlook view — no such endpoint
+exists on either side of the API boundary today, a separate and larger piece of work).
+
+## D45 — Future-draft-pick valuation in the trade engine (P2)
+
+`docs/CURRENT_STATE_AUDIT.md`'s gap: `LeagueContext.future_picks` exists in the schema but
+`trade.py::recommend_dynasty_trade` never read it -- no future-pick valuation logic existed
+anywhere in `league/`. Checked `future_picks` itself first before wiring it in: it is a
+free-form dict that is **always `{}`** in this deployment -- `sleeper_context.py` hardcodes
+`future_picks={}` (no traded-picks Sleeper endpoint is called), and the static `target_league.yaml`
+never populates it either. Wiring new logic to read an always-empty field would be dead code,
+untestable against real data, and would silently do nothing for every real league this
+deployment actually has. So pick assets are taken as **explicit caller-supplied input** instead
+(the same pattern `draft.py`'s `available_player_ids` already uses instead of inferring
+availability from context) -- real and testable today, and `future_picks` itself is left for a
+follow-up once a real traded-picks data source exists to feed it.
+
+Added `pick_value(round_, teams, pick_in_round, years_out)` (`league/trade.py`): a documented
+heuristic, not fit from data -- there is no real fantasy-rookie-draft-slot outcome dataset in
+this environment to fit one from (NFL draft position is a different thing from fantasy
+startup/rookie-draft position, and nothing here provides the latter). Same treatment as the
+pre-existing age curve (D25): disclosed as an assumption in every reason string, not presented
+as validated. The value scale is anchored to real observed data, though: `dynasty_values.value_2qb`
+runs 0-10232 (median 6) in this deployment, and a real 1st-overall rookie-class outcome has
+reached 5767-8538 across the 2022-2025 classes -- `pick_value`'s round-1 base (2200) sits well
+below that realized ceiling (which requires the pick to actually hit) and well above the median
+outcome (which includes every bust), an explicit expected-value-under-uncertainty compromise.
+Within-round slot and years-out both decay linearly/geometrically off that base.
+
+Added `evaluate_trade_package(con, side_a, side_b, season, teams, ecr_type)`: sums real
+age-adjusted dynasty value (unchanged `recommend_dynasty_trade` logic) for every player plus
+real pick value for every pick asset on each side, and reports which side comes out ahead (or
+"even" within a 10% threshold, so a razor-thin, not-actually-meaningful edge isn't reported as
+a real recommendation). `POST /league/{id}/trade-package` and `alpha-squad league trade-package`
+expose it. Verified against the real database: a 1.01 rookie pick + a real 0-value player
+correctly valued at 2200 vs. a real elite dynasty asset (10232) -- favors the elite asset by a
+wide, sensible margin, not a coin flip.
+
+Regression-tested (`tests/unit/test_league.py::TestPickValue`/`TestEvaluateTradePackage`, 9 new
+cases) and API-tested (`tests/unit/test_api.py`, 2 new cases) -- 284 offline tests passing
+(up from 273).
+
+## D46 — Evidence reaches served rankings: `GET /rankings/weekly` (closes P4 and P5 together)
+
+`docs/CURRENT_STATE_AUDIT.md` flagged two separate-looking gaps that turned out to be the same
+underlying one. Re-checked the architectural intent before assuming either resolution branch of
+P4's instructions applied: PRODUCT_SPEC.md's Evidence section says "current information updates
+the prior; it does not automatically override it," and ARCHITECTURE.md's pipeline diagram places
+Evidence between {Projection ML, Rookie ML, Market} and Ensemble/EDGE, upstream of "Universal
+Player Intelligence" -- i.e. evidence is supposed to reach what gets served, not just gate EDGE.
+So this is the "implement it" branch, not the "document evidence-veto-only by design" branch.
+
+Investigating why it didn't already: M9's real bounded (±15%) evidence adjustment
+(`evidence/prior_update.py::apply_evidence_adjustment`/`run_prior_update`) operates on
+`weekly_projection_snapshot` -- M5's **in-season weekly** established-ML projections -- writing
+`projection_deltas`, never mutating the base. That's the right grain: evidence detectors only
+ever produce in-season events (D23), so a weekly cadence is exactly where evidence timing
+actually lines up, unlike the season-level preseason uncertainty model behind `/rankings`
+(D23's real, structural timing mismatch there stands as documented). But `weekly_projection_snapshot`
+had **never been populated in this deployment** -- `train established` (the weekly command,
+distinct from `train established-season`) had never been run -- so `projection_deltas` had
+nothing to adjust regardless of how good the evidence-adjustment code was, and no endpoint
+served either table as a ranked view. This is the same root cause as P5's "in-season/ROS
+intelligence" gap: not a missing modeling capability (the walk-forward-safe weekly pipeline
+already existed and is real), but a missing production run plus a missing serving endpoint.
+
+Fix: ran `alpha-squad train established --season-start 2025 --season-end 2025` against the real
+database (6,037 real weekly predictions, 2025 weeks 1-19), then `alpha-squad evidence
+update-projections --season 2025 --week 8` (291 real deltas, 95 materially adjusted --
+e.g. Ja'Marr Chase +13.5% on a real target-share spike, Patrick Mahomes -13.5% on a real
+snap-share drop, Mac Jones +13.5% on a real teammate-injury opportunity). Added
+`GET /rankings/weekly` (`api/routers/rankings.py`) -- a direct LEFT JOIN of
+`weekly_projection_snapshot`/`projection_deltas`, **ordered by the evidence-adjusted value**,
+falling back to the unadjusted base for players with no evidence that week. Added the
+`RankingsView.tsx` "Weekly (evidence-adjusted)" mode showing base/adjusted/change/reason per
+player -- a user can now literally answer "why did this player's ranking change this week?"
+from the UI, which PRODUCT_SPEC.md's Evidence section calls for directly.
+
+Verified in a real browser (Playwright, not just the API): started the real backend + frontend,
+navigated to the new mode, and confirmed a real row (Patrick Mahomes, -13.5%, real reason text)
+rendered exactly as stored, no console errors.
+
+Regression-tested (`tests/unit/test_api.py::TestWeeklyRankingsSurfaceEvidenceAdjustment`, 3 new
+cases, including one proving the sort order uses the adjusted value and not the base value --
+the whole point of this change). 287 offline tests passing (up from 284).
+
+## D47 — Real task decomposition/dependency discovery for the orchestrator (P7)
+
+`docs/CURRENT_STATE_AUDIT.md`'s honest finding: "the DAG shape is fixed/declared, not
+dynamically planned" -- `orchestrator.py::run_pipeline` already does real dependency resolution,
+retry/backoff, and genuine concurrent dispatch (unit-tested, unchanged, not touched here), but
+every caller had to hand-type a `list[Task]` with `depends_on` edges themselves; the only
+existing example (`orchestrate demo`) was a fixed 2-task demo. Per the P7 instructions this was
+scoped to work on ("only after the more important product/data/model gaps are addressed" --
+true after D41-D46) and explicitly NOT to replace the scheduler with a new framework.
+
+Added `agents/planner.py::plan_full_refresh`: given a high-level goal (season range, which
+optional stages to include), builds the real multi-task graph -- selecting which of the 8
+functional agents in `AGENT_REGISTRY` apply (AGENT_CONTRACTS.md's "select appropriate agents")
+and wiring each one's `depends_on` to the real upstream task it actually needs
+(AGENT_CONTRACTS.md's "dependencies are explicit"), read directly off what each agent's
+`registry.py` implementation queries/writes rather than guessed -- e.g. `market_edge` depends on
+`projection_ml` because `market/edge.py`'s EDGE build reads `uncertainty_predictions`, which
+only `projection_ml`'s `run_uncertainty` call writes; `rookie_ml` depends only on `identity`
+(not on `projection_ml`), which is what makes it genuinely eligible to run concurrently with
+projection rather than being forced to wait on it. Also auto-schedules one `evaluation_qa`
+review task per position after `projection_ml` (AGENT_CONTRACTS.md's "invoke critique") --
+previously QA review was a fully separate, never-auto-invoked path.
+
+This is explicitly declarative dependency-graph construction, not an AI planner and not a new
+execution model -- `run_pipeline` itself is byte-for-byte unchanged. Disclosed limitation, not
+silently dropped: disagreement detection (`agents/disagreement.py`) is not yet auto-scheduled as
+a dependent task -- it remains the separate `orchestrate disagreements` command, since wiring it
+in correctly (it needs both `projection_ml` and `market_edge`'s *committed* output, and its own
+result shape doesn't fit the `Task`/`Result` contract without changes to `disagreement.py`
+itself) was judged a real follow-up rather than something to do half-correctly under this pass.
+
+Added `alpha-squad orchestrate run` (planner-powered; `orchestrate demo` untouched, still the
+original minimal 2-task example). **Verified against the real database**, not just stub agents:
+`alpha-squad orchestrate run --run-id planner-verify-1 --season-start 2025 --season-end 2025
+--min-train-season 2020 --no-include-evidence --no-include-qa` completed all 5 real tasks
+(data → identity → {rookie, projection} → market-edge) -- the completion order in the printed
+report shows `rookie` finishing before `projection` despite `projection` being declared first,
+confirming they genuinely raced concurrently rather than running in declaration order, and
+`market-edge` correctly only started after `projection` had actually committed
+`uncertainty_predictions`.
+
+Regression- and integration-tested (`tests/unit/test_planner.py`, 12 new cases): structural
+tests on the generated graph's edges, plus tests that actually run the generated plan through
+the real `run_pipeline` with stub agents (same pattern `test_agents.py`'s existing orchestrator
+tests use) -- including one proving `rookie_ml`/`projection_ml` start within 0.2s of each other
+(genuine concurrency, not accidentally-sequential) and one proving `market_edge` never starts
+before `projection_ml` completes. 299 offline tests passing (up from 287).
+
+## D48 — Auto-detect the newest season with real data (`GET /seasons/latest`)
+
+Six frontend views (`RankingsView` x2, `EdgeView`, `EvidenceView`, `LeagueView`, `TradeView`,
+`WaiverView`) hardcoded a season default (mostly `2025`, one inconsistently `2024`) -- the same
+failure mode D40 already fixed once for the rookie-class default (a hardcoded value silently
+going stale every season rollover; `EvidenceView`'s already-inconsistent `2024` while everything
+else said `2025` was itself a small real symptom of this). Added `GET /seasons/latest`
+(`api/routers/seasons.py`) returning the real max season per relevant table
+(`uncertainty_predictions`/`weekly_projection_snapshot`/`edge_snapshot`/`evidence_events`), and
+one shared frontend hook (`web/src/hooks.ts::useLatestSeason`) instead of six components each
+re-implementing the same fetch-on-mount-with-fallback (ACCEPTANCE_CRITERIA.md: no duplicated
+logic). Regression-tested (`tests/unit/test_api.py::TestLatestSeasons`, 2 new cases, including
+the empty-database case returning null rather than erroring).
+
+**A correction, recorded for the record rather than silently edited away.** While verifying this
+live, `data/alpha_squad.duckdb` briefly read back as completely empty (every table 0 rows) even
+though this same session had just confirmed real data in it multiple times over (25,052 real
+players from an `orchestrate run` identity build, 453 real uncertainty predictions, 291 real
+evidence deltas -- all still accurate as historical records of what those runs produced, D43/D46/
+D47). I investigated at the time (ruled out a destructive `DELETE`/`TRUNCATE` anywhere in `src/`,
+a stray `.wal` file, an un-isolated test `Settings()` call, orphaned processes, a `TMPDIR`/
+symlink misconfiguration) and, unable to find a code-level cause, wrote an entry here concluding
+"unexplained data loss." That conclusion was wrong: the harness reported a container restart
+immediately afterward, and re-checking `data/alpha_squad.duckdb` right after confirmed all of it
+-- 25,053 real players, 26,816 player-seasons, 2,271 uncertainty predictions, 1,543 EDGE rows,
+19,061 evidence events, 684 dynasty values -- fully intact. The empty read was a transient
+artifact of the restart (the persistent volume momentarily unavailable/remounting), not real data
+loss, and definitely not something this session's code or commands caused. Leaving the original
+"unexplained data loss" conclusion in this log would have been an inaccurate permanent record;
+correcting it here (rather than deleting the paragraph, since docs/DECISIONS.md is append-only)
+is what CLAUDE.md's "no untested claims" standard requires once better evidence exists.
+
+## D48 addendum — Made `GET /players` genuinely reachable (`PlayerPicker`), and a real bug found doing it: `<label>` around a nested interactive picker resets its own state on click
+
+A dead-code check (Explore sub-agent, application-hardening pass) found `GET /players`/
+`GET /players/{id}` had a working backend route *and* a working `api.ts` client wrapper
+(`listPlayers`/`getPlayer`) that nothing in the UI ever called -- every form asking for a
+`player_id` (Waiver, Trade) made a user type the raw opaque canonical id (`asq_<hash>`) by hand,
+against a placeholder (`"00-0012345"`) that did not even match that format. `GET /provenance/
+{entity_id}` and `POST /league/{id}/trade-package` were found unreachable from the UI too, but
+`trade-package` is real and CLI-live (D45, not dead, just not yet UI-exposed -- a smaller, disclosed
+instance of the same "built but unwired" pattern D44 already fixed for waiver/trade/roster-need),
+and `provenance` is closer to `/rankings/weekly`'s "why did this change" story than to a delete
+candidate. Rather than deleting a working, spec-relevant capability (`players` search) or leaving
+it permanently dead, wired it in: `web/src/components/PlayerPicker.tsx`, a real name-search
+autocomplete (debounced `GET /players?q=`) wired into `WaiverView`/`TradeView`'s player fields.
+
+**A real bug found and fixed while verifying it live** (not a synthetic test -- caught by driving
+the actual app in Playwright): wrapping `<PlayerPicker>` in a real HTML `<label>Player
+<PlayerPicker .../></label>` (matching every other `.controls` field's existing pattern)
+caused clicking a search result inside the picker's own dropdown to silently reset the picker's
+selection state back to empty on every pick, immediately after correctly selecting it -- verified
+via a render-logging build showing the correct `{selected: "asq_...", value: "asq_..."}` render
+immediately followed by `{selected: undefined, value: ""}` with no user action in between. Root
+cause: HTML's implicit label-click-forwarding -- clicking anywhere inside a `<label>` also
+activates/refocuses the first descendant form control, which raced against `PlayerPicker`'s own
+`onClick`-driven state update. `PlayerPicker` nests an `<input>` plus a clickable `<li>` list,
+exactly the "multiple/nested interactive elements inside one label" pattern the HTML spec warns
+against. Fixed by wrapping the field in a plain `<span className="picker-field">` (matching
+`.controls label`'s layout via CSS instead of the `<label>` element itself) rather than papering
+over it with `stopPropagation()` inside the picker.
+
+**Verified end-to-end in a real browser** (Playwright, real backend + frontend, real data):
+searched "Mahomes", picked the real result, submitted a real waiver recommendation for week 8 --
+got back a real FAAB bid ($17.14), real meaningful-role probability (0.98), and real reasons
+(marginal value, roster fit, competing-bid likelihood, dynasty value), with a real decision
+recorded (`dec_914f2d93508d4252`). 301 offline tests unaffected (frontend-only change; no new
+backend surface, `GET /players` already existed and was already tested).
+
+## D49 — Wire the Monte Carlo simulation engine into the API/UI (closes P1-4); found and fixed the real reason it always reported "not enough history"
+
+`models/simulation/correlated.py::simulate_team_season` was real, tested, and CLI-only
+(`alpha-squad simulate team-season`) -- the last of the four "built but invisible" capabilities
+this hardening pass set out to close (waiver/trade/roster-need closed D44/D48; this was the
+remainder). Added `POST /simulate/team-season` (`api/routers/simulate.py`) wrapping the exact
+same function the CLI calls -- no parallel simulation logic -- persisting via the existing
+`record_simulation_run` and enriching player rows with `display_name` via a `players` join, the
+same pattern `edge.py` already uses. Frontend: `SimulationView.tsx`, a new "Simulation" tab
+(team/season/n_simulations inputs, a "Run simulation" button since a real Monte Carlo run is
+real compute, not a cheap read -- POST, not GET, matching the CLI's own one-shot-command
+treatment of it). `tests/unit/test_api.py::TestSimulation`, 2 new cases (a real synthetic-history
+run proving the endpoint round-trips through `simulate_team_season` and persists a
+`team_simulation_runs` row; a 422 for insufficient history rather than a fabricated result).
+
+**A real, separate gap found verifying this against the live database, not a synthetic test:**
+every team/season combination reported "not enough real history" regardless of team, because
+`team_week_points` (the real final-score table `_team_environment_history`'s covariance draw is
+calibrated against) was completely empty in this deployment -- 0 rows. `models/simulation/
+team_scores.py::build_team_week_points` (real, tested against a mocked pbp snapshot in
+`tests/integration/test_simulation_live.py`) existed but had never been wired to any CLI command;
+an earlier session's D8/D29 note describes backfilling it, but that was a one-off ad-hoc
+invocation, not a reproducible step, and did not survive this database being rebuilt since (D39's
+full pipeline rebuild ran `sources ingest`/`identity build`/`features build` but had no step that
+would have populated it). This violates CLAUDE.md's "reproducible from `alpha-squad ingest`"
+standard for a real, load-bearing table, not just a preseason cosmetic gap -- so fixed the root
+cause rather than working around it: added `alpha-squad features build-team-scores` (a thin CLI
+wrapper around the existing function, mirroring `build-college-usage`'s pattern) and a
+`make team-scores` target between `features` and `market` in both the `Makefile` and `README.md`'s
+runbook. Ran it for real: `team_week_points` now has 7,326 rows (season 2012-2025), exactly
+matching `team_week_stats`'s row count for the same real pbp-derived source.
+
+**Verified end-to-end, twice:** CLI (`alpha-squad simulate team-season --team KC --season 2025
+--n-simulations 500`) returned a real result -- mean team points 433.1 (std 41.3), qb_wr1_correlation
+0.345 -- over real 2012-2024 KC history. Then the same thing through the running app (Playwright,
+real backend + frontend, real data): searched nothing (team is a free-text abbreviation, no
+picker needed for 32 known values), ran KC/2025/1000 simulations, got back real named players
+(Patrick Mahomes 354.6 mean QB points, Travis Kelce 222.8 TE, Rashee Rice 172.6 WR, ...), a real
+QB/WR1 stack correlation (0.335), and a real persisted run id (`sim_8cd9bd68d07e31c8`) --
+screenshot-verified. 303 offline tests pass (301 + 2 new); `make lint` clean.
+
+**Scope note:** this closes P1-4, the last item in `docs/IMPLEMENTATION_GAP_ANALYSIS.md`'s
+"built but invisible" list. What's left in that file after this (P2-3 network-suite-in-CI,
+P3-1 CLAUDE.md's stale data-source note, P3-2 expert-accuracy weighting) are all disclosed as
+low-risk/low-urgency, and P0-1 needs no further code (a user conversation about key rotation,
+not engineering work) -- see that file's own "Notes on sequencing" section, updated alongside
+this entry.
+
+## D50 — Refresh CLAUDE.md's stale data-source-status note (closes P3-1)
+
+Pure documentation, no code risk, exactly as flagged in D49's "Notes on sequencing." CLAUDE.md's
+`## Data` section still described Sleeper/FantasyPros/CFBD as blocked by this environment's
+egress policy (citing only D3, the original 2026-08-20 probe) -- stale since D31 (2026-08-22, the
+policy itself changed) and D36/D37 (2026-08-23, `CFBD_API_KEY`/`FANTASYPROS_API_KEY` supplied and
+confirmed live). Re-verified with a fresh `alpha-squad sources status` run before editing (not
+assumed from old docs): all three report `AVAILABLE` right now, alongside every nflverse/
+DynastyProcess/cfbfastR/ffopportunity dataset. Only KeepTradeCut (no formal adapter, a site not
+an API) and the ESPN public API (an app-level 403, unused either way) remain unreachable, and
+neither is required by PRODUCT_SPEC.md's core outputs. Rewrote the note to match
+`docs/DATA_SOURCES.md`'s current narrative, cite D31/D36-D38 alongside D3, and keep the
+"re-verify with `sources status`" instruction (still good practice, since the policy has already
+changed once and may again). No code changed; 303 offline tests and lint unaffected.
+
+## D51 — Expert-accuracy weighting: measured with real live data, confirmed LIMITED (closes P3-2)
+
+`ACCEPTANCE_CRITERIA.md`: "Expert weighting uses demonstrated accuracy where data permits."
+`PRODUCT_SPEC.md`'s Market section calls for "expert rankings weighted by demonstrated accuracy."
+D4 (this project's first session) marked this LIMITED on the reasoning that individual expert
+identity requires the (then-blocked) FantasyPros API. That blocker is gone (D37) -- **re-checked
+with a real live call against the paid API this session**: `consensus_rankings` returns
+`rank_ecr`/`rank_min`/`rank_max`/`rank_ave`/`rank_std`/`total_experts` per player, never a
+per-expert breakdown or expert identity. Confirmed empirically, not assumed: FantasyPros's public
+API tier (even paid, even live) does not expose which named expert contributed which rank, only
+consensus statistics -- so true per-expert weighting remains genuinely unbuildable with data this
+project can access, not merely unbuilt.
+
+`market_snapshot.ecr_best`/`ecr_worst` (real per-player min/max rank across the anonymous experts
+behind DynastyProcess's historical ECR series) is the coarser signal "where data permits" actually
+allows: how much the experts contributing to a consensus rank agree with each other. Rather than
+assume this dispersion doesn't predict anything (or assume it does and wire it in), **measured
+it** against real outcomes, reusing this project's own already-tested infrastructure end to end:
+for every preseason `rsf` snapshot with a real season to compare against (2022-2025, n=1,925 real
+player-seasons), computed the real `ecr_worst - ecr_best` spread and the real relative error
+between `_market_implied_points_curve`'s (already-tested, D8/M8) implied points and real
+`player_season_stats.total_fantasy_points_ppr`, then split each rank tercile at its median spread
+and compared tight-consensus vs. wide-consensus relative error (Mann-Whitney U):
+
+| Rank tier | n | tight-consensus mean rel. error | wide-consensus mean rel. error | p-value |
+|---|---|---|---|---|
+| Top 50 | 200 | 0.294 | 0.296 | 0.804 (no effect) |
+| 51-150 | 397 | 0.342 | 0.424 | 0.006 (tight is *more* accurate) |
+| 151+ | 1,323 | 0.753 | 0.671 | <0.001 (tight is *less* accurate) |
+
+The raw pooled spearman(spread, relative error) looked promising at first (-0.34) but that number
+is confounded by rank itself (both spread and relative error independently correlate with rank) --
+the rank-tier-controlled comparison above is the real test, and it **reverses sign** between the
+51-150 and 151+ tiers. There is no consistent, monotonic, generalizable relationship between
+expert-consensus tightness and market accuracy in the real data. Applying the same standard this
+project already committed to for exactly this situation (D39's pre-registered "measure, and if the
+signal doesn't hold up, say so rather than force it in"): **not adopted.** No change to
+`edge.py`'s market-rank computation or gating logic -- the existing hard rule (rank AND points
+edge must agree, D21) is untouched, and no unreliable weighting was added on top of it.
+
+**Reproduction:** for each season with both a preseason `rsf` `market_snapshot` and
+`player_season_stats`, join on `player_id`, compute `ecr_worst - ecr_best` and
+`abs(actual - curve.predict(ecr_rank)) / max(curve.predict(ecr_rank), 20)` using
+`market/edge.py::_market_implied_points_curve`, then split by rank tercile at the median spread
+within each tercile and compare with `scipy.stats.mannwhitneyu`. No new permanent module was
+added for this -- unlike D39's rookie ablation, there is no adopted feature to build ongoing
+comparison infrastructure around, and adding one for a rejected hypothesis would be exactly the
+unnecessary complexity CLAUDE.md's engineering standards warn against. `docs/TRACEABILITY.md`
+updated to mark this criterion LIMITED with this empirical justification, replacing D4's original
+data-availability-only reasoning. No code changed; 303 offline tests and lint unaffected.
+
+## D52 — Final validation: re-ran the full live/network integration suite after the D41-D51 pass
+
+Section 17 of this hardening pass's directive calls for re-running live/network integration
+tests as part of final validation, not just trusting that nothing broke. None of D41-D51 touched
+a source adapter, but this hadn't been directly re-confirmed against real external services since
+before this pass started, so ran it for real rather than assuming: `make test-network` (`pytest -m
+network`, real calls to nflverse/DynastyProcess/cfbfastR/ffopportunity/Sleeper/FantasyPros/CFBD,
+no mocks) -- **41 passed, 1 skipped, 0 failed**, ~25 minutes. The one skip is
+`test_sleeper_league_context_live.py`'s test needing a specific real league config not present in
+this environment, an expected/pre-existing skip, not a new failure. This reconfirms every
+live-source claim made across D41-D51 (Sleeper/FantasyPros/CFBD availability, the real KC 2025
+simulation, real league workflows, etc.) against actual external services at the end of the pass,
+not just at the moment each was first built. Closes the "run relevant live integration tests"
+final-validation step; no code changed.
+
+## D53 — User-facing productization: connect a real league, get real recommendations, with explanations
+
+M12/M14 (D41-D52) had already built the intelligence and exposed most of it behind API endpoints,
+but there was no coherent path for an actual fantasy manager to connect their real league and be
+told what to do — the audit's own framing ("substantial but partially inert"). This phase's
+explicit brief: **connect, understand, analyze, decide, explain** — and "your job is to CONNECT
+AND PRODUCTIZE," not rebuild. Every number in every new view below is a direct read of an
+already-tested M1-M13 table or a direct call into an already-tested M10 recommendation function;
+no new scoring/decision logic was written anywhere in this pass, frontend or backend.
+
+**New real capability, not previously reachable by any user:**
+- **Runtime league onboarding** (`POST /league/register`, `league/context.py::register_sleeper_league`):
+  validates a Sleeper league is real and reachable (a live fetch) before persisting it to a new
+  `registered_leagues` DB table, distinct from the curated `registry.yaml` set — a league
+  connected this way is immediately usable everywhere else in the app. `ConnectLeaguePanel.tsx` is
+  the UI for this; `alpha-squad league register-sleeper` is the CLI counterpart.
+- **Real roster import** (`league/roster_import.py::fetch_sleeper_rosters`): pulls real
+  `/league/{id}/rosters` and `/league/{id}/users` from Sleeper (two endpoints added to
+  `sources/sleeper.py`'s `_ENDPOINTS`), bridges Sleeper's numeric player ids to canonical
+  `asq_<hash>` ids via the existing `player_id_map` crosswalk, and persists a snapshot. Backs
+  `GET /league/{id}/teams` and every roster-aware endpoint below.
+- **My Team / roster intelligence** (`league/roster_intelligence.py::build_my_team_report`,
+  `GET /league/{id}/my-team`): the real roster joined with real uncertainty/EDGE/dynasty-value per
+  player, with starter/bench computed by reusing M10's `compute_league_starters` scoped to a
+  synthetic one-team league — the exact same value-based-drafting algorithm the whole-league
+  calculation uses, applied to just the user's own roster rather than a second implementation.
+- **Drop candidates** (`recommend_drops`, `GET /league/{id}/drop-candidates`): worst-VORP bench
+  players, structurally excluding anyone the same M10 algorithm marked a starter.
+- **Action Center** (`build_action_center`, `GET /league/{id}/actions`) — the phase's own framing
+  of "most important user-facing feature": ranked ADD (FAAB dollars)/DROP (VORP)/TRADE (rank-edge)
+  lists. Deliberately three separately-ranked lists, not one fabricated cross-type score — ADD,
+  DROP and TRADE signals are different units (dollars, replacement value, rank movement) and
+  forcing them onto one scale would be exactly the untested precision CLAUDE.md warns against.
+- **Batch waiver ranking** (`rank_waiver_targets`, `GET /league/{id}/waiver-targets`): the same
+  `recommend_waiver_pickup` M10 function run across a VORP-prefiltered candidate pool
+  (`DEFAULT_WAIVER_PREFILTER_N = 80`) instead of one player at a time, so the Action Center's ADD
+  list and the standalone Waiver tab are both real ranked output, not a single-player tool
+  pretending to be a list.
+- **Player Detail** (`GET /players/{id}/detail`, `PlayerDetailView.tsx`): the phase's explicit
+  requirement to distinguish **universal player value** (projection/uncertainty/market/EDGE/
+  evidence/rookie info — the same everywhere) from **my-league value** (dynasty trade action,
+  roster fit — genuinely different per league for the same player) in one view, both computed by
+  existing endpoints/functions and merged, not recomputed.
+- **Draft view** (`DraftView.tsx`), **Dashboard** (`DashboardView.tsx`), and an upgraded **Trade**
+  view (`TradeView.tsx`) adding real multi-asset package evaluation (`evaluate_trade_package`,
+  D45) with an ACCEPT/REJECT/CONSIDER verdict phrased from the user's chosen side — all thin
+  presentation over existing endpoints; `available_player_ids` in `DraftView.tsx` is the one
+  client-side computation in this whole pass, and it is pure set-subtraction (already-ranked
+  players minus already-drafted), not a decision.
+- A shared `LeagueProvider`/`useLeague()` React context (league id, roster id, real team list,
+  localStorage-persisted per league) replaces every view independently holding its own league
+  dropdown, and a `PlayerSelectionProvider`/`PlayerLink` context lets any player name anywhere in
+  the app jump straight to its Player Detail tab.
+
+**Five real bugs found by exercising the real app end to end (Playwright against the real backend
+and a real Sleeper league, `boys_of_fall`), not by code review — every one reproduced, root-caused,
+fixed, and covered by a regression test verified to fail without the fix:**
+
+1. **`init_db` (DDL migrations) ran on every request**, not once. `api/deps.py::get_db()` called
+   `init_db(con)` per-request; two concurrent requests racing on `ALTER TABLE` raised a real
+   `TransactionException: write-write conflict`. Fixed by moving `init_db()` into a new FastAPI
+   `lifespan` (`api/app.py`) that runs it exactly once at startup.
+2. **`build_action_center` re-fetched the live Sleeper roster 3-4 times per request** — its three
+   sub-calls (`rank_waiver_targets`, `recommend_drops`, `build_my_team_report`) each independently
+   called `teams_for_league`. Fixed by threading an optional `teams: list[TeamRoster] | None`
+   parameter through all three so `build_action_center` fetches once and passes it down;
+   regression test asserts exactly one `/rosters` fetch.
+3. **`duckdb.connect()` itself is not safe to call concurrently against the same file** — two
+   requests arriving close together raised a real `BinderException: Unique file handle conflict`.
+   Fixed by opening one shared base connection at lifespan startup and deriving per-request
+   connections via `base_connection.cursor()` — DuckDB's own documented-safe way to hand out an
+   independent connection per request from one already-open database, confirmed via
+   `tests/unit/test_api_concurrency.py`'s `ThreadPoolExecutor`-driven regression tests against a
+   real `TestClient(app)` lifespan (not the `dependency_overrides` pattern the rest of the API
+   suite uses, which never exercises this code path at all).
+4. **`sleeper.py`'s league-scoped snapshot filenames omitted every param** — `league`/
+   `league_rosters`/`league_drafts`/`league_users` all wrote to `captured_at=<date>/<dataset>.json`
+   with no `league_id` in the path, so registering a second real Sleeper league collided with the
+   first's file on disk. The exact same class of bug had already been fixed in `cfbd.py`/
+   `fantasypros.py`/`file_release.py` (an earlier `param_suffix` fix); `sleeper.py` was missed
+   because its league_id-taking endpoints were added afterward. Found live as a `JSONDecodeError`
+   reading a snapshot the registration flow had just corrupted; fixed with the same
+   `param_suffix` pattern; regression test in `tests/contracts/test_source_adapters.py`.
+5. **`dest.write_bytes(resp.content)` in `sleeper.py`/`cfbd.py`/`fantasypros.py` is not atomic** —
+   it truncates the destination file in place, so a concurrent read can observe a torn (empty or
+   partial) file mid-write. This matters even after fixing #4, because two different registered
+   `league_id`s can point at the *same* underlying real Sleeper league (identical snapshot key),
+   so a concurrent read genuinely does race a concurrent write for that key in normal use — still
+   observed live as `JSONDecodeError: Expecting value: line 1 column 1` after #4 was fixed.
+   Reproduced directly: hammering the old `dest.write_bytes()` pattern with concurrent
+   writer/reader threads over ~2,000 reads against one shared 5KB file produced **5,292 torn
+   reads**; the same test against the fix produced zero. Fixed with a new
+   `sources/base.py::write_bytes_atomic()` (write to a uniquely-named temp file, then
+   `Path.replace()` — atomic on the same filesystem) — the pattern `sources/http.py`'s
+   `http_get_to_file` already used, now applied to the three adapters that instead wrote in
+   place. Regression test in `tests/unit/test_source_base.py`, verified to fail reliably (every
+   run) against the old pattern and pass reliably against the fix.
+6. **A UI-only bug**, not a backend one: `ConnectLeaguePanel.tsx` called `onConnected()` (which
+   sets `showConnect=false` in the parent, unmounting the panel) in the same synchronous state
+   batch as `setConnected(result.league_id)`, so React committed the parent's re-render — panel
+   already gone — before the "Connected as ..." confirmation message the user is meant to see
+   ever painted. The registration itself always worked; the confirmation just never appeared.
+   Fixed with a 1500ms `setTimeout` before `onConnected()` so the message has a beat on screen.
+
+**Live verification**, all against the real `boys_of_fall` Sleeper league (a real 2QB dynasty
+league) through the real backend, via Playwright driving real Chromium against real dev servers —
+not mocked intelligence: register a brand-new league through the actual Connect League form and
+confirm it persists into the league dropdown; My Team roster intelligence; Action Center adds/
+drops/trade signals; Player Detail (universal + my-league value + a real 10-row evidence
+timeline); Draft recommendation (real VORP/confidence/survival-probability); standalone Waiver
+tab producing a real FAAB bid with real reasons; multi-asset Trade package (two players + a future
+pick per side) producing a real ACCEPT/REJECT/CONSIDER verdict with real side values and reasons.
+
+**Explicitly not built:** a manual/YAML league (`source: yaml`) has no runtime "connect" flow —
+`teams_for_league` returns `None` rather than fabricating roster data for it, and the UI shows
+"no real per-team roster data" instead of a broken or fake roster view, consistent with this
+project's standing rule against fabricated data.
+
+350 offline tests passing (up from 303 at the start of this pass); `make lint` clean
+(ruff + `check_no_secrets.py`); TypeScript compiles clean (`tsc --noEmit`).

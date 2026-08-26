@@ -93,10 +93,31 @@ def _load_registry(registry_path: Path | str = DEFAULT_REGISTRY_PATH) -> dict[st
         return yaml.safe_load(f) or {}
 
 
-def list_registered_leagues(registry_path: Path | str = DEFAULT_REGISTRY_PATH) -> dict[str, dict]:
+def _load_db_registry(con: duckdb.DuckDBPyConnection | None) -> dict[str, dict]:
+    """Runtime-registered leagues (the "Connect League" onboarding flow, D53) -- distinct from
+    `_load_registry`'s hand-edited YAML file. Returns {} if no connection is available (e.g. a
+    pure-config CLI invocation that never opened the DB) rather than requiring every caller to
+    thread a connection through just for this."""
+    if con is None:
+        return {}
+    rows = con.execute(
+        "SELECT league_id, source, sleeper_league_id, display_name FROM registered_leagues"
+    ).fetchall()
+    return {r[0]: {"source": r[1], "sleeper_league_id": r[2], "display_name": r[3]} for r in rows}
+
+
+def list_registered_leagues(
+    registry_path: Path | str = DEFAULT_REGISTRY_PATH,
+    *,
+    con: duckdb.DuckDBPyConnection | None = None,
+) -> dict[str, dict]:
     """{league_id: {source, ...}} for every league this deployment knows about -- the "which
-    leagues can I switch between" listing (CLI: `alpha-squad league list`)."""
-    return _load_registry(registry_path)
+    leagues can I switch between" listing (CLI: `alpha-squad league list`). Merges the curated
+    YAML registry with any leagues connected at runtime through the app (`registered_leagues`,
+    D53); a YAML entry wins on an id collision, since that's the deliberately-curated set."""
+    db_registry = _load_db_registry(con)
+    yaml_registry = _load_registry(registry_path)
+    return {**db_registry, **yaml_registry}
 
 
 def resolve_league(
@@ -112,11 +133,13 @@ def resolve_league(
     (`league/sleeper_context.py::load_sleeper_league_context`, hydrated fresh every call so it
     can never drift from what the league admin actually has configured). Every existing call
     site that only ever knew about the one hardcoded target_league.yaml keeps working
-    unchanged by defaulting to DEFAULT_LEAGUE_ID, which the registry maps to that same file."""
+    unchanged by defaulting to DEFAULT_LEAGUE_ID, which the registry maps to that same file.
+    Also checks `registered_leagues` (D53, runtime-connected leagues) when `league_id` isn't in
+    the YAML file and a connection is available."""
     registry = _load_registry(registry_path)
-    entry = registry.get(league_id)
+    entry = registry.get(league_id) or _load_db_registry(con).get(league_id)
     if entry is None:
-        known = ", ".join(sorted(registry)) or "(none registered)"
+        known = ", ".join(sorted({**_load_db_registry(con), **registry})) or "(none registered)"
         raise RuntimeError(
             f"no league registered as {league_id!r} in {registry_path}; known leagues: {known}"
         )
@@ -135,3 +158,38 @@ def resolve_league(
             con, settings or get_settings(), entry["sleeper_league_id"]
         )
     raise RuntimeError(f"league {league_id!r} has unknown source {source!r} in {registry_path}")
+
+
+def register_sleeper_league(
+    con: duckdb.DuckDBPyConnection,
+    sleeper_league_id: str,
+    *,
+    settings: Settings | None = None,
+    league_id: str | None = None,
+) -> LeagueContext:
+    """The "Connect League" onboarding action (D53): validates a real, reachable Sleeper league
+    by actually loading it (never trusts a caller-supplied id blind -- ARCHITECTURE.md's "never
+    fabricate" rule applies to accepting user input too), then persists it to
+    `registered_leagues` so it shows up in every future `list_registered_leagues`/`resolve_league`
+    call without needing a server-side file edit. Idempotent: registering the same
+    `sleeper_league_id` again just refreshes `display_name` rather than erroring or duplicating.
+    Returns the freshly-hydrated `LeagueContext` so the caller (the onboarding UI) can show real
+    league details immediately, in the same request that registered it."""
+    from alpha_squad.config.settings import get_settings
+    from alpha_squad.league.sleeper_context import load_sleeper_league_context
+
+    league = load_sleeper_league_context(con, settings or get_settings(), sleeper_league_id)
+    resolved_id = league_id or league.league_id
+    display_name = getattr(league, "sleeper_league_name", None) or resolved_id
+
+    con.execute(
+        """
+        INSERT INTO registered_leagues (league_id, source, sleeper_league_id, display_name)
+        VALUES (?, 'sleeper', ?, ?)
+        ON CONFLICT (league_id) DO UPDATE SET
+            sleeper_league_id = excluded.sleeper_league_id,
+            display_name = excluded.display_name
+        """,
+        [resolved_id, sleeper_league_id, display_name],
+    )
+    return league

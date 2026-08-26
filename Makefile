@@ -1,4 +1,4 @@
-.PHONY: install test test-network test-cov lint fmt ingest identity college-usage features market train evaluate edge simulate orchestrate serve serve-web clean
+.PHONY: install test test-network test-cov lint fmt check-secrets ingest identity college-usage features team-scores market train evaluate edge simulate orchestrate serve serve-web clean
 
 install:
 	uv sync --extra dev
@@ -13,7 +13,12 @@ test-network:
 test-cov:
 	uv run pytest --cov=alpha_squad --cov-report=term-missing
 
-lint:
+# D35: a real API key was once committed directly to .env.example. check-secrets fails the
+# build if any tracked *.env.example file has a non-empty secret-shaped value again.
+check-secrets:
+	uv run python scripts/check_no_secrets.py
+
+lint: check-secrets
 	uv run ruff check src tests
 	uv run ruff format --check src tests
 
@@ -41,6 +46,12 @@ college-usage:
 
 features:
 	uv run alpha-squad features build --season-start 2015 --season-end 2025
+
+# team_week_points (real final scores, from pbp) is a separate table from `features`'s
+# team_week_stats -- simulate_team_season's environment draw needs both. Not folded into
+# `features build` itself so nothing already-validated there is touched by adding it.
+team-scores:
+	uv run alpha-squad features build-team-scores --season-start 2015 --season-end 2025
 
 market:
 	uv run alpha-squad market build

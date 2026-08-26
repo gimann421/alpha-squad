@@ -15,6 +15,7 @@ from alpha_squad.agents.disagreement import (
     resolve_and_record,
 )
 from alpha_squad.agents.orchestrator import run_pipeline
+from alpha_squad.agents.planner import plan_full_refresh
 from alpha_squad.agents.state import reconstruct_run
 from alpha_squad.config.settings import get_settings
 from alpha_squad.evidence.events import build_evidence_events_range
@@ -28,7 +29,12 @@ from alpha_squad.features.college_production import (
 from alpha_squad.features.rookie import build_rookie_projection_features
 from alpha_squad.identity.canonical import build_identity
 from alpha_squad.identity.exceptions import list_exceptions
-from alpha_squad.league.context import DEFAULT_LEAGUE_ID, list_registered_leagues, resolve_league
+from alpha_squad.league.context import (
+    DEFAULT_LEAGUE_ID,
+    list_registered_leagues,
+    register_sleeper_league,
+    resolve_league,
+)
 from alpha_squad.league.decisions import record_decision
 from alpha_squad.league.draft import recommend_draft_pick
 from alpha_squad.league.replacement import (
@@ -36,7 +42,12 @@ from alpha_squad.league.replacement import (
     positional_scarcity,
     replacement_level,
 )
-from alpha_squad.league.trade import recommend_dynasty_trade
+from alpha_squad.league.trade import (
+    PickAsset,
+    TradePackageSide,
+    evaluate_trade_package,
+    recommend_dynasty_trade,
+)
 from alpha_squad.league.waiver import recommend_waiver_pickup
 from alpha_squad.market.consensus import build_live_fantasypros_snapshot, build_market_snapshot
 from alpha_squad.market.dynasty_values import build_dynasty_values
@@ -44,21 +55,31 @@ from alpha_squad.market.edge import (
     DEFAULT_ECR_TYPE,
     evaluate_historical_edge,
     run_edge_build,
+    write_edge_backtest_report,
     write_edge_validation_report,
 )
 from alpha_squad.models.baselines.run import run_baselines
-from alpha_squad.models.established.season_level import run_season_level_established_ml
+from alpha_squad.models.established.season_level import (
+    load_season_level_data,
+    run_season_level_established_ml,
+)
 from alpha_squad.models.established.train import run_established_ml
 from alpha_squad.models.report import write_evaluation_report
 from alpha_squad.models.rookie.ablation import compare_arms, write_ablation_report
+from alpha_squad.models.rookie.data import load_rookie_projection_data
 from alpha_squad.models.rookie.features import COLLEGE_FEATURE_VERSION, FEATURES_WITH_COLLEGE
-from alpha_squad.models.rookie.train import project_rookie_class, run_rookie_models
+from alpha_squad.models.rookie.train import (
+    project_rookie_class,
+    run_rookie_models,
+    score_rookie_projection_with_persisted_model,
+)
 from alpha_squad.models.simulation.correlated import (
     MIN_TEAM_WEEKS,
     record_simulation_run,
     simulate_team_season,
 )
-from alpha_squad.models.uncertainty.run import run_uncertainty
+from alpha_squad.models.simulation.team_scores import build_team_week_points
+from alpha_squad.models.uncertainty.run import run_uncertainty, score_with_persisted_model
 from alpha_squad.sources.base import SourceError, SourceHealth, SourceStatus, utcnow
 from alpha_squad.sources.registry import all_adapters
 from alpha_squad.storage.db import get_connection, init_db
@@ -76,6 +97,7 @@ evidence_app = typer.Typer(help="Structured evidence engine operations")
 league_app = typer.Typer(help="League-specific decision engine operations")
 orchestrate_app = typer.Typer(help="Agent orchestrator operations")
 simulate_app = typer.Typer(help="Team-season Monte Carlo simulation operations")
+models_app = typer.Typer(help="Persisted-model artifact operations (inference without retraining)")
 app.add_typer(sources_app, name="sources")
 app.add_typer(identity_app, name="identity")
 app.add_typer(features_app, name="features")
@@ -87,6 +109,7 @@ app.add_typer(evidence_app, name="evidence")
 app.add_typer(league_app, name="league")
 app.add_typer(orchestrate_app, name="orchestrate")
 app.add_typer(simulate_app, name="simulate")
+app.add_typer(models_app, name="models")
 console = Console()
 
 # Datasets that vary by NFL season vs. ones that are a single current/whole-history file.
@@ -357,6 +380,34 @@ def features_build_college_usage() -> None:
     con.close()
 
 
+@features_app.command("build-team-scores")
+def features_build_team_scores(
+    season_start: int = typer.Option(
+        2012, help="First season (matches `features build`'s own default)"
+    ),
+    season_end: int = typer.Option(2025, help="Last season with a real pbp snapshot ingested"),
+) -> None:
+    """Build `team_week_points` (real final scores per team/season/week, from nflverse pbp's
+    running score columns) for the given season range -- the real historical team-points
+    series `simulate_team_season`'s environment draw is calibrated against. This is a
+    separate table from `features build`'s team_week_stats (same pbp source, different
+    derivation), so it needs its own step; without it, simulation has no team-points history
+    to sample from and always reports "not enough real history" regardless of team. Requires
+    `sources ingest` to have already fetched pbp for this range."""
+    settings = get_settings()
+    con = get_connection(settings)
+    init_db(con)
+    seasons = list(range(season_start, season_end + 1))
+    try:
+        n = build_team_week_points(con, settings, seasons)
+    except RuntimeError as e:
+        console.print(f"[red]{e}[/red]")
+        con.close()
+        raise typer.Exit(code=1) from e
+    console.print(f"team_week_points rows upserted: [green]{n}[/green]")
+    con.close()
+
+
 @market_app.command("build")
 def market_build() -> None:
     """Build market_snapshot from the stored DynastyProcess fp_ecr_history snapshot
@@ -552,6 +603,13 @@ def train_uncertainty(
     report_path: str = typer.Option(
         "reports/calibration_report.md", help="Markdown report output path"
     ),
+    persist: bool = typer.Option(
+        True,
+        help="Save the fitted model + calibration residuals for the last season in range, so "
+        "`models rescore-uncertainty` can re-score without retraining. Leave off for a pure "
+        "walk-forward evaluation run over many historical seasons (no need to write dozens of "
+        "intermediate artifacts to disk just to compute historical metrics).",
+    ),
 ) -> None:
     """Walk-forward split-conformal uncertainty: p10-p90 + top-12/24 probabilities per
     player/season/position, with out-of-sample calibration diagnostics (did the intervals
@@ -560,7 +618,7 @@ def train_uncertainty(
     con = get_connection(settings)
     init_db(con)
 
-    run_report = run_uncertainty(con, season_start, season_end, min_train_season)
+    run_report = run_uncertainty(con, season_start, season_end, min_train_season, persist=persist)
 
     table = Table(title="Calibration diagnostics (out-of-sample coverage)")
     for col in (
@@ -743,6 +801,12 @@ def train_rookie_project(
     ),
     min_train_class: int = typer.Option(2000, help="Earliest draft class usable for training data"),
     top_n: int = typer.Option(20, help="How many to print"),
+    persist: bool = typer.Option(
+        True,
+        help="Save the fitted regression + classification models, so "
+        "`models rescore-rookie-projection` can re-score one player (e.g. after a camp-battle "
+        "update) without retraining on the full multi-decade rookie corpus.",
+    ),
 ) -> None:
     """Project an INCOMING rookie class -- one whose NFL season hasn't happened yet.
 
@@ -764,7 +828,7 @@ def train_rookie_project(
         con.close()
         raise typer.Exit(code=1)
 
-    report = project_rookie_class(con, draft_class, min_train_class)
+    report = project_rookie_class(con, draft_class, min_train_class, persist=persist)
 
     rows = con.execute(
         """
@@ -799,6 +863,110 @@ def train_rookie_project(
     )
     if report.skipped:
         console.print(f"[yellow]skipped: {report.skipped}[/yellow]")
+    con.close()
+
+
+@models_app.command("rescore-uncertainty")
+def models_rescore_uncertainty(
+    position: str = typer.Option(..., help="QB, RB, WR, or TE"),
+    season: int = typer.Option(..., help="Season to re-score"),
+    player_ids: str = typer.Option(
+        "",
+        help="Comma-separated player_ids to re-score. Blank = every player currently in "
+        "`uncertainty_predictions` for this season/position (a full refresh using the "
+        "persisted model, still without retraining).",
+    ),
+) -> None:
+    """Re-score players using the already-fitted model `train uncertainty --persist` saved --
+    no `.fit()` call happens here. Use this after something changed for a specific player
+    (e.g. an updated preseason ECR) instead of re-running the full multi-season walk-forward
+    training loop just to refresh a handful of rows. Requires a prior `train uncertainty
+    --persist` run for this position/season's calibration lineage."""
+    settings = get_settings()
+    con = get_connection(settings)
+    init_db(con)
+
+    all_data = load_season_level_data(con, position, season, season)
+    feature_rows = all_data[all_data["target_season"] == season]
+    if player_ids.strip():
+        wanted = {p.strip() for p in player_ids.split(",") if p.strip()}
+        feature_rows = feature_rows[feature_rows["player_id"].isin(wanted)]
+
+    if feature_rows.empty:
+        console.print("[yellow]nothing to re-score (no matching feature rows)[/yellow]")
+        con.close()
+        raise typer.Exit(code=1)
+
+    try:
+        scored = score_with_persisted_model(con, position, season, feature_rows)
+    except FileNotFoundError as e:
+        console.print(f"[red]{e}[/red]")
+        con.close()
+        raise typer.Exit(code=1) from e
+
+    table = Table(title=f"Re-scored {position}/{season} from the persisted model (no retrain)")
+    for col in ("player_id", "point_prediction", "p10", "median", "p90"):
+        table.add_column(col)
+    for player_id, q in scored.items():
+        table.add_row(
+            player_id,
+            f"{q['point_prediction']:.1f}",
+            f"{q['p10']:.1f}",
+            f"{q['median']:.1f}",
+            f"{q['p90']:.1f}",
+        )
+    console.print(table)
+    console.print(f"re-scored and stored: [green]{len(scored)}[/green]")
+    con.close()
+
+
+@models_app.command("rescore-rookie-projection")
+def models_rescore_rookie_projection(
+    position: str = typer.Option(..., help="QB, RB, WR, or TE"),
+    draft_class: int = typer.Option(..., help="Draft class to re-score"),
+    player_ids: str = typer.Option(
+        "",
+        help="Comma-separated player_ids to re-score. Blank = every player currently in "
+        "`rookie_projection_features` for this class/position.",
+    ),
+) -> None:
+    """Re-score prospects using the already-fitted models `train rookie-project --persist`
+    saved -- no `.fit()` call happens here. Use this after a late camp-battle/depth-chart
+    update changes one prospect's landing-spot feature, instead of re-running training on the
+    full multi-decade rookie corpus just to refresh that one row. Requires a prior `train
+    rookie-project --persist` run for this position/draft_class's feature_version."""
+    settings = get_settings()
+    con = get_connection(settings)
+    init_db(con)
+
+    feature_rows = load_rookie_projection_data(con, position, draft_class)
+    if player_ids.strip():
+        wanted = {p.strip() for p in player_ids.split(",") if p.strip()}
+        feature_rows = feature_rows[feature_rows["player_id"].isin(wanted)]
+
+    if feature_rows.empty:
+        console.print("[yellow]nothing to re-score (no matching feature rows)[/yellow]")
+        con.close()
+        raise typer.Exit(code=1)
+
+    try:
+        scored = score_rookie_projection_with_persisted_model(
+            con, position, draft_class, feature_rows
+        )
+    except FileNotFoundError as e:
+        console.print(f"[red]{e}[/red]")
+        con.close()
+        raise typer.Exit(code=1) from e
+
+    table = Table(title=f"Re-scored {position}/{draft_class} from the persisted model (no retrain)")
+    for col in ("player_id", "predicted_rookie_points", "breakout_probability"):
+        table.add_column(col)
+    for player_id, r in scored.items():
+        table.add_row(
+            player_id, f"{r['predicted_rookie_points']:.1f}", f"{r['breakout_probability']:.0%}"
+        )
+    console.print(table)
+    console.print(f"re-scored and stored: [green]{len(scored)}[/green]")
     con.close()
 
 
@@ -886,6 +1054,27 @@ def edge_validate(
 
     write_edge_validation_report(con, Path(report_path))
     console.print(f"report written to [green]{report_path}[/green]")
+    con.close()
+
+
+@edge_app.command("backtest")
+def edge_backtest(
+    season_start: int = typer.Option(2021, help="First season to backtest"),
+    season_end: int = typer.Option(2025, help="Last season to backtest"),
+    ecr_type: str = typer.Option(DEFAULT_ECR_TYPE, help="Market series EDGE was built against"),
+    report_path: str = typer.Option("reports/edge_backtest.md", help="Markdown report output path"),
+) -> None:
+    """The full reviewable EDGE backtest artifact: per-position, per-season, and edge-magnitude
+    (rank/points/confidence) bucket breakdowns on top of `edge validate`'s per-(season, action)
+    summary -- same walk-forward market-implied-points methodology, sliced finer. Requires
+    `edge build` to have already run for these seasons. Published either way; a weak or
+    negative result is documented, not hidden (CLAUDE.md)."""
+    settings = get_settings()
+    con = get_connection(settings)
+    init_db(con)
+
+    write_edge_backtest_report(con, Path(report_path), season_start, season_end, ecr_type)
+    console.print(f"backtest report written to [green]{report_path}[/green]")
     con.close()
 
 
@@ -980,12 +1169,17 @@ def evidence_build_sleeper_trending(
 
 @league_app.command("list")
 def league_list() -> None:
-    """List every registered league (config/league_configs/registry.yaml) -- the seamless
+    """List every registered league: config/league_configs/registry.yaml's curated set plus
+    any connected at runtime through the app (`registered_leagues`, D53) -- the seamless
     "which league am I about to run this for" check before any draft/waiver/trade/replacement
-    command. Add a league by editing that file: a `source: yaml` entry points at a local
-    config, a `source: sleeper` entry is hydrated live from a real Sleeper league on every
-    use (docs/DECISIONS.md D33)."""
-    registry = list_registered_leagues()
+    command. Add a league by editing the YAML file (a `source: yaml` entry points at a local
+    config, a `source: sleeper` entry is hydrated live on every use, D33) or by running
+    `alpha-squad league register-sleeper`."""
+    settings = get_settings()
+    con = get_connection(settings)
+    init_db(con)
+    registry = list_registered_leagues(con=con)
+    con.close()
     if not registry:
         console.print(
             "[yellow]no leagues registered in config/league_configs/registry.yaml[/yellow]"
@@ -1000,6 +1194,34 @@ def league_list() -> None:
         detail = entry.get("path") if source == "yaml" else entry.get("sleeper_league_id")
         table.add_row(league_id, source, str(detail))
     console.print(table)
+
+
+@league_app.command("register-sleeper")
+def league_register_sleeper(
+    sleeper_league_id: str = typer.Argument(..., help="Numeric id from the league's Sleeper URL"),
+    league_id: str | None = typer.Option(
+        None, help="Friendly id to register it under (defaults to the real Sleeper league id)"
+    ),
+) -> None:
+    """Connect a real Sleeper league at runtime (D53), the CLI counterpart to the app's
+    "Connect League" onboarding flow (`POST /league/register`). Validates the league is real
+    and reachable before persisting -- fails loudly rather than registering a broken id."""
+    settings = get_settings()
+    con = get_connection(settings)
+    init_db(con)
+    try:
+        league = register_sleeper_league(
+            con, sleeper_league_id, settings=settings, league_id=league_id
+        )
+    except (RuntimeError, SourceError) as e:
+        console.print(f"[red]{e}[/red]")
+        con.close()
+        raise typer.Exit(code=1) from e
+    console.print(
+        f"[green]Registered[/green] {league.league_id!r} "
+        f"({league.format}, {league.teams} teams) as league id {league_id or league.league_id!r}"
+    )
+    con.close()
 
 
 @league_app.command("replacement")
@@ -1199,6 +1421,65 @@ def league_trade(
     con.close()
 
 
+def _parse_picks(spec: str) -> list[PickAsset]:
+    """`round[:pick_in_round][:years_out]` entries, comma-separated, e.g. `1:1:0,2::1` = a
+    round-1-pick-1 pick this year plus a round-2 pick (unknown slot) one year out."""
+    picks: list[PickAsset] = []
+    for entry in spec.split(","):
+        entry = entry.strip()
+        if not entry:
+            continue
+        parts = entry.split(":")
+        round_ = int(parts[0])
+        pick_in_round = int(parts[1]) if len(parts) > 1 and parts[1] else None
+        years_out = int(parts[2]) if len(parts) > 2 and parts[2] else 0
+        picks.append(PickAsset(round=round_, pick_in_round=pick_in_round, years_out=years_out))
+    return picks
+
+
+@league_app.command("trade-package")
+def league_trade_package(
+    season: int = typer.Option(..., help="Season"),
+    side_a_players: str = typer.Option("", help="Comma-separated player_ids on side A"),
+    side_a_picks: str = typer.Option(
+        "", help="Comma-separated `round[:pick_in_round][:years_out]`, e.g. '1:1:0,2::1'"
+    ),
+    side_b_players: str = typer.Option("", help="Comma-separated player_ids on side B"),
+    side_b_picks: str = typer.Option("", help="Same format as --side-a-picks"),
+    ecr_type: str = typer.Option(DEFAULT_ECR_TYPE, help="Market series EDGE was built against"),
+    league: str = typer.Option(
+        DEFAULT_LEAGUE_ID, help="Registered league id to use (see `alpha-squad league list`)"
+    ),
+) -> None:
+    """Real multi-asset trade comparison (D45): players + future draft picks on each side,
+    summed on the same value_2qb scale `league trade` already uses. Pick values are a
+    documented heuristic (round/slot/years-out, not fit from data -- see docs/DECISIONS.md D45);
+    `LeagueContext.future_picks` is not read here since it is always empty in this deployment."""
+    settings = get_settings()
+    con = get_connection(settings)
+    init_db(con)
+    resolved_league = resolve_league(league, con=con, settings=settings)
+
+    side_a = TradePackageSide(
+        player_ids=[p.strip() for p in side_a_players.split(",") if p.strip()],
+        picks=_parse_picks(side_a_picks),
+    )
+    side_b = TradePackageSide(
+        player_ids=[p.strip() for p in side_b_players.split(",") if p.strip()],
+        picks=_parse_picks(side_b_picks),
+    )
+    result = evaluate_trade_package(con, side_a, side_b, season, resolved_league.teams, ecr_type)
+
+    console.print(f"Side A value: [green]{result.side_a_value:.0f}[/green]")
+    for r in result.side_a_reasons:
+        console.print(f"  - {r}")
+    console.print(f"Side B value: [green]{result.side_b_value:.0f}[/green]")
+    for r in result.side_b_reasons:
+        console.print(f"  - {r}")
+    console.print(f"\n[bold]Favors: {result.favors}[/bold] (delta: {result.delta:+.0f})")
+    con.close()
+
+
 @orchestrate_app.command("demo")
 def orchestrate_demo(
     run_id: str = typer.Option(..., help="Identifier for this orchestrated run"),
@@ -1230,7 +1511,10 @@ def orchestrate_demo(
         ),
     ]
     report = run_pipeline(settings, run_id, tasks)
+    _print_orchestrated_run_report(run_id, report)
 
+
+def _print_orchestrated_run_report(run_id: str, report) -> None:
     table = Table(title=f"Orchestrated run {run_id}")
     for col in ("task_id", "agent", "status", "confidence"):
         table.add_column(col)
@@ -1246,6 +1530,49 @@ def orchestrate_demo(
     for task_id in report.order:
         for f in report.results[task_id].findings:
             console.print(f"  [{task_id}] {f}")
+
+
+@orchestrate_app.command("run")
+def orchestrate_run(
+    run_id: str = typer.Option(..., help="Identifier for this orchestrated run"),
+    season_start: int = typer.Option(2020, help="First target season to refresh"),
+    season_end: int = typer.Option(2025, help="Last target season to refresh"),
+    min_train_season: int = typer.Option(2015, help="Earliest season usable for training data"),
+    class_start: int | None = typer.Option(
+        None, help="First rookie draft class (default: season_start)"
+    ),
+    class_end: int | None = typer.Option(
+        None, help="Last rookie draft class (default: season_end)"
+    ),
+    ecr_type: str = typer.Option(DEFAULT_ECR_TYPE, help="Market series for EDGE"),
+    include_rookie: bool = typer.Option(True, help="Include the rookie_ml stage"),
+    include_market_edge: bool = typer.Option(True, help="Include the market_edge stage"),
+    include_evidence: bool = typer.Option(True, help="Include the news_evidence stage"),
+    include_qa: bool = typer.Option(
+        True, help="Auto-schedule an evaluation_qa review per position"
+    ),
+) -> None:
+    """Real task decomposition (D47): builds the full universal-intelligence-refresh task
+    graph from these parameters (`agents/planner.py::plan_full_refresh` -- selects which
+    agents apply and wires the real dependency edges between them) and runs it through the
+    unchanged real orchestrator. `orchestrate demo` remains available as the original minimal
+    2-task example; this is the real multi-stage entry point."""
+    settings = get_settings()
+    tasks = plan_full_refresh(
+        run_id,
+        season_start,
+        season_end,
+        min_train_season=min_train_season,
+        class_start=class_start,
+        class_end=class_end,
+        ecr_type=ecr_type,
+        include_rookie=include_rookie,
+        include_market_edge=include_market_edge,
+        include_evidence=include_evidence,
+        include_qa=include_qa,
+    )
+    report = run_pipeline(settings, run_id, tasks)
+    _print_orchestrated_run_report(run_id, report)
 
 
 @orchestrate_app.command("status")

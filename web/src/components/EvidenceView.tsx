@@ -1,10 +1,13 @@
 import { useEffect, useState } from "react";
+import { useLatestSeason } from "../hooks";
 import { api } from "../api";
 import type { EvidenceRow } from "../types";
 import { AsyncSection, Badge } from "./common";
 
 export function EvidenceView() {
-  const [season, setSeason] = useState(2024);
+  const latestSeason = useLatestSeason("evidence", 2024);
+  const [season, setSeason] = useState(latestSeason);
+  useEffect(() => setSeason(latestSeason), [latestSeason]);
   const [week, setWeek] = useState(8);
   const [rows, setRows] = useState<EvidenceRow[] | null>(null);
   const [loading, setLoading] = useState(false);

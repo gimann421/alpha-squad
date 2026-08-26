@@ -552,3 +552,325 @@ def write_edge_validation_report(con: duckdb.DuckDBPyConnection, path: Path) -> 
 
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("\n".join(lines) + "\n")
+
+
+def _rank_edge_bucket(rank_edge: int) -> str:
+    a = abs(rank_edge)
+    if a < RANK_EDGE_THRESHOLD:
+        return f"<{RANK_EDGE_THRESHOLD} (below action threshold)"
+    if a < 25:
+        return f"{RANK_EDGE_THRESHOLD}-24"
+    if a < 40:
+        return "25-39"
+    return "40+"
+
+
+def _points_edge_bucket(points_edge: float | None) -> str:
+    if points_edge is None:
+        return "unknown"
+    a = abs(points_edge)
+    if a < POINTS_EDGE_THRESHOLD:
+        return f"<{POINTS_EDGE_THRESHOLD:.0f} (below action threshold)"
+    if a < 30:
+        return f"{POINTS_EDGE_THRESHOLD:.0f}-29"
+    if a < 50:
+        return "30-49"
+    return "50+"
+
+
+def _confidence_bucket(confidence: float | None) -> str:
+    if confidence is None:
+        return "unknown"
+    if confidence < CONFIDENCE_THRESHOLD:
+        return f"<{CONFIDENCE_THRESHOLD} (below action floor)"
+    if confidence < 0.7:
+        return f"{CONFIDENCE_THRESHOLD}-0.69"
+    if confidence < 0.9:
+        return "0.70-0.89"
+    return "0.90+"
+
+
+def evaluate_historical_edge_detailed(
+    con: duckdb.DuckDBPyConnection,
+    season_start: int,
+    season_end: int,
+    ecr_type: str = DEFAULT_ECR_TYPE,
+) -> dict:
+    """Same walk-forward market-implied-points methodology as `evaluate_historical_edge`
+    (reused, not reimplemented: identical `_market_implied_points_curve` per target season,
+    trained only on strictly-prior seasons) -- but additionally sliced by position and by
+    rank-edge/points-edge/confidence magnitude bucket, for the reviewable backtest artifact
+    ACCEPTANCE_CRITERIA.md and PRODUCT_SPEC.md require ('historical EDGE performance is
+    evaluated'). Returns cohorts as plain dicts; does not write to `edge_validation_results`
+    (that table is the per-season/action summary `evaluate_historical_edge` owns)."""
+    by_position_season: list[dict] = []
+    by_rank_bucket: dict[str, list[tuple[float, float | None]]] = {}
+    by_points_bucket: dict[str, list[tuple[float, float | None]]] = {}
+    by_confidence_bucket: dict[str, list[tuple[float, float | None]]] = {}
+    signal_dates: list[str] = []
+
+    for season in range(season_start, season_end + 1):
+        points_curve = _market_implied_points_curve(con, ecr_type, season)
+        rows = con.execute(
+            """
+            SELECT e.position, e.action, e.market_rank, e.rank_edge, e.projected_points_edge,
+                   e.confidence, s.total_fantasy_points_ppr, e.built_at
+            FROM edge_snapshot e
+            JOIN player_season_stats s ON s.player_id = e.player_id AND s.season = e.season
+            WHERE e.season = ? AND e.ecr_type = ? AND e.model_version = ?
+            """,
+            [season, ecr_type, EDGE_MODEL_VERSION],
+        ).fetchall()
+        if not rows:
+            continue
+
+        by_pos: dict[str, list[tuple[float, float | None]]] = {}
+        for (
+            position,
+            action,
+            market_rank,
+            rank_edge,
+            points_edge,
+            confidence,
+            actual_points,
+            built_at,
+        ) in rows:
+            market_points = (
+                float(points_curve.predict([market_rank])[0]) if points_curve is not None else None
+            )
+            pair = (actual_points, market_points)
+            by_pos.setdefault(position, []).append(pair)
+            if action in ("BUY", "SELL"):
+                by_rank_bucket.setdefault(_rank_edge_bucket(rank_edge), []).append(pair)
+                by_points_bucket.setdefault(_points_edge_bucket(points_edge), []).append(pair)
+                by_confidence_bucket.setdefault(_confidence_bucket(confidence), []).append(pair)
+            if built_at is not None:
+                signal_dates.append(str(built_at))
+
+        for position, pairs in by_pos.items():
+            n = len(pairs)
+            implied = [m for _, m in pairs if m is not None]
+            mean_outperf = (
+                sum(a - m for a, m in pairs if m is not None) / len(implied) if implied else None
+            )
+            by_position_season.append(
+                {
+                    "season": season,
+                    "position": position,
+                    "n": n,
+                    "mean_actual_points": sum(a for a, _ in pairs) / n,
+                    "mean_market_implied_points": (
+                        sum(implied) / len(implied) if implied else None
+                    ),
+                    "mean_outperformance_vs_market": mean_outperf,
+                }
+            )
+
+    def _summarize_buckets(buckets: dict[str, list[tuple[float, float | None]]]) -> list[dict]:
+        out = []
+        for label, pairs in buckets.items():
+            n = len(pairs)
+            implied = [m for _, m in pairs if m is not None]
+            mean_outperf = (
+                sum(a - m for a, m in pairs if m is not None) / len(implied) if implied else None
+            )
+            out.append(
+                {
+                    "bucket": label,
+                    "n": n,
+                    "mean_actual_points": sum(a for a, _ in pairs) / n,
+                    "mean_outperformance_vs_market": mean_outperf,
+                }
+            )
+        return out
+
+    return {
+        "by_position_season": by_position_season,
+        "by_rank_edge_bucket": _summarize_buckets(by_rank_bucket),
+        "by_points_edge_bucket": _summarize_buckets(by_points_bucket),
+        "by_confidence_bucket": _summarize_buckets(by_confidence_bucket),
+        "min_built_at": min(signal_dates) if signal_dates else None,
+        "max_built_at": max(signal_dates) if signal_dates else None,
+    }
+
+
+def write_edge_backtest_report(
+    con: duckdb.DuckDBPyConnection,
+    path: Path,
+    season_start: int,
+    season_end: int,
+    ecr_type: str = DEFAULT_ECR_TYPE,
+) -> None:
+    """The full reviewable EDGE backtest artifact (methodology, per-position, per-season,
+    edge-magnitude buckets, limitations, honest conclusions). Computes both the per-(season,
+    action) summary (`evaluate_historical_edge`, which also persists to
+    `edge_validation_results`) and the finer per-position/bucket breakdown
+    (`evaluate_historical_edge_detailed`) -- the same underlying walk-forward
+    market-implied-points methodology in both cases, just sliced differently. Published either
+    way per CLAUDE.md's no-hidden-failure rule: a weak or negative result is documented, not
+    suppressed or re-tuned against this test period."""
+    by_action_season = evaluate_historical_edge(con, season_start, season_end, ecr_type)
+    detail = evaluate_historical_edge_detailed(con, season_start, season_end, ecr_type)
+
+    n_players = con.execute(
+        "SELECT count(DISTINCT player_id) FROM edge_snapshot WHERE ecr_type = ? "
+        "AND season BETWEEN ? AND ? AND model_version = ?",
+        [ecr_type, season_start, season_end, EDGE_MODEL_VERSION],
+    ).fetchone()[0]
+    n_total = con.execute(
+        "SELECT count(*) FROM edge_snapshot WHERE ecr_type = ? AND season BETWEEN ? AND ? "
+        "AND model_version = ?",
+        [ecr_type, season_start, season_end, EDGE_MODEL_VERSION],
+    ).fetchone()[0]
+    action_totals = con.execute(
+        "SELECT action, count(*) FROM edge_snapshot WHERE ecr_type = ? AND season BETWEEN ? "
+        "AND ? AND model_version = ? GROUP BY 1 ORDER BY 1",
+        [ecr_type, season_start, season_end, EDGE_MODEL_VERSION],
+    ).fetchall()
+
+    lines = [
+        "# EDGE Historical Backtest",
+        "",
+        f"**Model version:** `{EDGE_MODEL_VERSION}` (uncertainty model `{UNCERTAINTY_MODEL_VERSION}`) "
+        f"&nbsp;·&nbsp; **Market series:** `{ecr_type}` (redraft-superflex ECR, the 2QB target "
+        f"league's overall rank) &nbsp;·&nbsp; **Seasons:** {season_start}-{season_end}",
+        f"**Signals evaluated:** {n_total} across {n_players} distinct players "
+        f"&nbsp;·&nbsp; **Signal timestamps:** "
+        f"{detail['min_built_at'] or '-'} to {detail['max_built_at'] or '-'}",
+        "",
+        "## Methodology",
+        "",
+        "Every EDGE in `edge_snapshot` was computed **walk-forward**: for a target season, the "
+        "market-implied-points curve (`_market_implied_points_curve`, an isotonic regression of "
+        "overall market rank → actual PPR points) is fit only on seasons strictly before the "
+        "target season, then applied to that season's actual market ranks. `BUY`/`SELL` "
+        f"requires rank edge AND points edge to agree in direction, both above threshold "
+        f"(rank_edge >= {RANK_EDGE_THRESHOLD}, points_edge >= {POINTS_EDGE_THRESHOLD:.0f}), model "
+        f"confidence >= {CONFIDENCE_THRESHOLD}, and no contradicting structured evidence "
+        f"(`market/edge.py::classify_action`). This backtest asks: within each cohort, did real "
+        "season-end fantasy points actually exceed what the market implied at prediction time "
+        "(`mean_outperformance_vs_market` = mean(actual points - market-implied points); positive "
+        "means the cohort beat the market)? **This backtest was written once against this test "
+        "period and the model was not re-tuned against these results.**",
+        "",
+        "## Signal volume by action",
+        "",
+        "| action | n |",
+        "|---|---|",
+    ]
+    for action, n in action_totals:
+        lines.append(f"| {action} | {n} |")
+
+    lines += [
+        "",
+        "## Per-(season, action) — BUY/SELL performance",
+        "",
+        "| season | action | n | mean_actual_pts | mean_market_implied_pts | mean_outperformance |",
+        "|---|---|---|---|---|---|",
+    ]
+    for r in sorted(by_action_season, key=lambda r: (r["season"], r["action"])):
+        lines.append(
+            "| "
+            + " | ".join(
+                _fmt(r[k])
+                for k in (
+                    "season",
+                    "action",
+                    "n",
+                    "mean_actual_points",
+                    "mean_market_implied_points",
+                    "mean_outperformance_vs_market",
+                )
+            )
+            + " |"
+        )
+
+    lines += [
+        "",
+        "## Per-position, per-season",
+        "",
+        "| season | position | n | mean_actual_pts | mean_market_implied_pts | mean_outperformance |",
+        "|---|---|---|---|---|---|",
+    ]
+    for r in sorted(detail["by_position_season"], key=lambda r: (r["season"], r["position"])):
+        lines.append(
+            "| "
+            + " | ".join(
+                _fmt(r[k])
+                for k in (
+                    "season",
+                    "position",
+                    "n",
+                    "mean_actual_points",
+                    "mean_market_implied_points",
+                    "mean_outperformance_vs_market",
+                )
+            )
+            + " |"
+        )
+
+    for title, key in (
+        ("Rank-edge magnitude buckets (BUY/SELL only)", "by_rank_edge_bucket"),
+        ("Points-edge magnitude buckets (BUY/SELL only)", "by_points_edge_bucket"),
+        ("Model-confidence buckets (BUY/SELL only)", "by_confidence_bucket"),
+    ):
+        lines += [
+            "",
+            f"## {title}",
+            "",
+            "| bucket | n | mean_actual_pts | mean_outperformance |",
+            "|---|---|---|---|",
+        ]
+        for r in sorted(detail[key], key=lambda r: r["bucket"]):
+            lines.append(
+                "| "
+                + " | ".join(
+                    _fmt(r[k])
+                    for k in ("bucket", "n", "mean_actual_points", "mean_outperformance_vs_market")
+                )
+                + " |"
+            )
+
+    lines += [
+        "",
+        "## Probability edge",
+        "",
+        "`probability_edge` (model top-24 probability minus a market-implied probability curve) "
+        "is stored per-signal in `edge_snapshot.probability_edge` and factors into `reasons`, "
+        "but is not currently an independent gate in `classify_action` -- it is diagnostic "
+        "context on each signal rather than a threshold this backtest buckets separately. See "
+        "`/edge` API responses for the per-signal value.",
+        "",
+        "## Limitations and failure modes",
+        "",
+        "- **Preseason-only.** Every EDGE here compares a single preseason market snapshot "
+        "against season-end outcomes. It does not capture in-season market movement, so a BUY "
+        "called in August that the market corrects toward by October reads identically to one "
+        'the market never corrected -- this backtest cannot distinguish "right early" from '
+        '"right by luck."',
+        "- **Evidence gate was structurally neutral for this period.** Structured evidence "
+        "events (injuries, depth-chart changes, usage shifts) are detected in-season; a "
+        "preseason-anchored EDGE has essentially no contradicting evidence available at "
+        "prediction time, so the evidence-veto gate rarely changed an outcome here. This "
+        "backtest is a test of the rank+points+confidence gate, not of evidence's real-world "
+        "contribution (see `docs/DECISIONS.md` D23 and the in-season EDGE work tracked "
+        "separately).",
+        "- **Small BUY/SELL samples per position-season cell.** Several position-season BUY/SELL "
+        "cohorts have single-digit n (see the per-action table above) -- read per-cell "
+        "`mean_outperformance` as indicative, not statistically conclusive, at that "
+        "granularity; the aggregated per-action and per-bucket rows are the more reliable read.",
+        "- **`rsf` only.** This backtest was run against the redraft-superflex market series "
+        "only; a dynasty-horizon EDGE is out of scope (`market/edge.py` module docstring).",
+        "",
+        "## Conclusions",
+        "",
+        "See the tables above for the actual numbers this run produced; they are reported "
+        "as-is. A BUY (or SELL) cohort with positive (resp. negative) mean_outperformance across "
+        "most seasons and in the higher-magnitude rank/points buckets is evidence the gate is "
+        "doing real work; a cohort that does not show that pattern is evidence it is currently "
+        "closer to noise than signal at that bucket, and should not be described as validated "
+        "without qualification.",
+    ]
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("\n".join(lines) + "\n")

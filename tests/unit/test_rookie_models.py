@@ -402,3 +402,106 @@ class TestProjectingAnUnplayedDraftClass:
         train = load_rookie_class_data(con, "RB", 2000, 2025)
         assert train["draft_class"].max() == 2025
         assert 2026 not in set(train["draft_class"])
+
+
+class TestRookieProjectionPersistedInference:
+    """The audit's P1 gap: the forward projection model was never saved, so re-scoring even
+    one prospect required retraining on the entire multi-decade rookie corpus. These prove the
+    persisted-inference path reproduces training-time predictions exactly."""
+
+    def _seed_labeled_class(self, con, draft_class, n=30):
+        for i in range(n):
+            pid = f"lab{draft_class}_{i}"
+            con.execute(
+                "INSERT INTO players (player_id, gsis_id, position, rookie_season, draft_round, "
+                "draft_pick, draft_team) VALUES (?, ?, 'RB', ?, ?, ?, 'KC')",
+                [pid, f"g{pid}", draft_class, (i % 7) + 1, i * 8 + 1],
+            )
+            con.execute(
+                "INSERT INTO player_season_stats (player_id, season, position, games_played, "
+                "total_fantasy_points_ppr, ppr_points_per_game) VALUES (?, ?, 'RB', 15, ?, ?)",
+                [pid, draft_class, 300.0 - i * 5, (300.0 - i * 5) / 15],
+            )
+
+    def _seed_incoming_class(self, con, draft_class=2026):
+        from alpha_squad.features.rookie import (
+            build_rookie_features,
+            build_rookie_projection_features,
+        )
+
+        self._seed_labeled_class(con, draft_class - 2)
+        self._seed_labeled_class(con, draft_class - 1)
+        con.execute(
+            "INSERT INTO players (player_id, gsis_id, display_name, position, rookie_season, "
+            "draft_round, draft_pick, draft_team) "
+            "VALUES ('rookieX', 'gX', 'Incoming Guy', 'RB', ?, 1, 3, 'KC')",
+            [draft_class],
+        )
+        build_rookie_features(con)
+        build_rookie_projection_features(con, draft_class)
+
+    def test_persist_true_saves_loadable_regression_and_classification_artifacts(
+        self, con, tmp_path, monkeypatch
+    ):
+        from alpha_squad.config.settings import get_settings
+        from alpha_squad.models.persistence import load_classifier, load_regressor
+        from alpha_squad.models.rookie.features import FEATURE_VERSION
+        from alpha_squad.models.rookie.train import (
+            PROJECTION_CLASSIFICATION_MODEL_NAME,
+            PROJECTION_REGRESSION_MODEL_NAME,
+            project_rookie_class,
+        )
+
+        monkeypatch.setattr(get_settings(), "models_dir", tmp_path / "models")
+        self._seed_incoming_class(con)
+
+        report = project_rookie_class(con, 2026, min_train_class=2000, persist=True)
+        assert report.predictions_written == 1
+
+        reg = load_regressor(PROJECTION_REGRESSION_MODEL_NAME, "RB", FEATURE_VERSION)
+        clf = load_classifier(PROJECTION_CLASSIFICATION_MODEL_NAME, "RB", FEATURE_VERSION)
+        assert reg is not None
+        assert clf is not None
+
+    def test_inference_only_rescoring_exactly_reproduces_training_time_predictions(
+        self, con, tmp_path, monkeypatch
+    ):
+        from alpha_squad.config.settings import get_settings
+        from alpha_squad.models.rookie.data import load_rookie_projection_data
+        from alpha_squad.models.rookie.train import (
+            project_rookie_class,
+            score_rookie_projection_with_persisted_model,
+        )
+
+        monkeypatch.setattr(get_settings(), "models_dir", tmp_path / "models")
+        self._seed_incoming_class(con)
+
+        project_rookie_class(con, 2026, min_train_class=2000, persist=True)
+        trained = con.execute(
+            "SELECT player_id, predicted_rookie_points, breakout_probability "
+            "FROM rookie_predictions WHERE draft_class = 2026"
+        ).fetchall()
+        assert len(trained) == 1
+
+        # No .fit() call anywhere below this line -- purely reloading the saved artifacts.
+        feature_rows = load_rookie_projection_data(con, "RB", 2026)
+        scored = score_rookie_projection_with_persisted_model(
+            con, "RB", 2026, feature_rows, store=False
+        )
+
+        for player_id, points, prob in trained:
+            assert scored[player_id]["predicted_rookie_points"] == pytest.approx(points, abs=1e-6)
+            assert scored[player_id]["breakout_probability"] == pytest.approx(prob, abs=1e-6)
+
+    def test_rescoring_without_a_persisted_artifact_fails_loudly(self, con, tmp_path, monkeypatch):
+        from alpha_squad.config.settings import get_settings
+        from alpha_squad.models.rookie.data import load_rookie_projection_data
+        from alpha_squad.models.rookie.train import score_rookie_projection_with_persisted_model
+
+        monkeypatch.setattr(get_settings(), "models_dir", tmp_path / "models")
+        self._seed_incoming_class(con)
+        # Note: project_rookie_class was never called with persist=True.
+        feature_rows = load_rookie_projection_data(con, "RB", 2026)
+
+        with pytest.raises(FileNotFoundError):
+            score_rookie_projection_with_persisted_model(con, "RB", 2026, feature_rows, store=False)

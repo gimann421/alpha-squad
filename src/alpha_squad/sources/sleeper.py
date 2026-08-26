@@ -20,6 +20,7 @@ from alpha_squad.sources.base import (
     SourceError,
     sha256_file,
     utcnow,
+    write_bytes_atomic,
 )
 
 _ENDPOINTS = {
@@ -30,6 +31,7 @@ _ENDPOINTS = {
     "league": "/league/{league_id}",
     "league_rosters": "/league/{league_id}/rosters",
     "league_drafts": "/league/{league_id}/drafts",
+    "league_users": "/league/{league_id}/users",
 }
 
 
@@ -65,15 +67,23 @@ class SleeperSource(SourceAdapter):
             raise SourceError(f"sleeper/{dataset} not found (404): {url}")
         resp.raise_for_status()
 
+        # D53: dataset-only filenames (no params) meant every league-scoped endpoint
+        # (league/league_rosters/league_drafts/league_users) shared one file across ALL
+        # leagues fetched the same day -- registering a second real Sleeper league collided
+        # with the first's snapshot file, observed live as a `JSONDecodeError` reading a
+        # file truncated mid-write by a concurrent request for the other league. Same fix
+        # already applied to cfbd.py/fantasypros.py/file_release.py; sleeper.py was missed
+        # because its league_id-taking endpoints were added afterward.
+        param_suffix = "_".join(f"{k}-{v}" for k, v in sorted(params.items())) or "default"
         dest = (
             self.settings.raw_dir
             / self.name
             / dataset
             / f"captured_at={captured_at.date().isoformat()}"
-            / f"{dataset}.json"
+            / f"{param_suffix}_{dataset}.json"
         )
         dest.parent.mkdir(parents=True, exist_ok=True)
-        dest.write_bytes(resp.content)
+        write_bytes_atomic(dest, resp.content)
 
         body = resp.json()
         if isinstance(body, list):

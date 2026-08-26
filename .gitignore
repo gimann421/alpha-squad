@@ -40,3 +40,6 @@ web/.vite/
 
 # OS
 .DS_Store
+
+# Claude Code agent worktrees (isolation:"worktree" sub-agents), never project content
+.claude/

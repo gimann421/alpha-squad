@@ -22,8 +22,15 @@ from alpha_squad.league.replacement import (
     replacement_level,
 )
 from alpha_squad.league.roster import roster_fit_multiplier, roster_need
-from alpha_squad.league.trade import age_curve_multiplier, recommend_dynasty_trade
-from alpha_squad.league.waiver import recommend_waiver_pickup
+from alpha_squad.league.trade import (
+    PickAsset,
+    TradePackageSide,
+    age_curve_multiplier,
+    evaluate_trade_package,
+    pick_value,
+    recommend_dynasty_trade,
+)
+from alpha_squad.league.waiver import rank_waiver_targets, recommend_waiver_pickup
 from alpha_squad.models.uncertainty.run import MODEL_VERSION as UNCERTAINTY_MODEL_VERSION
 from alpha_squad.storage.db import init_db
 
@@ -119,6 +126,105 @@ class TestResolveLeague:
         self, tmp_path
     ):
         assert list_registered_leagues(tmp_path / "nope.yaml") == {}
+
+
+class TestRegisterSleeperLeague:
+    """D53: the "Connect League" onboarding action -- validates a real Sleeper league by
+    actually loading it, then persists it so resolve_league/list_registered_leagues see it
+    without any file edit."""
+
+    def test_registers_a_real_reachable_league_and_makes_it_resolvable(
+        self, con, settings, monkeypatch
+    ):
+        import httpx
+
+        from alpha_squad.league.context import register_sleeper_league
+
+        body = {
+            "league_id": "999888777",
+            "name": "My New League",
+            "season": "2026",
+            "total_rosters": 10,
+            "roster_positions": ["QB", "RB", "RB", "WR", "WR", "TE", "FLEX", "BN", "BN"],
+            "scoring_settings": {"rec": 1.0},
+            "settings": {"type": 2, "waiver_budget": 100},
+        }
+
+        def fake_get(url, **kwargs):
+            import json as _json
+
+            from tests.fixtures.httpx_fakes import FakeGetResponse
+
+            return FakeGetResponse(200, body, _json.dumps(body).encode())
+
+        monkeypatch.setattr(httpx, "get", fake_get)
+
+        league = register_sleeper_league(
+            con, "999888777", settings=settings, league_id="my_new_league"
+        )
+        assert league.teams == 10
+        assert league.format == "dynasty"
+
+        registry = list_registered_leagues(con=con)
+        assert registry["my_new_league"]["source"] == "sleeper"
+        assert registry["my_new_league"]["sleeper_league_id"] == "999888777"
+
+        resolved = resolve_league("my_new_league", con=con, settings=settings)
+        assert resolved.teams == 10
+
+    def test_registering_the_same_league_again_updates_rather_than_duplicates(
+        self, con, settings, monkeypatch
+    ):
+        import httpx
+
+        from alpha_squad.league.context import register_sleeper_league
+
+        body = {
+            "league_id": "111",
+            "name": "Original Name",
+            "total_rosters": 8,
+            "roster_positions": ["QB", "BN"],
+            "scoring_settings": {},
+            "settings": {"type": 0},
+        }
+
+        def fake_get(url, **kwargs):
+            import json as _json
+
+            from tests.fixtures.httpx_fakes import FakeGetResponse
+
+            return FakeGetResponse(200, body, _json.dumps(body).encode())
+
+        monkeypatch.setattr(httpx, "get", fake_get)
+
+        register_sleeper_league(con, "111", settings=settings, league_id="dupe_test")
+        register_sleeper_league(con, "111", settings=settings, league_id="dupe_test")
+
+        n = con.execute(
+            "SELECT count(*) FROM registered_leagues WHERE league_id = 'dupe_test'"
+        ).fetchone()[0]
+        assert n == 1
+
+    def test_unreachable_league_raises_rather_than_registering_anyway(
+        self, con, settings, monkeypatch
+    ):
+        import httpx
+
+        from alpha_squad.league.context import register_sleeper_league
+        from alpha_squad.sources.base import SourceError
+
+        def fake_get_404(url, **kwargs):
+            from tests.fixtures.httpx_fakes import FakeGetResponse
+
+            return FakeGetResponse(404, None, b"not found")
+
+        monkeypatch.setattr(httpx, "get", fake_get_404)
+
+        with pytest.raises(SourceError):
+            register_sleeper_league(con, "does-not-exist", settings=settings)
+
+        n = con.execute("SELECT count(*) FROM registered_leagues").fetchone()[0]
+        assert n == 0
 
 
 def _flat_league(teams, lineup, bench=6, faab=100) -> LeagueContext:
@@ -262,6 +368,13 @@ def con():
     connection.close()
 
 
+@pytest.fixture
+def settings(tmp_path):
+    from alpha_squad.config.settings import Settings
+
+    return Settings(data_dir=tmp_path / "data", db_path=tmp_path / "data" / "x.duckdb")
+
+
 def _seed_uncertainty(con, player_id, season, position, point_pred, confidence=0.8, top24_prob=0.3):
     con.execute(
         """
@@ -335,6 +448,86 @@ class TestRecommendWaiverPickup:
         assert rec.recommended_bid > 0
 
 
+class TestRankWaiverTargets:
+    """D53: the Action Center's "who should I add" data -- real free agents (not rostered on
+    ANY real team) ranked by the exact same scoring `recommend_waiver_pickup` already does for
+    one player."""
+
+    LEAGUE_ID = "waiver_rank_test"
+
+    def _league(self) -> LeagueContext:
+        return LeagueContext(
+            league_id=self.LEAGUE_ID,
+            format="dynasty",
+            teams=2,
+            lineup={"WR": 1},
+            faab={"budget": 100},
+            source="sleeper",
+            sleeper_league_id=self.LEAGUE_ID,
+        )
+
+    def _fake_get(self, monkeypatch, rostered_sleeper_ids):
+        import httpx
+
+        from tests.fixtures.httpx_fakes import FakeGetResponse
+
+        rosters = [
+            {"roster_id": 1, "owner_id": "u1", "players": rostered_sleeper_ids},
+            {"roster_id": 2, "owner_id": "u2", "players": []},
+        ]
+        users = [{"user_id": "u1", "display_name": "me", "metadata": {}}]
+
+        def fake_get(url, **kwargs):
+            import json as _json
+
+            if url.endswith("/rosters"):
+                body = rosters
+            elif url.endswith("/users"):
+                body = users
+            else:
+                raise AssertionError(f"unexpected url {url}")
+            return FakeGetResponse(200, body, _json.dumps(body).encode())
+
+        monkeypatch.setattr(httpx, "get", fake_get)
+
+    def _seed_bridged_player(self, con, player_id, position, points, sleeper_id):
+        _seed_uncertainty(con, player_id, 2025, position, points)
+        con.execute(
+            "INSERT INTO players (player_id, gsis_id, display_name, position) VALUES "
+            "(?, ?, ?, ?) ON CONFLICT DO NOTHING",
+            [player_id, f"gsis_{player_id}", player_id, position],
+        )
+        con.execute(
+            "INSERT INTO player_id_map (id_type, id_value, player_id, source) VALUES "
+            "('sleeper_id', ?, ?, 'test')",
+            [sleeper_id, player_id],
+        )
+
+    def test_excludes_rostered_players_and_ranks_free_agents(self, con, monkeypatch):
+        self._seed_bridged_player(con, "rostered_wr", "WR", 300, "sl_rostered")
+        self._seed_bridged_player(con, "fa_best", "WR", 250, "sl_fa_best")
+        self._seed_bridged_player(con, "fa_worst", "WR", 60, "sl_fa_worst")
+        self._fake_get(monkeypatch, ["sl_rostered"])
+
+        results = rank_waiver_targets(con, self._league(), 2025, 5, roster_id=2)
+
+        ids = [r.player_id for r in results]
+        assert "rostered_wr" not in ids
+        assert ids[0] == "fa_best"
+
+    def test_position_filter_restricts_candidates(self, con, monkeypatch):
+        self._seed_bridged_player(con, "fa_wr", "WR", 200, "sl_wr")
+        self._seed_bridged_player(con, "fa_rb", "RB", 200, "sl_rb")
+        self._fake_get(monkeypatch, [])
+
+        results = rank_waiver_targets(con, self._league(), 2025, 5, roster_id=2, positions={"WR"})
+        assert {r.player_id for r in results} == {"fa_wr"}
+
+    def test_unsupported_league_raises(self, con):
+        with pytest.raises(RuntimeError, match="no real per-team roster source"):
+            rank_waiver_targets(con, load_league_context(), 2025, 5, roster_id=1)
+
+
 class TestAgeCurveMultiplier:
     def test_at_or_before_peak_is_full_value(self):
         assert age_curve_multiplier("RB", 23) == pytest.approx(1.0)
@@ -379,3 +572,91 @@ class TestRecommendDynastyTrade:
         )
         rec = recommend_dynasty_trade(con, "p1", 2025)
         assert rec.action == "WATCH"
+
+
+class TestPickValue:
+    """D45: future-draft-pick valuation, a documented heuristic on the same value_2qb scale."""
+
+    def test_earlier_round_is_worth_more_than_later_round(self):
+        v1, _ = pick_value(round_=1, teams=10, pick_in_round=6)
+        v2, _ = pick_value(round_=2, teams=10, pick_in_round=6)
+        v3, _ = pick_value(round_=3, teams=10, pick_in_round=6)
+        assert v1 > v2 > v3 > 0
+
+    def test_earlier_slot_within_round_is_worth_more(self):
+        first, _ = pick_value(round_=1, teams=10, pick_in_round=1)
+        last, _ = pick_value(round_=1, teams=10, pick_in_round=10)
+        assert first > last > 0
+
+    def test_further_out_years_are_worth_less(self):
+        this_year, _ = pick_value(round_=1, teams=10, pick_in_round=1, years_out=0)
+        next_year, _ = pick_value(round_=1, teams=10, pick_in_round=1, years_out=1)
+        two_years, _ = pick_value(round_=1, teams=10, pick_in_round=1, years_out=2)
+        assert this_year > next_year > two_years > 0
+
+    def test_unknown_slot_uses_round_midpoint_between_first_and_last(self):
+        unknown, _ = pick_value(round_=1, teams=10, pick_in_round=None)
+        first, _ = pick_value(round_=1, teams=10, pick_in_round=1)
+        last, _ = pick_value(round_=1, teams=10, pick_in_round=10)
+        assert last < unknown < first
+
+    def test_reason_string_discloses_this_is_a_heuristic_not_a_trained_model(self):
+        _, reason = pick_value(round_=1, teams=10, pick_in_round=1)
+        assert "heuristic" in reason
+        assert "D45" in reason
+
+
+class TestEvaluateTradePackage:
+    """D45: real multi-asset trade comparison summing player + pick value on each side."""
+
+    def _seed_player(self, con, player_id, age, value_2qb):
+        con.execute(
+            "INSERT INTO dynasty_values (player_id, scrape_date, age, value_2qb, updated_at) "
+            "VALUES (?, '2026-08-01', ?, ?, current_timestamp)",
+            [player_id, age, value_2qb],
+        )
+
+    def test_lopsided_package_favors_the_richer_side(self, con):
+        self._seed_player(con, "star", 24.0, 9000)
+        self._seed_player(con, "scrub", 30.0, 50)
+
+        side_a = TradePackageSide(player_ids=["star"])
+        side_b = TradePackageSide(player_ids=["scrub"], picks=[PickAsset(round=4)])
+
+        result = evaluate_trade_package(con, side_a, side_b, season=2025, teams=10)
+        assert result.favors == "side_a"
+        assert result.side_a_value > result.side_b_value
+        assert result.delta > 0
+        assert any("star" in r for r in result.side_a_reasons)
+
+    def test_a_pick_can_balance_a_trade(self, con):
+        self._seed_player(con, "playerA", 25.0, 2500)
+        self._seed_player(con, "playerB", 25.0, 2500)
+
+        # Identical players on both sides plus a real 1st-round pick added to side_b should tip
+        # the trade toward side_b, not stay even.
+        side_a = TradePackageSide(player_ids=["playerA"])
+        side_b = TradePackageSide(
+            player_ids=["playerB"], picks=[PickAsset(round=1, pick_in_round=1)]
+        )
+
+        result = evaluate_trade_package(con, side_a, side_b, season=2025, teams=10)
+        assert result.favors == "side_b"
+
+    def test_roughly_equal_packages_are_reported_even(self, con):
+        self._seed_player(con, "playerA", 25.0, 2500)
+        self._seed_player(con, "playerB", 25.0, 2500)
+
+        side_a = TradePackageSide(player_ids=["playerA"])
+        side_b = TradePackageSide(player_ids=["playerB"])
+
+        result = evaluate_trade_package(con, side_a, side_b, season=2025, teams=10)
+        assert result.favors == "even"
+
+    def test_empty_sides_do_not_error(self, con):
+        result = evaluate_trade_package(
+            con, TradePackageSide(), TradePackageSide(), season=2025, teams=10
+        )
+        assert result.side_a_value == 0.0
+        assert result.side_b_value == 0.0
+        assert result.favors == "even"

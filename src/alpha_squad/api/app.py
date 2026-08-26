@@ -6,6 +6,9 @@ DuckDB tables the CLI and orchestrator use — no business logic lives in this p
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -18,7 +21,37 @@ from alpha_squad.api.routers import (
     provenance,
     rankings,
     rookies,
+    seasons,
+    simulate,
 )
+from alpha_squad.config.settings import get_settings
+from alpha_squad.storage.db import get_connection, init_db
+
+
+@asynccontextmanager
+async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
+    # One base connection lives for the app's whole life; api/deps.py::get_db() derives a
+    # lightweight per-request connection from it via .cursor() rather than calling
+    # duckdb.connect() fresh per request. Two real bugs, both found running the real app with
+    # Playwright (not synthetic tests), made this necessary:
+    #  1. init_db (CREATE TABLE IF NOT EXISTS + ALTER TABLE migrations) must run exactly once:
+    #     DuckDB doesn't support concurrent ALTER/DDL from multiple connections against the
+    #     same file, and running it per-request raised a real
+    #     `TransactionException: write-write conflict` under real concurrent traffic.
+    #  2. duckdb.connect() itself isn't safe to call concurrently against the same file from
+    #     multiple requests -- two requests arriving close together raised a real
+    #     `BinderException: Unique file handle conflict: Cannot attach "alpha_squad" -- the
+    #     database file ... is already attached`. `.cursor()` is DuckDB's own documented way
+    #     to hand out an independent connection per thread/request that shares one already-
+    #     open database instance, without a second `duckdb.connect()` call.
+    con = get_connection(get_settings())
+    app.state.db_connection = con
+    init_db(con)
+    try:
+        yield
+    finally:
+        con.close()
+
 
 app = FastAPI(
     title="Alpha Squad API",
@@ -29,6 +62,7 @@ app = FastAPI(
         "store) breaks this API rather than silently serving stale demo data."
     ),
     version="0.1.0",
+    lifespan=_lifespan,
 )
 
 app.add_middleware(
@@ -46,6 +80,8 @@ app.include_router(evidence.router)
 app.include_router(league.router)
 app.include_router(provenance.router)
 app.include_router(health.router)
+app.include_router(seasons.router)
+app.include_router(simulate.router)
 
 
 @app.get("/")

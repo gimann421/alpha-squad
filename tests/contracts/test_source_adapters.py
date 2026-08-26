@@ -198,6 +198,36 @@ class TestJsonApiAdapters:
         assert '"2023"' in snap_2023.local_path.read_text()
         assert '"2024"' in snap_2024.local_path.read_text()
 
+    def test_sleeper_two_same_day_fetches_with_different_league_ids_do_not_collide(
+        self, settings, monkeypatch
+    ):
+        """Regression (D53): sleeper.py's league-scoped datasets (league/league_rosters/
+        league_drafts/league_users, added for real Sleeper league onboarding) built
+        `local_path` from dataset+captured_at date only, with no params in the filename --
+        so registering a second real league on the same day silently overwrote the first
+        league's on-disk snapshot. Found live: registering a second Sleeper league raised a
+        `JSONDecodeError` reading a file truncated mid-write by a concurrent request for a
+        different league_id. Same class of bug already fixed for cfbd/fantasypros/file_release;
+        sleeper.py was missed because its league_id-taking endpoints were added afterward."""
+
+        def fake_get(url: str, **kwargs):
+            import json as _json
+
+            league_id = url.rsplit("/league/", 1)[1]
+            body = {"league_id": league_id, "name": f"league {league_id}"}
+            return FakeGetResponse(200, body, _json.dumps(body).encode())
+
+        monkeypatch.setattr(httpx, "get", fake_get)
+        adapter = SleeperSource(settings)
+        snap_a = adapter.fetch("league", league_id="111")
+        snap_b = adapter.fetch("league", league_id="222")
+
+        assert snap_a.local_path != snap_b.local_path
+        assert snap_a.local_path.exists() and snap_b.local_path.exists()
+        assert snap_a.local_path.read_text() != snap_b.local_path.read_text()
+        assert '"111"' in snap_a.local_path.read_text()
+        assert '"222"' in snap_b.local_path.read_text()
+
 
 class TestHealthCheckNeverRaises:
     def test_health_translates_every_error_kind_without_raising(self, settings, monkeypatch):

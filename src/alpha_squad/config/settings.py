@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     db_path: Path = Field(
         default=Path("data/alpha_squad.duckdb"), validation_alias="ALPHA_SQUAD_DB_PATH"
     )
+    models_dir: Path = Field(default=Path("models"), validation_alias="ALPHA_SQUAD_MODELS_DIR")
 
     sleeper_base_url: str = Field(
         default="https://api.sleeper.app/v1", validation_alias="SLEEPER_BASE_URL"

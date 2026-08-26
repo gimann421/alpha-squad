@@ -17,8 +17,10 @@ from alpha_squad.market.edge import (
     classify_action,
     compute_edges_for_season,
     evaluate_historical_edge,
+    evaluate_historical_edge_detailed,
     run_edge_build,
     store_edges,
+    write_edge_backtest_report,
 )
 from alpha_squad.models.uncertainty.run import MODEL_VERSION as UNCERTAINTY_MODEL_VERSION
 from alpha_squad.storage.db import init_db
@@ -280,3 +282,92 @@ class TestEvaluateHistoricalEdge:
             "WHERE season=2021 AND action='BUY'"
         ).fetchone()
         assert stored[0] == pytest.approx(50.0)
+
+
+class TestEvaluateHistoricalEdgeDetailed:
+    """`edge backtest`'s per-position/bucket breakdown -- same underlying pairs as
+    `evaluate_historical_edge`'s per-action summary, just sliced finer."""
+
+    def _seed_one_buy(self, con):
+        training_market = [(f"t{i}", "WR", float(i + 1)) for i in range(MIN_CURVE_TRAINING_ROWS)]
+        training_stats = [(f"t{i}", "WR", 400.0 - i * 20) for i in range(MIN_CURVE_TRAINING_ROWS)]
+        _seed_market(con, "rsf", 2020, 7, training_market)
+        _seed_season_stats(con, 2020, training_stats)
+        con.execute(
+            """
+            INSERT INTO edge_snapshot
+                (edge_id, player_id, season, position, ecr_type, model_version, model_rank,
+                 market_rank, rank_edge, projected_points_edge, probability_edge,
+                 evidence_score, confidence, action, reasons_json, prediction_id, built_at)
+            VALUES ('e1', 'buy_hit', 2021, 'WR', 'rsf', 'edge_v1', 1, 5, 30, 50.0, 0.1, 0.5, 0.9,
+                    'BUY', '[]', NULL, current_timestamp)
+            """
+        )
+        _seed_season_stats(con, 2021, [("buy_hit", "WR", 370.0)])
+
+    def test_detailed_breakdown_matches_the_same_pair_as_the_summary(self, con):
+        self._seed_one_buy(con)
+        detail = evaluate_historical_edge_detailed(con, 2021, 2021, ecr_type="rsf")
+
+        assert len(detail["by_position_season"]) == 1
+        pos_row = detail["by_position_season"][0]
+        assert pos_row == {
+            "season": 2021,
+            "position": "WR",
+            "n": 1,
+            "mean_actual_points": pytest.approx(370.0),
+            "mean_market_implied_points": pytest.approx(320.0),
+            "mean_outperformance_vs_market": pytest.approx(50.0),
+        }
+
+        # rank_edge=30 falls in the 25-39 bucket; points_edge=50 falls in the 50+ bucket;
+        # confidence=0.9 falls in the 0.90+ bucket -- each bucket should carry the same pair.
+        rank_buckets = {b["bucket"]: b for b in detail["by_rank_edge_bucket"]}
+        assert rank_buckets["25-39"]["n"] == 1
+        assert rank_buckets["25-39"]["mean_outperformance_vs_market"] == pytest.approx(50.0)
+        points_buckets = {b["bucket"]: b for b in detail["by_points_edge_bucket"]}
+        assert points_buckets["50+"]["n"] == 1
+        confidence_buckets = {b["bucket"]: b for b in detail["by_confidence_bucket"]}
+        assert confidence_buckets["0.90+"]["n"] == 1
+
+    def test_watch_action_excluded_from_edge_magnitude_buckets(self, con):
+        # A WATCH row (below action threshold) should count toward the position/season
+        # breakdown but not toward the BUY/SELL-only magnitude buckets.
+        training_market = [(f"t{i}", "WR", float(i + 1)) for i in range(MIN_CURVE_TRAINING_ROWS)]
+        training_stats = [(f"t{i}", "WR", 400.0 - i * 20) for i in range(MIN_CURVE_TRAINING_ROWS)]
+        _seed_market(con, "rsf", 2020, 7, training_market)
+        _seed_season_stats(con, 2020, training_stats)
+        con.execute(
+            """
+            INSERT INTO edge_snapshot
+                (edge_id, player_id, season, position, ecr_type, model_version, model_rank,
+                 market_rank, rank_edge, projected_points_edge, probability_edge,
+                 evidence_score, confidence, action, reasons_json, prediction_id, built_at)
+            VALUES ('e1', 'watch1', 2021, 'WR', 'rsf', 'edge_v1', 3, 5, 2, 3.0, 0.05, 0.5, 0.9,
+                    'WATCH', '[]', NULL, current_timestamp)
+            """
+        )
+        _seed_season_stats(con, 2021, [("watch1", "WR", 330.0)])
+
+        detail = evaluate_historical_edge_detailed(con, 2021, 2021, ecr_type="rsf")
+        assert len(detail["by_position_season"]) == 1
+        assert detail["by_position_season"][0]["n"] == 1
+        assert detail["by_rank_edge_bucket"] == []
+        assert detail["by_points_edge_bucket"] == []
+        assert detail["by_confidence_bucket"] == []
+
+    def test_write_edge_backtest_report_produces_a_readable_file(self, con, tmp_path):
+        self._seed_one_buy(con)
+        out = tmp_path / "edge_backtest.md"
+        write_edge_backtest_report(con, out, 2021, 2021, ecr_type="rsf")
+        text = out.read_text()
+        assert "# EDGE Historical Backtest" in text
+        assert "Per-position, per-season" in text
+        assert "Rank-edge magnitude buckets" in text
+        assert "Limitations and failure modes" in text
+        assert "buy_hit" not in text  # summary tables only, no raw per-player rows
+        # Also populates the shared per-(season, action) summary table, same as `edge validate`.
+        stored = con.execute(
+            "SELECT count(*) FROM edge_validation_results WHERE season=2021"
+        ).fetchone()[0]
+        assert stored >= 1

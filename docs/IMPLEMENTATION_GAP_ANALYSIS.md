@@ -1,160 +1,176 @@
 # Alpha Squad — Implementation Gap Analysis
 
-Companion to `docs/CURRENT_STATE_AUDIT.md` (2026-08-24, commit `e0ca6c3`). Each item below reflects
-what is **actually missing today**, per that audit — not a re-statement of the original spec. Items
-are ordered P0 (do first / highest risk) → P3 (nice-to-have / low risk). "Dependencies" lists other
-items in this file that should land first; items with no listed dependency can start immediately.
+Companion to `docs/CURRENT_STATE_AUDIT.md`. Originally written 2026-08-24 (commit `e0ca6c3`);
+refreshed 2026-08-25 after a P0-P8 hardening pass (`docs/DECISIONS.md` D41-D52) closed every item
+except P2-3, which needs a user decision. Each item still reflects what is **actually missing today** — not a
+re-statement of the original spec. Closed items are kept (marked `CLOSED`, struck through) rather
+than deleted, so this file stays an accurate record of what was found and what changed, not just a
+snapshot of what's currently outstanding. Items are ordered P0 (do first / highest risk) → P3
+(nice-to-have / low risk). "Dependencies" lists other items in this file that should land first;
+items with no listed dependency can start immediately.
 
 ---
 
 ## P0 — Do first
 
-### P0-1: Resolve the leaked-credential Git-history exposure
-- **Problem:** Real API key values from the D35 incident (`docs/DECISIONS.md`) remain permanently
-  retrievable via `git log --all -p -- .env.example` on a repo with a public-facing remote
-  (`github.com/gimann421/alpha-squad`). Fixed forward, never purged from history.
-- **Dependencies:** None. Should happen before any other work that touches this repo's remote state.
-- **Recommended sequencing:**
-  1. Confirm with the user whether the leaked keys are still active; rotate at the provider if so
-     (independent of any Git action).
-  2. Decide, with the user's explicit sign-off, whether to rewrite Git history (`git filter-repo` or
-     equivalent) to purge the leaked commits — this is a destructive, irreversible, shared-history
-     action and must not be done unilaterally by an autonomous session.
-  3. If history is rewritten: force-push is required and every existing clone/PR becomes stale — plan
-     the timing with the user.
-  4. If history is *not* rewritten (e.g. because rotation makes the exposure moot): document that
-     decision explicitly in `docs/DECISIONS.md` as a closed item, with the reasoning.
-- **Acceptance criteria:** Either (a) the leaked key values no longer appear anywhere in
-  `git log --all -p`, and a fresh clone confirms it, or (b) `docs/DECISIONS.md` records an explicit,
-  reasoned decision not to rewrite history (e.g., keys already rotated and confirmed dead), signed
-  off by the user. No autonomous session should mark this "done" via history rewrite without that
-  sign-off.
+### ~~P0-1: Resolve the leaked-credential Git-history exposure~~ — CLOSED (D42), decision confirmed already made in D35
+
+- **What was found:** Real API key values from the D35 incident remain permanently retrievable via
+  `git log --all -p -- .env.example`. Originally flagged as needing a decision with the user's
+  explicit sign-off on whether to rewrite Git history.
+- **What actually happened:** Re-reading D35 itself (not reopening it) found the decision was
+  already made at the time of the original leak — the user was offered a full `git filter-repo` +
+  force-push history purge and **explicitly declined it**, reasoning it is strictly more invasive
+  than the file fix and still wouldn't undo the actual exposure (only provider-side key rotation
+  does that). D42 confirmed this and added a durable, non-destructive guardrail instead:
+  `scripts/check_no_secrets.py`, wired into `make lint`/CI, fails the build if a tracked
+  `*.env.example` file ever gets a real secret-shaped value again — verified against a synthetic
+  fixture reproducing D35's exact pattern.
+- **What remains, if anything:** This repo cannot verify whether the user has actually rotated the
+  two leaked keys at their respective providers — that was, is, and remains outside what static
+  analysis of this repo can check. If a future session or the user wants to reopen the
+  history-rewrite question, that requires a fresh, explicit request — it is not something an
+  autonomous session should revisit on its own read of "more time has passed."
 
 ---
 
 ## P1 — High value, ready to build
 
-### P1-1: Wire waiver, trade, and roster-need recommendations into the web UI
-- **Problem:** `waiver.py`, `trade.py`, and roster-fit logic are real, tested, and live-verified
-  server-side, but no reachable UI view calls them (§20 of the audit). This is the largest gap
-  between what the spec promises and what a user can actually do today.
-- **Dependencies:** None — purely additive frontend work against existing, working API endpoints.
-- **Recommended sequencing:** Add a Waiver tab (mirror the existing League tab's data-loading
-  pattern in `web/src/components/`), then a Trade evaluation view, then surface roster-need directly
-  in the existing League tab (it already loads `LeagueContext`, which is a roster-need input).
-- **Acceptance criteria:** From the running app, a user can (1) get a real FAAB bid recommendation
-  for a real Sleeper league without touching the API directly, (2) get a real dynasty trade
-  evaluation the same way, (3) see roster-need reflected somewhere in the League view. Playwright (or
-  manual) verification against the real app, not just an API call, per this project's UI-testing
-  standard.
+### ~~P1-1: Wire waiver, trade, and roster-need recommendations into the web UI~~ — CLOSED (D44)
 
-### P1-2: Commit an EDGE historical-backtest report artifact
-- **Problem:** A historical EDGE backtest was run with genuine mixed results (per the audit's EDGE
-  sub-finding), but no `reports/` file preserves it — the "historical EDGE performance is evaluated"
-  acceptance criterion currently rests on trust, not a reviewable document.
-- **Dependencies:** None.
-- **Recommended sequencing:** Re-run the existing backtest logic (do not re-derive it from scratch —
-  find whatever produced the sub-audit's "genuine mixed results" claim first), write
-  `reports/edge_backtest.md` following the same format as `reports/calibration_report.md` and
-  `reports/baseline_evaluation.md`, and update `docs/TRACEABILITY.md` to point to it.
-- **Acceptance criteria:** `reports/edge_backtest.md` exists, contains real per-position/per-season
-  numbers (not aggregate-only), and is referenced from `docs/PROJECT_STATE.md`.
+- Waiver, trade, and roster-need are all wired into the SPA (`WaiverView.tsx`, `TradeView.tsx`, a
+  roster-need section in `LeagueView.tsx`) and live-verified against a real Sleeper league
+  (`dilworth`, season 2025) with real recommendations, real reasons, and real decisions recorded.
+  D48 additionally replaced those views' raw opaque-player-id text entry with a real name-search
+  picker (`PlayerPicker.tsx`, against the previously-dead `GET /players` endpoint), and fixed a
+  real bug found doing it (an HTML `<label>`-click-forwarding issue that silently reset the
+  picker's selection).
 
-### P1-3: Add model-artifact persistence for production model versions
-- **Problem:** No model is ever saved to disk; every prediction requires an in-process retrain. This
-  breaks the "reproducible historical prediction" requirement at inference time (only the training
-  *inputs* are reconstructable today) and means the API's serving path is really a training path.
-- **Dependencies:** None, but touches `models/established/`, `models/rookie/`, `models/uncertainty/`,
-  and whatever currently triggers training-before-serving in the API layer — read those paths fully
-  before starting, since this is the largest code change in this backlog.
-- **Recommended sequencing:** Start with the established-player model (highest-traffic path): add a
-  `save_model`/load path keyed by `model_version`, gated behind the existing `model_registry` table
-  (a version only becomes "servable" once evaluation has run and passed). Extend to rookie and
-  uncertainty models once the established path is proven. Keep `models/` gitignored per CLAUDE.md —
-  this is a runtime artifact, not something to commit.
-- **Acceptance criteria:** The API can serve a prediction for a given `model_version` without
-  retraining in that request; a regression test proves a served prediction matches what training
-  produced for the same inputs; `docs/DECISIONS.md` records the decision with a D-number.
+### ~~P1-2: Commit an EDGE historical-backtest report artifact~~ — CLOSED (D41)
+
+- `alpha-squad edge backtest` + `market/edge.py::write_edge_backtest_report` produce
+  `reports/edge_backtest.md`: real per-position, per-season, and edge-magnitude-bucket numbers
+  (not aggregate-only), reusing the existing walk-forward methodology rather than a new one. Real
+  result: BUY beat market-implied points in all 4 scored seasons 2022-2025; SELL was genuinely
+  mixed. `docs/TRACEABILITY.md` updated to cite it. (Reports remain gitignored per CLAUDE.md's own
+  policy — "commit the artifact" in practice meant "make the report-generating code real and
+  reproducible," which it now is; nothing under `reports/` was ever meant to be committed.)
+
+### ~~P1-3: Add model-artifact persistence for production model versions~~ — CLOSED (D43)
+
+- `models/persistence.py` (generic CatBoost save/load + a `model_registry` upsert carrying
+  `artifact_path`/`calibration_residuals_json`) closes this for the two paths that actually serve
+  live predictions: uncertainty (`run_uncertainty(persist=True)` + `score_with_persisted_model`,
+  backing `/rankings`) and the forward rookie projection (`project_rookie_class(persist=True)` +
+  `score_rookie_projection_with_persisted_model`, backing `/rookies`). Verified against the real
+  database: trained and persisted real models, then re-scored real players from the saved
+  artifacts alone (no `.fit()` call) and reproduced the exact training-time output. New CLI:
+  `alpha-squad models rescore-uncertainty` / `rescore-rookie-projection`.
+- **Scope decision, not a gap:** established-player season-level/weekly models were deliberately
+  left unpersisted — nothing in the API serves their output live today (it feeds
+  `evaluation_results` for reporting/comparison only), so persisting them would add a servable
+  artifact nothing reads. Revisit if `/rankings` is ever extended to read established-model output
+  directly.
+
+### ~~P1-4: Wire the Monte Carlo simulation engine into the API/UI~~ — CLOSED (D49)
+
+- `POST /simulate/team-season` wraps the exact `simulate_team_season` the CLI calls (no parallel
+  logic), plus a new `SimulationView.tsx` tab. Verifying it live surfaced a real, separate gap:
+  `team_week_points` (the real-final-score table the simulation's covariance draw depends on) was
+  completely empty in this deployment — `build_team_week_points` existed and was tested but had
+  never been wired to a CLI command, so it never survived a database rebuild. Fixed the root
+  cause: added `alpha-squad features build-team-scores` + a `make team-scores` runbook step, then
+  ran it for real (7,326 rows, matching `team_week_stats`). Verified end-to-end via both the CLI
+  and the running app (Playwright): a real KC/2025 simulation returns real named players (Patrick
+  Mahomes, Travis Kelce, ...), real uncertainty bands, and a real QB/WR1 stack correlation
+  (0.335), with a real persisted `team_simulation_runs` row.
 
 ---
 
 ## P2 — Real gaps, lower urgency
 
-### P2-1: Feed evidence-adjusted projections into what's actually served
-- **Problem:** The bounded (±15%) evidence-adjustment function is correctly implemented but unused
-  except as an EDGE veto input — it does not affect the served projection or ranking.
-- **Dependencies:** None, but should be sequenced after P1-3 if that changes how projections are
-  served, to avoid rework.
-- **Recommended sequencing:** Decide explicitly (with the user, since this changes what "the
-  projection" means) whether evidence should adjust the served projection directly, or whether the
-  current "evidence only vetoes EDGE" design is intentional and should instead be documented as such
-  in PRODUCT_SPEC.md. Either resolution is acceptable; leaving it silently unused is not.
-- **Acceptance criteria:** Either evidence-adjusted values are demonstrably reflected in a served
-  projection (with a test proving it), or `docs/DECISIONS.md` records an explicit decision that
-  evidence is EDGE-veto-only by design, with reasoning.
+### ~~P2-1: Feed evidence-adjusted projections into what's actually served~~ — CLOSED (D46)
 
-### P2-2: Implement future-draft-pick valuation in the trade engine
-- **Problem:** `LeagueContext.future_picks` is loaded but never read by `trade.py::recommend_dynasty_trade`
-  — no future-pick valuation logic exists anywhere in `league/`.
-- **Dependencies:** None.
-- **Recommended sequencing:** Add a pick-value curve (can start as a documented heuristic, consistent
-  with the existing disclosed age-curve pattern in `trade.py`) keyed by round/pick-position, feed it
-  into `recommend_dynasty_trade`'s existing value calculation, and extend the `reasons` output.
-- **Acceptance criteria:** `recommend_dynasty_trade` accepts and uses `future_picks`; a test proves a
-  trade including a future 1st materially changes the recommendation vs. an otherwise-identical trade
-  without one.
+- Re-checked the architectural intent before resolving this (rather than assuming either branch):
+  PRODUCT_SPEC.md's Evidence section says "current information updates the prior; it does not
+  automatically override it," and ARCHITECTURE.md's pipeline places Evidence upstream of "Universal
+  Player Intelligence" — evidence is supposed to reach served output. The real blocker wasn't
+  missing logic: `weekly_projection_snapshot` (the table the real evidence-adjustment pipeline
+  depends on) had never been populated in this deployment. Fixed by running the real weekly
+  pipeline + evidence adjustment against 2025 data (6,037 predictions, 291 real deltas, 95
+  materially adjusted) and adding `GET /rankings/weekly` (ordered by the evidence-adjusted value,
+  with real reasons) + a "Weekly" mode in `RankingsView.tsx`. This closed the audit's separately-
+  tracked "in-season/ROS" gap (P3-3 below) at the same time, since it was the same root cause.
+
+### ~~P2-2: Implement future-draft-pick valuation in the trade engine~~ — CLOSED (D45)
+
+- `LeagueContext.future_picks` turned out to be **always empty** in this deployment (no
+  traded-picks data source is wired for Sleeper or the static YAML leagues) — wiring logic to read
+  an always-empty field would have been dead code. Instead: `pick_value(round, teams,
+  pick_in_round, years_out)` (a documented heuristic, same treatment as the pre-existing age
+  curve, anchored to real `dynasty_values.value_2qb` data) + `evaluate_trade_package` (sums real
+  player + pick value on each side of a trade) + `POST /league/{id}/trade-package` +
+  `alpha-squad league trade-package`. Pick assets are explicit caller input, the same pattern
+  `draft.py`'s `available_player_ids` already uses. Verified against the real database.
 
 ### P2-3: Add the live/network integration suite to CI (at least on a schedule)
-- **Problem:** `.github/workflows/ci.yml` only runs the offline suite (`make test`, which deselects
-  `network`-marked tests). The Sleeper/league live-integration claims in this audit were only
-  verified because I ran them manually this session — there is no automated gate on them.
-- **Dependencies:** Requires provisioning real API credentials as GitHub Actions secrets — a decision
-  for the user (credential ownership/rotation policy), not something to do unilaterally.
-- **Recommended sequencing:** Propose to the user first (credentials need to live in GitHub secrets,
-  which is outside this repo). Once approved, add a separate scheduled workflow (not on every PR,
-  since it hits real external services) running `pytest -m network`.
-- **Acceptance criteria:** A scheduled CI job runs the live suite and fails visibly if a real source
-  breaks; failures are distinguishable from PR-blocking failures.
+
+- **Problem:** `.github/workflows/ci.yml` only runs the offline suite (`make test`, which
+  deselects `network`-marked tests). The Sleeper/league live-integration claims in this project's
+  docs depend on someone running them manually (as this session did, more than once), not an
+  automated gate. **Still open** — not attempted this pass since it requires provisioning real API
+  credentials as GitHub Actions secrets, a decision for the user.
+- **Dependencies:** None technically, but requires the user's credential-ownership decision.
+- **Recommended sequencing:** Propose to the user first. Once approved, add a separate scheduled
+  workflow (not on every PR, since it hits real external services) running `pytest -m network`.
+- **Acceptance criteria:** A scheduled CI job runs the live suite and fails visibly if a real
+  source breaks; failures are distinguishable from PR-blocking failures.
 
 ---
 
 ## P3 — Low risk, do opportunistically
 
-### P3-1: Refresh CLAUDE.md's stale data-source-status note
-- **Problem:** CLAUDE.md still describes Sleeper/FantasyPros/CFBD as blocked by egress policy; this
-  was resolved by D36/D37 and re-confirmed live this audit.
-- **Dependencies:** None.
-- **Acceptance criteria:** CLAUDE.md's data section matches the current, audit-confirmed reality;
-  the "re-verify with `alpha-squad sources status`" instruction stays (it's still good practice).
+### ~~P3-1: Refresh CLAUDE.md's stale data-source-status note~~ — CLOSED (D50)
 
-### P3-2: Add expert-accuracy weighting to market-signal blending
-- **Problem:** PRODUCT_SPEC.md calls for "expert weighting uses demonstrated accuracy where data
-  permits"; no such logic exists in `market/` today.
-- **Dependencies:** Benefits from P1-2's backtest artifact existing first, since expert accuracy is
-  itself a historical-performance measurement.
-- **Acceptance criteria:** Market blending demonstrably weights a source differently based on a
-  measured historical-accuracy statistic for that source, not a fixed constant.
+- CLAUDE.md's `## Data` section cited only D3 (the original 2026-08-20 probe) and described
+  Sleeper/FantasyPros/CFBD as policy-blocked. Re-verified live with a fresh `alpha-squad sources
+  status` run before editing — all three report `AVAILABLE` — and rewrote the note to match
+  `docs/DATA_SOURCES.md`'s current narrative, citing D31/D36-D38. Only KeepTradeCut and ESPN
+  remain unreachable, neither required by PRODUCT_SPEC.md's core outputs.
 
-### P3-3: Add an explicit in-season/ROS re-projection loop, if genuinely absent
-- **Problem:** The audit marked this PARTIAL rather than confirming it doesn't exist — it needs a
-  direct investigation before being treated as a real gap.
-- **Dependencies:** None.
-- **Recommended sequencing:** First re-verify whether this already exists (re-check `established/`'s
-  training entry points for a within-season retraining or re-scoring path) before writing new code.
-- **Acceptance criteria:** Either confirmed to already exist (update the audit's table), or built and
-  tested following the same walk-forward discipline as the rest of the established-player pipeline.
+### ~~P3-2: Add expert-accuracy weighting to market-signal blending~~ — CLOSED/LIMITED (D51)
+
+- Measured rather than assumed: re-confirmed live that even the paid FantasyPros API exposes only
+  consensus statistics, never per-expert identity, so true per-expert weighting is genuinely
+  unbuildable with data this project can access. The coarser proxy the real data does permit
+  (`ecr_best`/`ecr_worst` expert-agreement dispersion) was measured against 1,925 real
+  player-seasons (2022-2025) and found to have no consistent relationship with market accuracy —
+  it reverses sign between rank tiers. Applied this project's own D39 standard (measure, and if
+  the signal doesn't hold up, say so rather than force it in): **not adopted.** No change to
+  `edge.py`'s gating logic. See D51 for the full methodology and numbers.
+
+### ~~P3-3: Add an explicit in-season/ROS re-projection loop, if genuinely absent~~ — CLOSED (D46)
+
+- Investigated rather than assumed: the pipeline existed (`weekly_projection_snapshot` +
+  `projection_deltas`) but had never been run against real data in this deployment and nothing
+  served it. See P2-1 above — same fix, same D-number, closed together.
 
 ---
 
-## Notes on sequencing across the whole list
+## Notes on sequencing across what's left
 
-- P0-1 should not be blocked by anything else, but also should not be rushed into a unilateral
-  history rewrite — it needs the user's explicit decision, which may take longer than the code work
-  in P1/P2.
-- P1-3 (model persistence) is the largest single change in this list and touches the most existing
-  code; if a future session picks up this backlog, read `models/established/`, `models/rookie/`, and
-  `models/uncertainty/` in full before starting, and add the regression test *before* changing serving
-  behavior, per this project's standing "no hidden failing tests" / "add regression tests" rules.
-- P1-1 (UI wiring) is the fastest way to make the existing, already-tested backend work valuable to
-  an actual user, and has no risk of touching model-quality code — a good first pick for the next
-  implementation session if the user wants quick, low-risk, high-visibility progress.
+- All four "built but invisible" capabilities identified at the start of this hardening pass
+  (waiver/trade/roster-need/simulation) are now closed (D44/D48/D49), the pure-documentation item
+  (P3-1) is closed (D50), and P3-2 has been measured and honestly resolved as LIMITED (D51) rather
+  than left simply "not done." The only item left in this file is **P2-3** (network suite in CI),
+  which needs a user credential decision — propose it rather than doing it unilaterally.
+- **P0-1** requires no further code work — the repo-side decision is settled (D35/D42). The only
+  open thread is a conversation with the user about provider-side key rotation status, not
+  something to schedule as engineering work.
+- **Note (2026-08-25):** a separate, later phase (M15, `docs/DECISIONS.md` D53) productized the
+  intelligence this backlog hardened — real Sleeper league onboarding, My Team/Action Center/
+  Player Detail/Draft/multi-asset Trade views — and found/fixed 6 further real bugs the same way
+  this pass did (exercising the real app with Playwright, not code review). It is a separate body
+  of work from the P0-P3 items above, not a continuation of this file's backlog; see D53 and
+  `docs/PROJECT_STATE.md`'s M15 section for the full account. P2-3 (network suite in CI) remains
+  the only item in *this* file still open.

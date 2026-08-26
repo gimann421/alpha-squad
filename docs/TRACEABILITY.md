@@ -20,7 +20,7 @@ state at the time each milestone was first built.
 | Redraft preseason projections/rankings exist | ✅ | `models/established/season_level.py` (M5), `models/baselines/` (M4); `/rankings` API, `RankingsView` |
 | Dynasty rookie rankings exist | ✅ | `models/rookie/train.py` (M7); `/rookies` API, `RookiesView` |
 | Dynasty overall rankings exist | ✅ | `market/dynasty_values.py` (dynasty market value) blended with EDGE via `league/trade.py` |
-| In-season/ROS rankings exist | ✅ | `models/established/train.py::_persist_weekly_projections`, evidence-adjusted via `evidence/prior_update.py` (M9) |
+| In-season/ROS rankings exist | ✅ | `models/established/train.py::_persist_weekly_projections`, evidence-adjusted via `evidence/prior_update.py` (M9), served via `GET /rankings/weekly` and `RankingsView.tsx`'s "Weekly" mode (D46 — previously the pipeline was real but had never been run against this deployment's data and nothing served it; now both are true, verified live) |
 | Projection ranges and probabilities exist | ✅ | `models/uncertainty/` (M6): p10/p25/p50/p75/p90, top-12/24 probability |
 | EDGE scores exist | ✅ | `market/edge.py` (M8) |
 | Evidence/provenance explains material outliers | ✅ | `evidence/events.py`, `projection_deltas` (M9); `/provenance/{id}` |
@@ -65,7 +65,7 @@ state at the time each milestone was first built.
 | CatBoost exists | ✅ | `ml_catboost` in `MODEL_SPECS` |
 | XGBoost challenger exists or is explicitly rejected with evidence | ✅ | `ml_xgboost`; compared against every other component in `evaluation_results`, real numbers in `reports/established_ml_evaluation.md` |
 | Opportunity modeling exists | ✅ | `ml_opportunity_only` |
-| Team environment modeling exists | ✅ | `ml_team_environment_only` (M5); correlated team-season simulation (M13, `models/simulation/`) |
+| Team environment modeling exists | ✅ | `ml_team_environment_only` (M5); correlated team-season simulation (M13, `models/simulation/`), served live via `POST /simulate/team-season` + `SimulationView.tsx` (D49) |
 | Rookie model is separate from established-player model | ✅ | `models/rookie/` is a fully separate pipeline/feature set, walk-forward by draft class |
 | Rookie breakout probability exists | ✅ | `ml_rookie_breakout_*` classifiers |
 | Draft capital is explicit | ✅ | `models/rookie/features.py` draft-capital/pick-value-curve feature |
@@ -74,6 +74,7 @@ state at the time each milestone was first built.
 | Uncertainty intervals exist | ✅ | M6 quantile models + split-conformal calibration |
 | Probability calibration is measured | ✅ | `reports/calibration_report.md` — real out-of-sample coverage vs. nominal |
 | Model versions are tracked | ✅ | model registry (`_register_model`), `VALIDATED`/`UNVALIDATED` |
+| Servable model artifacts persist without retraining | ✅ | `models/persistence.py` (D43): fitted CatBoost models saved natively (`.cbm`) under `models/`, keyed by (model_name, position, version) in `model_registry.artifact_path`; `train uncertainty --persist`/`train rookie-project --persist` save on every real run (default on), `alpha-squad models rescore-uncertainty`/`rescore-rookie-projection` re-score without a `.fit()` call. Verified live: re-scored a real 2026 rookie QB from the persisted artifact and reproduced the exact training-time output (196.3 pts / 86% breakout) |
 | Model performance is compared against baselines | ✅ | same `evaluation_results` table for both, `evaluate_and_record` |
 
 ## Market/EDGE
@@ -83,11 +84,11 @@ state at the time each milestone was first built.
 | FantasyPros ECR is a market baseline when available | ✅ | via DynastyProcess `db_fpecr` (real historical ECR, D3); `market/consensus.py` |
 | ADP is tracked when available | ⚠️ | no direct ADP series is reachable in this environment; ECR-implied (isotonic rank→points, D17) and dynasty market value are the documented substitutes — not literal ADP |
 | Sleeper/KTC are treated as separate signals, not truth | ✅ | Sleeper's trending adds/drops now feed the evidence engine as a real Weak-tier `social_media_buzz` signal (D32, `evidence/sleeper_trending.py`) — a separate, bounded evidence input, never a source of truth the model defers to (same ±15% bounded-adjustment ceiling as every other evidence signal). KTC has no formal adapter; its dynasty-value role is covered by DynastyProcess `values-players`/`values-picks` (D3) |
-| Expert weighting uses demonstrated accuracy where data permits | ⚠️ | only *consensus* ECR is reachable, not per-expert rankings (needs the blocked FantasyPros API); weighting is applied at the source level (ECR vs. dynasty value vs. model) instead (D4) |
+| Expert weighting uses demonstrated accuracy where data permits | ⚠️ | LIMITED, now empirically confirmed rather than assumed (D51): even the live paid FantasyPros API exposes only consensus statistics (`rank_min`/`rank_max`/`rank_ave`/`rank_std`), never per-expert identity. The coarser proxy data *does* permit — expert-agreement dispersion (`ecr_best`/`ecr_worst` spread) — was measured against 1,925 real player-seasons (2022-2025) and found to have no consistent, generalizable relationship with market accuracy (reverses sign between rank tiers, D51); not adopted, per the same measure-and-reject standard D39 established |
 | Rank edge, points edge, and probability edge exist | ✅ | `market/edge.py` `EdgeContract` fields |
 | A raw ranking discrepancy cannot alone produce a strong EDGE | ✅ | `classify_action`'s hard gating rule; `tests/unit/test_edge.py::TestClassifyActionGatingRule` |
 | BUY/HOLD/SELL/WATCH are evidence-backed | ✅ | `evidence_score` veto below `EVIDENCE_CONTRADICTION_THRESHOLD` (D23) |
-| Historical EDGE performance is evaluated | ✅ | `edge validate`, `reports/edge_validation.md`; BUY cohort beat market-implied points in 3 of 4 scored seasons post-M13-fix, honestly reported either way (D21, D28) |
+| Historical EDGE performance is evaluated | ✅ | `edge validate` (per-season/action summary, `reports/edge_validation.md`) + `edge backtest` (per-position, per-season, and rank/points/confidence-magnitude bucket breakdown, `reports/edge_backtest.md`, D41). Re-run 2026-08-24 against the current live-sourced market data (2022-2025, 1543 signals): BUY cohort beat market-implied points in all 4 scored seasons (+27.2/+19.2/+18.8/+4.7 pts, a real declining-but-consistently-positive trend); SELL was mixed (beat in 2022-2023, roughly neutral 2024, wrong-direction 2025) — honestly reported either way, not smoothed over |
 
 ## Evidence
 
@@ -98,7 +99,7 @@ state at the time each milestone was first built.
 | Evidence strength is structured | ✅ | `evidence/taxonomy.py` |
 | Strong/medium/weak hierarchy is implemented | ⚠️ | Strong tier has 4 real detectors on officially-sourced nflverse data; Weak tier now has one real detector too (`social_media_buzz` via Sleeper trending adds/drops, D32) — real community momentum, timestamped and bounded like every other evidence input; Medium remains registered vocabulary with a manual-entry path but no reachable text/news source (D5, D22) |
 | News does not directly overwrite model projections | ✅ | `evidence/prior_update.py::apply_evidence_adjustment`, bounded to `MAX_ADJUSTMENT_PCT = 0.15`; tested |
-| Material projection changes have reasons | ✅ | `projection_deltas.reason` + `evidence_ids` |
+| Material projection changes have reasons | ✅ | `projection_deltas.reason` + `evidence_ids`, reachable end-to-end via `GET /rankings/weekly` and the UI's "Why" column as of D46 (not just written to a table nothing read) |
 
 ## League decision engine
 
@@ -115,19 +116,19 @@ state at the time each milestone was first built.
 | Next-pick survival probability exists | ✅ | `next_pick_survival_probability` (Uniform over ECR best/worst) |
 | Draft recommendation includes alternatives and reasoning | ✅ | `DraftRecommendation.alternatives`/`.reasons` |
 | Waiver/FAAB recommendations include roster fit and replacement | ✅ | `recommend_waiver_pickup` |
-| Dynasty decisions account for future value | ✅ | `league/trade.py::age_curve_multiplier` (disclosed heuristic, not trained — D25) |
+| Dynasty decisions account for future value | ✅ | `league/trade.py::age_curve_multiplier` (disclosed heuristic, not trained — D25) plus, as of D45, real future-draft-pick valuation (`pick_value`, `evaluate_trade_package`, `POST /league/{id}/trade-package`, `alpha-squad league trade-package`) — a documented round/slot/years-out heuristic on the same `value_2qb` scale, verified against real dynasty data live |
 
 ## Agent/orchestrator
 
 | Criterion | Status | Where |
 |---|---|---|
-| Orchestrator can decompose work | ✅ | `agents/orchestrator.py::run_pipeline`, topological readiness batches |
+| Orchestrator can decompose work | ✅ | `agents/orchestrator.py::run_pipeline`, topological readiness batches; as of D47, `agents/planner.py::plan_full_refresh` builds the real multi-task graph (which agents apply + correct dependency edges) from a high-level goal rather than every caller hand-typing one, verified against the real database (`alpha-squad orchestrate run`) |
 | Agents have explicit responsibilities | ✅ | `agents/registry.py::AGENT_REGISTRY`, 9 named agents |
 | Structured task/result contracts exist | ✅ | `agents/contracts.py` mirrors `AGENT_CONTRACTS.md` |
 | Dependencies are explicit | ✅ | `Task.depends_on` |
 | Independent tasks can run in parallel | ✅ | `ThreadPoolExecutor`; `tests/unit/test_agents.py::test_independent_tasks_run_concurrently` (timing-based) |
 | Provenance is preserved across agent outputs | ✅ | `Result` contract fields |
-| Critique/review can be invoked | ✅ | `run_evaluation_qa` agent |
+| Critique/review can be invoked | ✅ | `run_evaluation_qa` agent; as of D47, `plan_full_refresh` auto-schedules one QA review task per position after `projection_ml` rather than QA being a fully separate, never-auto-invoked path |
 | Agent disagreements are explicitly resolved | ✅ | `agents/disagreement.py`, both majority and minority positions preserved |
 | Evaluation/QA can reject unsupported claims | ✅ | `REJECT` task state, forces `UNVALIDATED` |
 | Agent failures are retried/recovered or surfaced | ✅ | `MAX_RETRIES = 2`, `BACKOFF_SECONDS`, `FAILED` state |
@@ -145,7 +146,7 @@ state at the time each milestone was first built.
 | Bugs discovered during implementation get regression tests | ✅ | every D-numbered bug in `docs/DECISIONS.md` (D24, D26, D28, D29) has a named regression test |
 | Secrets are not committed | ✅ | M13 audit: `.gitignore` excludes `.env`/`.env.*`/`data/`/`models/`/`*.duckdb`; no hardcoded credential patterns in tracked source; `.env.example` files contain only placeholders |
 | Ruff/static checks pass | ✅ | `make lint` clean as of the final M13 commit |
-| Unit tests pass | ✅ | 204 passed offline (`make test`) |
+| Unit tests pass | ✅ | 350 passed offline (`make test`), up from 204 at the end of M13 |
 | Integration tests pass where configured | ✅ | network-marked suite, run against real sources throughout the session (most recently the M13 simulation live test) |
 | End-to-end workflow succeeds | ✅ | full pipeline (`ingest`→`identity`→`features`→`market`→`train`→`evaluate`→`edge`→`simulate`→`orchestrate`→`serve`) re-run end to end in M13 after the REG/POST fix |
 | New season ingestion is documented and repeatable | ✅ | `README.md`'s pipeline section; every builder is an idempotent upsert, safe to re-run |
@@ -157,13 +158,17 @@ state at the time each milestone was first built.
 | Criterion | Status | Where |
 |---|---|---|
 | The interface exposes the validated player intelligence | ✅ | `api/routers/*.py`, all reading already-persisted/validated tables |
-| EDGE/evidence can be inspected | ✅ | `EdgeView.tsx`, `EvidenceView.tsx` |
-| Rookie evaluation can be inspected | ✅ | `RookiesView.tsx` |
-| League context can be loaded | ✅ | `LeagueView.tsx`, `/league/{id}/context` |
-| Roster-aware recommendations can be generated | ✅ | league draft/waiver forms in `LeagueView.tsx` |
-| Draft/waiver/FAAB recommendations can be generated | ✅ | same |
-| Recommendation explanations show relevant evidence/provenance | ✅ | reasons rendered alongside every recommendation |
-| UI does not duplicate or bypass core model/decision logic | ✅ | D27; every API field traces to a persisted table or a direct M10 function call — verified literally by killing the API process and confirming the UI breaks rather than serving stale data |
+| EDGE/evidence can be inspected | ✅ | `EdgeView.tsx`, `EvidenceView.tsx`, and per-player in `PlayerDetailView.tsx` (D53) |
+| Rookie evaluation can be inspected | ✅ | `RookiesView.tsx`, and per-player in `PlayerDetailView.tsx` (D53) |
+| League context can be loaded | ✅ | `LeagueView.tsx`, `/league/{id}/context`; a real Sleeper league can be connected at runtime through the UI itself (`POST /league/register`, `ConnectLeaguePanel.tsx`, D53), not only pre-registered in `registry.yaml` |
+| A user's own roster and its weaknesses can be inspected | ✅ | D53: `GET /league/{id}/my-team` + `MyTeamView.tsx`/`DashboardView.tsx` — real per-player projection/uncertainty/market/EDGE/dynasty-value/roster-need joined against the real imported roster, starter/bench computed by reusing M10's `compute_league_starters`; `GET /league/{id}/drop-candidates` for worst-VORP bench players |
+| Roster-aware recommendations can be generated | ✅ | D44: `LeagueView.tsx`'s "Roster need" section, `GET /league/{id}/roster` — live-tested against `dilworth` (real Sleeper league). D53: a connected league's `roster_id` now resolves real `roster_positions` server-side for draft/waiver instead of requiring manual entry |
+| A single ranked "what should I do" view exists | ✅ | D53 (Action Center, the phase's own framing of "most important user-facing feature"): `GET /league/{id}/actions` + `ActionCenterView.tsx` — ranked ADD (FAAB $)/DROP (VORP)/TRADE (rank-edge) lists, each entry carrying real value/confidence/reasons; deliberately three separately-ranked lists rather than one fabricated cross-type score |
+| Draft/waiver/FAAB recommendations can be generated | ✅ | D44: draft form in `LeagueView.tsx` (pre-existing) plus new `WaiverView.tsx`/`TradeView.tsx` — all three live-tested against `dilworth` (real Sleeper league, season 2025); prior to D44 this row's citation ("league draft/waiver forms in `LeagueView.tsx`") was inaccurate — only the draft form existed, per `docs/CURRENT_STATE_AUDIT.md`'s UI/API sub-audit. D48 addendum: Waiver/Trade's player-id fields use `PlayerPicker.tsx`, a real name-search autocomplete against `GET /players` (previously a dead endpoint — nothing called it), replacing raw opaque-id text entry; verified end-to-end live including a real submitted recommendation. D53: `DraftView.tsx` (new — a full recommend-and-repeat draft workflow) and batch waiver ranking (`rank_waiver_targets`, `GET /league/{id}/waiver-targets`) so a ranked list of every free agent is available, not only one-player-at-a-time |
+| Trade evaluation covers multi-asset packages including future picks | ✅ | D53: `TradeView.tsx`'s package section — add players/future picks to each side, `evaluate_trade_package` (D45) returns real side values and reasons, UI phrases an ACCEPT/REJECT/CONSIDER verdict from the user's chosen side; live-verified with a real two-player-plus-pick package |
+| A player's universal value is distinguished from its value in a specific league | ✅ | D53: `GET /players/{id}/detail` + `PlayerDetailView.tsx` — universal section (projection/uncertainty/market/EDGE/evidence/rookie info, same everywhere) rendered separately from a "my league value" section (dynasty trade action, roster fit) that changes per selected league for the identical player |
+| Recommendation explanations show relevant evidence/provenance | ✅ | reasons rendered alongside every recommendation; `PlayerDetailView.tsx`'s "why did this change" evidence timeline (D53) |
+| UI does not duplicate or bypass core model/decision logic | ✅ | D27; every API field traces to a persisted table or a direct M10 function call — verified literally by killing the API process and confirming the UI breaks rather than serving stale data. D53 kept this true through productization: the one client-side computation added (`DraftView.tsx`'s `available_player_ids`) is pure set-subtraction over already-ranked/already-drafted ids, not a decision |
 
 ## Completion standard
 
