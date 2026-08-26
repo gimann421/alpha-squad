@@ -149,21 +149,37 @@ all 5 seasons — in 2025 `generic_prior_year` (2139.4 starter pts) edges out `m
 `market_consensus` in every one of the 5. This directly answers questions 3 and 4 unfavorably
 for Alpha's current draft decision engine — on a now leak-free and verified-reproducible basis.
 
-**Root cause, found by inspecting real drafted rosters (not left as an unexplained number, and
-re-verified against the corrected data):** `alpha_league_aware`'s real 2021 draft-slot-1
-roster drafted **7 quarterbacks and zero running backs** (into a league that starts 2 QB and 2
-RB) among its 17 picks (7 QB / 7 WR / 3 TE). Its real 2025 roster was 12 WRs against only 3
-QBs. `recommend_draft_pick`'s `roster_fit_multiplier` is bounded to [0.7, 1.3] (deliberately,
-so a marginal roster need can never invert a large talent gap — see `league/roster.py`) — but
-this means once one position's VORP genuinely runs hotter than others for several consecutive
-picks, the bounded fit multiplier cannot correct hard enough, and the engine stacks that
-position (or starves another) far past what any real roster can use. Bench players who never
-become starters contribute to `total_roster_points` but not `starter_points`, which is exactly
-the gap observed (`alpha_league_aware`'s total-points shortfall vs. market_consensus, 255.1
-pts pooled, is smaller than its starter-points shortfall, 376.2 pts — points are there, just
-on the bench). Market consensus avoids this failure mode because real aggregate expert
-rankings already implicitly balance across positions; a single-model VORP ranking does not
-unless something forces it to.
+**Root cause, verified by replaying the real production `recommend_draft_pick` function
+pick-by-pick against real 2021 data (not left as an unexplained number, and not just inferred
+from the final roster):** `alpha_league_aware`'s real 2021 draft-slot-1 roster drafted **7
+quarterbacks and zero running backs** (into a league that starts 2 QB and 2 RB) among its 17
+picks (7 QB / 7 WR / 3 TE). Its real 2025 roster was 12 WRs against only 3 QBs.
+
+A direct replay of the 2021 draft (calling the exact live function, printing its real VORP/
+fit-multiplier/score decomposition at every pick) shows this is not one mechanism but two
+compounding ones:
+
+1. **`roster_fit_multiplier`'s penalty barely engages in practice.** It is bounded to
+   [0.7, 1.3] by design (`league/roster.py`), but the real per-pick penalty growth is far
+   gentler than that bound suggests — even after already drafting 6 QBs, a 7th costs only a
+   **6% discount** (`fit_mult=0.94`, verified by direct computation), nowhere near the 0.7
+   floor. A 6% discount is not enough to overcome a real VORP edge of the kind seen at pick 1
+   of this exact draft (available TE at 127.5 VORP and QB at 131.2 VORP both outscoring the
+   best available RB at 103.1, before any roster-need adjustment).
+2. **Real positional scarcity compounds the miss.** The other 9 slots (real market-consensus
+   opponents) draft RBs at a normal, balanced rate throughout. Because this team's early picks
+   drifted to QB/WR/TE, by round 16 the best *available* RB had VORP **-135.4** — worse than
+   replacement level — because the real RB pool was already drained by the other teams. By the
+   time roster-need pressure would organically demand an RB, there were no usable RBs left to
+   correct with.
+
+Bench players who never become starters contribute to `total_roster_points` but not
+`starter_points`, which is exactly the gap observed (`alpha_league_aware`'s total-points
+shortfall vs. market_consensus, 255.1 pts pooled, is smaller than its starter-points shortfall,
+376.2 pts — points are there, just on the bench). Market consensus avoids this failure mode
+because real aggregate expert rankings already implicitly balance across positions; a
+single-model VORP ranking, reactive only to *current* roster need rather than anticipating a
+run on a scarce position, does not.
 
 **A genuinely mixed nuance worth stating plainly, not just the unfavorable half:**
 `alpha_league_aware` actually *beats* `alpha_bpa` on pooled starter points (1644.5 vs 1429.1)

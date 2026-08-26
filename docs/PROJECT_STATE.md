@@ -814,14 +814,18 @@ production draft recommender) losing to plain market consensus on mean starter p
 **every one of the 5 real seasons tested**, never winning a single season outright, and scoring
 below `alpha_bpa` (identical player values, no league context) on pooled total roster points
 (though it *beats* `alpha_bpa` on pooled starter points — a real, mixed nuance: league context
-helps the started lineup, it just strands more value on the bench overall). Root-caused by
-inspecting real drafted rosters (not left as an unexplained number): the recommender drafted 7
-QBs and zero RBs into a league starting 2 of each in one real trial, and 12 WRs against only 3
-QBs in another, because `roster_fit_multiplier`'s deliberate [0.7, 1.3] bound (so a marginal
-roster need can never invert a large talent gap) cannot correct hard enough once one position's
-VORP runs hot for several consecutive picks. This is a decision-logic bug, not a modeling one,
-and is the single most actionable finding of this phase — not yet fixed, tracked as this
-project's next recommended action.
+helps the started lineup, it just strands more value on the bench overall). Root-caused not
+just from the final rosters but by replaying the real `recommend_draft_pick` function
+pick-by-pick against real 2021 data: the recommender drafted 7 QBs and zero RBs into a league
+starting 2 of each in one real trial, and 12 WRs against only 3 QBs in another. Two compounding
+mechanisms: `roster_fit_multiplier`'s real penalty growth is far gentler than its [0.7, 1.3]
+bound implies (only a 6% discount at the 7th same-position pick, verified by direct
+computation), nowhere near enough to overcome a real VORP edge; and the other 9 real
+market-consensus opponents drain the scarce position at a normal rate throughout, so by the
+time need-pressure would organically correct course, no usable players are left at that
+position (round 16 of the replayed draft: best available RB had VORP -135.4). This is a
+decision-logic bug, not a modeling one, and is the single most actionable finding of this
+phase — not yet fixed, tracked as this project's next recommended action.
 
 This finding was independently re-verified after the fact, prompted by a direct question about
 whether pre-2025 training data was genuinely separated from 2025 outcomes: that audit found and

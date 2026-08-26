@@ -1977,15 +1977,23 @@ reported exactly as found — two of these are unfavorable to Alpha's current im
   context: 2680.0 vs. 2756.1) — though it *beats* `alpha_bpa` on pooled *starter* points
   (1644.5 vs. 1429.1), a real, mixed nuance: league context measurably improves the started
   lineup, it just also strands more value on the bench overall (see the root cause below).
-  Root-caused by inspecting real drafted rosters, not left unexplained: `alpha_league_aware`
-  drafted 7 QBs and zero RBs (of 17 picks, into a league starting 2 of each) in one real 2021
-  trial, and 12 WRs against only 3 QBs in a real 2025 trial. `roster_fit_multiplier` is
-  deliberately bounded to [0.7, 1.3] (`league/roster.py`) so a marginal roster need can never
-  invert a large talent gap — but that same bound cannot correct hard enough once one
-  position's VORP runs hot for several consecutive picks, and the engine stacks that position
-  (or starves another) far past what a real roster can start. This is a decision-logic bug in
-  how good player values become a 17-pick sequence, not a modeling problem (§1 shows the
-  values themselves are good) — the most actionable finding of this phase.
+  Root-caused not just by inspecting the final drafted rosters but by *replaying* the real
+  `recommend_draft_pick` function pick-by-pick against real 2021 data (prompted by a direct
+  question of whether "7 QBs, 0 RBs" was even plausible for a real draft — it is, and the
+  replay shows exactly why): `alpha_league_aware` drafted 7 QBs and zero RBs (of 17 picks,
+  into a league starting 2 of each) in one real 2021 trial, and 12 WRs against only 3 QBs in a
+  real 2025 trial. Two compounding mechanisms, not one: (1) `roster_fit_multiplier` is bounded
+  to [0.7, 1.3] by design, but its real penalty growth is far gentler than that bound implies
+  — even after already drafting 6 QBs, a 7th costs only a 6% discount (`fit_mult=0.94`,
+  verified by direct computation), nowhere near the 0.7 floor, and nowhere near enough to
+  overcome a real VORP edge (round 1 of the replayed draft: an available TE at 127.5 VORP and
+  QB at 131.2 both beat the best available RB at 103.1, before any need adjustment); (2) the
+  other 9 real market-consensus opponents drain the RB pool at a normal rate throughout, so by
+  round 16 the best *available* RB had VORP -135.4 (worse than replacement) — by the time
+  roster-need pressure would organically demand an RB, none were left to correct with. This is
+  a decision-logic bug in how good player values become a 17-pick sequence, not a modeling
+  problem (§1 shows the values themselves are good) — the most actionable finding of this
+  phase.
   **This finding was independently re-verified after the fact**, prompted by a direct question
   about whether the evaluation was genuinely leak-free: found and fixed two real bugs in the
   draft-simulation path itself (not methodology changes) — `next_pick_survival_probability`

@@ -52,21 +52,41 @@ items with no listed dependency can start immediately.
   reproducibility audit of the draft-simulation path itself (a missing season filter in
   `next_pick_survival_probability`, and non-deterministic tie-breaking over Python `set`s) —
   the numbers above are the corrected, reproducibility-confirmed (byte-identical across two
-  separate process runs) result, not the original ones.
-- **Why it happens:** `roster_fit_multiplier` in `league/roster.py` is deliberately bounded to
-  [0.7, 1.3] so that a marginal roster need can never invert a large talent gap — a reasonable
-  design goal in isolation. But that same bound means once one position's VORP genuinely runs
-  hotter than others for several consecutive picks, the fit multiplier cannot correct hard
-  enough, and the engine keeps taking that position (or starving another) past what any real
-  roster can start. Bench players who never start still count toward `total_roster_points`,
-  which is why the total-points shortfall (255.1 pts pooled) is smaller than the
-  starter-points shortfall (376.2 pts pooled) — the value is there, just stranded on the bench.
-- **What's needed:** A stronger correction than a fixed multiplier bound once a position is
-  already full at the roster-slot level — e.g. a hard or steeply-scaling penalty once
-  drafted-at-position count reaches the league's real starting requirement for that position,
-  not just a proportional fit adjustment. Needs its own before/after run of
-  `alpha-squad evaluate draft-simulation` to confirm the fix actually closes the gap against
-  market consensus, not just changes the failure mode.
+  separate process runs) result, not the original ones. The specific "7 QB / 0 RB" and
+  "12 WR / 3 QB" rosters were then further verified by directly replaying the real
+  `recommend_draft_pick` function pick-by-pick against real 2021/2025 data (prompted by a
+  direct question of whether such a roster is even plausible for a real fantasy draft — it
+  is, and the replay pins down exactly why).
+- **Why it happens — two compounding mechanisms, both confirmed by the replay, not inferred
+  from the final roster alone:**
+  1. `roster_fit_multiplier` in `league/roster.py` is bounded to [0.7, 1.3] by design, but its
+     real per-pick penalty growth is far gentler than that bound implies: even after already
+     drafting 6 QBs, a 7th costs only a **6% discount** (`fit_mult=0.94`, verified by direct
+     computation of the formula), nowhere near the 0.7 floor and nowhere near enough to
+     overcome a real VORP edge (round 1 of the replayed 2021 draft: an available TE at 127.5
+     VORP and QB at 131.2 VORP both beat the best available RB at 103.1, before any
+     roster-need adjustment at all).
+  2. The other 9 draft slots (real market-consensus opponents) drain the underdrafted
+     position at a normal, balanced rate throughout the draft. Because this team's early picks
+     drifted toward QB/WR/TE, by round 16 of the replayed 2021 draft the best *available* RB
+     had VORP **-135.4** — worse than replacement level. By the time roster-need pressure
+     would organically demand an RB, none were left to correct with. `roster_fit_multiplier`
+     only reacts to current roster composition; it has no way to anticipate a run depleting a
+     position it hasn't drafted yet.
+  Bench players who never start still count toward `total_roster_points`, which is why the
+  total-points shortfall (255.1 pts pooled) is smaller than the starter-points shortfall
+  (376.2 pts pooled) — the value is there, just stranded on the bench.
+- **What's needed:** Both mechanisms likely need addressing, not just one — a steeper penalty
+  once a position is already full at the roster-slot level (e.g. a hard or steeply-scaling cost
+  once drafted-at-position count reaches the league's real starting requirement, rather than
+  the current gentle linear scaling) probably prevents the worst pile-ups (mechanism 1), but
+  may not by itself prevent missing a position's window before it becomes scarce (mechanism 2)
+  — that likely needs some position-scarcity-awareness (e.g. discounting a position's
+  available VORP by how many roster-relevant players remain at it league-wide, not just this
+  team's own need). Needs its own before/after run of `alpha-squad evaluate draft-simulation`
+  to confirm any fix actually closes the gap against market consensus, not just changes the
+  failure mode — and re-verification against a replayed draft, not just the summary metrics,
+  given how much the pick-by-pick replay revealed here that the aggregate numbers alone did not.
 - **Dependencies:** None — the evaluation harness to verify a fix already exists.
 - **Acceptance criteria:** `alpha_league_aware` beats or matches `market_consensus` on mean
   starter points across the same 5 real seasons this finding was measured on, without
