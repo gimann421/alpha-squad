@@ -58,6 +58,30 @@ class TestPureStrategyPicks:
         proj = {"a": 100.0, "b": 250.0}
         assert _alpha_bpa_pick({"a", "b"}, proj) == "b"
 
+    def test_market_consensus_tie_breaks_deterministically_by_player_id(self):
+        """Regression (D54): `available` is a Python `set`, whose iteration order depends on
+        hash randomization that differs across process runs (confirmed: PYTHONHASHSEED unset
+        in this environment). Real tied ECR ranks are common (43 tied groups in the real 2025
+        'rsf' data alone) -- without an explicit secondary key, a tied pick could silently
+        differ between two runs of the identical historical draft, which would make this
+        evaluation's own numbers unreproducible. This test cannot itself vary the
+        process-level hash seed (not practical from within one pytest run); it instead pins
+        down the documented tie-break rule (alphabetically-first player_id wins for `min`) as
+        an explicit, verifiable contract, independent of set iteration order."""
+        market_rank = {"zeta": ("WR", 5.0), "alpha_p": ("RB", 5.0), "mid": ("QB", 5.0)}
+        for _ in range(20):
+            assert _market_consensus_pick(set(market_rank), market_rank) == "alpha_p"
+
+    def test_generic_prior_year_tie_breaks_deterministically_by_player_id(self):
+        prior = {"zeta": 100.0, "alpha_p": 100.0, "mid": 100.0}
+        for _ in range(20):
+            assert _generic_prior_year_pick(set(prior), prior) == "zeta"
+
+    def test_alpha_bpa_tie_breaks_deterministically_by_player_id(self):
+        proj = {"zeta": 100.0, "alpha_p": 100.0, "mid": 100.0}
+        for _ in range(20):
+            assert _alpha_bpa_pick(set(proj), proj) == "zeta"
+
 
 @pytest.fixture
 def con():

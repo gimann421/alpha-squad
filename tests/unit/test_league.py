@@ -434,6 +434,17 @@ class TestRecommendDraftPick:
         with pytest.raises(RuntimeError):
             recommend_draft_pick(con, league, 2025, [], {"nobody"})
 
+    def test_exact_score_ties_break_deterministically_by_player_id(self, con):
+        """Regression (D54): candidates are built by iterating `available_player_ids` (a
+        `set`), whose order depends on hash randomization that differs across process runs
+        (confirmed: PYTHONHASHSEED unset in this environment) -- an exact score tie could
+        otherwise pick a different player on a re-run of the identical historical draft."""
+        league = load_league_context()
+        _seed_uncertainty(con, "zeta", 2025, "QB", 300.0)
+        _seed_uncertainty(con, "alpha_p", 2025, "QB", 300.0)
+        rec = recommend_draft_pick(con, league, 2025, [], {"zeta", "alpha_p"})
+        assert rec.recommendation == "alpha_p"
+
 
 class TestRecommendWaiverPickup:
     def test_raises_for_a_player_with_no_projection(self, con):

@@ -88,16 +88,30 @@ def _market_consensus_pick(available: set[str], market_rank: dict[str, tuple[str
     Alpha's evaluable universe includes but this season's market snapshot doesn't cover
     (rare -- a deep sleeper with no real preseason consensus rank on record) sorts last
     rather than being silently excluded, since a real bot in a real draft still has to pick
-    someone."""
-    return min(available, key=lambda p: market_rank[p][1] if p in market_rank else float("inf"))
+    someone.
+
+    `player_id` is a deterministic tie-break, not a ranking preference: real ECR ranks tie
+    often (43 tied rank groups in the real 2025 'rsf' data alone), and `available` is a
+    Python `set`, whose iteration order depends on hash randomization that differs across
+    process runs (unset PYTHONHASHSEED, confirmed) -- without this, a re-run of the exact
+    same historical draft could silently pick a different player among ties and produce a
+    different (and unreproducible) result. See docs/DECISIONS.md D54."""
+    return min(
+        available,
+        key=lambda p: (market_rank[p][1] if p in market_rank else float("inf"), p),
+    )
 
 
 def _generic_prior_year_pick(available: set[str], prior_year_points: dict[str, float]) -> str:
-    return max(available, key=lambda p: prior_year_points.get(p, float("-inf")))
+    """See `_market_consensus_pick`'s docstring: the `p` tie-break is for reproducibility
+    across process runs, not a stated preference among tied real point totals (real ties are
+    common here too -- e.g. two players both scoring exactly 0.0)."""
+    return max(available, key=lambda p: (prior_year_points.get(p, float("-inf")), p))
 
 
 def _alpha_bpa_pick(available: set[str], projections: dict[str, float]) -> str:
-    return max(available, key=lambda p: projections.get(p, float("-inf")))
+    """See `_market_consensus_pick`'s docstring for why `p` is included as a tie-break."""
+    return max(available, key=lambda p: (projections.get(p, float("-inf")), p))
 
 
 def simulate_draft(

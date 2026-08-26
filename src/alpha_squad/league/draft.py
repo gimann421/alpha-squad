@@ -128,7 +128,11 @@ def recommend_draft_pick(
             DraftCandidate(player_id, pos, vorp[player_id], confidence, survival, score, reasons)
         )
 
-    candidates.sort(key=lambda c: -c.score)
+    # player_id is a deterministic tie-break, not a ranking preference: `candidates` is built
+    # by iterating `available_player_ids` (a `set`), whose order depends on hash randomization
+    # that differs across process runs -- without this, an exact score tie could pick a
+    # different player on a re-run of the identical historical draft. See docs/DECISIONS.md D54.
+    candidates.sort(key=lambda c: (-c.score, c.player_id))
     top = candidates[:top_n]
     if not top:
         raise RuntimeError(
