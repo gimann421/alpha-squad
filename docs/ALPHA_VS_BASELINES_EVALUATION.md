@@ -21,21 +21,26 @@ phase's explicit instruction not to design the evaluation to make Alpha look goo
    (rank-edge tiers 1-3, no evidence gate) does **not** show a clean monotonic relationship
    with outcome — only the evidence-gated BUY/SELL tier does. See §2, §3.
 3. **Does league context improve decisions?** — **Mixed, but net No as currently
-   implemented — a real, unfavorable finding.** `alpha_league_aware` (real roster context +
-   VORP) beats `alpha_bpa` (identical player values, no context) on mean *starter* points
-   (1644.5 vs 1429.1 pooled) but loses to it on mean *total roster* points (2680.0 vs
-   2756.1) — context helps the lineup you actually start but leaves more value stranded on
-   the bench overall — and loses to plain `market_consensus` on every measure. See §4 for
-   the root cause found while investigating this.
-4. **Does Alpha make better draft decisions?** — **No — a real, unfavorable finding.**
-   `market_consensus` beat `alpha_league_aware` on mean starter points in every one of the 5
-   real seasons tested (2020.7 vs 1644.5 pooled) and `alpha_league_aware` never won a single
-   season outright. See §4.
+   implemented — a real, unfavorable finding, partially improved by a fix made and re-verified
+   during this phase.** `alpha_league_aware` (real roster context + VORP) beats `alpha_bpa`
+   (identical player values, no context) on mean *starter* points (1688.2 vs 1429.1 pooled,
+   after the fix — up from 1644.5) but loses to it on mean *total roster* points (2606.6 vs
+   2756.1, a wider gap than before the fix) — context helps the lineup you actually start but
+   leaves more value stranded on the bench overall — and loses to plain `market_consensus` on
+   every measure. See §4 for the root cause found while investigating this, and the fix's real,
+   incomplete effect.
+4. **Does Alpha make better draft decisions?** — **No — a real, unfavorable finding, one
+   mechanism of which has now been partially fixed.** `market_consensus` beat
+   `alpha_league_aware` on mean starter points in every one of the 5 real seasons tested both
+   before (2020.7 vs 1644.5 pooled) and after a fix to the weaker of two identified failure
+   mechanisms (2020.7 vs 1688.2 pooled) — `alpha_league_aware` still never won a single season
+   outright. See §4.
 5. **Does Alpha make better waiver/FAAB decisions?** — **Inconclusive with this proxy; the
    full question isn't measurable here.** See §5 and `docs/EVALUATION_LIMITATIONS.md`.
 6. **Does Alpha make better roster decisions?** — Mixed with §4's finding: Alpha's underlying
    player values are good (§1), but the roster-construction logic that turns them into an
-   actual draft has a real, identified bug (§4).
+   actual draft has a real, identified bug (§4) — one of its two compounding mechanisms now
+   has a real, measured (if partial) fix; the other, positional-scarcity-awareness, does not.
 7. **Does Alpha's trade/roster intelligence improve decisions?** — Trade action quality
    inherits EDGE's real, partially-confirmed evidence (§2); the *value* heuristics it also
    uses have mixed real-world support (§6). A causal trade-outcome study isn't measurable here.
@@ -47,9 +52,12 @@ phase's explicit instruction not to design the evaluation to make Alpha look goo
     gate) is predictive (§3); early-round rookie evaluation vs. draft capital alone (§7);
     the age-curve heuristic's specific decline ages, confounded by survivorship (§6); FAAB
     bid quality (§5, not measurable here).
-11. **What should we improve next?** — Fix `recommend_draft_pick`'s roster-balance logic
-    (§4) — this is the single highest-value, most concrete, most actionable finding of this
-    phase.
+11. **What should we improve next?** — `recommend_draft_pick`'s roster-balance logic had two
+    identified failure mechanisms (§4); one (weak same-position saturation penalty) now has a
+    real, measured fix in place. The other — positional-scarcity-awareness, so the engine can
+    anticipate a run on a position rather than only react to its own current roster
+    composition — remains, and is now the single highest-value, most concrete, most actionable
+    finding of this phase.
 
 ---
 
@@ -189,9 +197,39 @@ strands more value on the bench overall via the position-stacking failure mode a
 context is not doing nothing; it is doing one real thing well and one thing badly.
 
 **This is not a modeling problem — §1 shows Alpha's underlying player values are good.** It is
-a **decision-logic** bug in how those values get turned into a sequence of 17 picks. **Verdict:
-FAILED as currently implemented, with a specific, well-evidenced, actionable root cause** —
-this is the single most useful finding of this phase (directive question 11).
+a **decision-logic** bug in how those values get turned into a sequence of 17 picks.
+
+**A fix was attempted for mechanism 1 (the weak same-position saturation penalty) and
+re-verified against a full re-run — reported honestly, not oversold.**
+`roster_need`'s oversaturation coefficient was steepened so `roster_fit_multiplier` hits its
+0.7 floor immediately at one player past starters + a healthy 2-deep bench, instead of
+requiring ~15 extra players at one position (the old -0.2 coefficient meant even a 7th QB in a
+2-QB league cost only a 6% discount). Re-running the full evaluation after this fix:
+
+| Strategy | Mean starter pts (pooled) | Mean total pts (pooled) |
+|---|---|---|
+| alpha_league_aware, before fix | 1644.5 | 2680.0 |
+| alpha_league_aware, after fix | 1688.2 | 2606.6 |
+
+Starter points improved (+43.7, +2.7%) — a real, if modest, gain in the metric that actually
+determines real fantasy outcomes — and the 2021 slot-1 roster's QB count dropped from 7 to 6.
+But total points *worsened* (-73.4, -2.7%): the fix trades some stranded bench value for a
+more balanced (and slightly better-starting) roster. **The fix does not close the gap to
+`market_consensus`** — `alpha_league_aware` still loses every one of the 5 seasons on starter
+points (0/5 wins, unchanged) and still trails by 332.5 pts pooled (down from 376.2, roughly
+12% of the original gap closed). Directly confirming why: the 2021 slot-1 roster still
+drafted **zero RBs** even after the fix — mechanism 2 (the real RB pool getting drained by the
+other 9 market-consensus opponents before this team's own need ever becomes urgent) is
+untouched by a same-position saturation penalty, since that mechanism never fires for a
+position you haven't drafted at all. The 2025 slot-1 roster did show real, meaningful
+rebalancing (RB count 1→2, WR count 12→9), so the fix is not inert — it is a genuine, partial
+improvement that is insufficient alone, exactly as anticipated before this re-run.
+
+**Verdict: FAILED as currently implemented, with a specific, well-evidenced, actionable root
+cause, PARTIALLY ADDRESSED** — mechanism 1 has a real fix in place (measured, not assumed);
+mechanism 2 (positional-scarcity-awareness — anticipating a run on a position rather than only
+reacting to a roster's current composition) remains unfixed and is the clearly-identified next
+step. This is still the single most useful finding of this phase (directive question 11).
 
 ## 5. Waiver-tier value discovery (preseason proxy)
 
@@ -260,8 +298,13 @@ full lists and cause categorization.
 - **INCONCLUSIVE:** SELL signal reliability (§2); disagreement magnitude alone (§3);
   waiver-tier value discovery as a full answer to FAAB quality (§5); age-curve decline ages
   under survivorship bias (§6); early/mid-round rookie evaluation vs. draft capital alone (§7).
-- **FAILED (with identified cause):** The draft decision engine's real-world roster
-  construction (§4) — loses to simply following market consensus, root-caused to a roster-fit
-  bound too weak to prevent position-stacking.
+- **FAILED (with identified cause, partially fixed):** The draft decision engine's real-world
+  roster construction (§4) — still loses to simply following market consensus in every season
+  tested. Root-caused to two compounding mechanisms: a same-position saturation penalty too
+  weak to prevent position-stacking (now fixed and re-verified: starter points improved
+  +2.7% pooled, but the gap to market consensus is only ~12% closed) and a positional-scarcity
+  blindness that lets a scarce position get fully drained by other drafters before the
+  engine's own need signal ever fires (unfixed — a real 2021 roster still drafted zero RBs
+  even after the first fix).
 - **NOT YET EVALUATED:** FAAB bid efficiency/opportunity cost (needs real transaction data
   this environment doesn't have); causal trade-outcome attribution (same constraint).

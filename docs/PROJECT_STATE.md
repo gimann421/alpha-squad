@@ -825,7 +825,19 @@ market-consensus opponents drain the scarce position at a normal rate throughout
 time need-pressure would organically correct course, no usable players are left at that
 position (round 16 of the replayed draft: best available RB had VORP -135.4). This is a
 decision-logic bug, not a modeling one, and is the single most actionable finding of this
-phase — not yet fixed, tracked as this project's next recommended action.
+phase.
+
+**A fix for the first mechanism was implemented and re-verified against a full re-run, per
+explicit request.** `roster_need`'s oversaturation coefficient was steepened so
+`roster_fit_multiplier` hits its 0.7 floor immediately at one player past a full bench,
+instead of ~15 extra players. Result, reported honestly rather than oversold: pooled starter
+points improved 1644.5 -> 1688.2 (+2.7%, a real gain in the metric that actually determines
+fantasy outcomes) and the replayed 2021 roster's QB count dropped 7 -> 6, but pooled total
+points worsened 2680.0 -> 2606.6 (a real tradeoff, not a free win). The fix does **not** close
+the gap — `alpha_league_aware` still loses all 5 seasons (0/5 wins, unchanged) and still
+trails `market_consensus` by 332.5 pts pooled (down from 376.2, ~12% of the gap closed). The
+2021 roster still drafted zero RBs even after the fix, confirming the second mechanism
+(positional-scarcity blindness) is untouched and is now the clearly-identified remaining work.
 
 This finding was independently re-verified after the fact, prompted by a direct question about
 whether pre-2025 training data was genuinely separated from 2025 outcomes: that audit found and

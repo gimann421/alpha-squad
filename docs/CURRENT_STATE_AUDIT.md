@@ -704,7 +704,12 @@ position (7 QBs and zero RBs; 12 WRs against 3 QBs, in two real trials) once tha
 VORP runs hot for several consecutive picks. (This finding was independently re-verified after
 a follow-up audit found and fixed two further real bugs in the draft-simulation harness itself
 — a missing season filter and non-deterministic tie-breaking — confirmed via byte-identical
-results across separate re-runs; see D54's "Results" section.) This does not change this
+results across separate re-runs; see D54's "Results" section.) A fix for one of the two
+compounding mechanisms behind the bug (the roster-fit penalty's too-gentle saturation curve)
+was implemented and re-verified against a full re-run: starter points improved (+2.7% pooled)
+but the gap to market consensus is only ~12% closed, and a real 2021 roster still drafted zero
+RBs after the fix — the second mechanism (positional-scarcity blindness) remains unaddressed,
+see D54 and `docs/IMPLEMENTATION_GAP_ANALYSIS.md` P1-0. This does not change this
 audit's "Strongest component" finding above
 (the established-player ML pipeline's *point-value* accuracy is separately re-confirmed as
 beating every baseline, D54) — the newly-found gap is specifically in the decision-logic layer

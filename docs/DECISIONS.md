@@ -2007,6 +2007,24 @@ reported exactly as found — two of these are unfavorable to Alpha's current im
   it actually wins 4 of 5, with `generic_prior_year` (a non-market baseline) edging it out in
   2025 specifically. `alpha_league_aware` still never wins any season, so the core finding is
   unchanged and now rests on firmer ground.
+  **A fix for mechanism (1) above was implemented and re-verified against a full re-run, per
+  explicit request, rather than left as a documented-but-unfixed finding.**
+  `roster_need`'s oversaturation coefficient was steepened (-0.2 -> -3.0 per player beyond
+  starters + a healthy 2-deep bench) so `roster_fit_multiplier` hits its 0.7 floor immediately
+  at one player past a full bench, instead of requiring ~15 extra players. Re-running the full
+  evaluation: `alpha_league_aware`'s pooled starter points improved 1644.5 -> 1688.2 (+2.7%,
+  a real gain in the metric that determines actual fantasy outcomes) and the 2021 slot-1
+  roster's QB count dropped 7 -> 6, but pooled total points *worsened* 2680.0 -> 2606.6
+  (-2.7%, a real tradeoff: less value stranded on the bench of an over-drafted position, but
+  the roster leans on lower-value players at other positions to get there). **The fix does not
+  close the gap**: `alpha_league_aware` still loses every one of the 5 seasons on starter
+  points (0/5, unchanged) and still trails `market_consensus` by 332.5 pts pooled (down from
+  376.2 — roughly 12% of the original gap closed). The 2021 slot-1 roster still drafted **zero
+  RBs** even after the fix, directly confirming mechanism (2) (positional-scarcity blindness)
+  is untouched — a same-position saturation penalty cannot help a position the engine never
+  drafted at all. The 2025 slot-1 roster did rebalance meaningfully (RB count 1->2, WR
+  count 12->9), so the fix is a real, partial improvement, not a no-op — just not sufficient
+  alone, exactly as anticipated before re-running. Mechanism (2) remains the open item.
 - **INCONCLUSIVE.** SELL signal reliability (mixed sign by season); disagreement magnitude
   alone absent the evidence gate; waiver-tier value discovery as a full answer to FAAB quality
   (no historical bidding log exists in this environment — see `docs/EVALUATION_LIMITATIONS.md`);

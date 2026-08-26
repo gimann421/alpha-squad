@@ -36,7 +36,7 @@ items with no listed dependency can start immediately.
 
 ## P1 — High value, ready to build
 
-### P1-0: Fix `recommend_draft_pick`'s roster-balance failure (found by M16 evaluation, D54)
+### P1-0: Fix `recommend_draft_pick`'s roster-balance failure — PARTIALLY FIXED (D54; mechanism 2 remains open)
 
 - **What was found:** A real historical draft simulation (`src/alpha_squad/evaluation/
   draft_simulation.py`, `docs/DECISIONS.md` D54) showed the actual production draft
@@ -76,21 +76,40 @@ items with no listed dependency can start immediately.
   Bench players who never start still count toward `total_roster_points`, which is why the
   total-points shortfall (255.1 pts pooled) is smaller than the starter-points shortfall
   (376.2 pts pooled) — the value is there, just stranded on the bench.
-- **What's needed:** Both mechanisms likely need addressing, not just one — a steeper penalty
-  once a position is already full at the roster-slot level (e.g. a hard or steeply-scaling cost
-  once drafted-at-position count reaches the league's real starting requirement, rather than
-  the current gentle linear scaling) probably prevents the worst pile-ups (mechanism 1), but
-  may not by itself prevent missing a position's window before it becomes scarce (mechanism 2)
-  — that likely needs some position-scarcity-awareness (e.g. discounting a position's
-  available VORP by how many roster-relevant players remain at it league-wide, not just this
-  team's own need). Needs its own before/after run of `alpha-squad evaluate draft-simulation`
-  to confirm any fix actually closes the gap against market consensus, not just changes the
-  failure mode — and re-verification against a replayed draft, not just the summary metrics,
-  given how much the pick-by-pick replay revealed here that the aggregate numbers alone did not.
-- **Dependencies:** None — the evaluation harness to verify a fix already exists.
-- **Acceptance criteria:** `alpha_league_aware` beats or matches `market_consensus` on mean
-  starter points across the same 5 real seasons this finding was measured on, without
-  re-tuning the evaluation's own thresholds/strategies to produce that result.
+- **Mechanism 1 — FIXED and re-verified against a full re-run of `alpha-squad evaluate
+  draft-simulation`, not just unit tests.** `roster_need`'s oversaturation coefficient was
+  steepened (-0.2 -> -3.0 per player beyond starters + a healthy 2-deep bench) so
+  `roster_fit_multiplier` hits its 0.7 floor immediately at one player past a full bench,
+  instead of requiring ~15 extra players. Regression test added and confirmed to fail against
+  the old coefficient. Real, measured effect of the fix (before -> after, pooled): mean
+  starter points 1644.5 -> 1688.2 (+2.7%, a real gain in the metric that actually determines
+  fantasy outcomes); mean total roster points 2680.0 -> 2606.6 (-2.7%, a real tradeoff — less
+  value stranded on an over-drafted position's bench, but the roster leans on lower-value
+  players at other positions to get there); the replayed 2021 slot-1 roster's QB count dropped
+  7 -> 6. **This does not close the gap to `market_consensus`**: `alpha_league_aware` still
+  loses every one of the 5 seasons on starter points (0/5 wins, unchanged) and still trails by
+  332.5 pts pooled (down from 376.2 — roughly 12% of the original gap closed). The 2021 slot-1
+  roster still drafted **zero RBs** even after the fix — direct, concrete confirmation that
+  mechanism 2 is untouched, since a same-position saturation penalty cannot help a position
+  the engine never drafted at all. The 2025 slot-1 roster did rebalance meaningfully (RB count
+  1->2, WR count 12->9), so the fix is a real, partial improvement, not a no-op.
+- **Mechanism 2 — still open, now the sole remaining item here.** The other 9 draft slots
+  (real market-consensus opponents) drain an underdrafted position at a normal rate throughout
+  the draft; `roster_fit_multiplier` only reacts to this team's own current roster composition,
+  so it has no way to anticipate a run depleting a position it hasn't drafted yet. Likely needs
+  some position-scarcity-awareness — e.g. discounting a position's available VORP by how many
+  roster-relevant players remain at it league-wide (not just this team's own need) as the
+  draft progresses, so the engine can preemptively secure a scarce position before it's gone
+  rather than only reacting once its own roster is already thin there.
+- **Dependencies:** None — the evaluation harness to verify a fix already exists, and mechanism
+  1's fix demonstrates the verify-with-a-real-rerun workflow to follow for mechanism 2.
+- **Acceptance criteria (still unmet):** `alpha_league_aware` beats or matches
+  `market_consensus` on mean starter points across the same 5 real seasons this finding was
+  measured on, without re-tuning the evaluation's own thresholds/strategies to produce that
+  result. Mechanism 1's fix improved starter points but did not meet this bar; a fix for
+  mechanism 2 is still needed to reasonably attempt it, and should be re-verified the same
+  way — a full `alpha-squad evaluate draft-simulation` re-run plus a replayed draft's
+  pick-by-pick reasoning, not summary metrics alone.
 
 ### ~~P1-1: Wire waiver, trade, and roster-need recommendations into the web UI~~ — CLOSED (D44)
 
