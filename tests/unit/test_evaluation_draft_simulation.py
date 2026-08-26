@@ -150,6 +150,40 @@ class TestSimulateDraft:
         assert len(result.drafted_player_ids) == 5
         assert result.total_roster_points > 0
 
+    def test_alpha_league_aware_threads_the_historical_season_into_survival_probability(
+        self, con, monkeypatch
+    ):
+        """Regression (D54): league/draft.py::next_pick_survival_probability used to have no
+        `season` parameter at all -- it queried market_snapshot's single most-recently-scraped
+        row with no scoping, so a historical draft simulation for season 2021 could read
+        expert-rank dispersion recorded as late as 2026 (confirmed against real data: many
+        players' market_snapshot rows span exactly that range). The fix threads `season`
+        through recommend_draft_pick into next_pick_survival_probability, restricted to that
+        season's own Jul/Aug window (matching market/edge.py's leakage-safe pattern). An
+        end-to-end behavioral test of this is unreliable here -- the survival term is one of
+        several multiplicative factors and a synthetic scenario can easily fail to put any
+        candidate on a decision boundary it would flip -- so this asserts the wiring directly:
+        every call the real draft path makes must carry the historical season being drafted,
+        never a caller-omitted default."""
+        _seed_league_season(con, 2023)
+        league = _small_league()
+
+        from alpha_squad.league import draft as draft_module
+
+        seasons_seen: list[int] = []
+        real_fn = draft_module.next_pick_survival_probability
+
+        def spy(con_arg, player_id, next_pick_overall, season, ecr_type="rsf"):
+            seasons_seen.append(season)
+            return real_fn(con_arg, player_id, next_pick_overall, season, ecr_type)
+
+        monkeypatch.setattr(draft_module, "next_pick_survival_probability", spy)
+
+        simulate_draft(con, league, 2023, ALPHA_LEAGUE_AWARE, draft_slot=1)
+
+        assert seasons_seen, "expected at least one survival-probability lookup during the draft"
+        assert all(s == 2023 for s in seasons_seen)
+
     def test_starter_points_never_exceeds_total_roster_points(self, con):
         _seed_league_season(con, 2023)
         league = _small_league()

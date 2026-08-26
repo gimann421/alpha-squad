@@ -335,29 +335,51 @@ class TestNextPickSurvivalProbability:
         yield connection
         connection.close()
 
-    def _seed(self, con, player_id, best, worst):
+    def _seed(self, con, player_id, best, worst, scrape_date="2025-08-01"):
         con.execute(
             "INSERT INTO market_snapshot (player_id, scrape_date, ecr_type, position, ecr_rank, ecr_best, ecr_worst) "
-            "VALUES (?, '2025-08-01', 'rsf', 'WR', ?, ?, ?)",
-            [player_id, (best + worst) / 2, best, worst],
+            "VALUES (?, ?, 'rsf', 'WR', ?, ?, ?)",
+            [player_id, scrape_date, (best + worst) / 2, best, worst],
         )
 
     def test_certainly_gone_before_the_best_case_rank(self, con):
         self._seed(con, "p1", best=5, worst=15)
-        assert next_pick_survival_probability(con, "p1", next_pick_overall=20) == pytest.approx(0.0)
+        assert next_pick_survival_probability(
+            con, "p1", next_pick_overall=20, season=2025
+        ) == pytest.approx(0.0)
 
     def test_certainly_available_after_the_worst_case_rank(self, con):
         self._seed(con, "p1", best=5, worst=15)
-        assert next_pick_survival_probability(con, "p1", next_pick_overall=1) == pytest.approx(1.0)
+        assert next_pick_survival_probability(
+            con, "p1", next_pick_overall=1, season=2025
+        ) == pytest.approx(1.0)
 
     def test_interpolates_within_the_expert_dispersion(self, con):
         self._seed(con, "p1", best=10, worst=20)
-        prob = next_pick_survival_probability(con, "p1", next_pick_overall=15)
+        prob = next_pick_survival_probability(con, "p1", next_pick_overall=15, season=2025)
         assert 0.0 < prob < 1.0
         assert prob == pytest.approx(0.5)
 
     def test_no_market_data_returns_none(self, con):
-        assert next_pick_survival_probability(con, "nobody", next_pick_overall=10) is None
+        assert (
+            next_pick_survival_probability(con, "nobody", next_pick_overall=10, season=2025) is None
+        )
+
+    def test_does_not_leak_a_snapshot_recorded_after_the_draft_season(self, con):
+        """Regression (D54): a real historical draft simulation for season 2021 must not see
+        expert-rank dispersion recorded in 2026 -- found live via a real draft_simulation.py
+        run where many players' market_snapshot rows span 2021-2026 and the un-scoped
+        `ORDER BY scrape_date DESC LIMIT 1` picked up the 2026 row regardless of which
+        historical season was being drafted."""
+        self._seed(con, "p1", best=5, worst=15, scrape_date="2026-08-01")
+        assert next_pick_survival_probability(con, "p1", next_pick_overall=20, season=2021) is None
+
+    def test_uses_the_snapshot_from_the_season_being_drafted_not_a_later_one(self, con):
+        self._seed(con, "p1", best=5, worst=15, scrape_date="2021-08-01")
+        self._seed(con, "p1", best=50, worst=60, scrape_date="2026-08-01")
+        assert next_pick_survival_probability(
+            con, "p1", next_pick_overall=20, season=2021
+        ) == pytest.approx(0.0)
 
 
 @pytest.fixture

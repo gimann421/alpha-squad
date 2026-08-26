@@ -47,19 +47,28 @@ def next_pick_survival_probability(
     con: duckdb.DuckDBPyConnection,
     player_id: str,
     next_pick_overall: int,
+    season: int,
     ecr_type: str = "rsf",
 ) -> float | None:
     """P(player is still available at next_pick_overall), modeling the player's true draft
     rank as Uniform(ecr_best, ecr_worst) -- the real expert-rank dispersion already captured
     in market_snapshot (M4/M8's ecr_best/ecr_worst), not a fabricated distribution. Returns
-    None when no market dispersion is on record for this player (no opinion to model)."""
+    None when no market dispersion is on record for this player (no opinion to model).
+
+    Restricted to `season`'s own Jul/Aug preseason snapshot -- the same leakage-safe pattern
+    `market/edge.py::_preseason_overall_market` already uses -- rather than simply the latest
+    snapshot ever recorded. Without this, a draft for a past `season` could see expert-rank
+    dispersion recorded years after that draft actually happened (found via a real historical
+    draft simulation, docs/DECISIONS.md D54: many players' market_snapshot rows span 2021 to
+    2026, so an un-scoped "latest" lookup for a 2021 draft could read a 2026 snapshot)."""
     row = con.execute(
         """
         SELECT ecr_best, ecr_worst FROM market_snapshot
         WHERE player_id = ? AND ecr_type = ? AND ecr_best IS NOT NULL AND ecr_worst IS NOT NULL
+          AND year(scrape_date) = ? AND month(scrape_date) IN (7, 8)
         ORDER BY scrape_date DESC LIMIT 1
         """,
-        [player_id, ecr_type],
+        [player_id, ecr_type, season],
     ).fetchone()
     if row is None:
         return None
@@ -95,7 +104,7 @@ def recommend_draft_pick(
         pos = positions[player_id]
         confidence = _confidence_for(con, player_id, season)
         survival = (
-            next_pick_survival_probability(con, player_id, next_pick_overall, ecr_type)
+            next_pick_survival_probability(con, player_id, next_pick_overall, season, ecr_type)
             if next_pick_overall is not None
             else None
         )
