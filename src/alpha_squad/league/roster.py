@@ -25,7 +25,15 @@ def roster_need(league: LeagueContext, roster_positions: list[str]) -> dict[str,
         elif have < depth_target:
             needs[pos] = 0.3 * (depth_target - have)
         else:
-            needs[pos] = -0.2 * (have - depth_target)
+            # Beyond starters + a healthy 2-deep bench, one more at this position has
+            # essentially no real usable value (a 3rd+ bench QB in a 2-QB league will
+            # basically never start) -- discourage it at `roster_fit_multiplier`'s full
+            # floor immediately, not gradually. The old -0.2 coefficient here took ~15 extra
+            # players at one position to reach the floor, which is why a real historical
+            # draft simulation (docs/DECISIONS.md D54) could stack 7 QBs into a 2-QB league
+            # before this ever meaningfully discouraged it -- verified by replaying the real
+            # draft pick-by-pick, not just observed in the final roster.
+            needs[pos] = -3.0 * (have - depth_target)
     return needs
 
 

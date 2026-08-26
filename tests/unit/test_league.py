@@ -321,6 +321,18 @@ class TestRosterNeed:
         needs = roster_need(league, ["QB", "QB", "QB", "QB", "QB"])
         assert needs["QB"] < 0
 
+    def test_one_player_past_a_full_bench_hits_the_fit_multiplier_floor_immediately(self):
+        """Regression (D54): the old oversaturation coefficient (-0.2) took ~15 extra
+        players at one position to reach roster_fit_multiplier's 0.7 floor, which is why a
+        real historical draft simulation could stack 7 QBs into a 2-QB league before this
+        signal ever meaningfully discouraged it (verified by replaying the real draft
+        pick-by-pick). A single player beyond starters + a healthy 2-deep bench should already
+        hit the full floor -- there is essentially no real scenario where a 3rd+ bench QB in a
+        2-QB league has usable value."""
+        league = _flat_league(1, {"QB": 2})  # depth_target = 2 + 2 = 4
+        needs = roster_need(league, ["QB", "QB", "QB", "QB", "QB"])  # 5th QB: one past depth_target
+        assert roster_fit_multiplier(needs["QB"]) == pytest.approx(0.7)
+
     def test_fit_multiplier_is_bounded(self):
         assert roster_fit_multiplier(100) == pytest.approx(1.3)
         assert roster_fit_multiplier(-100) == pytest.approx(0.7)
