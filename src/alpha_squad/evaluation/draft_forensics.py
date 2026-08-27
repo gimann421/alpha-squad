@@ -845,6 +845,11 @@ def _candidate_to_dict(c: CandidateScore) -> dict:
             else None
         ),
         "feasibility_multiplier": c.feasibility_multiplier,
+        "marginal_starter_value": (
+            round(c.marginal_starter_value, 2)
+            if c.marginal_starter_value is not None
+            else None
+        ),
         "opportunity_cost_pts": (
             round(c.opportunity_cost_pts, 2) if c.opportunity_cost_pts is not None else None
         ),
