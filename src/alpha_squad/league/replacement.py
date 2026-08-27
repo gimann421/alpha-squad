@@ -21,15 +21,25 @@ from alpha_squad.models.uncertainty.run import MODEL_VERSION as UNCERTAINTY_MODE
 
 
 def compute_league_starters(
-    league: LeagueContext, projections: dict[str, float], positions: dict[str, str]
+    league: LeagueContext,
+    projections: dict[str, float],
+    positions: dict[str, str],
+    *,
+    teams: int | None = None,
 ) -> dict:
     """Returns starters/dedicated_starters/flex_starters/replacement_pool -- see module
     docstring for the allocation algorithm. replacement_pool[pos] is every non-starter at
     that position, ranked best-first; its first element is that position's replacement
-    level player."""
+    level player.
+
+    `teams` overrides the league's own team count. Callers scoping the allocation to a
+    single roster (outcome scoring, marginal starter value) pass `teams=1`; doing it here
+    rather than through `league.model_copy(update={"teams": 1})` avoids a pydantic model
+    copy, which matters because marginal starter value calls this once per candidate per
+    pick -- on the order of a million times across a full ablation run."""
     dedicated = league.dedicated_slots()
     flex = league.flex_slots()
-    teams = league.teams
+    teams = league.teams if teams is None else teams
 
     flex_eligible_positions: set[str] = set()
     for flex_name in flex:
@@ -117,6 +127,62 @@ def marginal_value_over_replacement(
     return {
         p: projections[p] - levels[positions[p]] for p in projections if positions.get(p) in levels
     }
+
+
+def best_lineup_points(
+    league: LeagueContext,
+    roster: list[str],
+    projections: dict[str, float],
+    positions: dict[str, str],
+) -> float:
+    """Projected points of the best legal starting lineup THIS roster can field (D58).
+
+    Reuses `compute_league_starters` with `teams: 1` so the slot allocation -- dedicated
+    slots by within-position rank, then flex slots to the best remaining flex-eligible
+    players -- is the same logic the benchmark scores rosters with, rather than a second
+    implementation that could disagree with it.
+
+    An incomplete roster simply leaves slots empty, which is the correct reading during a
+    draft: a team with three players has three starters and seven holes."""
+    roster_projections = {p: projections.get(p, 0.0) for p in roster}
+    roster_positions = {p: positions.get(p, "UNKNOWN") for p in roster}
+    starters = compute_league_starters(
+        league, roster_projections, roster_positions, teams=1
+    )
+    return sum(roster_projections.get(p, 0.0) for p in starters["starters"])
+
+
+def marginal_starter_value(
+    league: LeagueContext,
+    roster: list[str],
+    candidate: str,
+    projections: dict[str, float],
+    positions: dict[str, str],
+    *,
+    base_points: float | None = None,
+) -> float:
+    """How much adding `candidate` would improve this roster's best starting lineup (D58).
+
+    This is the question the pre-D58 scoring path could not ask. VORP measures a player
+    against a *league-wide* replacement level, and `roster_need` measures a positional
+    *count* -- so a player was scored identically whether he would be your WR1 or your WR5.
+    Marginal starter value asks instead whether he would actually start, and by how much he
+    would beat whoever he displaces.
+
+    Early in a draft, when slots are empty, this equals the candidate's own projection, so it
+    behaves like best-player-available. Once a position's slots are full it collapses toward
+    zero, which is the honest reading: a sixth wide receiver does not improve the lineup this
+    week. It is therefore a complement to VORP and opportunity cost -- which price
+    season-long scarcity and near-term availability -- not a replacement for either.
+
+    `base_points` lets a caller hoist the current-lineup calculation out of a per-candidate
+    loop; it is the only thing that does not vary across candidates at one pick."""
+    if base_points is None:
+        base_points = best_lineup_points(league, roster, projections, positions)
+    with_candidate = best_lineup_points(
+        league, [*roster, candidate], projections, positions
+    )
+    return with_candidate - base_points
 
 
 def load_season_projections(

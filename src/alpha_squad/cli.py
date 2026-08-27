@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import typer
@@ -18,6 +19,10 @@ from alpha_squad.agents.orchestrator import run_pipeline
 from alpha_squad.agents.planner import plan_full_refresh
 from alpha_squad.agents.state import reconstruct_run
 from alpha_squad.config.settings import get_settings
+from alpha_squad.evaluation.draft_forensics import (
+    run_tier_ablation,
+    summarize_tier_ablation,
+)
 from alpha_squad.evaluation.draft_simulation import (
     persist_draft_sim_results,
     run_draft_simulation,
@@ -26,6 +31,10 @@ from alpha_squad.evaluation.draft_simulation import (
 from alpha_squad.evaluation.dynasty_validation import write_dynasty_validation_report
 from alpha_squad.evaluation.failure_analysis import write_failure_analysis_report
 from alpha_squad.evaluation.market_inefficiency import write_market_inefficiency_report
+from alpha_squad.evaluation.pick_attribution import (
+    run_pick_attribution,
+    write_pick_attribution_artifacts,
+)
 from alpha_squad.evaluation.projection_benchmark import write_projection_benchmark_report
 from alpha_squad.evaluation.rookie_benchmark import (
     run_rookie_baselines,
@@ -527,6 +536,90 @@ def evaluate_baselines(
     console.print(table)
 
     write_evaluation_report(con, Path(report_path))
+    console.print(f"report written to [green]{report_path}[/green]")
+    con.close()
+
+
+@evaluate_app.command("tier-ablation")
+def evaluate_tier_ablation(
+    tiers: str = typer.Option("M0,M1,M2,M3", help="Comma-separated tier codes"),
+    season_start: int = typer.Option(2021, help="First season"),
+    season_end: int = typer.Option(2025, help="Last season"),
+    league_id: str = typer.Option("target_league", help="League config to draft under"),
+    json_path: str = typer.Option(
+        "reports/draft_forensics_mtier_results.json", help="Raw per-draft rows"
+    ),
+) -> None:
+    """Run a ceteris-paribus scoring ablation across a tier grid (D55/D58).
+
+    Diagnostic, not the official benchmark: `evaluation/draft_forensics.py` reproduces
+    production's formulas against pre-loaded season data so hundreds of drafts are affordable.
+    A tier that wins here still has to clear the real benchmark
+    (`evaluate draft-simulation`) before it ships."""
+    settings = get_settings()
+    con = get_connection(settings)
+    init_db(con)
+    league = resolve_league(league_id, con=con, settings=settings)
+    seasons = list(range(season_start, season_end + 1))
+    tier_list = tuple(t.strip() for t in tiers.split(",") if t.strip())
+
+    rows = run_tier_ablation(con, league, seasons, tier_list)
+    summary = summarize_tier_ablation(rows, league)
+
+    out = Path(json_path)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps({"rows": rows, "summary": summary}, indent=2, sort_keys=True))
+
+    table = Table(title=f"Tier ablation ({season_start}-{season_end}, {len(rows)} drafts)")
+    for col in ("tier", "n", "mean starter pts", "mean total pts", "infeasible", "zero by pos"):
+        table.add_column(col)
+    for r in summary:
+        zeros = ", ".join(f"{p}:{c}" for p, c in sorted(r["zero_rate_by_position"].items()) if c)
+        table.add_row(
+            r["tier"],
+            str(r["n"]),
+            f"{r['mean_starter_points']:.1f}",
+            f"{r['mean_total_roster_points']:.1f}",
+            str(r["n_infeasible_rosters"]),
+            zeros or "-",
+        )
+    console.print(table)
+    console.print(f"raw rows written to [green]{json_path}[/green]")
+    con.close()
+
+
+@evaluate_app.command("pick-attribution")
+def evaluate_pick_attribution(
+    season_start: int = typer.Option(2021, help="First season"),
+    season_end: int = typer.Option(2025, help="Last season"),
+    league_id: str = typer.Option("target_league", help="League config to draft under"),
+    slots: str = typer.Option("", help="Comma-separated draft slots; default every slot"),
+    json_path: str = typer.Option(
+        "reports/pick_attribution.json", help="Raw per-pick rows"
+    ),
+    report_path: str = typer.Option(
+        "reports/pick_attribution.md", help="Markdown summary output path"
+    ),
+) -> None:
+    """Where Alpha's draft diverges from consensus, and whether each divergence helped or
+    hurt realized starter points (D58). Replays Alpha's draft once and asks, at each of its
+    turns, what the consensus rule would have taken from the same pool -- a real
+    counterfactual at a real decision point. Slow for the same reason the draft benchmark
+    is: it calls the real `recommend_draft_pick` once per pick."""
+    settings = get_settings()
+    con = get_connection(settings)
+    init_db(con)
+    league = resolve_league(league_id, con=con, settings=settings)
+    seasons = list(range(season_start, season_end + 1))
+    slot_list = [int(s) for s in slots.split(",") if s.strip()] or None
+
+    rows = run_pick_attribution(con, league, seasons, slot_list)
+    write_pick_attribution_artifacts(rows, Path(json_path), Path(report_path))
+    disagreements = [r for r in rows if not r.agreed]
+    console.print(
+        f"picks analysed: [green]{len(rows)}[/green], "
+        f"disagreements: [yellow]{len(disagreements)}[/yellow]"
+    )
     console.print(f"report written to [green]{report_path}[/green]")
     con.close()
 

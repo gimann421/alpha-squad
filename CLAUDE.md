@@ -26,6 +26,38 @@ Act autonomously. Plan internally, implement, test, fix, review, and continue. D
 ## Architecture
 Universal player intelligence and league-specific decision logic are separate layers.
 
+## Target format (D58)
+The product's default target is a **10-team 1-QB redraft PPR league**:
+`QB1 / RB2 / WR2 / TE1 / FLEX2 (RB,WR,TE) / K1 / DEF1` = 10 starters, bench 6,
+`roster_size` 16. Full spec: `docs/TARGET_FORMAT_1QB.md`.
+
+This is a *default*, not a limitation. Everything format-dependent — replacement levels,
+positional capacity, the consensus board — is derived from the league config, never
+hardcoded. `legacy_2qb_dynasty` stays registered so a second, genuinely different format is
+always exercised. Rules that follow from this:
+
+- **`starters + bench == roster_size`** for every shipped league config, asserted by test.
+  `roster_size` is also the draft benchmark's round count, so an inconsistent one silently
+  drafts the wrong number of players.
+- **Never optimize toward a roster-count target** ("draft exactly 2 QBs"). The objective is
+  expected realized *starter* points subject to a feasible roster. Positional caps are
+  ceilings derived from the lineup, not goals.
+- **Lineup slot names are not position names.** A config's `DEF` slot is filled by the `DST`
+  position; `league/context.py::SLOT_POSITION_ALIASES` normalizes them. Adding a new slot
+  type means adding its alias, or the slot silently goes unfilled and scores zero.
+
+## Market series (D56)
+A market series is the pair **`(ecr_type, page_type)`**, never `ecr_type` alone —
+DynastyProcess labels several independently-ranked FantasyPros pages with the same
+`ecr_type`, and merging them produces colliding ranks. Resolve it from the league via
+`market/series.py::resolve_market_series`; do not hardcode one.
+
+`rsf` is the **superflex** board (9 of the overall top 15 are QBs in real preseason-2024
+data); `ro` is the 1-QB board (0 of 15). Every draft number recorded before D56 was measured
+against `rsf` and therefore describes a superflex league. Label such results by the format
+they measured; never restate them as if they transfer. Benchmark definition and the
+evaluation hierarchy: `docs/BENCHMARK_SPEC.md`.
+
 ## Data
 Core: nflverse, FantasyPros API, CFBD, Sleeper, official current information.
 Never bypass access controls. Never use names as production player keys.
@@ -50,6 +82,15 @@ trust a fresh `alpha-squad sources status` run over this note if they disagree.
 
 ## Modeling
 Use baselines first, then position-specific ML, uncertainty, rookie modeling, market EDGE, current information, league strategy.
+
+**K and DST (D57)** are deliberately baselines, not models, and the weighting for each was
+chosen by walk-forward MAE rather than assumed. Both carry weak year-over-year signal (K
+r=0.41, DST r=0.29 over real 2015–2025 seasons); an ML model would imply an accuracy the data
+does not support. Their realized points are *computed* — nflverse scores only
+passing/rushing/receiving, so kickers came through as 0.0 and team defenses did not exist as
+an entity at all. See `features/kicking_defense.py` and
+`models/baselines/kicking_defense.py`. A DST's canonical id is built from the team code
+(`asq_dst_KC`), never a name.
 
 ## Agents
 Use structured agent contracts and persistent state. Evaluation/QA is adversarial. Preserve provenance and resolve disagreements explicitly.
