@@ -1,6 +1,18 @@
-"""Draft recommendation: expected pick value, next-pick survival probability, roster fit,
-alternatives with reasoning -- mirrors AGENT_CONTRACTS.md's Decision contract
-(recommendation/alternatives/expected_value/confidence/reasons)."""
+"""Draft recommendation: expected pick value, positional opportunity cost, next-pick survival
+probability, roster fit, alternatives with reasoning -- mirrors AGENT_CONTRACTS.md's Decision
+contract (recommendation/alternatives/expected_value/confidence/reasons).
+
+Score (D55):
+
+    score = (VORP + positional_opportunity_cost) x roster_fit x confidence x survival
+            x [0.1 if the position is past this league's usable cap]
+
+The opportunity-cost term is the fix for the root cause the M17 forensic audit identified
+(docs/DRAFT_ENGINE_FORENSIC_AUDIT.md): the score previously had no representation of
+*positional* opportunity cost, only a single-*player* survival probability, so a position could
+empty out between this team's turns without anything in the score ever noticing. See
+`league/opportunity_cost.py` for the mechanism and why `positional_scarcity()` is deliberately
+NOT used here (adding it made the pathology measurably worse)."""
 
 from __future__ import annotations
 
@@ -9,8 +21,18 @@ from dataclasses import dataclass
 import duckdb
 
 from alpha_squad.league.context import LeagueContext
+from alpha_squad.league.opportunity_cost import (
+    load_market_ranks,
+    picks_until_next_turn,
+    positional_opportunity_cost,
+)
 from alpha_squad.league.replacement import load_season_projections, marginal_value_over_replacement
-from alpha_squad.league.roster import roster_fit_multiplier, roster_need
+from alpha_squad.league.roster import (
+    OVER_CAP_VALUE_MULTIPLIER,
+    positional_feasibility_cap,
+    roster_fit_multiplier,
+    roster_need,
+)
 from alpha_squad.models.uncertainty.run import MODEL_VERSION as UNCERTAINTY_MODEL_VERSION
 
 
@@ -92,10 +114,35 @@ def recommend_draft_pick(
     next_pick_overall: int | None = None,
     ecr_type: str = "rsf",
     top_n: int = 5,
+    current_pick_overall: int | None = None,
 ) -> DraftRecommendation:
     projections, positions = load_season_projections(con, season)
     vorp = marginal_value_over_replacement(league, projections, positions)
     needs = roster_need(league, roster_positions)
+    have_at_position: dict[str, int] = {}
+    for pos_on_roster in roster_positions:
+        have_at_position[pos_on_roster] = have_at_position.get(pos_on_roster, 0) + 1
+
+    # Positional opportunity cost (D55). Computed ONCE per call, for each position present in
+    # the candidate pool -- not once per candidate. That is the mechanism's real shape (the
+    # cost is a property of the position, not of any individual player), and it is what keeps
+    # the opponent replay affordable: measured at ~9x faster than the per-candidate form with
+    # byte-identical results. Degrades to all-zero (i.e. exactly the pre-D55 score) when the
+    # caller cannot say where in the draft we are, rather than guessing.
+    n_opponent_picks = picks_until_next_turn(current_pick_overall, next_pick_overall)
+    opportunity_costs: dict[str, float] = {}
+    if n_opponent_picks > 0:
+        candidate_positions = {
+            p for pid in available_player_ids if (p := positions.get(pid)) is not None
+        }
+        opportunity_costs = positional_opportunity_cost(
+            set(available_player_ids),
+            positions,
+            vorp,
+            load_market_ranks(con, ecr_type, season),
+            n_opponent_picks,
+            candidate_positions,
+        )
 
     candidates: list[DraftCandidate] = []
     for player_id in available_player_ids:
@@ -111,12 +158,39 @@ def recommend_draft_pick(
         fit_mult = roster_fit_multiplier(needs.get(pos, 0.0))
         risk_mult = confidence if confidence is not None else 0.7
         survival_mult = 1.0 if survival is None else (1.0 + 0.3 * (1.0 - survival))
-        score = vorp[player_id] * fit_mult * risk_mult * survival_mult
+
+        # The opportunity cost is itself denominated in VORP points, so it is added to VORP
+        # *before* the multipliers rather than to the finished score. Two consequences, both
+        # measured rather than assumed (D55 tier P1c vs P1): the term cannot overwhelm the
+        # score, because it is discounted by exactly the same roster-fit and confidence factors
+        # as the value it augments (a raw additive term is not -- against a late-round score it
+        # was measured at 8x the base); and chasing a position the roster is already saturated
+        # at is automatically damped by that position's own fit multiplier.
+        opportunity_cost = opportunity_costs.get(pos, 0.0)
+        score = (vorp[player_id] + opportunity_cost) * fit_mult * risk_mult * survival_mult
+
+        # Hard feasibility floor, past which one more body at this position cannot start.
+        # Complements the D54 saturation fix (which tapers `fit_mult`) rather than replacing it.
+        cap = positional_feasibility_cap(league, pos)
+        over_cap = cap > 0 and have_at_position.get(pos, 0) >= cap
+        if over_cap:
+            score *= OVER_CAP_VALUE_MULTIPLIER
 
         reasons = [
             f"VORP {vorp[player_id]:+.1f} pts above {pos} replacement",
             f"roster fit multiplier {fit_mult:.2f} ({'need' if needs.get(pos, 0) > 0 else 'depth'} at {pos})",
         ]
+        if opportunity_cost > 0:
+            reasons.append(
+                f"{pos} opportunity cost +{opportunity_cost:.1f} pts "
+                f"(that much {pos} value is expected to be gone in the {n_opponent_picks} "
+                f"picks before your next turn at #{next_pick_overall})"
+            )
+        if over_cap:
+            reasons.append(
+                f"already hold {have_at_position.get(pos, 0)} {pos} vs this league's usable "
+                f"cap of {cap}; valued at {OVER_CAP_VALUE_MULTIPLIER:g}x"
+            )
         if confidence is not None:
             reasons.append(f"model confidence {confidence:.2f}")
         if survival is not None:

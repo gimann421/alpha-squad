@@ -1494,9 +1494,15 @@ def league_draft(
         DEFAULT_LEAGUE_ID, help="Registered league id to use (see `alpha-squad league list`)"
     ),
     top_n: int = typer.Option(5, help="Number of alternatives to show"),
+    current_pick: int = typer.Option(
+        None,
+        help="Your current overall pick number. Together with --next-pick this enables the "
+        "positional opportunity-cost term (D55); omit it and that term is simply not applied.",
+    ),
 ) -> None:
-    """Recommend a draft pick: VORP, roster fit, model confidence, and next-pick survival
-    probability, with alternatives and reasoning (AGENT_CONTRACTS.md's Decision contract)."""
+    """Recommend a draft pick: VORP, positional opportunity cost, roster fit, model confidence,
+    and next-pick survival probability, with alternatives and reasoning (AGENT_CONTRACTS.md's
+    Decision contract)."""
     settings = get_settings()
     con = get_connection(settings)
     init_db(con)
@@ -1510,7 +1516,15 @@ def league_draft(
 
     try:
         rec = recommend_draft_pick(
-            con, league, season, roster_positions, available_ids, next_pick, ecr_type, top_n
+            con,
+            league,
+            season,
+            roster_positions,
+            available_ids,
+            next_pick,
+            ecr_type,
+            top_n,
+            current_pick_overall=current_pick,
         )
     except RuntimeError as e:
         console.print(f"[red]{e}[/red]")

@@ -34,6 +34,7 @@ import duckdb
 from alpha_squad.evaluation.config import EVALUATION_FRAMEWORK_VERSION
 from alpha_squad.league.context import LeagueContext
 from alpha_squad.league.draft import recommend_draft_pick
+from alpha_squad.league.opportunity_cost import best_by_market_rank
 from alpha_squad.league.replacement import compute_league_starters, load_season_projections
 from alpha_squad.market.edge import _preseason_overall_market
 from alpha_squad.models.baselines.simple import previous_year_baseline
@@ -95,11 +96,12 @@ def _market_consensus_pick(available: set[str], market_rank: dict[str, tuple[str
     Python `set`, whose iteration order depends on hash randomization that differs across
     process runs (unset PYTHONHASHSEED, confirmed) -- without this, a re-run of the exact
     same historical draft could silently pick a different player among ties and produce a
-    different (and unreproducible) result. See docs/DECISIONS.md D54."""
-    return min(
-        available,
-        key=lambda p: (market_rank[p][1] if p in market_rank else float("inf"), p),
-    )
+    different (and unreproducible) result. See docs/DECISIONS.md D54.
+
+    Delegates to `league/opportunity_cost.py::best_by_market_rank`, the single canonical
+    implementation, so this strategy and the opponent replay used by the production draft
+    engine's opportunity-cost term can never drift apart (D55)."""
+    return best_by_market_rank(available, market_rank)
 
 
 def _generic_prior_year_pick(available: set[str], prior_year_points: dict[str, float]) -> str:
@@ -168,6 +170,10 @@ def simulate_draft(
                         next_pick_overall=next_pick,
                         ecr_type=ecr_type,
                         top_n=1,
+                        # D55: the engine's positional opportunity-cost term needs to know how
+                        # many picks other teams make before this team's next turn; the snake
+                        # geometry is known exactly here.
+                        current_pick_overall=_snake_overall_pick(round_no, slot, league.teams),
                     )
                     pick = rec.recommendation
                 drafted.append(pick)

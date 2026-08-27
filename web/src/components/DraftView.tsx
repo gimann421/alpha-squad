@@ -75,6 +75,10 @@ export function DraftView() {
         roster_id: useRosterId ? (rosterId ?? undefined) : undefined,
         available_player_ids: availableIds,
         next_pick_overall: nextPick,
+        // D55: the engine prices in how much value at each position disappears before your
+        // next turn. It needs to know where the draft is now -- every pick you have marked
+        // drafted, plus the one you are on.
+        current_pick_overall: draftedIds.length + 1,
         ecr_type: ecrType,
         top_n: topN,
       });

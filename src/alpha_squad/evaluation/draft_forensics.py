@@ -37,6 +37,11 @@ from alpha_squad.evaluation.draft_simulation import (
 )
 from alpha_squad.league.context import LeagueContext
 from alpha_squad.league.draft import recommend_draft_pick
+from alpha_squad.league.opportunity_cost import (
+    picks_until_next_turn,
+    positional_opportunity_cost,
+    replay_opponent_picks,
+)
 from alpha_squad.league.replacement import (
     load_season_projections,
     marginal_value_over_replacement,
@@ -47,8 +52,37 @@ from alpha_squad.league.roster import roster_fit_multiplier, roster_need
 from alpha_squad.market.edge import _preseason_overall_market
 from alpha_squad.models.uncertainty.run import MODEL_VERSION as UNCERTAINTY_MODEL_VERSION
 
-Tier = Literal["A", "B", "C", "D", "E", "F", "G", "H"]
+Tier = Literal["A", "B", "C", "D", "E", "F", "G", "H", "P0", "P1", "P1b", "P1c", "P2", "P3"]
 ALL_TIERS: tuple[Tier, ...] = ("A", "B", "C", "D", "E", "F", "G", "H")
+
+# --- P-tiers (D55) -----------------------------------------------------------------------
+# The A-H ablation established the ROOT CAUSE but could not, by itself, tell us what to ship:
+# tier F (the best performer) is `vorp x fit x scarcity x future x [feasibility] + opp_cost`,
+# which INCLUDES `scarcity_mult` -- the one mechanism the experiments proved harmful -- and
+# EXCLUDES production's `risk_mult` and `survival_mult`. The redesign recommendation's proposed
+# formula (`production + opp_cost`) was therefore never actually measured by A-H.
+#
+# The P-tiers close that gap: they hold the REAL production formula fixed as the base and vary
+# only what is added on top, so the measured result belongs to a formula we could actually ship.
+P_TIERS: tuple[Tier, ...] = ("P0", "P1", "P1b", "P1c", "P2", "P3")
+
+# PRE-REGISTERED DECISION RULE -- committed before the P-tiers were ever run against real data,
+# following the D39/D54 discipline of fixing the rule before seeing the outcome so a result
+# cannot be rationalised after the fact.
+#
+#   Primary metric : mean starter points (the metric that decides real fantasy outcomes; total
+#                    roster points rewards bench hoarding, which is the pathology under study).
+#   Gate 1         : RB=0 rate must not exceed production's measured 10/50.
+#   Gate 2         : no position carrying a starting requirement may be zeroed at a HIGHER rate
+#                    than production zeroes it (guards against trading one hole for another).
+#   Tie-break      : prefer the tier with FEWER added mechanisms (Occam; each mechanism is
+#                    future maintenance and another way to be wrong).
+#   Ship only if   : primary is STRICTLY better than P0's, and both gates pass.
+#
+# A tier that improves RB=0 while losing starter points does NOT qualify. Improving the
+# headline pathology is not by itself evidence the system got better.
+PREREGISTERED_PRIMARY_METRIC = "mean_starter_points"
+PREREGISTERED_RB_ZERO_GATE = 10  # out of 50 trials; production's measured rate
 
 TIER_DESCRIPTIONS: dict[Tier, str] = {
     "A": "raw player value only, no roster context",
@@ -64,6 +98,16 @@ TIER_DESCRIPTIONS: dict[Tier, str] = {
     "G": "+ opponent-behavior simulation (literally replay the known real market-consensus "
     "opponent strategy forward to my next pick, rather than approximate it analytically)",
     "H": "the real, unmodified production recommend_draft_pick",
+    # P-tiers: production formula held fixed as the base, only the addition varies (D55).
+    "P0": "production formula reproduced in-harness (vorp x fit x risk x survival) -- the "
+    "control; must match tier H closely or the harness does not model production",
+    "P1": "P0 + opp_cost (raw additive) -- the redesign recommendation's literal proposal",
+    "P1b": "P0 + opp_cost x risk_mult (confidence-scaled additive)",
+    "P1c": "(vorp + opp_cost) x fit x risk x survival -- integrated: the opportunity cost is "
+    "itself denominated in VORP points, so it is discounted by the same roster-fit and "
+    "confidence factors as the value it augments",
+    "P2": "P0 x feasibility_mult (hard league-derived positional cap, no opportunity cost)",
+    "P3": "P1c x feasibility_mult (integrated opportunity cost + feasibility cap)",
 }
 
 
@@ -207,17 +251,42 @@ def _future_position_pool_after_market_consensus(
     simulation's 9 opponent slots) and return the players still available at `position`
     afterward. This is more expensive than an analytical approximation but is a direct replay
     of the real opponent model already validated in evaluation/draft_simulation.py, not a new
-    behavioral assumption."""
-    remaining = set(available)
-    for _ in range(max(0, n_opponent_picks)):
-        if not remaining:
-            break
-        pick = _market_consensus_pick(remaining, static.market_rank)
-        remaining.discard(pick)
+    behavioral assumption.
+
+    Delegates the replay itself to `league/opportunity_cost.py::replay_opponent_picks` (the
+    canonical implementation now also used by the production draft engine, D55) so the two
+    cannot drift. The `, p` secondary sort key is a determinism fix (D55): the original had
+    none, and real VORP/projection ties exist in production data (2021: 8 tied WR groups
+    covering 17 players, 5 TE groups / 13 players), so `future_pool[0]` could differ between
+    process runs under hash randomization -- the same bug class D54 fixed in
+    `draft_simulation.py`."""
+    remaining = replay_opponent_picks(available, static.market_rank, n_opponent_picks)
     return sorted(
         (p for p in remaining if static.positions.get(p) == position),
-        key=lambda p: -static.projections.get(p, float("-inf")),
+        key=lambda p: (-static.projections.get(p, float("-inf")), p),
     )
+
+
+def _opportunity_cost_for(
+    static: SeasonStatic,
+    position: str,
+    available: set[str] | None,
+    current_pick_overall: int | None,
+    next_pick_overall: int | None,
+    opportunity_costs: dict[str, float] | None,
+) -> float:
+    """Prefer the per-pick precomputed map (see `_pick_by_tier`); fall back to computing this
+    one position on demand so `score_candidate` stays usable standalone in tests."""
+    if opportunity_costs is not None:
+        return opportunity_costs.get(position, 0.0)
+    return positional_opportunity_cost(
+        available or set(),
+        static.positions,
+        static.vorp,
+        static.market_rank,
+        picks_until_next_turn(current_pick_overall, next_pick_overall),
+        [position],
+    )[position]
 
 
 def score_candidate(
@@ -230,6 +299,7 @@ def score_candidate(
     available: set[str] | None = None,
     current_pick_overall: int | None = None,
     next_pick_overall: int | None = None,
+    opportunity_costs: dict[str, float] | None = None,
 ) -> CandidateScore | None:
     position = static.positions.get(player_id)
     if position is None or player_id not in static.vorp:
@@ -251,6 +321,64 @@ def score_candidate(
     feasibility_mult = None
     opp_cost = None
     opponent_mult = None
+
+    if tier in P_TIERS:
+        # Production's real scoring terms, reproduced against pre-loaded data (identical
+        # formulas to league/draft.py, just without the per-candidate DB round-trips).
+        risk_mult = confidence if confidence is not None else 0.7
+        survival_mult = 1.0 if survival is None else (1.0 + 0.3 * (1.0 - survival))
+        base_production = vorp * fit_mult * risk_mult * survival_mult
+
+        opp_cost = 0.0
+        if tier in ("P1", "P1b", "P1c", "P3"):
+            opp_cost = _opportunity_cost_for(
+                static,
+                position,
+                available,
+                current_pick_overall,
+                next_pick_overall,
+                opportunity_costs,
+            )
+
+        if tier == "P0":
+            score = base_production
+        elif tier == "P1":
+            score = base_production + opp_cost
+        elif tier == "P1b":
+            score = base_production + opp_cost * risk_mult
+        else:  # P1c and P3 share the integrated form
+            score = (vorp + opp_cost) * fit_mult * risk_mult * survival_mult
+
+        if tier in ("P2", "P3"):
+            cap = _feasibility_cap(league, position)
+            have = sum(1 for p in roster_positions if p == position)
+            if have >= cap:
+                feasibility_mult = 0.1
+                score *= feasibility_mult
+                reasons.append(f"feasibility_mult=0.10 (already have {have} {position}, cap {cap})")
+
+        opp_cost_pts = opp_cost if tier in ("P1", "P1b", "P1c", "P3") else None
+        if opp_cost_pts is not None:
+            reasons.append(f"opportunity_cost=+{opp_cost:.1f} pts for {position}")
+        return CandidateScore(
+            player_id=player_id,
+            position=position,
+            projection=projection,
+            vorp=vorp,
+            replacement_level=level,
+            scarcity_raw=scarcity_raw,
+            scarcity_norm=scarcity_norm,
+            roster_need=need_score,
+            fit_multiplier=fit_mult,
+            confidence=confidence,
+            survival_probability=survival,
+            future_scarcity_multiplier=None,
+            feasibility_multiplier=feasibility_mult,
+            opportunity_cost_pts=opp_cost_pts,
+            opponent_depletion_multiplier=None,
+            score=score,
+            reasons=reasons,
+        )
 
     if tier == "A":
         score = projection
@@ -320,28 +448,20 @@ def score_candidate(
         if tier == "F":
             # Explicit opportunity cost in points, not just a multiplier: value now minus the
             # expected value of the best-of-position replacement if I wait for my next pick.
-            pos_players_sorted = sorted(
-                (p for p in (available or ()) if static.positions.get(p) == position),
-                key=lambda p: -static.vorp.get(p, float("-inf")),
-            )
-            future_pool = _future_position_pool_after_market_consensus(
+            # Now delegates to the canonical `league/opportunity_cost.py` implementation (D55)
+            # so the diagnostic tier and the production engine share one algorithm. That
+            # implementation also clamps both sides at replacement level, which the original
+            # tier-F code did not -- see the note in `_reproduce_tier_f_numbers` below.
+            opp_cost = _opportunity_cost_for(
                 static,
-                available or set(),
                 position,
-                max(0, next_pick_overall - current_pick_overall - 1)
-                if next_pick_overall is not None and current_pick_overall is not None
-                else 0,
+                available,
+                current_pick_overall,
+                next_pick_overall,
+                opportunity_costs,
             )
-            expected_future_best = static.vorp.get(future_pool[0], 0.0) if future_pool else 0.0
-            current_best = (
-                static.vorp.get(pos_players_sorted[0], 0.0) if pos_players_sorted else 0.0
-            )
-            opp_cost = max(0.0, current_best - expected_future_best)
             score += opp_cost
-            reasons.append(
-                f"opportunity_cost=+{opp_cost:.1f} pts (best {position} now {current_best:.1f} "
-                f"vs. expected best {position} at next pick {expected_future_best:.1f})"
-            )
+            reasons.append(f"opportunity_cost=+{opp_cost:.1f} pts for {position}")
     else:
         raise ValueError(
             f"score_candidate does not handle tier {tier!r} directly (use tier H's "
@@ -392,6 +512,7 @@ def _pick_by_tier(
             available,
             next_pick_overall=next_pick_overall,
             top_n=20,
+            current_pick_overall=current_pick_overall,
         )
         scored = [
             CandidateScore(
@@ -417,6 +538,25 @@ def _pick_by_tier(
         ]
         return rec.recommendation, scored
 
+    # Opportunity cost is a property of the POSITION, not the candidate, so the opponent replay
+    # is computed once per pick here and reused for every candidate -- not once per candidate
+    # (which is what the original tier-F code did, and why it cost ~5.5s/draft). Correctness
+    # note: this is not merely an optimization, it is the mechanism's actual shape; see
+    # league/opportunity_cost.py's module docstring.
+    opportunity_costs: dict[str, float] | None = None
+    if tier in ("P1", "P1b", "P1c", "P3", "F"):
+        candidate_positions = {
+            pos for p in available if (pos := static.positions.get(p)) is not None
+        }
+        opportunity_costs = positional_opportunity_cost(
+            available,
+            static.positions,
+            static.vorp,
+            static.market_rank,
+            picks_until_next_turn(current_pick_overall, next_pick_overall),
+            candidate_positions,
+        )
+
     scored = []
     for player_id in available:
         s = score_candidate(
@@ -428,6 +568,7 @@ def _pick_by_tier(
             available=available,
             current_pick_overall=current_pick_overall,
             next_pick_overall=next_pick_overall,
+            opportunity_costs=opportunity_costs,
         )
         if s is not None:
             scored.append(s)
