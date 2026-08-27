@@ -2246,3 +2246,165 @@ round-trips (two queries × 559 candidates), not by anything D55 added — the r
 pure in-memory work costing ~10k comparisons. Computing the cost once per position rather than
 once per candidate is what keeps it there; the per-candidate form measured ~9× slower in the
 diagnostic harness for byte-identical results.
+
+---
+
+## D56 — A market series is `(ecr_type, page_type)`; `rsf` is the superflex board and the wrong benchmark for a 1-QB format
+
+Two separate problems, found while auditing whether the existing consensus benchmark is
+appropriate for the new target format. One is a data-quality bug; the other invalidates the
+project's entire recorded draft evaluation.
+
+### `ecr_type` alone is not a rank space (bug)
+
+DynastyProcess's `fp_ecr_history` labels several independently-ranked FantasyPros pages with
+the same `ecr_type`. Verified against the real snapshot:
+
+| ecr_type | page_type | FantasyPros page | rows |
+|---|---|---|---|
+| `ro` | `redraft-overall` | `ppr-cheatsheets.php` | 102,563 |
+| `ro` | `redraft-idp` | `idp-cheatsheets.php` | 38,873 |
+| `rsf` | `redraft-op` | `ppr-superflex-cheatsheets.php` | 99,694 |
+
+`market/consensus.py` mapped rows to `ecr_type` without filtering the page, so `ro` merged the
+PPR draft board with a separately-ranked 1..N IDP board. The two sequences collide — in
+preseason 2024, `ro` rank 3.0 was simultaneously an LB and a WR — so "best available by ECR"
+could return a linebacker in a league that cannot start one. Worse, the pre-D56 PRIMARY KEY
+did not include the page, so one of any two rows a player held on the same date was silently
+dropped.
+
+**Fix:** `market_snapshot.page_type`, populated from the real source column and part of the
+key, with a migration that carries pre-existing rows across at `page_type = ''` rather than
+inventing a page they never recorded. `_preseason_overall_market` defaults its scoping to the
+page `market/series.py` maps the `ecr_type` to, so every existing caller was fixed without
+threading a new argument through thirty call sites.
+
+`redraft-overall` also carries `ros-ppr-overall.php` (rest-of-season) rows, a genuinely
+different product. Verified those appear only in months 9–12, so the July/August preseason
+scoping every consumer already applies excludes them by construction.
+
+### `rsf` is the superflex board (format mismatch)
+
+D21 chose `ecr_type='rsf'` deliberately and correctly, because the target league was then 2QB.
+`rsf` is FantasyPros' `ppr-superflex-cheatsheets.php`. Measured on the real preseason-2024
+snapshot:
+
+| board | QBs in the overall top 15 | first QB |
+|---|---|---|
+| `rsf` | **9 of 15** | ECR 1.7 |
+| `ro` | **0 of 15** | ECR 23.4 |
+
+And on what a consensus draft builds, 10-team snake, 2021–2025 × 10 slots = 50 drafts per
+board:
+
+| board | mean QB | mean RB | mean WR | mean TE | share landing on 1–3 QBs |
+|---|---|---|---|---|---|
+| `rsf` | 4.1 | 5.1 | 6.1 | 1.8 | 20/50 (40%) |
+| `ro` | **2.4** | 5.5 | 6.9 | 2.1 | **40/50 (80%)** |
+
+So the claim that a 1-QB redraft team drafts roughly 1–3 QBs is **supported by this project's
+own historical consensus data under `ro`**, and is not supported under `rsf`. `ro` also has
+better coverage: 211k rows / 3,110 players from 2019-12, against 98k / 1,393 from 2021-01.
+
+**Consequence, stated plainly:** every draft number recorded before this entry — market
+consensus 2020.7 starter points, `alpha_league_aware` 1801.1, the −219.6 gap, the M17 forensic
+audit, the D55 P-tier ablation — describes Alpha playing a *superflex* league. Those results
+remain valid for the league they measured. They are labelled by that format rather than
+restated, and they do not transfer to the 1-QB target.
+
+**Design:** `market/series.py` resolves the `(ecr_type, page_type)` pair from the league's own
+lineup and format. A superflex lineup — two dedicated QB slots *or* a QB-eligible flex —
+selects a superflex board; a dynasty/keeper format selects a dynasty board. Nothing is
+hardcoded, so `legacy_2qb_dynasty` still resolves to `dsf/dynasty-op` from its config alone.
+
+## D57 — Kickers and team defenses: computed from real data, projected by measured baselines
+
+The 1-QB target format starts a K and a DEF. Neither was supported, for two different reasons,
+both checked against real data rather than assumed.
+
+**Kickers** were ingested (125 of them, back to 2012) but scored **0.0**: nflverse's
+`fantasy_points_ppr` prices only passing/rushing/receiving, so all 571 kicker season rows were
+zero apart from 7 from incidental non-kicking plays. Every component was present all along —
+`fg_made_0_19` … `fg_made_60_`, `fg_missed`, `pat_made`, `pat_missed` — so the points are now
+computed from them with Sleeper's documented default scoring (Sleeper being the league source
+this deployment actually integrates with, D33/D34).
+
+**Team defenses did not exist as an entity anywhere** — absent from `players`, `player_id_map`,
+`player_season_stats`, and `market_snapshot`. They now have canonical ids built from the team
+abbreviation (`asq_dst_KC`), never a name, scored from the raw `stats_team_week` `def_*`
+columns plus real points allowed from `team_week_points.opponent_points`. The defensive
+counting stats live only in the raw snapshot: the normalized `team_week_stats` table keeps
+only the offensive-environment columns the projection features need.
+
+A DST has no GSIS id. Rather than relax the identity spine's `NOT NULL` — which DuckDB will
+not do while foreign keys reference the table — the `gsis_id` column holds the same
+`asq_dst_`-prefixed id, self-evidently Alpha-Squad-generated and incapable of colliding with
+or being mistaken for a real GSIS id.
+
+**FantasyPros DST market ranks** were being dropped at ingest, because identity resolved only
+through `fantasypros_id`. They now join on the team code through an explicit three-entry alias
+map (`JAC→JAX`, `LAR→LA`, `OAK→LV`); the other 29 codes already agreed. K was already on the
+`ro` board. Both now enter around overall rank 150, which is where a 16-round 10-team draft
+actually takes them — a useful independent check that the market data and the format line up.
+
+### Both are baselines, and the weighting was measured
+
+Walk-forward over real 2015–2025 seasons, every candidate compared against actual outcomes:
+
+| | n | year-over-year r | best | MAE | vs. prior-year |
+|---|---|---|---|---|---|
+| K | 368 | 0.406 | weighted 2-year (0.65/0.35) | **33.60** | 37.44 |
+| DST | 352 | 0.294 | 0.3·prior + 0.7·positional mean | **22.55** | 27.14 |
+
+The right answer differs by position, which is why this is not one formula applied to both: a
+kicker's own history carries real signal and two seasons beat one; a defense's carries much
+less, and shrinking hard toward the positional mean beats trusting the prior season by a wide
+margin. Both signals are weak in absolute terms — that is a real property of these positions,
+and an ML model here would imply an accuracy the data does not support.
+
+## D58 — The target format is a 10-team 1-QB redraft league; capacity is flex-aware; the engine gains marginal starter value
+
+**Format** (`docs/TARGET_FORMAT_1QB.md`): `QB1 / RB2 / WR2 / TE1 / FLEX2 / K1 / DEF1` = 10
+starters, bench 6, `roster_size` 16. Supersedes D7's 2QB dynasty target, which stays registered
+as `legacy_2qb_dynasty` — it is the format every pre-D56 result was measured under, and keeping
+a genuinely different format exercised is what makes league-contextuality a property of the
+code rather than a claim.
+
+**Roster arithmetic was inconsistent and is now asserted.** The pre-D58 config declared 9
+starters and a 10-player bench alongside `roster_size: 17` — three numbers that could not all
+be true (`docs/DRAFT_ENGINE_FORENSIC_AUDIT.md` §3). `roster_size` is also the benchmark's round
+count, so an inconsistent one silently drafts the wrong number of players. A test now asserts
+`starters + bench == roster_size` for every shipped config.
+
+**Slot names are not position names.** A config (and Sleeper) calls the team-defense slot
+`DEF`; nflverse and FantasyPros call the position `DST`. `dedicated_slots()` now normalizes
+slot names into the data's position vocabulary, so the slot resolves to real rows instead of
+silently going unfilled and scoring zero.
+
+**Positional capacity is now flex-aware.** The old model split the bench evenly across
+`dedicated_slots()` and ignored FLEX entirely. That was survivable with four positions and a
+2-QB lineup; adding K and DEF took the divisor from 4 to 6 and made the error first-order —
+capping RB at 3 in a league that starts 2 RB plus up to 2 FLEX, while handing kickers bench
+room no roster uses. Capacity is now every slot a position could start in, plus a bench share
+proportional to that, with a one-slot floor so a backup is never structurally forbidden:
+
+| | QB | RB | WR | TE | K | DST |
+|---|---|---|---|---|---|---|
+| old (even split) | 2 | 3 | 3 | 2 | 2 | 2 |
+| new (flex-aware) | 2 | **6** | **6** | **4** | 2 | 2 |
+
+`roster_need`'s depth target moves off the arbitrary `slots + 2` constant onto the same
+league-derived figure. These are ceilings past which one more body cannot start, **not
+targets**: the objective is realized starter points subject to feasibility, never a
+roster-count goal.
+
+**Marginal starter value.** The audit found the scoring path had no representation of the
+team's own starting lineup: VORP measures against a *league-wide* replacement level and
+`roster_need` measures a positional *count*, so a player was scored identically whether he
+would be your WR1 or your WR5. `league/replacement.py::marginal_starter_value` asks instead
+how much a candidate would improve this roster's best legal lineup — full projection into an
+empty slot, zero at a saturated position, the margin over whoever he displaces otherwise.
+
+Where that term belongs in the score is a measurement, not a preference. Tiers M0 (the shipped
+formula, as control) through M3 (marginal starter value replacing VORP outright) vary only its
+placement, with the decision rule pre-registered in source before any run against real data.
