@@ -133,4 +133,64 @@ displaces otherwise. Where that term belongs in the score is measured, not assum
 M0 (the shipped formula, as control) through M3 (marginal starter value replacing VORP
 outright), with the decision rule pre-registered in source before any run against real data.
 
-<!-- SECTIONS 6-9 ARE FILLED FROM MEASURED RUNS AND ARE APPENDED BELOW. -->
+## 6. The re-baselined benchmark: Alpha now beats consensus
+
+Full official benchmark, `alpha-squad evaluate draft-simulation`, 2021–2025 × 10 slots, run
+against the corrected `ro` board and the corrected 1-QB league config (all of §1–5 applied,
+nothing else changed in the scoring path — this is the shipped D55 opportunity-cost engine,
+unmodified, scored on the right board for the first time):
+
+| Strategy | Mean starter pts | Mean total roster pts |
+|---|---|---|
+| **alpha_league_aware** | **1927.8** | 2785.4 |
+| market_consensus | 1825.2 | 2806.7 |
+| generic_prior_year | 591.5 | 3468.6 |
+| alpha_bpa | 463.5 | 3612.0 |
+
+**Alpha's shipped engine beats market consensus: +102.6 mean starter points (+5.6%).** This is
+the reverse of every prior (superflex) result, where consensus led by 219.6 and Alpha never
+won a single season. Checked at the level the pre-registered rule in `docs/BENCHMARK_SPEC.md`
+requires, not just the pooled mean:
+
+- **Per (season, slot) win rate: 34/50 (68%).**
+- **Per-season:** Alpha's mean exceeds consensus's in 4 of 5 seasons (2021, 2022, 2023, 2025);
+  2024 is the one loss (1797.8 vs 1877.9). Reported as a real result, not smoothed over — a
+  single losing season in five is exactly the kind of variance the evaluation hierarchy exists
+  to surface rather than hide inside a favorable pooled mean.
+
+### The naive-baseline collapse is a real finding, not a bug
+
+`alpha_bpa` and `generic_prior_year` — both deliberately built with zero VORP/roster
+awareness — collapsed to 463.5 and 591.5 starter points. Checked against the actual drafted
+rosters (2024, slot 1): `alpha_bpa` drafted **15 QBs and 1 K**; `generic_prior_year` drafted
+**14 QBs and 2 WR**. Zero RB, zero TE, zero DST in both.
+
+This is not a defect in the simulator. In a 1-QB format, raw point totals still favor QB —
+top QBs project well above top RB/WR — but only one team can start one, and nothing in these
+two baselines' logic knows that. Without VORP or a roster-fit signal, "take the highest
+points remaining" hoards QBs uncontrollably and leaves 8 of 10 starting slots empty. It is a
+clean, real demonstration that VORP and roster-fit are load-bearing in this format, not
+cosmetic — `alpha_league_aware` and `alpha_bpa` share identical Alpha point predictions and
+differ only in whether that context exists, and the gap between them (1927.8 vs 463.5) is
+almost entirely that context's contribution.
+
+### What this does and does not settle
+
+This answers the directive's central question — is the 1-QB benchmark appropriate, and does
+Alpha beat it — with a clear "yes, now it does." It does not by itself explain *why*: whether
+the win comes from allocation (VORP/roster-fit filling the right slots), from raw projection
+quality, or from the D55 opportunity-cost term specifically now mattering more under a format
+where positional runs are sharper. §7–9 below use pick-level attribution and the M-tier
+ablation to separate those.
+
+## 7. Where the gap to consensus (and the remaining upside) comes from
+
+<!-- Filled from the pick-attribution and M-tier ablation runs. -->
+
+## 8. M-tier ablation: does marginal starter value help, and does D55's opportunity cost still?
+
+<!-- Filled once the M0-M3 ablation completes. -->
+
+## 9. Recommendation
+
+<!-- Filled last, after §7-8. -->

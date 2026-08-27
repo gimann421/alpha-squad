@@ -2408,3 +2408,39 @@ empty slot, zero at a saturated position, the margin over whoever he displaces o
 Where that term belongs in the score is a measurement, not a preference. Tiers M0 (the shipped
 formula, as control) through M3 (marginal starter value replacing VORP outright) vary only its
 placement, with the decision rule pre-registered in source before any run against real data.
+
+## D59 — Re-baselined benchmark: Alpha's shipped engine beats market consensus under the 1-QB board
+
+Official benchmark (`alpha-squad evaluate draft-simulation`), full 2021–2025 × 10 slots, run
+against the corrected `ro` board and corrected 1-QB league config from D56–D58, with the
+scoring engine itself unchanged (this is D55's shipped opportunity-cost formula, scored on
+the right board for the first time):
+
+| Strategy | Mean starter pts | Mean total roster pts |
+|---|---|---|
+| `alpha_league_aware` | **1927.8** | 2785.4 |
+| `market_consensus` | 1825.2 | 2806.7 |
+| `generic_prior_year` | 591.5 | 3468.6 |
+| `alpha_bpa` | 463.5 | 3612.0 |
+
+**Alpha beats consensus by +102.6 mean starter points (+5.6%)** — the reverse of every
+pre-D56 result, where consensus led by 219.6 points and Alpha never won a season. Win rate
+at the (season, slot) level (not just the pooled mean): **34/50 (68%)**. Per-season: Alpha
+wins 4 of 5 (2021/2022/2023/2025); loses 2024 (1797.8 vs 1877.9) — reported as a real result
+rather than smoothed into the favorable pooled mean.
+
+**The naive-baseline collapse is a real finding.** `alpha_bpa`/`generic_prior_year` — built
+with deliberately zero VORP/roster awareness — fell to 463.5/591.5 starter points. Verified
+against the actual drafted rosters (2024 slot 1): `alpha_bpa` drafted 15 QBs and 1 K;
+`generic_prior_year` drafted 14 QBs and 2 WR. Zero RB/TE/DST in either. Not a simulator
+defect: in a 1-QB format, raw point totals still favor QB, but nothing in either baseline's
+logic knows only one team can start one — "take the highest points remaining" hoards QBs and
+leaves 8 of 10 starting slots empty. Since `alpha_bpa` shares identical point predictions
+with `alpha_league_aware` and differs only in whether VORP/roster-fit exists, the ~1464-point
+gap between them is almost entirely that context's contribution.
+
+This settles the directive's central benchmark question (is the 1-QB board appropriate, and
+does Alpha beat it) but not why. Pick-level attribution and the M-tier ablation (measuring
+whether marginal starter value improves further, and whether D55's opportunity-cost term
+still helps specifically under this format) are the next diagnostic step — see
+`docs/FORMAT_MIGRATION_DIAGNOSTIC.md` §7–9.
