@@ -36,7 +36,17 @@ items with no listed dependency can start immediately.
 
 ## P1 — High value, ready to build
 
-### P1-0: Fix `recommend_draft_pick`'s roster-balance failure — BOTH MECHANISMS FIXED (D54 + D55); acceptance criterion still unmet
+### ~~P1-0: Fix `recommend_draft_pick`'s roster-balance failure~~ — CLOSED (D56–D60)
+
+> **The benchmark below is invalid for the current target format and is preserved as-is,
+> labelled, not restated.** Everything through "Acceptance criteria — STILL UNMET" was
+> measured against `ecr_type='rsf'` — FantasyPros' *superflex* board — because the target
+> league was then 2QB (D7/D21). The product's target format is now a 10-team 1-QB redraft
+> league (`docs/TARGET_FORMAT_1QB.md`); its matching board is `ro` (D56). Re-baselined on the
+> correct board, `alpha_league_aware` beats `market_consensus` outright — see the update at
+> the end of this item and `docs/FORMAT_MIGRATION_DIAGNOSTIC.md` for the full account. Both
+> mechanisms below (D54/D55) remain real fixes for the pathologies they addressed; they are
+> not undone, only re-measured against the right opponent.
 
 - **What was found:** A real historical draft simulation (`src/alpha_squad/evaluation/
   draft_simulation.py`, `docs/DECISIONS.md` D54) showed the actual production draft
