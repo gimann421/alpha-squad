@@ -81,6 +81,13 @@ export function DraftView() {
         // next turn. It needs to know where the draft is now -- every pick you have marked
         // drafted, plus the one you are on.
         current_pick_overall: draftedIds.length + 1,
+        // D60: `roster_player_ids` (enables marginal starter value) is deliberately omitted
+        // here. `draftedIds` tracks EVERY player marked drafted league-wide, not this team's
+        // own picks -- there is no per-team split in this picker's state. Passing it would
+        // tell the engine "my roster already holds every position anyone has drafted," which
+        // is actively wrong, not just incomplete, so the engine falls back to VORP instead
+        // (see league/draft.py). Wiring this correctly needs a "my picks" list distinct from
+        // the full drafted pool, which this view does not yet track.
         ecr_type: ecrType || undefined,
         top_n: topN,
       });

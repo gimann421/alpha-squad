@@ -180,6 +180,11 @@ def simulate_draft(
                         # many picks other teams make before this team's next turn; the snake
                         # geometry is known exactly here.
                         current_pick_overall=_snake_overall_pick(round_no, slot, league.teams),
+                        # D60: `drafted` IS this team's actual roster at this point (it only
+                        # ever receives this team's own picks -- see the loop above), so the
+                        # engine can score candidates by marginal starter value rather than
+                        # falling back to VORP.
+                        roster_player_ids=drafted,
                     )
                     pick = rec.recommendation
                 drafted.append(pick)

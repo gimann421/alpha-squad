@@ -225,7 +225,13 @@ class TestSimulateForensicDraft:
         league = _small_league()
         static = load_season_static(con, league, 2023)
         available = set(static.projections)
-        direct = recommend_draft_pick(con, league, 2023, [], available, next_pick_overall=5)
+        # D60: the harness passes the real (empty, at pick 1) roster explicitly, which
+        # activates marginal starter value -- `roster_player_ids=[]` (a KNOWN empty roster)
+        # is not the same call as omitting the argument (an UNKNOWN roster, which falls back
+        # to VORP). The direct comparison call must match what the harness actually passes.
+        direct = recommend_draft_pick(
+            con, league, 2023, [], available, next_pick_overall=5, roster_player_ids=[]
+        )
 
         result = simulate_forensic_draft(con, league, 2023, "H", draft_slot=1, static=static)
         assert result.drafted_player_ids[0] == direct.recommendation

@@ -361,6 +361,7 @@ def post_draft(
             body.ecr_type,
             body.top_n,
             current_pick_overall=body.current_pick_overall,
+            roster_player_ids=body.roster_player_ids,
         )
     except RuntimeError as e:
         raise HTTPException(status_code=422, detail=str(e)) from e

@@ -255,6 +255,10 @@ class DraftRequest(BaseModel):
     season: int
     roster_positions: list[str] = []
     roster_id: int | None = None
+    # D60: the roster's actual drafted player ids, when the caller tracks them (e.g. the web
+    # draft picker, which already maintains this list client-side). Enables marginal starter
+    # value; omitted entirely, the engine falls back to VORP -- see league/draft.py.
+    roster_player_ids: list[str] | None = None
     available_player_ids: list[str] | None = None
     next_pick_overall: int | None = None
     # D55: enables the positional opportunity-cost term. Optional -- when absent the

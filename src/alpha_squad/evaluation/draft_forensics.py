@@ -646,6 +646,10 @@ def _pick_by_tier(
             next_pick_overall=next_pick_overall,
             top_n=20,
             current_pick_overall=current_pick_overall,
+            # D60: real production now uses marginal starter value when it knows the
+            # roster's actual players; tier H exists to mirror real production exactly, so
+            # it must pass the same thing the official benchmark does.
+            roster_player_ids=roster_player_ids,
         )
         scored = [
             CandidateScore(
