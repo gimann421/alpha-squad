@@ -71,7 +71,9 @@ export function TradeView() {
   const latestSeason = useLatestSeason("edge", 2025);
   const [season, setSeason] = useState(latestSeason);
   useEffect(() => setSeason(latestSeason), [latestSeason]);
-  const [ecrType, setEcrType] = useState("rsf");
+  // Blank means "let the server resolve the board from the league" (D56):
+  // a 1-QB league gets the 1-QB board, a superflex league the superflex one.
+  const [ecrType, setEcrType] = useState("");
 
   // Single-player buy/sell/hold evaluation.
   const [playerId, setPlayerId] = useState("");
@@ -85,7 +87,7 @@ export function TradeView() {
     setDecisionError(null);
     setDecision(null);
     try {
-      const result = await api.postTrade(leagueId, { season, player_id: playerId.trim(), ecr_type: ecrType });
+      const result = await api.postTrade(leagueId, { season, player_id: playerId.trim(), ecr_type: ecrType || undefined });
       setDecision(result);
     } catch (e) {
       setDecisionError(String(e));
@@ -120,7 +122,7 @@ export function TradeView() {
     try {
       const result = await api.postTradePackage(leagueId, {
         season,
-        ecr_type: ecrType,
+        ecr_type: ecrType || undefined,
         side_a: { player_ids: sideAPlayers, picks: sideAPicks },
         side_b: { player_ids: sideBPlayers, picks: sideBPicks },
       });
@@ -148,7 +150,7 @@ export function TradeView() {
           Season <input type="number" value={season} onChange={(e) => setSeason(Number(e.target.value))} />
         </label>
         <label>
-          ECR type <input value={ecrType} onChange={(e) => setEcrType(e.target.value)} placeholder="rsf" />
+          ECR type <input value={ecrType} onChange={(e) => setEcrType(e.target.value)} placeholder="auto (from league)" />
         </label>
       </div>
 

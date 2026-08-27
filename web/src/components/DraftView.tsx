@@ -18,7 +18,9 @@ export function DraftView() {
   useEffect(() => setSeason(latestSeason), [latestSeason]);
   const [rosterPositions, setRosterPositions] = useState("");
   const [nextPick, setNextPick] = useState(10);
-  const [ecrType, setEcrType] = useState("rsf");
+  // Blank means "let the server resolve the board from the league" (D56):
+  // a 1-QB league gets the 1-QB board, a superflex league the superflex one.
+  const [ecrType, setEcrType] = useState("");
   const [topN, setTopN] = useState(5);
 
   const [pool, setPool] = useState<RankingRow[] | null>(null);
@@ -79,7 +81,7 @@ export function DraftView() {
         // next turn. It needs to know where the draft is now -- every pick you have marked
         // drafted, plus the one you are on.
         current_pick_overall: draftedIds.length + 1,
-        ecr_type: ecrType,
+        ecr_type: ecrType || undefined,
         top_n: topN,
       });
       setDecision(result);
@@ -107,7 +109,7 @@ export function DraftView() {
           Next pick # <input type="number" value={nextPick} onChange={(e) => setNextPick(Number(e.target.value))} />
         </label>
         <label>
-          ECR type <input value={ecrType} onChange={(e) => setEcrType(e.target.value)} placeholder="rsf" />
+          ECR type <input value={ecrType} onChange={(e) => setEcrType(e.target.value)} placeholder="auto (from league)" />
         </label>
         <label>
           Top N alternatives <input type="number" value={topN} onChange={(e) => setTopN(Number(e.target.value))} />

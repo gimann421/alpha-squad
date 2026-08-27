@@ -260,7 +260,10 @@ class DraftRequest(BaseModel):
     # D55: enables the positional opportunity-cost term. Optional -- when absent the
     # engine simply omits that term rather than guessing where the draft is.
     current_pick_overall: int | None = None
-    ecr_type: str = DEFAULT_ECR_TYPE
+    # None means "resolve the consensus board from the league" (D56) -- a 1-QB league reads
+    # the 1-QB board, a superflex league the superflex one. An explicit value still wins, so
+    # a caller can compare against a specific series deliberately.
+    ecr_type: str | None = None
     top_n: int = 5
 
 
