@@ -268,7 +268,10 @@ Alpha's decision logic.**
 - **Whether a combined fix (explicit opportunity cost, the standout single mechanism, plus the
   already-landed saturation-penalty fix, and explicitly *without* naively adding
   `positional_scarcity`, now shown to backfire) fully closes the gap to market consensus, or only
-  reduces it further.** Not yet tested as a combined tier — the full grid confirms F (1789.1 mean
-  starter pts) beats H (1688.2) but both still trail `market_consensus`'s pooled 2020.7
-  (`docs/ALPHA_VS_BASELINES_EVALUATION.md` §4). `docs/DRAFT_ENGINE_REDESIGN_RECOMMENDATION.md`
-  proposes but does not implement or measure this combination.
+  reduces it further** — **RESOLVED by M18/D55: it reduces the gap substantially but does not
+  close it.** The combination was implemented and measured on the official benchmark at 1801.1
+  mean starter points, up from 1688.2 (+112.9), with RB=0 down from 10/50 to 2/50 and the QB
+  stacking pathology materially reduced (7-and-8-QB rosters eliminated). `market_consensus`
+  remains ahead at 2020.7, so `docs/IMPLEMENTATION_GAP_ANALYSIS.md` P1-0's acceptance criterion
+  is still unmet. See `docs/DECISIONS.md` D55 for the full measured result including the one
+  season (2023) that regressed.

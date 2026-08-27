@@ -217,3 +217,52 @@ roster construction are demonstrated as genuinely separable outcomes, not merely
    engine (1789.1 vs. 1688.2, beating H in 4 of 5 seasons) — while still inheriting the same
    QB-favoring scarcity multiplier every other tier from C onward carries, making its
    improvement the more notable for having overcome that headwind rather than avoided it.
+
+
+---
+
+## Follow-up: the P-tier ablation (M18 / D55)
+
+The A-H ablation above established the root cause but could not say what to *ship*, because no
+tier tested a formula that could actually be deployed: tier F (the best performer) includes
+`positional_scarcity` — the mechanism this document shows is harmful — and excludes production's
+`risk_mult` and `survival_mult`. The redesign recommendation's proposed `production + opp_cost`
+was a third combination that A-H never measured.
+
+Six **P-tiers** closed that gap, holding the real production formula fixed as the control and
+varying only the addition. The decision rule (primary = mean starter points; gate = RB=0 must not
+exceed production's 10/50; second gate = no position zeroed at a higher rate; tie-break = fewer
+mechanisms) was committed to `evaluation/draft_forensics.py` **before** the tiers were run.
+
+300 real drafts, 5 seasons × 10 slots, n=50 per tier. Raw data:
+`reports/draft_forensics_ptier_results.json`.
+
+| Tier | Formula | starter | total | RB=0 | concentration |
+|---|---|---|---|---|---|
+| P0 | production (control) | 1688.2 | 2606.6 | 10/50 | 0.345 |
+| P1 | `P0 + opp_cost` — the recommendation's literal proposal | 1777.1 | 2673.9 | 6/50 | 0.344 |
+| P1b | `P0 + opp_cost × risk` | 1734.8 | 2644.4 | 8/50 | 0.344 |
+| P1c | `(vorp + opp_cost) × fit × risk × survival` | 1783.3 | 2617.3 | 5/50 | 0.331 |
+| P2 | `P0 × feasibility` | 1706.0 | 2624.0 | 10/50 | 0.315 |
+| **P3** | **P1c × feasibility** | **1801.1** | 2599.8 | **2/50** | **0.304** |
+
+P0 reproduced tier H exactly (identical roster and points on the 2021 slot-1 control),
+confirming the harness models production faithfully before anything was concluded from it.
+
+**P3 shipped.** Three findings worth carrying forward:
+
+1. **The integrated form beats the raw additive form** (P1c 1783.3 vs P1 1777.1, and RB=0 5 vs 6).
+   Adding the cost to VORP *before* the multipliers keeps it on the same scale as the value it
+   augments. The raw additive form was measured at **8× the base score** in a real late round
+   (2021 slot 5, R13: base 2.4, opportunity cost 19.3) — the "overwhelming the score" failure
+   mode, confirmed empirically rather than assumed.
+2. **The feasibility cap is a real contributor**, not a rounding detail: P2 alone improves on
+   production, and P3 (cap + opportunity cost) beats P1c (opportunity cost alone) by 17.8
+   starter points while halving RB=0 from 5 to 2.
+3. **P3 beats Experiment F** (1801.1 vs 1789.1) *while excluding `positional_scarcity` entirely*
+   and retaining production's confidence and survival terms — reinforcing this document's
+   central negative result rather than contradicting it.
+
+The official `alpha-squad evaluate draft-simulation` benchmark subsequently reproduced P3's
+per-season figures exactly. See `docs/DECISIONS.md` D55 for the benchmark result, the one season
+that regressed, and the mechanism-level trace verification.

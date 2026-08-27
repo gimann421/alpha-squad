@@ -2149,6 +2149,80 @@ Three design decisions worth recording, each measured rather than assumed:
 
 ### Results
 
-*(Official `alpha-squad evaluate draft-simulation` benchmark numbers, forensic re-traces,
-determinism and runtime appended below once measured — the diagnostic harness is not the
-benchmark, and the P-tier numbers above do not substitute for it.)*
+Measured with the official `alpha-squad evaluate draft-simulation` benchmark over the full
+2021-2025 window, not the diagnostic harness. The benchmark reproduced the P-tier prediction
+**exactly** (1801.1 pooled starter points, and every per-season figure to the decimal), which
+is itself a useful validation that the harness models production faithfully.
+
+**Headline (pooled, n=50 drafts per strategy):**
+
+| Strategy | starter pts | total pts |
+|---|---|---|
+| market_consensus | 2020.7 | 2935.1 |
+| **alpha_league_aware (D55)** | **1801.1** | 2599.8 |
+| *alpha_league_aware (pre-D55)* | *1688.2* | *2606.6* |
+| generic_prior_year | 1708.3 | 2882.0 |
+| alpha_bpa | 1429.1 | 2756.1 |
+
+**+112.9 mean starter points (+6.7%).** Alpha's draft engine moves from 3rd of four strategies
+to 2nd, now clearly ahead of `generic_prior_year` (which it previously trailed). It also beats
+Experiment F's 1789.1 while excluding `positional_scarcity` entirely.
+
+**Per season — 4 wins, 1 real loss, reported as found:**
+
+| Season | starter before | after | Δ | total Δ |
+|---|---|---|---|---|
+| 2021 | 1695.3 | 1825.7 | **+130.4** | −104.7 |
+| 2022 | 1699.1 | 1981.8 | **+282.7** | +86.3 |
+| 2023 | 1813.3 | 1806.9 | **−6.4** | −100.5 |
+| 2024 | 1658.2 | 1795.9 | **+137.7** | +15.3 |
+| 2025 | 1575.1 | 1595.4 | **+20.3** | +69.5 |
+
+2023 regresses by 6.4 starter points (0.35%). It is small and it is real; it is recorded rather
+than averaged away. Pooled **total** roster points also dip slightly (2606.6 → 2599.8, −6.8) —
+an expected and arguably desirable trade, since total points reward bench hoarding, which is the
+pathology under study, while starter points are what decide real matchups.
+
+**Roster construction — every feasibility metric improved, none regressed:**
+
+| Metric | before | after |
+|---|---|---|
+| RB=0 rosters | 10/50 | **2/50** |
+| QB=0 / WR=0 / TE=0 | 0 / 0 / 0 | 0 / 0 / 0 (no hole traded for another) |
+| Max QB on one roster | 8 | **6** |
+| Mean QB per roster | 4.8 | 4.2 |
+| Max at any single position | 10 | 9 |
+| Concentration index | 0.345 | **0.304** |
+| Max single-position share | 0.472 | 0.411 |
+
+The D54 QB-stacking pathology is materially reduced: rosters with 7 or 8 QBs (9 of 50 before)
+**no longer occur at all**, and the distribution shifts toward the league's actual 2-QB
+requirement (4QB rosters go 9 → 23).
+
+**Draft-slot behaviour: all 10 slots improve, none regress** (+38.8 at slot 10 to +219.5 at slot
+3). The gain is not an artifact of one lucky seat.
+
+**Mechanism verified, not just outcomes.** Re-tracing the 2021 slot-1 pathological draft
+pick-by-pick (`reports/draft_decision_trace_d55.json`): pick #1 is now **RB**, where it was TE
+before, and the engine's own reason string states why — *"RB opportunity cost +60.5 pts (that
+much RB value is expected to be gone in the 18 picks before your next turn at #20)"*. The RB
+wins at 170.2 despite a **lower** VORP (103.1) than the TE it beat. That is the mechanism doing
+exactly what it was built to do, confirmed from the decision trace rather than inferred from the
+final roster. In 2025 slot 1 — a season that never had the pathology — the roster is
+essentially unchanged (RB count stays 2, starter +5.4), i.e. the term is targeted, not a
+blanket re-weighting.
+
+**Honest limitations:**
+
+- **The gap to market consensus is narrowed, not closed** (219.6 starter points remain). D55 is
+  a substantial, measured improvement; it is not a claim that Alpha now drafts better than
+  following expert consensus. `docs/IMPLEMENTATION_GAP_ANALYSIS.md` P1-0's acceptance criterion
+  is still unmet.
+- **2023 regressed** (−6.4). Not diagnosed further in this pass; the effect is within the range
+  where a single season's noise is plausible, but it is not dismissed as noise without evidence.
+- **The feasibility cap fires on every draft** (50/50 rosters have at least one position over
+  cap, before and after). It discourages rather than forbids (0.1x, not 0), so rosters still
+  concentrate more than an idealised allocation would.
+- **The opponent replay assumes market-consensus opponents.** Exactly true inside the benchmark;
+  an approximation against real human drafters — the same class of assumption
+  `next_pick_survival_probability` already makes.

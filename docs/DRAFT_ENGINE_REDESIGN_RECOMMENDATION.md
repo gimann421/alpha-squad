@@ -1,5 +1,19 @@
 # Draft Engine Redesign Recommendation
 
+> **STATUS: IMPLEMENTED (M18 / `docs/DECISIONS.md` D55) — with one substantive correction.**
+>
+> The mechanism recommended here (continuous, points-denominated positional opportunity cost
+> fed by a G-style opponent replay) shipped and is measured at **+112.9 mean starter points**
+> on the official benchmark. But the specific *formula* proposed below —
+> `production + opp_cost` — was found, on verifying it against the source, to have **never been
+> measured**: Experiment F is `vorp × fit × scarcity × future × [feasibility] + opp_cost`, which
+> includes `positional_scarcity` (proven harmful) and excludes production's `risk`/`survival`
+> terms. A new pre-registered P-tier ablation was run to close that gap, and what shipped is
+> the integrated form `(VORP + opp_cost) × fit × risk × survival × [cap]`, which measured
+> better than the raw additive form proposed here. See D55 for the full account.
+>
+> The rest of this document is preserved as written during the diagnostic phase.
+
 Not implemented in this phase — a diagnostic phase's output, per explicit instruction. Grounded
 in `docs/DRAFT_ENGINE_FORENSIC_AUDIT.md` (root cause) and `docs/DRAFT_CONTROLLED_EXPERIMENTS.md`
 (what actually moved the needle when tested, not assumed).
