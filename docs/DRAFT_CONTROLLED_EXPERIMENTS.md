@@ -1,0 +1,158 @@
+# Draft Engine Controlled Experiments
+
+Companion to `docs/DRAFT_ENGINE_FORENSIC_AUDIT.md`. All experiments here use
+`src/alpha_squad/evaluation/draft_forensics.py` — a diagnostic-only module, separate from both
+production `league/draft.py` and the official benchmark harness (`evaluation/draft_simulation.py`,
+behind `docs/DECISIONS.md` D54's already-reported results). Nothing here changes production
+behavior; every number is a measurement, not a tuning target. Per the phase's own explicit
+instruction, this document reports which mechanism fixes which failure, not which tier "wins."
+
+## Methodology
+
+**Design.** One team (the "team in question") drafts under a fixed scoring tier from a given
+draft slot; the other 9 slots always draft by real historical market consensus — the same fixed
+opponent field, snake-draft loop, and outcome scoring `evaluation/draft_simulation.py` already
+uses (`_market_consensus_pick`, `_snake_overall_pick`, `_next_pick_overall`, `_actual_points_for`
+are imported and reused, not reimplemented, so any difference between tiers is attributable to the
+scoring formula alone).
+
+**Data — three distinct samples, sized for what each is trying to answer, not identical:**
+- The full 8-tier ablation grid (§ "Full grid" below) covers all 5 real seasons the official
+  benchmark uses (2021-2025) × all 10 draft slots × all 8 tiers — 400 drafts. Tier H alone costs
+  ~37s/draft (it calls the real, unmodified production `recommend_draft_pick`, which re-queries
+  the database per candidate per pick), so this is the largest grid tractable in this phase, not
+  a deliberately narrowed one.
+- The baseline sanity checks (§ below) use a smaller, explicitly 3-season subset (2021/2023/2025)
+  × all 10 slots × 3 non-Alpha strategies — 90 drafts — since their purpose is a qualitative
+  check (does the simulator ever produce a pathological roster under a rational strategy) not a
+  precise aggregate effect size.
+- The single-slot deep dive (§ below) is exactly the one already-traced pathological example
+  (2021, draft slot 1) run under all 8 tiers, chosen specifically because its full pick-by-pick
+  mechanism is already understood from `docs/DRAFT_ENGINE_FORENSIC_AUDIT.md` §4 — it illustrates
+  *why* a tier does or doesn't help, which the aggregate grid alone cannot show.
+
+All 10 draft slots are covered in
+every sampled season, so no single slot's luck drives a tier's apparent result.
+
+**Tiers (A-H), each adding exactly one term on top of the previous tier's score:**
+
+| Tier | Adds | Formula (on top of the previous tier) |
+|---|---|---|
+| A | raw player value only | `score = projection` |
+| B | + current roster fit | `score = VORP × fit_mult(current need)` |
+| C | + current positional scarcity | `× (0.7 + 0.6 × scarcity_norm[pos])` — `positional_scarcity()` is a real production function (`league/replacement.py`) already used by the waiver engine but never by the draft engine (forensic audit §2) |
+| D | + analytical future scarcity | `× (1.3 − 0.6 × expected_survival_rate[pos])`, where `expected_survival_rate` aggregates the same per-player Uniform(ecr_best, ecr_worst) survival model `next_pick_survival_probability` already uses for one candidate, applied across the whole position |
+| E | + roster feasibility | `× 0.1` once this position's drafted count reaches a league-config-derived cap (`starting slots + ⌈bench_size / n_positions⌉`) — a hard floor, not `roster_fit_multiplier`'s soft [0.7, 1.3] bound |
+| F | + explicit opportunity cost | `+ max(0, best_available_VORP[pos] − expected_best_VORP[pos]_at_next_pick)`, priced in points, not a multiplier |
+| G | + opponent-behavior simulation | replaces D's analytical estimate with a literal replay: step `_market_consensus_pick` forward the real number of opponent picks before this team's next turn, using the actual known opponent strategy, and multiply by 1.3 if the position empties in that replay |
+| H | the real, unmodified `recommend_draft_pick` | production code, called directly, unmodified |
+
+D and G are mechanically related by construction in this specific simulated environment: the
+*only* source of positional depletion between two of the team-in-question's picks is the other 9
+(real, market-consensus) opponents, so "future scarcity" and "opponent depletion" describe the
+same underlying event here. D estimates it analytically (fast, statistical); G computes it by
+literally replaying the known opponent strategy (slower, exact for this simulation's specific
+opponent model). This is stated plainly rather than presented as two independent mechanisms that
+happen to agree.
+
+## Baseline sanity checks (directive §14-15)
+
+Before trusting any ablation result, the simulator itself has to be shown sane independent of
+Alpha. `homogeneous_league_draft` drafts **all 10 slots** under one identical real strategy (not
+the 1-vs-9 fixed-opponent design), removing the fixed-opponent-field confound entirely.
+
+No separate ADP series exists in this environment (`docs/EVALUATION_LIMITATIONS.md`, D17) — real
+preseason FantasyPros-mirrored ECR (`market_consensus`) is the closest available substitute and
+is what "ADP vs ADP" / "ECR vs ECR" mean below.
+
+| Strategy (all 10 slots) | Seasons | QB=0 | RB=0 | WR=0 | TE=0 |
+|---|---|---|---|---|---|
+| market_consensus ("ECR vs ECR") | 2021/2023/2025 | 0/30 | **0/30** | 0/30 | 6/30 |
+| raw_value ("simple value vs itself") | 2021/2023/2025 | 1/30 | **0/30** | 0/30 | 4/30 |
+| vorp ("simple VORP vs itself") | 2021/2023/2025 | 0/30 | **0/30** | 0/30 | 4/30 |
+
+**RB is never zero in 90 real homogeneous-league trials under any baseline strategy.** TE goes to
+zero at a real rate under every strategy including bare VORP — consistent with "punt/stream TE," a
+legitimate, well-known real fantasy strategy given TE's shallow one-dedicated-slot demand, not a
+simulator defect. Per the directive's own decision rule (§14): baseline strategies produce
+realistic rosters; **the simulator is validated as sound.**
+
+## Pathological draft analysis (directive §7)
+
+Full pick-by-pick machine-readable traces: `reports/draft_decision_trace.json`
+(`2021_slot1_tierH`, `2025_slot1_tierH`), produced by `evaluation/draft_forensics.py`'s tier-H
+path, confirmed to reproduce the exact roster the official benchmark records for the same
+season/slot. Full narrative analysis in `docs/DRAFT_ENGINE_FORENSIC_AUDIT.md` §4; the short
+version: **both traced drafts are effectively decided by the team's first 1-2 picks.** RB is a
+live, competitive top-5 candidate at pick #1 in both cases (VORP 103.1 in 2021; present but
+outscored in 2025) and falls out of the top 5 entirely by the team's second turn (pick #20),
+not reappearing until the position is already below replacement level. This is not a multi-round
+feedback loop — it is a near-immediate, largely irreversible loss of position.
+
+## Ablation results
+
+### Single-slot deep dive (2021, draft slot 1 — the traced pathological example)
+
+| Tier | Total pts | Starter pts | Position counts | RB count |
+|---|---|---|---|---|
+| A (raw value) | 2761.5 | 1201.8 | QB 12, WR 5 | **0** |
+| B (+ current fit) | 2799.5 | 1588.0 | QB 7, WR 7, TE 3 | **0** |
+| C (+ current scarcity) | 2676.0 | 1475.8 | QB 9, WR 6, TE 2 | **0** |
+| D (+ future scarcity, analytical) | 2769.7 | 1404.0 | QB 10, WR 6, TE 1 | **0** |
+| E (+ feasibility cap) | 2795.0 | 1578.5 | QB 7, WR 6, TE 4 | **0** |
+| F (+ opportunity cost) | 2676.2 | 1723.9 | QB 7, WR 6, TE 3 | **1** |
+| G (+ opponent replay) | 3110.2 | 1254.2 | QB 11, WR 5, TE 1 | **0** |
+| H (real production engine) | 2829.8 | 1676.9 | QB 6, WR 7, TE 4 | **0** |
+
+**Every tier through E still produces zero RB for this specific draft.** Only F — explicit,
+points-denominated opportunity cost — recovers any RB at all, and even then only one (still short
+of the league's 2 starting RB slots). G, despite modeling opponent behavior directly rather than
+analytically, does *not* recover RB here, and in fact stacks QB even harder (11) than the current
+production engine (H, 6) — a genuinely counter-intuitive result addressed below rather than
+smoothed over.
+
+### Full grid (5 seasons × 10 slots × 8 tiers, 400 drafts)
+
+*Data collection for the full 400-draft grid is still running in the background as of this
+commit (tier H alone costs ~37s/draft against the real database). This section will be updated
+with the complete aggregate table, and the §6 "UNKNOWN: does the RB-specific pattern
+generalize" question in `docs/DRAFT_ENGINE_FORENSIC_AUDIT.md` resolved one way or the other with
+real data, in a follow-up commit — not asserted from the single-slot deep dive above, which is
+illustrative of mechanism, not a claim about prevalence.*
+
+## Why did G (opponent simulation) not outperform F (explicit opportunity cost)?
+
+This was not the expected result going in, and is reported as found rather than adjusted after
+the fact. G's opponent-depletion multiplier is binary (1.3× if the replay shows the position empties
+before the next pick, else 1.0×) — coarser than F's continuous, points-denominated cost. A
+position that is merely *getting worse* rather than *disappearing outright* by the next pick gets
+no credit under G but a real, proportional bonus under F. Since real positional decline is
+typically gradual (a position's 4th-best remaining player is usually only somewhat worse than its
+3rd-best, not catastrophically so, until very late), F's continuous pricing captures the everyday
+case G's binary trigger misses. This suggests the *shape* of an opportunity-cost signal (continuous
+vs. threshold) matters as much as *whether* one exists at all — a specific, testable design
+implication carried into `docs/DRAFT_ENGINE_REDESIGN_RECOMMENDATION.md`.
+
+## Roster feasibility vs. fantasy value (directive §9)
+
+Tracked as explicitly separate metrics throughout (`roster_feasibility_metrics`): position counts,
+starting-requirement comparison, zero-drafted-starting-positions, positions over a league-derived
+feasibility cap, max single-position share, and a Herfindahl-style concentration index — none of
+these are fantasy-value numbers, and none were derived from "what looks realistic" rather than the
+league's own structural settings (`league.dedicated_slots()`, `league.bench_size`). The single-slot
+table above already shows the two dimensions diverge: tier G has the *highest* total points (3110.2)
+of any tier in this draft but is *not* more feasible (QB 11, RB 0) — high fantasy value and poor
+roster construction are demonstrated as genuinely separable outcomes, not merely a hypothesis.
+
+## Conclusions
+
+1. The simulator is valid (baseline sanity checks, RB never zero in 90 trials).
+2. The player projection model is not the cause (`docs/ALPHA_VS_BASELINES_EVALUATION.md` §1;
+   the pick-1 trace shows the RB was correctly valued and simply outscored by the formula, not
+   mis-projected).
+3. Layering in current scarcity (C), analytical future scarcity (D), or a hard feasibility cap (E)
+   alone — in the traced pathological example — does not recover the neglected position. Explicit,
+   points-denominated opportunity cost (F) is the first mechanism that does, even if only
+   partially.
+4. This is a single-slot deep dive; see the full grid below for whether the pattern holds broadly
+   or is concentrated in specific seasons/slots.

@@ -717,3 +717,25 @@ that turns good values into a pick sequence, not in the values themselves. Full 
 `docs/DECISIONS.md` D54, `docs/ALPHA_VS_BASELINES_EVALUATION.md`, and `docs/PROJECT_STATE.md`'s
 M16 section. The fix is not yet implemented — tracked as the project's current top recommended
 action, ahead of P2-3 in `docs/IMPLEMENTATION_GAP_ANALYSIS.md`.
+
+## Postscript (2026-08-27): draft-engine forensic audit (M17)
+
+A diagnostic-only phase, explicitly not permitted to redesign the engine before understanding
+the failure mechanism. Two real, previously-undocumented findings this audit's own prior passes
+missed: `positional_scarcity()` — a real function `PRODUCT_SPEC.md`/`ACCEPTANCE_CRITERIA.md`
+both require and which the waiver engine already consults — is never imported by the draft
+engine at all; and `roster_need`'s bench-depth assumption is a hardcoded constant unrelated to
+the league's actual configured bench size (a real property, `league.bench_size`, that was dead
+code before this phase). Replaying the real, unmodified `recommend_draft_pick` pick-by-pick
+against the same real 2021/2025 pathological drafts this audit already knew about (D54) found
+they are effectively decided within the team's first 1-2 picks — a real, viable RB is a live
+top-5 candidate at pick #1 in both cases and falls out of consideration entirely by the team's
+second turn, not a slow multi-round feedback loop. 90 real homogeneous-league drafts under three
+independent non-Alpha strategies never produced a zero-RB roster once, validating the simulator
+and pointing conclusively at the draft engine's decision logic specifically. A controlled
+ablation found that positional scarcity, analytical future scarcity, and even a hard
+roster-feasibility cap did not, alone, recover the neglected position — only an explicit,
+continuously-priced opportunity-cost term did, and only partially. No fix was implemented in
+this phase; see `docs/DRAFT_ENGINE_FORENSIC_AUDIT.md`, `docs/DRAFT_CONTROLLED_EXPERIMENTS.md`,
+and `docs/DRAFT_ENGINE_REDESIGN_RECOMMENDATION.md` for the full account and the proposed
+(unimplemented) next step.

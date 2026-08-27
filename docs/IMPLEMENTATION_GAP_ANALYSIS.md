@@ -93,23 +93,37 @@ items with no listed dependency can start immediately.
   mechanism 2 is untouched, since a same-position saturation penalty cannot help a position
   the engine never drafted at all. The 2025 slot-1 roster did rebalance meaningfully (RB count
   1->2, WR count 12->9), so the fix is a real, partial improvement, not a no-op.
-- **Mechanism 2 — still open, now the sole remaining item here.** The other 9 draft slots
-  (real market-consensus opponents) drain an underdrafted position at a normal rate throughout
-  the draft; `roster_fit_multiplier` only reacts to this team's own current roster composition,
-  so it has no way to anticipate a run depleting a position it hasn't drafted yet. Likely needs
-  some position-scarcity-awareness — e.g. discounting a position's available VORP by how many
-  roster-relevant players remain at it league-wide (not just this team's own need) as the
-  draft progresses, so the engine can preemptively secure a scarce position before it's gone
-  rather than only reacting once its own roster is already thin there.
-- **Dependencies:** None — the evaluation harness to verify a fix already exists, and mechanism
-  1's fix demonstrates the verify-with-a-real-rerun workflow to follow for mechanism 2.
+- **Mechanism 2 — still open, now diagnosed in depth by a dedicated forensic phase (M17)
+  before any further fix, rather than guessed at.** Full account: `docs/DRAFT_ENGINE_FORENSIC_AUDIT.md`,
+  `docs/DRAFT_CONTROLLED_EXPERIMENTS.md`, `docs/DRAFT_ENGINE_REDESIGN_RECOMMENDATION.md`. Key
+  findings that sharpen the diagnosis above: (a) replaying the real `recommend_draft_pick`
+  pick-by-pick shows both traced pathological drafts are effectively decided by the team's
+  *first 1-2 picks* — a real, viable RB is a live top-5 candidate at pick #1 and falls out of
+  consideration entirely by the team's second turn, not a slow multi-round feedback loop; (b)
+  `positional_scarcity()`, a real production function `PRODUCT_SPEC.md` requires and the waiver
+  engine already consults, is never imported by the draft engine at all — a genuine, previously
+  undocumented gap; (c) 90 real homogeneous-league drafts under 3 independent non-Alpha
+  strategies never produced a zero-RB roster, validating the simulator and ruling out both it
+  and the player-projection model as causes; (d) a controlled ablation found that adding
+  positional scarcity, analytical future scarcity, or a hard feasibility cap did not, alone,
+  recover the neglected position — only an explicit, continuously-priced opportunity-cost term
+  did, and only partially (1 of 2 needed RB slots in the deep-dive example). The recommended
+  next step (not implemented, per the diagnostic phase's own scope) is an explicit per-position
+  opportunity-cost term, continuously priced, using an opponent-behavior replay as its input —
+  see the redesign recommendation doc for why this and not a more complex or simpler alternative.
+- **Dependencies:** None — the evaluation harness to verify a fix already exists, mechanism 1's
+  fix demonstrates the verify-with-a-real-rerun workflow to follow for mechanism 2, and M17's
+  diagnostic harness (`src/alpha_squad/evaluation/draft_forensics.py`) already has the
+  opportunity-cost mechanism implemented and unit-tested in isolation — it has not been ported
+  into production `league/draft.py`, which is the actual remaining work.
 - **Acceptance criteria (still unmet):** `alpha_league_aware` beats or matches
   `market_consensus` on mean starter points across the same 5 real seasons this finding was
   measured on, without re-tuning the evaluation's own thresholds/strategies to produce that
   result. Mechanism 1's fix improved starter points but did not meet this bar; a fix for
   mechanism 2 is still needed to reasonably attempt it, and should be re-verified the same
   way — a full `alpha-squad evaluate draft-simulation` re-run plus a replayed draft's
-  pick-by-pick reasoning, not summary metrics alone.
+  pick-by-pick reasoning, not summary metrics alone (M17 found the aggregate metrics alone hid
+  exactly this kind of mechanism-level detail).
 
 ### ~~P1-1: Wire waiver, trade, and roster-need recommendations into the web UI~~ — CLOSED (D44)
 

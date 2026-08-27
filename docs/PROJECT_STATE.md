@@ -861,3 +861,56 @@ position-misclassification and a season-intersection bug in `projection_benchmar
 draft-simulation bugs above, plus a `zip(..., strict=True)` crash that only triggers on a
 cleanly monotonic result) were found and fixed by this phase's own test suite before any
 number was treated as final — see D54.
+
+## M17 summary — draft-engine forensic audit (diagnostic phase, not a redesign)
+
+M16 found and partially fixed the draft engine's roster-balance failure; this phase's explicit
+purpose was to diagnose *why* it happens before attempting any further fix, per its own
+instruction not to tune the engine against benchmark results. Full account:
+`docs/DRAFT_ENGINE_FORENSIC_AUDIT.md` (root cause), `docs/DRAFT_CONTROLLED_EXPERIMENTS.md`
+(ablation results), `docs/DRAFT_ENGINE_REDESIGN_RECOMMENDATION.md` (proposed fix, not
+implemented), `reports/draft_decision_trace.json` (machine-readable pick-by-pick traces).
+
+**A real, previously-undocumented finding: `positional_scarcity()` — a real, tested production
+function required by `PRODUCT_SPEC.md`/`ACCEPTANCE_CRITERIA.md` and already consulted by the
+waiver engine — is never imported or used by the draft engine (`league/draft.py`).** The
+acceptance criterion "positional scarcity is calculated" is technically true (the function
+exists and is exercised elsewhere) but the actual draft decision never consults it. A second,
+related finding: `roster_need`'s "healthy bench depth" assumption (`slots + 2`, a hardcoded
+constant) has no relationship to the league's actual configured bench size
+(`league.bench_size`, a real property that turned out to be dead code before this phase).
+
+**The core diagnostic finding, from replaying the real, unmodified `recommend_draft_pick`
+pick-by-pick against real 2021 and 2025 data:** both traced pathological drafts (the same "7
+QB/0 RB" and "12 WR/3 QB" examples from D54) are effectively decided by the team's first 1-2
+picks, not a multi-round feedback loop. A real, viable RB was a live top-5 candidate at pick #1
+in both cases and fell out of consideration entirely by the team's second pick (19 picks later
+across the whole league) — never recovering until the position was already below replacement
+level. The engine's score has no representation of "this position depletes fast, secure it now"
+at the one point it would have mattered — only a single-candidate survival probability, never a
+positional one.
+
+**The simulator itself was validated as sound before trusting any of the above:** 90 real
+homogeneous-league drafts (3 independent real strategies — market consensus, raw projected
+value, and bare VORP — each drafting all 10 slots, removing the fixed-opponent-field design used
+elsewhere) never produced a zero-RB roster once. Only TE occasionally went to zero, matching the
+well-known, legitimate real fantasy strategy of "punting" a shallow-demand position — not a
+simulator defect. This directly rules out the simulator and the player-projection model (already
+separately validated, D54 §1) as root causes.
+
+**Controlled ablation (tiers A-H, each adding one mechanism from the directive's list on top of
+the last) found that adding current positional scarcity, analytical future scarcity, or even a
+hard roster-feasibility cap did not, alone, recover the neglected position in the traced
+example — only an explicit, points-denominated opportunity-cost term did, and only partially
+(1 of 2 needed RB slots).** A literal opponent-behavior replay (rather than an analytical
+estimate) was tested too and, counter-intuitively, performed worse — its binary "position
+empties or it doesn't" trigger missed the everyday case of a position merely getting worse
+rather than vanishing outright, a specific, evidence-based design implication carried into the
+redesign recommendation.
+
+**No further fix was implemented in this phase, per its own explicit instruction.** The
+recommendation is a moderate-complexity addition (an explicit per-position opportunity-cost
+term, priced continuously, using an opponent-behavior replay as its input) — not a
+rebuild, not a hardcoded positional cap, not a full Monte Carlo lookahead — with the honest
+caveat that its sufficiency at full scale, and in combination with the already-landed
+saturation-penalty fix, remains `UNKNOWN` and must be measured before being claimed as solved.

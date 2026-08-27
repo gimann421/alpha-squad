@@ -110,7 +110,7 @@ state at the time each milestone was first built.
 | Target league settings are supported | ✅ | `config/league_configs/target_league.yaml` — 10 teams, 2QB/2RB/2WR/1TE/2FLEX |
 | Multiple leagues can be configured and switched between | ✅ | `league/context.py::resolve_league` + `config/league_configs/registry.yaml` (D33/D34) — every CLI league command, the API, and `LeagueView.tsx`'s league picker resolve through the same registry; 3 leagues registered today (1 YAML, 2 live Sleeper), no hardcoded single-league assumption remains |
 | Replacement level is calculated | ✅ | `league/replacement.py::replacement_level`, derived from the league's own starting-slot config (verified: 2QB league's QB replacement sits at real rank ~20-24, materially different from a 1QB league) |
-| Positional scarcity is calculated | ✅ | `positional_scarcity` |
+| Positional scarcity is calculated | ⚠️ | `league/replacement.py::positional_scarcity` — real, tested, and consulted by `league/waiver.py`, but never imported by `league/draft.py`; the draft decision itself does not use it (found by the M17 forensic audit, `docs/DRAFT_ENGINE_FORENSIC_AUDIT.md` §2) |
 | Roster fit is calculated | ✅ | `roster_fit_multiplier` |
 | Expected pick value exists | ✅ | `recommend_draft_pick`'s VORP × fit × confidence score |
 | Next-pick survival probability exists | ✅ | `next_pick_survival_probability` (Uniform over ECR best/worst) |
