@@ -1,5 +1,15 @@
 # Draft Engine Redesign Recommendation
 
+> **FORMAT NOTE (docs/DECISIONS.md D56/D58).** Every number in this document was measured
+> against `ecr_type='rsf'` — FantasyPros' **superflex** board — under the 2QB dynasty target
+> league that was current at the time (D7/D21). That was the correct board for that league.
+> The product's target format is now a **10-team 1-QB redraft** league
+> (`docs/TARGET_FORMAT_1QB.md`), whose matching board is `ro`; measured on real preseason-2024
+> data, `rsf` puts 9 QBs in the overall top 15 and `ro` puts none. These results therefore
+> describe a genuinely different game, and are retained as-is rather than restated. The 1-QB
+> re-baseline lives in `docs/FORMAT_MIGRATION_DIAGNOSTIC.md`; which findings survived the
+> format change, and which did not, is recorded there.
+
 > **STATUS: IMPLEMENTED (M18 / `docs/DECISIONS.md` D55) — with one substantive correction.**
 >
 > The mechanism recommended here (continuous, points-denominated positional opportunity cost
