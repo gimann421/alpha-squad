@@ -1,0 +1,5826 @@
+[
+  {
+    "season": 2021,
+    "slot": 1,
+    "tier": "P0",
+    "total_roster_points": 2829.8,
+    "starter_points": 1676.9,
+    "position_counts": {
+      "TE": 4,
+      "WR": 7,
+      "QB": 6
+    },
+    "zero_drafted_starting_positions": [
+      "RB"
+    ],
+    "positions_over_feasibility_cap": {
+      "QB": 6,
+      "WR": 7
+    },
+    "max_single_position_share": 0.4117647058823529,
+    "concentration_index": 0.3494809688581315
+  },
+  {
+    "season": 2021,
+    "slot": 1,
+    "tier": "P1",
+    "total_roster_points": 2682.14,
+    "starter_points": 1594.1,
+    "position_counts": {
+      "QB": 8,
+      "WR": 7,
+      "TE": 2
+    },
+    "zero_drafted_starting_positions": [
+      "RB"
+    ],
+    "positions_over_feasibility_cap": {
+      "QB": 8,
+      "WR": 7
+    },
+    "max_single_position_share": 0.47058823529411764,
+    "concentration_index": 0.40484429065743943
+  },
+  {
+    "season": 2021,
+    "slot": 1,
+    "tier": "P1b",
+    "total_roster_points": 2589.12,
+    "starter_points": 1625.6,
+    "position_counts": {
+      "QB": 7,
+      "WR": 7,
+      "TE": 3
+    },
+    "zero_drafted_starting_positions": [
+      "RB"
+    ],
+    "positions_over_feasibility_cap": {
+      "QB": 7,
+      "WR": 7
+    },
+    "max_single_position_share": 0.4117647058823529,
+    "concentration_index": 0.370242214532872
+  },
+  {
+    "season": 2021,
+    "slot": 1,
+    "tier": "P1c",
+    "total_roster_points": 2398.06,
+    "starter_points": 1652.64,
+    "position_counts": {
+      "RB": 1,
+      "WR": 7,
+      "TE": 3,
+      "QB": 6
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "QB": 6,
+      "WR": 7
+    },
+    "max_single_position_share": 0.4117647058823529,
+    "concentration_index": 0.32871972318339104
+  },
+  {
+    "season": 2021,
+    "slot": 1,
+    "tier": "P2",
+    "total_roster_points": 2841.7000000000003,
+    "starter_points": 1683.1000000000001,
+    "position_counts": {
+      "TE": 5,
+      "WR": 6,
+      "QB": 6
+    },
+    "zero_drafted_starting_positions": [
+      "RB"
+    ],
+    "positions_over_feasibility_cap": {
+      "QB": 6,
+      "WR": 6,
+      "TE": 5
+    },
+    "max_single_position_share": 0.35294117647058826,
+    "concentration_index": 0.33564013840830453
+  },
+  {
+    "season": 2021,
+    "slot": 1,
+    "tier": "P3",
+    "total_roster_points": 2371.58,
+    "starter_points": 1691.64,
+    "position_counts": {
+      "RB": 1,
+      "WR": 6,
+      "TE": 5,
+      "QB": 5
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 6,
+      "TE": 5
+    },
+    "max_single_position_share": 0.35294117647058826,
+    "concentration_index": 0.3010380622837371
+  },
+  {
+    "season": 2021,
+    "slot": 2,
+    "tier": "P0",
+    "total_roster_points": 2888.42,
+    "starter_points": 1676.9,
+    "position_counts": {
+      "TE": 3,
+      "WR": 7,
+      "QB": 7
+    },
+    "zero_drafted_starting_positions": [
+      "RB"
+    ],
+    "positions_over_feasibility_cap": {
+      "QB": 7,
+      "WR": 7
+    },
+    "max_single_position_share": 0.4117647058823529,
+    "concentration_index": 0.370242214532872
+  },
+  {
+    "season": 2021,
+    "slot": 2,
+    "tier": "P1",
+    "total_roster_points": 2947.78,
+    "starter_points": 1895.56,
+    "position_counts": {
+      "RB": 1,
+      "TE": 2,
+      "WR": 7,
+      "QB": 7
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "QB": 7,
+      "WR": 7
+    },
+    "max_single_position_share": 0.4117647058823529,
+    "concentration_index": 0.35640138408304495
+  },
+  {
+    "season": 2021,
+    "slot": 2,
+    "tier": "P1b",
+    "total_roster_points": 2940.62,
+    "starter_points": 1729.1,
+    "position_counts": {
+      "QB": 7,
+      "TE": 3,
+      "WR": 7
+    },
+    "zero_drafted_starting_positions": [
+      "RB"
+    ],
+    "positions_over_feasibility_cap": {
+      "QB": 7,
+      "WR": 7
+    },
+    "max_single_position_share": 0.4117647058823529,
+    "concentration_index": 0.370242214532872
+  },
+  {
+    "season": 2021,
+    "slot": 2,
+    "tier": "P1c",
+    "total_roster_points": 2749.56,
+    "starter_points": 1783.0600000000002,
+    "position_counts": {
+      "RB": 1,
+      "TE": 3,
+      "WR": 7,
+      "QB": 6
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "QB": 6,
+      "WR": 7
+    },
+    "max_single_position_share": 0.4117647058823529,
+    "concentration_index": 0.32871972318339104
+  },
+  {
+    "season": 2021,
+    "slot": 2,
+    "tier": "P2",
+    "total_roster_points": 2978.26,
+    "starter_points": 1683.1000000000001,
+    "position_counts": {
+      "TE": 5,
+      "WR": 6,
+      "QB": 6
+    },
+    "zero_drafted_starting_positions": [
+      "RB"
+    ],
+    "positions_over_feasibility_cap": {
+      "QB": 6,
+      "WR": 6,
+      "TE": 5
+    },
+    "max_single_position_share": 0.35294117647058826,
+    "concentration_index": 0.33564013840830453
+  },
+  {
+    "season": 2021,
+    "slot": 2,
+    "tier": "P3",
+    "total_roster_points": 2723.08,
+    "starter_points": 1794.96,
+    "position_counts": {
+      "RB": 1,
+      "TE": 5,
+      "WR": 6,
+      "QB": 5
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 6,
+      "TE": 5
+    },
+    "max_single_position_share": 0.35294117647058826,
+    "concentration_index": 0.3010380622837371
+  },
+  {
+    "season": 2021,
+    "slot": 3,
+    "tier": "P0",
+    "total_roster_points": 2962.82,
+    "starter_points": 1751.3,
+    "position_counts": {
+      "TE": 3,
+      "WR": 7,
+      "QB": 7
+    },
+    "zero_drafted_starting_positions": [
+      "RB"
+    ],
+    "positions_over_feasibility_cap": {
+      "QB": 7,
+      "WR": 7
+    },
+    "max_single_position_share": 0.4117647058823529,
+    "concentration_index": 0.370242214532872
+  },
+  {
+    "season": 2021,
+    "slot": 3,
+    "tier": "P1",
+    "total_roster_points": 3022.18,
+    "starter_points": 1969.96,
+    "position_counts": {
+      "RB": 1,
+      "TE": 2,
+      "WR": 7,
+      "QB": 7
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "QB": 7,
+      "WR": 7
+    },
+    "max_single_position_share": 0.4117647058823529,
+    "concentration_index": 0.35640138408304495
+  },
+  {
+    "season": 2021,
+    "slot": 3,
+    "tier": "P1b",
+    "total_roster_points": 3015.02,
+    "starter_points": 1803.5,
+    "position_counts": {
+      "QB": 7,
+      "TE": 3,
+      "WR": 7
+    },
+    "zero_drafted_starting_positions": [
+      "RB"
+    ],
+    "positions_over_feasibility_cap": {
+      "QB": 7,
+      "WR": 7
+    },
+    "max_single_position_share": 0.4117647058823529,
+    "concentration_index": 0.370242214532872
+  },
+  {
+    "season": 2021,
+    "slot": 3,
+    "tier": "P1c",
+    "total_roster_points": 2823.96,
+    "starter_points": 1857.46,
+    "position_counts": {
+      "RB": 1,
+      "TE": 3,
+      "WR": 7,
+      "QB": 6
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "QB": 6,
+      "WR": 7
+    },
+    "max_single_position_share": 0.4117647058823529,
+    "concentration_index": 0.32871972318339104
+  },
+  {
+    "season": 2021,
+    "slot": 3,
+    "tier": "P2",
+    "total_roster_points": 3052.66,
+    "starter_points": 1757.5,
+    "position_counts": {
+      "TE": 5,
+      "WR": 6,
+      "QB": 6
+    },
+    "zero_drafted_starting_positions": [
+      "RB"
+    ],
+    "positions_over_feasibility_cap": {
+      "QB": 6,
+      "WR": 6,
+      "TE": 5
+    },
+    "max_single_position_share": 0.35294117647058826,
+    "concentration_index": 0.33564013840830453
+  },
+  {
+    "season": 2021,
+    "slot": 3,
+    "tier": "P3",
+    "total_roster_points": 2797.48,
+    "starter_points": 1869.3600000000001,
+    "position_counts": {
+      "RB": 1,
+      "TE": 5,
+      "WR": 6,
+      "QB": 5
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 6,
+      "TE": 5
+    },
+    "max_single_position_share": 0.35294117647058826,
+    "concentration_index": 0.3010380622837371
+  },
+  {
+    "season": 2021,
+    "slot": 4,
+    "tier": "P0",
+    "total_roster_points": 3015.02,
+    "starter_points": 1803.5,
+    "position_counts": {
+      "TE": 3,
+      "QB": 7,
+      "WR": 7
+    },
+    "zero_drafted_starting_positions": [
+      "RB"
+    ],
+    "positions_over_feasibility_cap": {
+      "QB": 7,
+      "WR": 7
+    },
+    "max_single_position_share": 0.4117647058823529,
+    "concentration_index": 0.370242214532872
+  },
+  {
+    "season": 2021,
+    "slot": 4,
+    "tier": "P1",
+    "total_roster_points": 3022.18,
+    "starter_points": 1969.96,
+    "position_counts": {
+      "RB": 1,
+      "TE": 2,
+      "WR": 7,
+      "QB": 7
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "QB": 7,
+      "WR": 7
+    },
+    "max_single_position_share": 0.4117647058823529,
+    "concentration_index": 0.35640138408304495
+  },
+  {
+    "season": 2021,
+    "slot": 4,
+    "tier": "P1b",
+    "total_roster_points": 2929.16,
+    "starter_points": 1940.56,
+    "position_counts": {
+      "RB": 1,
+      "TE": 3,
+      "WR": 7,
+      "QB": 6
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "QB": 6,
+      "WR": 7
+    },
+    "max_single_position_share": 0.4117647058823529,
+    "concentration_index": 0.32871972318339104
+  },
+  {
+    "season": 2021,
+    "slot": 4,
+    "tier": "P1c",
+    "total_roster_points": 2929.16,
+    "starter_points": 1940.56,
+    "position_counts": {
+      "RB": 1,
+      "TE": 3,
+      "WR": 7,
+      "QB": 6
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "QB": 6,
+      "WR": 7
+    },
+    "max_single_position_share": 0.4117647058823529,
+    "concentration_index": 0.32871972318339104
+  },
+  {
+    "season": 2021,
+    "slot": 4,
+    "tier": "P2",
+    "total_roster_points": 3104.86,
+    "starter_points": 1809.6999999999998,
+    "position_counts": {
+      "TE": 5,
+      "QB": 6,
+      "WR": 6
+    },
+    "zero_drafted_starting_positions": [
+      "RB"
+    ],
+    "positions_over_feasibility_cap": {
+      "QB": 6,
+      "WR": 6,
+      "TE": 5
+    },
+    "max_single_position_share": 0.35294117647058826,
+    "concentration_index": 0.33564013840830453
+  },
+  {
+    "season": 2021,
+    "slot": 4,
+    "tier": "P3",
+    "total_roster_points": 2902.68,
+    "starter_points": 1946.76,
+    "position_counts": {
+      "RB": 1,
+      "TE": 5,
+      "WR": 6,
+      "QB": 5
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 6,
+      "TE": 5
+    },
+    "max_single_position_share": 0.35294117647058826,
+    "concentration_index": 0.3010380622837371
+  },
+  {
+    "season": 2021,
+    "slot": 5,
+    "tier": "P0",
+    "total_roster_points": 2908.64,
+    "starter_points": 1697.12,
+    "position_counts": {
+      "TE": 3,
+      "QB": 7,
+      "WR": 7
+    },
+    "zero_drafted_starting_positions": [
+      "RB"
+    ],
+    "positions_over_feasibility_cap": {
+      "QB": 7,
+      "WR": 7
+    },
+    "max_single_position_share": 0.4117647058823529,
+    "concentration_index": 0.370242214532872
+  },
+  {
+    "season": 2021,
+    "slot": 5,
+    "tier": "P1",
+    "total_roster_points": 3026.58,
+    "starter_points": 1945.68,
+    "position_counts": {
+      "RB": 1,
+      "TE": 4,
+      "WR": 6,
+      "QB": 6
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "QB": 6,
+      "WR": 6
+    },
+    "max_single_position_share": 0.35294117647058826,
+    "concentration_index": 0.3079584775086506
+  },
+  {
+    "season": 2021,
+    "slot": 5,
+    "tier": "P1b",
+    "total_roster_points": 2822.78,
+    "starter_points": 1834.18,
+    "position_counts": {
+      "RB": 1,
+      "TE": 3,
+      "WR": 7,
+      "QB": 6
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "QB": 6,
+      "WR": 7
+    },
+    "max_single_position_share": 0.4117647058823529,
+    "concentration_index": 0.32871972318339104
+  },
+  {
+    "season": 2021,
+    "slot": 5,
+    "tier": "P1c",
+    "total_roster_points": 2822.78,
+    "starter_points": 1834.18,
+    "position_counts": {
+      "RB": 1,
+      "TE": 3,
+      "WR": 7,
+      "QB": 6
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "QB": 6,
+      "WR": 7
+    },
+    "max_single_position_share": 0.4117647058823529,
+    "concentration_index": 0.32871972318339104
+  },
+  {
+    "season": 2021,
+    "slot": 5,
+    "tier": "P2",
+    "total_roster_points": 2998.48,
+    "starter_points": 1703.32,
+    "position_counts": {
+      "TE": 5,
+      "QB": 6,
+      "WR": 6
+    },
+    "zero_drafted_starting_positions": [
+      "RB"
+    ],
+    "positions_over_feasibility_cap": {
+      "QB": 6,
+      "WR": 6,
+      "TE": 5
+    },
+    "max_single_position_share": 0.35294117647058826,
+    "concentration_index": 0.33564013840830453
+  },
+  {
+    "season": 2021,
+    "slot": 5,
+    "tier": "P3",
+    "total_roster_points": 2796.3,
+    "starter_points": 1840.38,
+    "position_counts": {
+      "RB": 1,
+      "TE": 5,
+      "WR": 6,
+      "QB": 5
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 6,
+      "TE": 5
+    },
+    "max_single_position_share": 0.35294117647058826,
+    "concentration_index": 0.3010380622837371
+  },
+  {
+    "season": 2021,
+    "slot": 6,
+    "tier": "P0",
+    "total_roster_points": 2979.7799999999997,
+    "starter_points": 1659.1999999999998,
+    "position_counts": {
+      "TE": 3,
+      "QB": 8,
+      "WR": 6
+    },
+    "zero_drafted_starting_positions": [
+      "RB"
+    ],
+    "positions_over_feasibility_cap": {
+      "QB": 8,
+      "WR": 6
+    },
+    "max_single_position_share": 0.47058823529411764,
+    "concentration_index": 0.3771626297577855
+  },
+  {
+    "season": 2021,
+    "slot": 6,
+    "tier": "P1",
+    "total_roster_points": 3278.76,
+    "starter_points": 1813.88,
+    "position_counts": {
+      "WR": 6,
+      "TE": 3,
+      "QB": 8
+    },
+    "zero_drafted_starting_positions": [
+      "RB"
+    ],
+    "positions_over_feasibility_cap": {
+      "QB": 8,
+      "WR": 6
+    },
+    "max_single_position_share": 0.47058823529411764,
+    "concentration_index": 0.3771626297577855
+  },
+  {
+    "season": 2021,
+    "slot": 6,
+    "tier": "P1b",
+    "total_roster_points": 3185.7400000000002,
+    "starter_points": 1812.8200000000002,
+    "position_counts": {
+      "WR": 6,
+      "TE": 4,
+      "QB": 7
+    },
+    "zero_drafted_starting_positions": [
+      "RB"
+    ],
+    "positions_over_feasibility_cap": {
+      "QB": 7,
+      "WR": 6
+    },
+    "max_single_position_share": 0.4117647058823529,
+    "concentration_index": 0.3494809688581315
+  },
+  {
+    "season": 2021,
+    "slot": 6,
+    "tier": "P1c",
+    "total_roster_points": 3185.7400000000002,
+    "starter_points": 1812.8200000000002,
+    "position_counts": {
+      "WR": 6,
+      "TE": 4,
+      "QB": 7
+    },
+    "zero_drafted_starting_positions": [
+      "RB"
+    ],
+    "positions_over_feasibility_cap": {
+      "QB": 7,
+      "WR": 6
+    },
+    "max_single_position_share": 0.4117647058823529,
+    "concentration_index": 0.3494809688581315
+  },
+  {
+    "season": 2021,
+    "slot": 6,
+    "tier": "P2",
+    "total_roster_points": 3181.04,
+    "starter_points": 1738.6,
+    "position_counts": {
+      "TE": 5,
+      "QB": 6,
+      "WR": 6
+    },
+    "zero_drafted_starting_positions": [
+      "RB"
+    ],
+    "positions_over_feasibility_cap": {
+      "QB": 6,
+      "WR": 6,
+      "TE": 5
+    },
+    "max_single_position_share": 0.35294117647058826,
+    "concentration_index": 0.33564013840830453
+  },
+  {
+    "season": 2021,
+    "slot": 6,
+    "tier": "P3",
+    "total_roster_points": 2930.7000000000003,
+    "starter_points": 1881.2800000000002,
+    "position_counts": {
+      "WR": 6,
+      "TE": 5,
+      "QB": 5,
+      "RB": 1
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 6,
+      "TE": 5
+    },
+    "max_single_position_share": 0.35294117647058826,
+    "concentration_index": 0.3010380622837371
+  },
+  {
+    "season": 2021,
+    "slot": 7,
+    "tier": "P0",
+    "total_roster_points": 2979.7799999999997,
+    "starter_points": 1659.1999999999998,
+    "position_counts": {
+      "TE": 3,
+      "QB": 8,
+      "WR": 6
+    },
+    "zero_drafted_starting_positions": [
+      "RB"
+    ],
+    "positions_over_feasibility_cap": {
+      "QB": 8,
+      "WR": 6
+    },
+    "max_single_position_share": 0.47058823529411764,
+    "concentration_index": 0.3771626297577855
+  },
+  {
+    "season": 2021,
+    "slot": 7,
+    "tier": "P1",
+    "total_roster_points": 3340.3399999999997,
+    "starter_points": 1736.3,
+    "position_counts": {
+      "TE": 2,
+      "QB": 9,
+      "WR": 6
+    },
+    "zero_drafted_starting_positions": [
+      "RB"
+    ],
+    "positions_over_feasibility_cap": {
+      "QB": 9,
+      "WR": 6
+    },
+    "max_single_position_share": 0.5294117647058824,
+    "concentration_index": 0.41868512110726647
+  },
+  {
+    "season": 2021,
+    "slot": 7,
+    "tier": "P1b",
+    "total_roster_points": 3247.3199999999997,
+    "starter_points": 1742.0,
+    "position_counts": {
+      "TE": 3,
+      "QB": 8,
+      "WR": 6
+    },
+    "zero_drafted_starting_positions": [
+      "RB"
+    ],
+    "positions_over_feasibility_cap": {
+      "QB": 8,
+      "WR": 6
+    },
+    "max_single_position_share": 0.47058823529411764,
+    "concentration_index": 0.3771626297577855
+  },
+  {
+    "season": 2021,
+    "slot": 7,
+    "tier": "P1c",
+    "total_roster_points": 3247.3199999999997,
+    "starter_points": 1742.0,
+    "position_counts": {
+      "TE": 3,
+      "QB": 8,
+      "WR": 6
+    },
+    "zero_drafted_starting_positions": [
+      "RB"
+    ],
+    "positions_over_feasibility_cap": {
+      "QB": 8,
+      "WR": 6
+    },
+    "max_single_position_share": 0.47058823529411764,
+    "concentration_index": 0.3771626297577855
+  },
+  {
+    "season": 2021,
+    "slot": 7,
+    "tier": "P2",
+    "total_roster_points": 3181.04,
+    "starter_points": 1738.6,
+    "position_counts": {
+      "TE": 5,
+      "QB": 6,
+      "WR": 6
+    },
+    "zero_drafted_starting_positions": [
+      "RB"
+    ],
+    "positions_over_feasibility_cap": {
+      "QB": 6,
+      "WR": 6,
+      "TE": 5
+    },
+    "max_single_position_share": 0.35294117647058826,
+    "concentration_index": 0.33564013840830453
+  },
+  {
+    "season": 2021,
+    "slot": 7,
+    "tier": "P3",
+    "total_roster_points": 2997.2799999999997,
+    "starter_points": 1850.6999999999998,
+    "position_counts": {
+      "TE": 5,
+      "QB": 6,
+      "WR": 5,
+      "RB": 1
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "QB": 6,
+      "TE": 5
+    },
+    "max_single_position_share": 0.35294117647058826,
+    "concentration_index": 0.3010380622837371
+  },
+  {
+    "season": 2021,
+    "slot": 8,
+    "tier": "P0",
+    "total_roster_points": 2979.7799999999997,
+    "starter_points": 1659.1999999999998,
+    "position_counts": {
+      "TE": 3,
+      "QB": 8,
+      "WR": 6
+    },
+    "zero_drafted_starting_positions": [
+      "RB"
+    ],
+    "positions_over_feasibility_cap": {
+      "QB": 8,
+      "WR": 6
+    },
+    "max_single_position_share": 0.47058823529411764,
+    "concentration_index": 0.3771626297577855
+  },
+  {
+    "season": 2021,
+    "slot": 8,
+    "tier": "P1",
+    "total_roster_points": 3340.3399999999997,
+    "starter_points": 1736.3,
+    "position_counts": {
+      "TE": 2,
+      "QB": 9,
+      "WR": 6
+    },
+    "zero_drafted_starting_positions": [
+      "RB"
+    ],
+    "positions_over_feasibility_cap": {
+      "QB": 9,
+      "WR": 6
+    },
+    "max_single_position_share": 0.5294117647058824,
+    "concentration_index": 0.41868512110726647
+  },
+  {
+    "season": 2021,
+    "slot": 8,
+    "tier": "P1b",
+    "total_roster_points": 3247.3199999999997,
+    "starter_points": 1742.0,
+    "position_counts": {
+      "TE": 3,
+      "QB": 8,
+      "WR": 6
+    },
+    "zero_drafted_starting_positions": [
+      "RB"
+    ],
+    "positions_over_feasibility_cap": {
+      "QB": 8,
+      "WR": 6
+    },
+    "max_single_position_share": 0.47058823529411764,
+    "concentration_index": 0.3771626297577855
+  },
+  {
+    "season": 2021,
+    "slot": 8,
+    "tier": "P1c",
+    "total_roster_points": 3085.56,
+    "starter_points": 1742.0,
+    "position_counts": {
+      "TE": 4,
+      "QB": 7,
+      "WR": 6
+    },
+    "zero_drafted_starting_positions": [
+      "RB"
+    ],
+    "positions_over_feasibility_cap": {
+      "QB": 7,
+      "WR": 6
+    },
+    "max_single_position_share": 0.4117647058823529,
+    "concentration_index": 0.3494809688581315
+  },
+  {
+    "season": 2021,
+    "slot": 8,
+    "tier": "P2",
+    "total_roster_points": 3181.04,
+    "starter_points": 1738.6,
+    "position_counts": {
+      "TE": 5,
+      "QB": 6,
+      "WR": 6
+    },
+    "zero_drafted_starting_positions": [
+      "RB"
+    ],
+    "positions_over_feasibility_cap": {
+      "QB": 6,
+      "WR": 6,
+      "TE": 5
+    },
+    "max_single_position_share": 0.35294117647058826,
+    "concentration_index": 0.33564013840830453
+  },
+  {
+    "season": 2021,
+    "slot": 8,
+    "tier": "P3",
+    "total_roster_points": 2997.2799999999997,
+    "starter_points": 1850.6999999999998,
+    "position_counts": {
+      "TE": 5,
+      "QB": 6,
+      "WR": 5,
+      "RB": 1
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "QB": 6,
+      "TE": 5
+    },
+    "max_single_position_share": 0.35294117647058826,
+    "concentration_index": 0.3010380622837371
+  },
+  {
+    "season": 2021,
+    "slot": 9,
+    "tier": "P0",
+    "total_roster_points": 2979.7799999999997,
+    "starter_points": 1659.1999999999998,
+    "position_counts": {
+      "QB": 8,
+      "TE": 3,
+      "WR": 6
+    },
+    "zero_drafted_starting_positions": [
+      "RB"
+    ],
+    "positions_over_feasibility_cap": {
+      "QB": 8,
+      "WR": 6
+    },
+    "max_single_position_share": 0.47058823529411764,
+    "concentration_index": 0.3771626297577855
+  },
+  {
+    "season": 2021,
+    "slot": 9,
+    "tier": "P1",
+    "total_roster_points": 3247.3199999999997,
+    "starter_points": 1742.0,
+    "position_counts": {
+      "QB": 8,
+      "TE": 3,
+      "WR": 6
+    },
+    "zero_drafted_starting_positions": [
+      "RB"
+    ],
+    "positions_over_feasibility_cap": {
+      "QB": 8,
+      "WR": 6
+    },
+    "max_single_position_share": 0.47058823529411764,
+    "concentration_index": 0.3771626297577855
+  },
+  {
+    "season": 2021,
+    "slot": 9,
+    "tier": "P1b",
+    "total_roster_points": 3247.3199999999997,
+    "starter_points": 1742.0,
+    "position_counts": {
+      "QB": 8,
+      "TE": 3,
+      "WR": 6
+    },
+    "zero_drafted_starting_positions": [
+      "RB"
+    ],
+    "positions_over_feasibility_cap": {
+      "QB": 8,
+      "WR": 6
+    },
+    "max_single_position_share": 0.47058823529411764,
+    "concentration_index": 0.3771626297577855
+  },
+  {
+    "season": 2021,
+    "slot": 9,
+    "tier": "P1c",
+    "total_roster_points": 2998.96,
+    "starter_points": 1742.0,
+    "position_counts": {
+      "QB": 7,
+      "TE": 3,
+      "WR": 7
+    },
+    "zero_drafted_starting_positions": [
+      "RB"
+    ],
+    "positions_over_feasibility_cap": {
+      "QB": 7,
+      "WR": 7
+    },
+    "max_single_position_share": 0.4117647058823529,
+    "concentration_index": 0.370242214532872
+  },
+  {
+    "season": 2021,
+    "slot": 9,
+    "tier": "P2",
+    "total_roster_points": 3181.04,
+    "starter_points": 1738.6,
+    "position_counts": {
+      "QB": 6,
+      "TE": 5,
+      "WR": 6
+    },
+    "zero_drafted_starting_positions": [
+      "RB"
+    ],
+    "positions_over_feasibility_cap": {
+      "QB": 6,
+      "WR": 6,
+      "TE": 5
+    },
+    "max_single_position_share": 0.35294117647058826,
+    "concentration_index": 0.33564013840830453
+  },
+  {
+    "season": 2021,
+    "slot": 9,
+    "tier": "P3",
+    "total_roster_points": 3126.58,
+    "starter_points": 1808.8,
+    "position_counts": {
+      "QB": 6,
+      "TE": 5,
+      "WR": 6
+    },
+    "zero_drafted_starting_positions": [
+      "RB"
+    ],
+    "positions_over_feasibility_cap": {
+      "QB": 6,
+      "WR": 6,
+      "TE": 5
+    },
+    "max_single_position_share": 0.35294117647058826,
+    "concentration_index": 0.33564013840830453
+  },
+  {
+    "season": 2021,
+    "slot": 10,
+    "tier": "P0",
+    "total_roster_points": 3122.1,
+    "starter_points": 1710.1999999999998,
+    "position_counts": {
+      "QB": 8,
+      "TE": 3,
+      "WR": 6
+    },
+    "zero_drafted_starting_positions": [
+      "RB"
+    ],
+    "positions_over_feasibility_cap": {
+      "QB": 8,
+      "WR": 6
+    },
+    "max_single_position_share": 0.47058823529411764,
+    "concentration_index": 0.3771626297577855
+  },
+  {
+    "season": 2021,
+    "slot": 10,
+    "tier": "P1",
+    "total_roster_points": 3082.72,
+    "starter_points": 1649.6999999999998,
+    "position_counts": {
+      "QB": 8,
+      "TE": 3,
+      "WR": 6
+    },
+    "zero_drafted_starting_positions": [
+      "RB"
+    ],
+    "positions_over_feasibility_cap": {
+      "QB": 8,
+      "WR": 6
+    },
+    "max_single_position_share": 0.47058823529411764,
+    "concentration_index": 0.3771626297577855
+  },
+  {
+    "season": 2021,
+    "slot": 10,
+    "tier": "P1b",
+    "total_roster_points": 3082.72,
+    "starter_points": 1649.6999999999998,
+    "position_counts": {
+      "QB": 8,
+      "TE": 3,
+      "WR": 6
+    },
+    "zero_drafted_starting_positions": [
+      "RB"
+    ],
+    "positions_over_feasibility_cap": {
+      "QB": 8,
+      "WR": 6
+    },
+    "max_single_position_share": 0.47058823529411764,
+    "concentration_index": 0.3771626297577855
+  },
+  {
+    "season": 2021,
+    "slot": 10,
+    "tier": "P1c",
+    "total_roster_points": 3082.72,
+    "starter_points": 1649.6999999999998,
+    "position_counts": {
+      "QB": 8,
+      "TE": 3,
+      "WR": 6
+    },
+    "zero_drafted_starting_positions": [
+      "RB"
+    ],
+    "positions_over_feasibility_cap": {
+      "QB": 8,
+      "WR": 6
+    },
+    "max_single_position_share": 0.47058823529411764,
+    "concentration_index": 0.3771626297577855
+  },
+  {
+    "season": 2021,
+    "slot": 10,
+    "tier": "P2",
+    "total_roster_points": 3316.46,
+    "starter_points": 1782.6999999999998,
+    "position_counts": {
+      "QB": 6,
+      "TE": 5,
+      "WR": 6
+    },
+    "zero_drafted_starting_positions": [
+      "RB"
+    ],
+    "positions_over_feasibility_cap": {
+      "QB": 6,
+      "WR": 6,
+      "TE": 5
+    },
+    "max_single_position_share": 0.35294117647058826,
+    "concentration_index": 0.33564013840830453
+  },
+  {
+    "season": 2021,
+    "slot": 10,
+    "tier": "P3",
+    "total_roster_points": 2955.7799999999997,
+    "starter_points": 1722.1999999999998,
+    "position_counts": {
+      "QB": 6,
+      "TE": 5,
+      "WR": 6
+    },
+    "zero_drafted_starting_positions": [
+      "RB"
+    ],
+    "positions_over_feasibility_cap": {
+      "QB": 6,
+      "WR": 6,
+      "TE": 5
+    },
+    "max_single_position_share": 0.35294117647058826,
+    "concentration_index": 0.33564013840830453
+  },
+  {
+    "season": 2022,
+    "slot": 1,
+    "tier": "P0",
+    "total_roster_points": 2555.52,
+    "starter_points": 1657.38,
+    "position_counts": {
+      "QB": 5,
+      "WR": 8,
+      "TE": 3,
+      "RB": 1
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 8
+    },
+    "max_single_position_share": 0.47058823529411764,
+    "concentration_index": 0.342560553633218
+  },
+  {
+    "season": 2022,
+    "slot": 1,
+    "tier": "P1",
+    "total_roster_points": 2669.92,
+    "starter_points": 1859.88,
+    "position_counts": {
+      "QB": 5,
+      "WR": 7,
+      "TE": 3,
+      "RB": 2
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 7
+    },
+    "max_single_position_share": 0.4117647058823529,
+    "concentration_index": 0.30103806228373703
+  },
+  {
+    "season": 2022,
+    "slot": 1,
+    "tier": "P1b",
+    "total_roster_points": 2669.92,
+    "starter_points": 1859.88,
+    "position_counts": {
+      "QB": 5,
+      "WR": 7,
+      "TE": 3,
+      "RB": 2
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 7
+    },
+    "max_single_position_share": 0.4117647058823529,
+    "concentration_index": 0.30103806228373703
+  },
+  {
+    "season": 2022,
+    "slot": 1,
+    "tier": "P1c",
+    "total_roster_points": 2772.1600000000003,
+    "starter_points": 2151.94,
+    "position_counts": {
+      "RB": 3,
+      "QB": 4,
+      "WR": 7,
+      "TE": 3
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 7
+    },
+    "max_single_position_share": 0.4117647058823529,
+    "concentration_index": 0.28719723183391005
+  },
+  {
+    "season": 2022,
+    "slot": 1,
+    "tier": "P2",
+    "total_roster_points": 2614.7200000000003,
+    "starter_points": 1668.98,
+    "position_counts": {
+      "QB": 5,
+      "WR": 7,
+      "TE": 4,
+      "RB": 1
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 7
+    },
+    "max_single_position_share": 0.4117647058823529,
+    "concentration_index": 0.314878892733564
+  },
+  {
+    "season": 2022,
+    "slot": 1,
+    "tier": "P3",
+    "total_roster_points": 2772.1600000000003,
+    "starter_points": 2151.94,
+    "position_counts": {
+      "RB": 3,
+      "QB": 4,
+      "WR": 7,
+      "TE": 3
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 7
+    },
+    "max_single_position_share": 0.4117647058823529,
+    "concentration_index": 0.28719723183391005
+  },
+  {
+    "season": 2022,
+    "slot": 2,
+    "tier": "P0",
+    "total_roster_points": 2653.92,
+    "starter_points": 1708.18,
+    "position_counts": {
+      "QB": 5,
+      "WR": 7,
+      "TE": 4,
+      "RB": 1
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 7
+    },
+    "max_single_position_share": 0.4117647058823529,
+    "concentration_index": 0.314878892733564
+  },
+  {
+    "season": 2022,
+    "slot": 2,
+    "tier": "P1",
+    "total_roster_points": 2708.2200000000003,
+    "starter_points": 1898.18,
+    "position_counts": {
+      "QB": 5,
+      "WR": 7,
+      "TE": 3,
+      "RB": 2
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 7
+    },
+    "max_single_position_share": 0.4117647058823529,
+    "concentration_index": 0.30103806228373703
+  },
+  {
+    "season": 2022,
+    "slot": 2,
+    "tier": "P1b",
+    "total_roster_points": 2708.2200000000003,
+    "starter_points": 1898.18,
+    "position_counts": {
+      "QB": 5,
+      "WR": 7,
+      "TE": 3,
+      "RB": 2
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 7
+    },
+    "max_single_position_share": 0.4117647058823529,
+    "concentration_index": 0.30103806228373703
+  },
+  {
+    "season": 2022,
+    "slot": 2,
+    "tier": "P1c",
+    "total_roster_points": 2810.46,
+    "starter_points": 2190.2400000000002,
+    "position_counts": {
+      "RB": 3,
+      "QB": 4,
+      "WR": 7,
+      "TE": 3
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 7
+    },
+    "max_single_position_share": 0.4117647058823529,
+    "concentration_index": 0.28719723183391005
+  },
+  {
+    "season": 2022,
+    "slot": 2,
+    "tier": "P2",
+    "total_roster_points": 2653.92,
+    "starter_points": 1708.18,
+    "position_counts": {
+      "QB": 5,
+      "WR": 7,
+      "TE": 4,
+      "RB": 1
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 7
+    },
+    "max_single_position_share": 0.4117647058823529,
+    "concentration_index": 0.314878892733564
+  },
+  {
+    "season": 2022,
+    "slot": 2,
+    "tier": "P3",
+    "total_roster_points": 2810.46,
+    "starter_points": 2190.2400000000002,
+    "position_counts": {
+      "RB": 3,
+      "QB": 4,
+      "WR": 7,
+      "TE": 3
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 7
+    },
+    "max_single_position_share": 0.4117647058823529,
+    "concentration_index": 0.28719723183391005
+  },
+  {
+    "season": 2022,
+    "slot": 3,
+    "tier": "P0",
+    "total_roster_points": 2653.92,
+    "starter_points": 1708.18,
+    "position_counts": {
+      "QB": 5,
+      "WR": 7,
+      "TE": 4,
+      "RB": 1
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 7
+    },
+    "max_single_position_share": 0.4117647058823529,
+    "concentration_index": 0.314878892733564
+  },
+  {
+    "season": 2022,
+    "slot": 3,
+    "tier": "P1",
+    "total_roster_points": 2810.46,
+    "starter_points": 2190.2400000000002,
+    "position_counts": {
+      "RB": 3,
+      "QB": 4,
+      "WR": 7,
+      "TE": 3
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 7
+    },
+    "max_single_position_share": 0.4117647058823529,
+    "concentration_index": 0.28719723183391005
+  },
+  {
+    "season": 2022,
+    "slot": 3,
+    "tier": "P1b",
+    "total_roster_points": 2708.2200000000003,
+    "starter_points": 1898.18,
+    "position_counts": {
+      "QB": 5,
+      "WR": 7,
+      "TE": 3,
+      "RB": 2
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 7
+    },
+    "max_single_position_share": 0.4117647058823529,
+    "concentration_index": 0.30103806228373703
+  },
+  {
+    "season": 2022,
+    "slot": 3,
+    "tier": "P1c",
+    "total_roster_points": 2810.46,
+    "starter_points": 2190.2400000000002,
+    "position_counts": {
+      "RB": 3,
+      "QB": 4,
+      "WR": 7,
+      "TE": 3
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 7
+    },
+    "max_single_position_share": 0.4117647058823529,
+    "concentration_index": 0.28719723183391005
+  },
+  {
+    "season": 2022,
+    "slot": 3,
+    "tier": "P2",
+    "total_roster_points": 2653.92,
+    "starter_points": 1708.18,
+    "position_counts": {
+      "QB": 5,
+      "WR": 7,
+      "TE": 4,
+      "RB": 1
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 7
+    },
+    "max_single_position_share": 0.4117647058823529,
+    "concentration_index": 0.314878892733564
+  },
+  {
+    "season": 2022,
+    "slot": 3,
+    "tier": "P3",
+    "total_roster_points": 2810.46,
+    "starter_points": 2190.2400000000002,
+    "position_counts": {
+      "RB": 3,
+      "QB": 4,
+      "WR": 7,
+      "TE": 3
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 7
+    },
+    "max_single_position_share": 0.4117647058823529,
+    "concentration_index": 0.28719723183391005
+  },
+  {
+    "season": 2022,
+    "slot": 4,
+    "tier": "P0",
+    "total_roster_points": 2525.12,
+    "starter_points": 1661.38,
+    "position_counts": {
+      "QB": 5,
+      "WR": 8,
+      "TE": 3,
+      "RB": 1
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 8
+    },
+    "max_single_position_share": 0.47058823529411764,
+    "concentration_index": 0.342560553633218
+  },
+  {
+    "season": 2022,
+    "slot": 4,
+    "tier": "P1",
+    "total_roster_points": 2639.52,
+    "starter_points": 1863.88,
+    "position_counts": {
+      "QB": 5,
+      "WR": 7,
+      "TE": 3,
+      "RB": 2
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 7
+    },
+    "max_single_position_share": 0.4117647058823529,
+    "concentration_index": 0.30103806228373703
+  },
+  {
+    "season": 2022,
+    "slot": 4,
+    "tier": "P1b",
+    "total_roster_points": 2639.52,
+    "starter_points": 1863.88,
+    "position_counts": {
+      "QB": 5,
+      "WR": 7,
+      "TE": 3,
+      "RB": 2
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 7
+    },
+    "max_single_position_share": 0.4117647058823529,
+    "concentration_index": 0.30103806228373703
+  },
+  {
+    "season": 2022,
+    "slot": 4,
+    "tier": "P1c",
+    "total_roster_points": 2639.52,
+    "starter_points": 1863.88,
+    "position_counts": {
+      "QB": 5,
+      "WR": 7,
+      "TE": 3,
+      "RB": 2
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 7
+    },
+    "max_single_position_share": 0.4117647058823529,
+    "concentration_index": 0.30103806228373703
+  },
+  {
+    "season": 2022,
+    "slot": 4,
+    "tier": "P2",
+    "total_roster_points": 2525.12,
+    "starter_points": 1661.38,
+    "position_counts": {
+      "QB": 5,
+      "WR": 8,
+      "TE": 3,
+      "RB": 1
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 8
+    },
+    "max_single_position_share": 0.47058823529411764,
+    "concentration_index": 0.342560553633218
+  },
+  {
+    "season": 2022,
+    "slot": 4,
+    "tier": "P3",
+    "total_roster_points": 2639.52,
+    "starter_points": 1863.88,
+    "position_counts": {
+      "QB": 5,
+      "WR": 7,
+      "TE": 3,
+      "RB": 2
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 7
+    },
+    "max_single_position_share": 0.4117647058823529,
+    "concentration_index": 0.30103806228373703
+  },
+  {
+    "season": 2022,
+    "slot": 5,
+    "tier": "P0",
+    "total_roster_points": 2525.12,
+    "starter_points": 1661.38,
+    "position_counts": {
+      "QB": 5,
+      "WR": 8,
+      "TE": 3,
+      "RB": 1
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 8
+    },
+    "max_single_position_share": 0.47058823529411764,
+    "concentration_index": 0.342560553633218
+  },
+  {
+    "season": 2022,
+    "slot": 5,
+    "tier": "P1",
+    "total_roster_points": 2529.42,
+    "starter_points": 1811.28,
+    "position_counts": {
+      "QB": 5,
+      "WR": 7,
+      "TE": 3,
+      "RB": 2
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 7
+    },
+    "max_single_position_share": 0.4117647058823529,
+    "concentration_index": 0.30103806228373703
+  },
+  {
+    "season": 2022,
+    "slot": 5,
+    "tier": "P1b",
+    "total_roster_points": 2529.42,
+    "starter_points": 1811.28,
+    "position_counts": {
+      "QB": 5,
+      "WR": 7,
+      "TE": 3,
+      "RB": 2
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 7
+    },
+    "max_single_position_share": 0.4117647058823529,
+    "concentration_index": 0.30103806228373703
+  },
+  {
+    "season": 2022,
+    "slot": 5,
+    "tier": "P1c",
+    "total_roster_points": 2529.42,
+    "starter_points": 1811.28,
+    "position_counts": {
+      "QB": 5,
+      "WR": 7,
+      "TE": 3,
+      "RB": 2
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 7
+    },
+    "max_single_position_share": 0.4117647058823529,
+    "concentration_index": 0.30103806228373703
+  },
+  {
+    "season": 2022,
+    "slot": 5,
+    "tier": "P2",
+    "total_roster_points": 2525.12,
+    "starter_points": 1661.38,
+    "position_counts": {
+      "QB": 5,
+      "WR": 8,
+      "TE": 3,
+      "RB": 1
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 8
+    },
+    "max_single_position_share": 0.47058823529411764,
+    "concentration_index": 0.342560553633218
+  },
+  {
+    "season": 2022,
+    "slot": 5,
+    "tier": "P3",
+    "total_roster_points": 2529.42,
+    "starter_points": 1811.28,
+    "position_counts": {
+      "QB": 5,
+      "WR": 7,
+      "TE": 3,
+      "RB": 2
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 7
+    },
+    "max_single_position_share": 0.4117647058823529,
+    "concentration_index": 0.30103806228373703
+  },
+  {
+    "season": 2022,
+    "slot": 6,
+    "tier": "P0",
+    "total_roster_points": 2525.12,
+    "starter_points": 1661.38,
+    "position_counts": {
+      "QB": 5,
+      "WR": 8,
+      "TE": 3,
+      "RB": 1
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 8
+    },
+    "max_single_position_share": 0.47058823529411764,
+    "concentration_index": 0.342560553633218
+  },
+  {
+    "season": 2022,
+    "slot": 6,
+    "tier": "P1",
+    "total_roster_points": 2579.42,
+    "starter_points": 1831.28,
+    "position_counts": {
+      "QB": 5,
+      "WR": 8,
+      "TE": 2,
+      "RB": 2
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 8
+    },
+    "max_single_position_share": 0.47058823529411764,
+    "concentration_index": 0.33564013840830453
+  },
+  {
+    "season": 2022,
+    "slot": 6,
+    "tier": "P1b",
+    "total_roster_points": 2579.42,
+    "starter_points": 1831.28,
+    "position_counts": {
+      "QB": 5,
+      "WR": 8,
+      "TE": 2,
+      "RB": 2
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 8
+    },
+    "max_single_position_share": 0.47058823529411764,
+    "concentration_index": 0.33564013840830453
+  },
+  {
+    "season": 2022,
+    "slot": 6,
+    "tier": "P1c",
+    "total_roster_points": 2579.42,
+    "starter_points": 1831.28,
+    "position_counts": {
+      "QB": 5,
+      "WR": 8,
+      "TE": 2,
+      "RB": 2
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 8
+    },
+    "max_single_position_share": 0.47058823529411764,
+    "concentration_index": 0.33564013840830453
+  },
+  {
+    "season": 2022,
+    "slot": 6,
+    "tier": "P2",
+    "total_roster_points": 2525.12,
+    "starter_points": 1661.38,
+    "position_counts": {
+      "QB": 5,
+      "WR": 8,
+      "TE": 3,
+      "RB": 1
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 8
+    },
+    "max_single_position_share": 0.47058823529411764,
+    "concentration_index": 0.342560553633218
+  },
+  {
+    "season": 2022,
+    "slot": 6,
+    "tier": "P3",
+    "total_roster_points": 2579.42,
+    "starter_points": 1831.28,
+    "position_counts": {
+      "QB": 5,
+      "WR": 8,
+      "TE": 2,
+      "RB": 2
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 8
+    },
+    "max_single_position_share": 0.47058823529411764,
+    "concentration_index": 0.33564013840830453
+  },
+  {
+    "season": 2022,
+    "slot": 7,
+    "tier": "P0",
+    "total_roster_points": 2525.12,
+    "starter_points": 1661.38,
+    "position_counts": {
+      "QB": 5,
+      "WR": 8,
+      "TE": 3,
+      "RB": 1
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 8
+    },
+    "max_single_position_share": 0.47058823529411764,
+    "concentration_index": 0.342560553633218
+  },
+  {
+    "season": 2022,
+    "slot": 7,
+    "tier": "P1",
+    "total_roster_points": 2579.42,
+    "starter_points": 1831.28,
+    "position_counts": {
+      "QB": 5,
+      "WR": 8,
+      "TE": 2,
+      "RB": 2
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 8
+    },
+    "max_single_position_share": 0.47058823529411764,
+    "concentration_index": 0.33564013840830453
+  },
+  {
+    "season": 2022,
+    "slot": 7,
+    "tier": "P1b",
+    "total_roster_points": 2579.42,
+    "starter_points": 1831.28,
+    "position_counts": {
+      "QB": 5,
+      "WR": 8,
+      "TE": 2,
+      "RB": 2
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 8
+    },
+    "max_single_position_share": 0.47058823529411764,
+    "concentration_index": 0.33564013840830453
+  },
+  {
+    "season": 2022,
+    "slot": 7,
+    "tier": "P1c",
+    "total_roster_points": 2579.42,
+    "starter_points": 1831.28,
+    "position_counts": {
+      "QB": 5,
+      "WR": 8,
+      "TE": 2,
+      "RB": 2
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 8
+    },
+    "max_single_position_share": 0.47058823529411764,
+    "concentration_index": 0.33564013840830453
+  },
+  {
+    "season": 2022,
+    "slot": 7,
+    "tier": "P2",
+    "total_roster_points": 2525.12,
+    "starter_points": 1661.38,
+    "position_counts": {
+      "QB": 5,
+      "WR": 8,
+      "TE": 3,
+      "RB": 1
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 8
+    },
+    "max_single_position_share": 0.47058823529411764,
+    "concentration_index": 0.342560553633218
+  },
+  {
+    "season": 2022,
+    "slot": 7,
+    "tier": "P3",
+    "total_roster_points": 2579.42,
+    "starter_points": 1831.28,
+    "position_counts": {
+      "QB": 5,
+      "WR": 8,
+      "TE": 2,
+      "RB": 2
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 8
+    },
+    "max_single_position_share": 0.47058823529411764,
+    "concentration_index": 0.33564013840830453
+  },
+  {
+    "season": 2022,
+    "slot": 8,
+    "tier": "P0",
+    "total_roster_points": 2707.02,
+    "starter_points": 1866.98,
+    "position_counts": {
+      "QB": 5,
+      "WR": 8,
+      "TE": 2,
+      "RB": 2
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 8
+    },
+    "max_single_position_share": 0.47058823529411764,
+    "concentration_index": 0.33564013840830453
+  },
+  {
+    "season": 2022,
+    "slot": 8,
+    "tier": "P1",
+    "total_roster_points": 2659.08,
+    "starter_points": 2008.8600000000001,
+    "position_counts": {
+      "QB": 4,
+      "RB": 3,
+      "WR": 8,
+      "TE": 2
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 8
+    },
+    "max_single_position_share": 0.47058823529411764,
+    "concentration_index": 0.3217993079584775
+  },
+  {
+    "season": 2022,
+    "slot": 8,
+    "tier": "P1b",
+    "total_roster_points": 2659.08,
+    "starter_points": 2008.8600000000001,
+    "position_counts": {
+      "QB": 4,
+      "RB": 3,
+      "WR": 8,
+      "TE": 2
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 8
+    },
+    "max_single_position_share": 0.47058823529411764,
+    "concentration_index": 0.3217993079584775
+  },
+  {
+    "season": 2022,
+    "slot": 8,
+    "tier": "P1c",
+    "total_roster_points": 2659.08,
+    "starter_points": 2008.8600000000001,
+    "position_counts": {
+      "QB": 4,
+      "RB": 3,
+      "WR": 8,
+      "TE": 2
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 8
+    },
+    "max_single_position_share": 0.47058823529411764,
+    "concentration_index": 0.3217993079584775
+  },
+  {
+    "season": 2022,
+    "slot": 8,
+    "tier": "P2",
+    "total_roster_points": 2707.02,
+    "starter_points": 1866.98,
+    "position_counts": {
+      "QB": 5,
+      "WR": 8,
+      "TE": 2,
+      "RB": 2
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 8
+    },
+    "max_single_position_share": 0.47058823529411764,
+    "concentration_index": 0.33564013840830453
+  },
+  {
+    "season": 2022,
+    "slot": 8,
+    "tier": "P3",
+    "total_roster_points": 2659.08,
+    "starter_points": 2008.8600000000001,
+    "position_counts": {
+      "QB": 4,
+      "RB": 3,
+      "WR": 8,
+      "TE": 2
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 8
+    },
+    "max_single_position_share": 0.47058823529411764,
+    "concentration_index": 0.3217993079584775
+  },
+  {
+    "season": 2022,
+    "slot": 9,
+    "tier": "P0",
+    "total_roster_points": 2582.08,
+    "starter_points": 1742.04,
+    "position_counts": {
+      "QB": 5,
+      "WR": 8,
+      "TE": 2,
+      "RB": 2
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 8
+    },
+    "max_single_position_share": 0.47058823529411764,
+    "concentration_index": 0.33564013840830453
+  },
+  {
+    "season": 2022,
+    "slot": 9,
+    "tier": "P1",
+    "total_roster_points": 2659.08,
+    "starter_points": 2008.8600000000001,
+    "position_counts": {
+      "QB": 4,
+      "RB": 3,
+      "WR": 8,
+      "TE": 2
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 8
+    },
+    "max_single_position_share": 0.47058823529411764,
+    "concentration_index": 0.3217993079584775
+  },
+  {
+    "season": 2022,
+    "slot": 9,
+    "tier": "P1b",
+    "total_roster_points": 2659.08,
+    "starter_points": 2008.8600000000001,
+    "position_counts": {
+      "QB": 4,
+      "RB": 3,
+      "WR": 8,
+      "TE": 2
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 8
+    },
+    "max_single_position_share": 0.47058823529411764,
+    "concentration_index": 0.3217993079584775
+  },
+  {
+    "season": 2022,
+    "slot": 9,
+    "tier": "P1c",
+    "total_roster_points": 2659.08,
+    "starter_points": 2008.8600000000001,
+    "position_counts": {
+      "QB": 4,
+      "RB": 3,
+      "WR": 8,
+      "TE": 2
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 8
+    },
+    "max_single_position_share": 0.47058823529411764,
+    "concentration_index": 0.3217993079584775
+  },
+  {
+    "season": 2022,
+    "slot": 9,
+    "tier": "P2",
+    "total_roster_points": 2582.08,
+    "starter_points": 1742.04,
+    "position_counts": {
+      "QB": 5,
+      "WR": 8,
+      "TE": 2,
+      "RB": 2
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 8
+    },
+    "max_single_position_share": 0.47058823529411764,
+    "concentration_index": 0.33564013840830453
+  },
+  {
+    "season": 2022,
+    "slot": 9,
+    "tier": "P3",
+    "total_roster_points": 2659.08,
+    "starter_points": 2008.8600000000001,
+    "position_counts": {
+      "QB": 4,
+      "RB": 3,
+      "WR": 8,
+      "TE": 2
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 8
+    },
+    "max_single_position_share": 0.47058823529411764,
+    "concentration_index": 0.3217993079584775
+  },
+  {
+    "season": 2022,
+    "slot": 10,
+    "tier": "P0",
+    "total_roster_points": 2499.38,
+    "starter_points": 1662.84,
+    "position_counts": {
+      "QB": 5,
+      "WR": 8,
+      "TE": 2,
+      "RB": 2
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 8
+    },
+    "max_single_position_share": 0.47058823529411764,
+    "concentration_index": 0.33564013840830453
+  },
+  {
+    "season": 2022,
+    "slot": 10,
+    "tier": "P1",
+    "total_roster_points": 2576.38,
+    "starter_points": 1929.66,
+    "position_counts": {
+      "QB": 4,
+      "RB": 3,
+      "WR": 8,
+      "TE": 2
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 8
+    },
+    "max_single_position_share": 0.47058823529411764,
+    "concentration_index": 0.3217993079584775
+  },
+  {
+    "season": 2022,
+    "slot": 10,
+    "tier": "P1b",
+    "total_roster_points": 2576.38,
+    "starter_points": 1929.66,
+    "position_counts": {
+      "QB": 4,
+      "RB": 3,
+      "WR": 8,
+      "TE": 2
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 8
+    },
+    "max_single_position_share": 0.47058823529411764,
+    "concentration_index": 0.3217993079584775
+  },
+  {
+    "season": 2022,
+    "slot": 10,
+    "tier": "P1c",
+    "total_roster_points": 2576.38,
+    "starter_points": 1929.66,
+    "position_counts": {
+      "QB": 4,
+      "RB": 3,
+      "WR": 8,
+      "TE": 2
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 8
+    },
+    "max_single_position_share": 0.47058823529411764,
+    "concentration_index": 0.3217993079584775
+  },
+  {
+    "season": 2022,
+    "slot": 10,
+    "tier": "P2",
+    "total_roster_points": 2499.38,
+    "starter_points": 1662.84,
+    "position_counts": {
+      "QB": 5,
+      "WR": 8,
+      "TE": 2,
+      "RB": 2
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 8
+    },
+    "max_single_position_share": 0.47058823529411764,
+    "concentration_index": 0.33564013840830453
+  },
+  {
+    "season": 2022,
+    "slot": 10,
+    "tier": "P3",
+    "total_roster_points": 2576.38,
+    "starter_points": 1929.66,
+    "position_counts": {
+      "QB": 4,
+      "RB": 3,
+      "WR": 8,
+      "TE": 2
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 8
+    },
+    "max_single_position_share": 0.47058823529411764,
+    "concentration_index": 0.3217993079584775
+  },
+  {
+    "season": 2023,
+    "slot": 1,
+    "tier": "P0",
+    "total_roster_points": 2662.86,
+    "starter_points": 1810.8600000000001,
+    "position_counts": {
+      "WR": 8,
+      "QB": 4,
+      "RB": 2,
+      "TE": 3
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 8
+    },
+    "max_single_position_share": 0.47058823529411764,
+    "concentration_index": 0.3217993079584775
+  },
+  {
+    "season": 2023,
+    "slot": 1,
+    "tier": "P1",
+    "total_roster_points": 2770.36,
+    "starter_points": 2008.3600000000001,
+    "position_counts": {
+      "WR": 7,
+      "QB": 4,
+      "RB": 3,
+      "TE": 3
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 7
+    },
+    "max_single_position_share": 0.4117647058823529,
+    "concentration_index": 0.28719723183391005
+  },
+  {
+    "season": 2023,
+    "slot": 1,
+    "tier": "P1b",
+    "total_roster_points": 2770.36,
+    "starter_points": 2008.3600000000001,
+    "position_counts": {
+      "WR": 7,
+      "QB": 4,
+      "RB": 3,
+      "TE": 3
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 7
+    },
+    "max_single_position_share": 0.4117647058823529,
+    "concentration_index": 0.28719723183391005
+  },
+  {
+    "season": 2023,
+    "slot": 1,
+    "tier": "P1c",
+    "total_roster_points": 2770.36,
+    "starter_points": 2008.3600000000001,
+    "position_counts": {
+      "WR": 7,
+      "QB": 4,
+      "RB": 3,
+      "TE": 3
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 7
+    },
+    "max_single_position_share": 0.4117647058823529,
+    "concentration_index": 0.28719723183391005
+  },
+  {
+    "season": 2023,
+    "slot": 1,
+    "tier": "P2",
+    "total_roster_points": 2677.36,
+    "starter_points": 1810.8600000000001,
+    "position_counts": {
+      "WR": 7,
+      "QB": 4,
+      "RB": 2,
+      "TE": 4
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 7
+    },
+    "max_single_position_share": 0.4117647058823529,
+    "concentration_index": 0.29411764705882354
+  },
+  {
+    "season": 2023,
+    "slot": 1,
+    "tier": "P3",
+    "total_roster_points": 2878.86,
+    "starter_points": 2008.3600000000001,
+    "position_counts": {
+      "WR": 6,
+      "QB": 4,
+      "RB": 3,
+      "TE": 4
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 6
+    },
+    "max_single_position_share": 0.35294117647058826,
+    "concentration_index": 0.2664359861591696
+  },
+  {
+    "season": 2023,
+    "slot": 2,
+    "tier": "P0",
+    "total_roster_points": 2662.86,
+    "starter_points": 1810.8600000000001,
+    "position_counts": {
+      "WR": 8,
+      "QB": 4,
+      "RB": 2,
+      "TE": 3
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 8
+    },
+    "max_single_position_share": 0.47058823529411764,
+    "concentration_index": 0.3217993079584775
+  },
+  {
+    "season": 2023,
+    "slot": 2,
+    "tier": "P1",
+    "total_roster_points": 2770.36,
+    "starter_points": 2008.3600000000001,
+    "position_counts": {
+      "WR": 7,
+      "QB": 4,
+      "RB": 3,
+      "TE": 3
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 7
+    },
+    "max_single_position_share": 0.4117647058823529,
+    "concentration_index": 0.28719723183391005
+  },
+  {
+    "season": 2023,
+    "slot": 2,
+    "tier": "P1b",
+    "total_roster_points": 2770.36,
+    "starter_points": 2008.3600000000001,
+    "position_counts": {
+      "WR": 7,
+      "QB": 4,
+      "RB": 3,
+      "TE": 3
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 7
+    },
+    "max_single_position_share": 0.4117647058823529,
+    "concentration_index": 0.28719723183391005
+  },
+  {
+    "season": 2023,
+    "slot": 2,
+    "tier": "P1c",
+    "total_roster_points": 2770.36,
+    "starter_points": 2008.3600000000001,
+    "position_counts": {
+      "WR": 7,
+      "QB": 4,
+      "RB": 3,
+      "TE": 3
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 7
+    },
+    "max_single_position_share": 0.4117647058823529,
+    "concentration_index": 0.28719723183391005
+  },
+  {
+    "season": 2023,
+    "slot": 2,
+    "tier": "P2",
+    "total_roster_points": 2677.36,
+    "starter_points": 1810.8600000000001,
+    "position_counts": {
+      "WR": 7,
+      "QB": 4,
+      "RB": 2,
+      "TE": 4
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 7
+    },
+    "max_single_position_share": 0.4117647058823529,
+    "concentration_index": 0.29411764705882354
+  },
+  {
+    "season": 2023,
+    "slot": 2,
+    "tier": "P3",
+    "total_roster_points": 2878.86,
+    "starter_points": 2008.3600000000001,
+    "position_counts": {
+      "WR": 6,
+      "QB": 4,
+      "RB": 3,
+      "TE": 4
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 6
+    },
+    "max_single_position_share": 0.35294117647058826,
+    "concentration_index": 0.2664359861591696
+  },
+  {
+    "season": 2023,
+    "slot": 3,
+    "tier": "P0",
+    "total_roster_points": 2662.06,
+    "starter_points": 1810.0600000000002,
+    "position_counts": {
+      "WR": 8,
+      "QB": 4,
+      "RB": 2,
+      "TE": 3
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 8
+    },
+    "max_single_position_share": 0.47058823529411764,
+    "concentration_index": 0.3217993079584775
+  },
+  {
+    "season": 2023,
+    "slot": 3,
+    "tier": "P1",
+    "total_roster_points": 2731.82,
+    "starter_points": 1948.8600000000001,
+    "position_counts": {
+      "WR": 6,
+      "QB": 5,
+      "RB": 3,
+      "TE": 3
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 6
+    },
+    "max_single_position_share": 0.35294117647058826,
+    "concentration_index": 0.27335640138408307
+  },
+  {
+    "season": 2023,
+    "slot": 3,
+    "tier": "P1b",
+    "total_roster_points": 2680.12,
+    "starter_points": 1751.3600000000001,
+    "position_counts": {
+      "WR": 7,
+      "QB": 5,
+      "RB": 2,
+      "TE": 3
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 7
+    },
+    "max_single_position_share": 0.4117647058823529,
+    "concentration_index": 0.30103806228373703
+  },
+  {
+    "season": 2023,
+    "slot": 3,
+    "tier": "P1c",
+    "total_roster_points": 2731.82,
+    "starter_points": 1948.8600000000001,
+    "position_counts": {
+      "WR": 6,
+      "QB": 5,
+      "RB": 3,
+      "TE": 3
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 6
+    },
+    "max_single_position_share": 0.35294117647058826,
+    "concentration_index": 0.27335640138408307
+  },
+  {
+    "season": 2023,
+    "slot": 3,
+    "tier": "P2",
+    "total_roster_points": 2676.56,
+    "starter_points": 1810.0600000000002,
+    "position_counts": {
+      "WR": 7,
+      "QB": 4,
+      "RB": 2,
+      "TE": 4
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 7
+    },
+    "max_single_position_share": 0.4117647058823529,
+    "concentration_index": 0.29411764705882354
+  },
+  {
+    "season": 2023,
+    "slot": 3,
+    "tier": "P3",
+    "total_roster_points": 2731.82,
+    "starter_points": 1948.8600000000001,
+    "position_counts": {
+      "WR": 6,
+      "QB": 5,
+      "RB": 3,
+      "TE": 3
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 6
+    },
+    "max_single_position_share": 0.35294117647058826,
+    "concentration_index": 0.27335640138408307
+  },
+  {
+    "season": 2023,
+    "slot": 4,
+    "tier": "P0",
+    "total_roster_points": 2791.98,
+    "starter_points": 1827.94,
+    "position_counts": {
+      "QB": 5,
+      "WR": 7,
+      "RB": 2,
+      "TE": 3
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 7
+    },
+    "max_single_position_share": 0.4117647058823529,
+    "concentration_index": 0.30103806228373703
+  },
+  {
+    "season": 2023,
+    "slot": 4,
+    "tier": "P1",
+    "total_roster_points": 2481.62,
+    "starter_points": 1868.2,
+    "position_counts": {
+      "WR": 7,
+      "QB": 4,
+      "RB": 3,
+      "TE": 3
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 7
+    },
+    "max_single_position_share": 0.4117647058823529,
+    "concentration_index": 0.28719723183391005
+  },
+  {
+    "season": 2023,
+    "slot": 4,
+    "tier": "P1b",
+    "total_roster_points": 2429.92,
+    "starter_points": 1670.7,
+    "position_counts": {
+      "WR": 8,
+      "QB": 4,
+      "RB": 2,
+      "TE": 3
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 8
+    },
+    "max_single_position_share": 0.47058823529411764,
+    "concentration_index": 0.3217993079584775
+  },
+  {
+    "season": 2023,
+    "slot": 4,
+    "tier": "P1c",
+    "total_roster_points": 2481.62,
+    "starter_points": 1868.2,
+    "position_counts": {
+      "WR": 7,
+      "QB": 4,
+      "RB": 3,
+      "TE": 3
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 7
+    },
+    "max_single_position_share": 0.4117647058823529,
+    "concentration_index": 0.28719723183391005
+  },
+  {
+    "season": 2023,
+    "slot": 4,
+    "tier": "P2",
+    "total_roster_points": 2900.48,
+    "starter_points": 1827.94,
+    "position_counts": {
+      "QB": 5,
+      "WR": 6,
+      "RB": 2,
+      "TE": 4
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 6
+    },
+    "max_single_position_share": 0.35294117647058826,
+    "concentration_index": 0.28027681660899656
+  },
+  {
+    "season": 2023,
+    "slot": 4,
+    "tier": "P3",
+    "total_roster_points": 2590.12,
+    "starter_points": 1868.2,
+    "position_counts": {
+      "WR": 6,
+      "QB": 4,
+      "RB": 3,
+      "TE": 4
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 6
+    },
+    "max_single_position_share": 0.35294117647058826,
+    "concentration_index": 0.2664359861591696
+  },
+  {
+    "season": 2023,
+    "slot": 5,
+    "tier": "P0",
+    "total_roster_points": 2742.1600000000003,
+    "starter_points": 1890.16,
+    "position_counts": {
+      "WR": 8,
+      "QB": 4,
+      "RB": 2,
+      "TE": 3
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 8
+    },
+    "max_single_position_share": 0.47058823529411764,
+    "concentration_index": 0.3217993079584775
+  },
+  {
+    "season": 2023,
+    "slot": 5,
+    "tier": "P1",
+    "total_roster_points": 2562.62,
+    "starter_points": 1750.8,
+    "position_counts": {
+      "WR": 8,
+      "QB": 4,
+      "RB": 2,
+      "TE": 3
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 8
+    },
+    "max_single_position_share": 0.47058823529411764,
+    "concentration_index": 0.3217993079584775
+  },
+  {
+    "season": 2023,
+    "slot": 5,
+    "tier": "P1b",
+    "total_roster_points": 2562.62,
+    "starter_points": 1750.8,
+    "position_counts": {
+      "WR": 8,
+      "QB": 4,
+      "RB": 2,
+      "TE": 3
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 8
+    },
+    "max_single_position_share": 0.47058823529411764,
+    "concentration_index": 0.3217993079584775
+  },
+  {
+    "season": 2023,
+    "slot": 5,
+    "tier": "P1c",
+    "total_roster_points": 2562.62,
+    "starter_points": 1750.8,
+    "position_counts": {
+      "WR": 8,
+      "QB": 4,
+      "RB": 2,
+      "TE": 3
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 8
+    },
+    "max_single_position_share": 0.47058823529411764,
+    "concentration_index": 0.3217993079584775
+  },
+  {
+    "season": 2023,
+    "slot": 5,
+    "tier": "P2",
+    "total_roster_points": 2756.6600000000003,
+    "starter_points": 1890.16,
+    "position_counts": {
+      "WR": 7,
+      "QB": 4,
+      "RB": 2,
+      "TE": 4
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 7
+    },
+    "max_single_position_share": 0.4117647058823529,
+    "concentration_index": 0.29411764705882354
+  },
+  {
+    "season": 2023,
+    "slot": 5,
+    "tier": "P3",
+    "total_roster_points": 2577.12,
+    "starter_points": 1750.8,
+    "position_counts": {
+      "WR": 7,
+      "QB": 4,
+      "RB": 2,
+      "TE": 4
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 7
+    },
+    "max_single_position_share": 0.4117647058823529,
+    "concentration_index": 0.29411764705882354
+  },
+  {
+    "season": 2023,
+    "slot": 6,
+    "tier": "P0",
+    "total_roster_points": 2658.34,
+    "starter_points": 1791.8400000000001,
+    "position_counts": {
+      "WR": 7,
+      "QB": 4,
+      "RB": 2,
+      "TE": 4
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 7
+    },
+    "max_single_position_share": 0.4117647058823529,
+    "concentration_index": 0.29411764705882354
+  },
+  {
+    "season": 2023,
+    "slot": 6,
+    "tier": "P1",
+    "total_roster_points": 2533.8,
+    "starter_points": 1707.48,
+    "position_counts": {
+      "TE": 5,
+      "QB": 4,
+      "WR": 6,
+      "RB": 2
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 6,
+      "TE": 5
+    },
+    "max_single_position_share": 0.35294117647058826,
+    "concentration_index": 0.28027681660899656
+  },
+  {
+    "season": 2023,
+    "slot": 6,
+    "tier": "P1b",
+    "total_roster_points": 2478.7999999999997,
+    "starter_points": 1690.48,
+    "position_counts": {
+      "WR": 7,
+      "QB": 4,
+      "RB": 2,
+      "TE": 4
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 7
+    },
+    "max_single_position_share": 0.4117647058823529,
+    "concentration_index": 0.29411764705882354
+  },
+  {
+    "season": 2023,
+    "slot": 6,
+    "tier": "P1c",
+    "total_roster_points": 2478.7999999999997,
+    "starter_points": 1690.48,
+    "position_counts": {
+      "WR": 7,
+      "QB": 4,
+      "RB": 2,
+      "TE": 4
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 7
+    },
+    "max_single_position_share": 0.4117647058823529,
+    "concentration_index": 0.29411764705882354
+  },
+  {
+    "season": 2023,
+    "slot": 6,
+    "tier": "P2",
+    "total_roster_points": 2658.34,
+    "starter_points": 1791.8400000000001,
+    "position_counts": {
+      "WR": 7,
+      "QB": 4,
+      "RB": 2,
+      "TE": 4
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 7
+    },
+    "max_single_position_share": 0.4117647058823529,
+    "concentration_index": 0.29411764705882354
+  },
+  {
+    "season": 2023,
+    "slot": 6,
+    "tier": "P3",
+    "total_roster_points": 2478.7999999999997,
+    "starter_points": 1690.48,
+    "position_counts": {
+      "WR": 7,
+      "QB": 4,
+      "RB": 2,
+      "TE": 4
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 7
+    },
+    "max_single_position_share": 0.4117647058823529,
+    "concentration_index": 0.29411764705882354
+  },
+  {
+    "season": 2023,
+    "slot": 7,
+    "tier": "P0",
+    "total_roster_points": 2658.34,
+    "starter_points": 1791.8400000000001,
+    "position_counts": {
+      "WR": 7,
+      "QB": 4,
+      "RB": 2,
+      "TE": 4
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 7
+    },
+    "max_single_position_share": 0.4117647058823529,
+    "concentration_index": 0.29411764705882354
+  },
+  {
+    "season": 2023,
+    "slot": 7,
+    "tier": "P1",
+    "total_roster_points": 2533.8,
+    "starter_points": 1707.48,
+    "position_counts": {
+      "TE": 5,
+      "QB": 4,
+      "WR": 6,
+      "RB": 2
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 6,
+      "TE": 5
+    },
+    "max_single_position_share": 0.35294117647058826,
+    "concentration_index": 0.28027681660899656
+  },
+  {
+    "season": 2023,
+    "slot": 7,
+    "tier": "P1b",
+    "total_roster_points": 2478.7999999999997,
+    "starter_points": 1690.48,
+    "position_counts": {
+      "WR": 7,
+      "QB": 4,
+      "RB": 2,
+      "TE": 4
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 7
+    },
+    "max_single_position_share": 0.4117647058823529,
+    "concentration_index": 0.29411764705882354
+  },
+  {
+    "season": 2023,
+    "slot": 7,
+    "tier": "P1c",
+    "total_roster_points": 2478.7999999999997,
+    "starter_points": 1690.48,
+    "position_counts": {
+      "WR": 7,
+      "QB": 4,
+      "RB": 2,
+      "TE": 4
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 7
+    },
+    "max_single_position_share": 0.4117647058823529,
+    "concentration_index": 0.29411764705882354
+  },
+  {
+    "season": 2023,
+    "slot": 7,
+    "tier": "P2",
+    "total_roster_points": 2658.34,
+    "starter_points": 1791.8400000000001,
+    "position_counts": {
+      "WR": 7,
+      "QB": 4,
+      "RB": 2,
+      "TE": 4
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 7
+    },
+    "max_single_position_share": 0.4117647058823529,
+    "concentration_index": 0.29411764705882354
+  },
+  {
+    "season": 2023,
+    "slot": 7,
+    "tier": "P3",
+    "total_roster_points": 2478.7999999999997,
+    "starter_points": 1690.48,
+    "position_counts": {
+      "WR": 7,
+      "QB": 4,
+      "RB": 2,
+      "TE": 4
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 7
+    },
+    "max_single_position_share": 0.4117647058823529,
+    "concentration_index": 0.29411764705882354
+  },
+  {
+    "season": 2023,
+    "slot": 8,
+    "tier": "P0",
+    "total_roster_points": 2658.34,
+    "starter_points": 1791.8400000000001,
+    "position_counts": {
+      "WR": 7,
+      "QB": 4,
+      "RB": 2,
+      "TE": 4
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 7
+    },
+    "max_single_position_share": 0.4117647058823529,
+    "concentration_index": 0.29411764705882354
+  },
+  {
+    "season": 2023,
+    "slot": 8,
+    "tier": "P1",
+    "total_roster_points": 2533.8,
+    "starter_points": 1707.48,
+    "position_counts": {
+      "TE": 5,
+      "QB": 4,
+      "WR": 6,
+      "RB": 2
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 6,
+      "TE": 5
+    },
+    "max_single_position_share": 0.35294117647058826,
+    "concentration_index": 0.28027681660899656
+  },
+  {
+    "season": 2023,
+    "slot": 8,
+    "tier": "P1b",
+    "total_roster_points": 2426.2,
+    "starter_points": 1652.48,
+    "position_counts": {
+      "WR": 7,
+      "QB": 4,
+      "RB": 2,
+      "TE": 4
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 7
+    },
+    "max_single_position_share": 0.4117647058823529,
+    "concentration_index": 0.29411764705882354
+  },
+  {
+    "season": 2023,
+    "slot": 8,
+    "tier": "P1c",
+    "total_roster_points": 2478.7999999999997,
+    "starter_points": 1690.48,
+    "position_counts": {
+      "WR": 7,
+      "QB": 4,
+      "RB": 2,
+      "TE": 4
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 7
+    },
+    "max_single_position_share": 0.4117647058823529,
+    "concentration_index": 0.29411764705882354
+  },
+  {
+    "season": 2023,
+    "slot": 8,
+    "tier": "P2",
+    "total_roster_points": 2658.34,
+    "starter_points": 1791.8400000000001,
+    "position_counts": {
+      "WR": 7,
+      "QB": 4,
+      "RB": 2,
+      "TE": 4
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 7
+    },
+    "max_single_position_share": 0.4117647058823529,
+    "concentration_index": 0.29411764705882354
+  },
+  {
+    "season": 2023,
+    "slot": 8,
+    "tier": "P3",
+    "total_roster_points": 2478.7999999999997,
+    "starter_points": 1690.48,
+    "position_counts": {
+      "WR": 7,
+      "QB": 4,
+      "RB": 2,
+      "TE": 4
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 7
+    },
+    "max_single_position_share": 0.4117647058823529,
+    "concentration_index": 0.29411764705882354
+  },
+  {
+    "season": 2023,
+    "slot": 9,
+    "tier": "P0",
+    "total_roster_points": 2780.7000000000003,
+    "starter_points": 1829.8400000000001,
+    "position_counts": {
+      "QB": 5,
+      "WR": 6,
+      "RB": 2,
+      "TE": 4
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 6
+    },
+    "max_single_position_share": 0.35294117647058826,
+    "concentration_index": 0.28027681660899656
+  },
+  {
+    "season": 2023,
+    "slot": 9,
+    "tier": "P1",
+    "total_roster_points": 2533.8,
+    "starter_points": 1707.48,
+    "position_counts": {
+      "TE": 5,
+      "QB": 4,
+      "WR": 6,
+      "RB": 2
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 6,
+      "TE": 5
+    },
+    "max_single_position_share": 0.35294117647058826,
+    "concentration_index": 0.28027681660899656
+  },
+  {
+    "season": 2023,
+    "slot": 9,
+    "tier": "P1b",
+    "total_roster_points": 2533.8,
+    "starter_points": 1707.48,
+    "position_counts": {
+      "TE": 5,
+      "QB": 4,
+      "WR": 6,
+      "RB": 2
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 6,
+      "TE": 5
+    },
+    "max_single_position_share": 0.35294117647058826,
+    "concentration_index": 0.28027681660899656
+  },
+  {
+    "season": 2023,
+    "slot": 9,
+    "tier": "P1c",
+    "total_roster_points": 2533.8,
+    "starter_points": 1707.48,
+    "position_counts": {
+      "TE": 5,
+      "QB": 4,
+      "WR": 6,
+      "RB": 2
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 6,
+      "TE": 5
+    },
+    "max_single_position_share": 0.35294117647058826,
+    "concentration_index": 0.28027681660899656
+  },
+  {
+    "season": 2023,
+    "slot": 9,
+    "tier": "P2",
+    "total_roster_points": 2780.7000000000003,
+    "starter_points": 1829.8400000000001,
+    "position_counts": {
+      "QB": 5,
+      "WR": 6,
+      "RB": 2,
+      "TE": 4
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 6
+    },
+    "max_single_position_share": 0.35294117647058826,
+    "concentration_index": 0.28027681660899656
+  },
+  {
+    "season": 2023,
+    "slot": 9,
+    "tier": "P3",
+    "total_roster_points": 2455.3,
+    "starter_points": 1733.48,
+    "position_counts": {
+      "TE": 4,
+      "QB": 4,
+      "WR": 6,
+      "RB": 3
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 6
+    },
+    "max_single_position_share": 0.35294117647058826,
+    "concentration_index": 0.2664359861591696
+  },
+  {
+    "season": 2023,
+    "slot": 10,
+    "tier": "P0",
+    "total_roster_points": 2728.1,
+    "starter_points": 1777.94,
+    "position_counts": {
+      "QB": 5,
+      "WR": 6,
+      "RB": 2,
+      "TE": 4
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 6
+    },
+    "max_single_position_share": 0.35294117647058826,
+    "concentration_index": 0.28027681660899656
+  },
+  {
+    "season": 2023,
+    "slot": 10,
+    "tier": "P1",
+    "total_roster_points": 2452.82,
+    "starter_points": 1679.1,
+    "position_counts": {
+      "QB": 4,
+      "TE": 5,
+      "WR": 6,
+      "RB": 2
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 6,
+      "TE": 5
+    },
+    "max_single_position_share": 0.35294117647058826,
+    "concentration_index": 0.28027681660899656
+  },
+  {
+    "season": 2023,
+    "slot": 10,
+    "tier": "P1b",
+    "total_roster_points": 2452.82,
+    "starter_points": 1679.1,
+    "position_counts": {
+      "QB": 4,
+      "TE": 5,
+      "WR": 6,
+      "RB": 2
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 6,
+      "TE": 5
+    },
+    "max_single_position_share": 0.35294117647058826,
+    "concentration_index": 0.28027681660899656
+  },
+  {
+    "season": 2023,
+    "slot": 10,
+    "tier": "P1c",
+    "total_roster_points": 2452.82,
+    "starter_points": 1679.1,
+    "position_counts": {
+      "QB": 4,
+      "TE": 5,
+      "WR": 6,
+      "RB": 2
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 6,
+      "TE": 5
+    },
+    "max_single_position_share": 0.35294117647058826,
+    "concentration_index": 0.28027681660899656
+  },
+  {
+    "season": 2023,
+    "slot": 10,
+    "tier": "P2",
+    "total_roster_points": 2728.1,
+    "starter_points": 1777.94,
+    "position_counts": {
+      "QB": 5,
+      "WR": 6,
+      "RB": 2,
+      "TE": 4
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 6
+    },
+    "max_single_position_share": 0.35294117647058826,
+    "concentration_index": 0.28027681660899656
+  },
+  {
+    "season": 2023,
+    "slot": 10,
+    "tier": "P3",
+    "total_roster_points": 2452.82,
+    "starter_points": 1679.1,
+    "position_counts": {
+      "QB": 4,
+      "TE": 5,
+      "WR": 6,
+      "RB": 2
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 6,
+      "TE": 5
+    },
+    "max_single_position_share": 0.35294117647058826,
+    "concentration_index": 0.28027681660899656
+  },
+  {
+    "season": 2024,
+    "slot": 1,
+    "tier": "P0",
+    "total_roster_points": 2655.58,
+    "starter_points": 1616.72,
+    "position_counts": {
+      "QB": 3,
+      "WR": 10,
+      "RB": 1,
+      "TE": 3
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 10
+    },
+    "max_single_position_share": 0.5882352941176471,
+    "concentration_index": 0.411764705882353
+  },
+  {
+    "season": 2024,
+    "slot": 1,
+    "tier": "P1",
+    "total_roster_points": 2670.54,
+    "starter_points": 1643.3,
+    "position_counts": {
+      "QB": 4,
+      "WR": 9,
+      "RB": 1,
+      "TE": 3
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 9
+    },
+    "max_single_position_share": 0.5294117647058824,
+    "concentration_index": 0.370242214532872
+  },
+  {
+    "season": 2024,
+    "slot": 1,
+    "tier": "P1b",
+    "total_roster_points": 2670.54,
+    "starter_points": 1643.3,
+    "position_counts": {
+      "QB": 4,
+      "WR": 9,
+      "RB": 1,
+      "TE": 3
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 9
+    },
+    "max_single_position_share": 0.5294117647058824,
+    "concentration_index": 0.370242214532872
+  },
+  {
+    "season": 2024,
+    "slot": 1,
+    "tier": "P1c",
+    "total_roster_points": 2670.54,
+    "starter_points": 1643.3,
+    "position_counts": {
+      "QB": 4,
+      "WR": 9,
+      "RB": 1,
+      "TE": 3
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 9
+    },
+    "max_single_position_share": 0.5294117647058824,
+    "concentration_index": 0.370242214532872
+  },
+  {
+    "season": 2024,
+    "slot": 1,
+    "tier": "P2",
+    "total_roster_points": 2397.94,
+    "starter_points": 1687.6200000000001,
+    "position_counts": {
+      "QB": 4,
+      "WR": 7,
+      "RB": 2,
+      "TE": 4
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 7
+    },
+    "max_single_position_share": 0.4117647058823529,
+    "concentration_index": 0.29411764705882354
+  },
+  {
+    "season": 2024,
+    "slot": 1,
+    "tier": "P3",
+    "total_roster_points": 2515.7400000000002,
+    "starter_points": 1669.3,
+    "position_counts": {
+      "QB": 4,
+      "WR": 7,
+      "RB": 2,
+      "TE": 4
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 7
+    },
+    "max_single_position_share": 0.4117647058823529,
+    "concentration_index": 0.29411764705882354
+  },
+  {
+    "season": 2024,
+    "slot": 2,
+    "tier": "P0",
+    "total_roster_points": 2524.56,
+    "starter_points": 1485.7,
+    "position_counts": {
+      "QB": 3,
+      "WR": 10,
+      "RB": 1,
+      "TE": 3
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 10
+    },
+    "max_single_position_share": 0.5882352941176471,
+    "concentration_index": 0.411764705882353
+  },
+  {
+    "season": 2024,
+    "slot": 2,
+    "tier": "P1",
+    "total_roster_points": 2584.82,
+    "starter_points": 1557.58,
+    "position_counts": {
+      "QB": 4,
+      "WR": 9,
+      "RB": 1,
+      "TE": 3
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 9
+    },
+    "max_single_position_share": 0.5294117647058824,
+    "concentration_index": 0.370242214532872
+  },
+  {
+    "season": 2024,
+    "slot": 2,
+    "tier": "P1b",
+    "total_roster_points": 2584.82,
+    "starter_points": 1557.58,
+    "position_counts": {
+      "QB": 4,
+      "WR": 9,
+      "RB": 1,
+      "TE": 3
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 9
+    },
+    "max_single_position_share": 0.5294117647058824,
+    "concentration_index": 0.370242214532872
+  },
+  {
+    "season": 2024,
+    "slot": 2,
+    "tier": "P1c",
+    "total_roster_points": 2584.82,
+    "starter_points": 1557.58,
+    "position_counts": {
+      "QB": 4,
+      "WR": 9,
+      "RB": 1,
+      "TE": 3
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 9
+    },
+    "max_single_position_share": 0.5294117647058824,
+    "concentration_index": 0.370242214532872
+  },
+  {
+    "season": 2024,
+    "slot": 2,
+    "tier": "P2",
+    "total_roster_points": 2266.92,
+    "starter_points": 1556.6,
+    "position_counts": {
+      "QB": 4,
+      "WR": 7,
+      "RB": 2,
+      "TE": 4
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 7
+    },
+    "max_single_position_share": 0.4117647058823529,
+    "concentration_index": 0.29411764705882354
+  },
+  {
+    "season": 2024,
+    "slot": 2,
+    "tier": "P3",
+    "total_roster_points": 2430.02,
+    "starter_points": 1583.58,
+    "position_counts": {
+      "QB": 4,
+      "WR": 7,
+      "RB": 2,
+      "TE": 4
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 7
+    },
+    "max_single_position_share": 0.4117647058823529,
+    "concentration_index": 0.29411764705882354
+  },
+  {
+    "season": 2024,
+    "slot": 3,
+    "tier": "P0",
+    "total_roster_points": 2592.16,
+    "starter_points": 1491.6000000000001,
+    "position_counts": {
+      "QB": 3,
+      "WR": 10,
+      "RB": 1,
+      "TE": 3
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 10
+    },
+    "max_single_position_share": 0.5882352941176471,
+    "concentration_index": 0.411764705882353
+  },
+  {
+    "season": 2024,
+    "slot": 3,
+    "tier": "P1",
+    "total_roster_points": 2680.86,
+    "starter_points": 1826.4,
+    "position_counts": {
+      "QB": 3,
+      "WR": 9,
+      "RB": 2,
+      "TE": 3
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 9
+    },
+    "max_single_position_share": 0.5294117647058824,
+    "concentration_index": 0.356401384083045
+  },
+  {
+    "season": 2024,
+    "slot": 3,
+    "tier": "P1b",
+    "total_roster_points": 2524.56,
+    "starter_points": 1485.7,
+    "position_counts": {
+      "QB": 3,
+      "WR": 10,
+      "RB": 1,
+      "TE": 3
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 10
+    },
+    "max_single_position_share": 0.5882352941176471,
+    "concentration_index": 0.411764705882353
+  },
+  {
+    "season": 2024,
+    "slot": 3,
+    "tier": "P1c",
+    "total_roster_points": 2680.86,
+    "starter_points": 1826.4,
+    "position_counts": {
+      "QB": 3,
+      "WR": 9,
+      "RB": 2,
+      "TE": 3
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 9
+    },
+    "max_single_position_share": 0.5294117647058824,
+    "concentration_index": 0.356401384083045
+  },
+  {
+    "season": 2024,
+    "slot": 3,
+    "tier": "P2",
+    "total_roster_points": 2435.86,
+    "starter_points": 1625.0,
+    "position_counts": {
+      "QB": 3,
+      "WR": 7,
+      "RB": 2,
+      "TE": 5
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 7,
+      "TE": 5
+    },
+    "max_single_position_share": 0.4117647058823529,
+    "concentration_index": 0.30103806228373703
+  },
+  {
+    "season": 2024,
+    "slot": 3,
+    "tier": "P3",
+    "total_roster_points": 2526.06,
+    "starter_points": 1844.9,
+    "position_counts": {
+      "QB": 3,
+      "WR": 7,
+      "RB": 3,
+      "TE": 4
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 7
+    },
+    "max_single_position_share": 0.4117647058823529,
+    "concentration_index": 0.28719723183391005
+  },
+  {
+    "season": 2024,
+    "slot": 4,
+    "tier": "P0",
+    "total_roster_points": 2743.5,
+    "starter_points": 1861.16,
+    "position_counts": {
+      "QB": 4,
+      "WR": 8,
+      "RB": 2,
+      "TE": 3
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 8
+    },
+    "max_single_position_share": 0.47058823529411764,
+    "concentration_index": 0.3217993079584775
+  },
+  {
+    "season": 2024,
+    "slot": 4,
+    "tier": "P1",
+    "total_roster_points": 2833.52,
+    "starter_points": 1858.66,
+    "position_counts": {
+      "QB": 3,
+      "WR": 9,
+      "TE": 4,
+      "RB": 1
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 9
+    },
+    "max_single_position_share": 0.5294117647058824,
+    "concentration_index": 0.370242214532872
+  },
+  {
+    "season": 2024,
+    "slot": 4,
+    "tier": "P1b",
+    "total_roster_points": 2833.52,
+    "starter_points": 1858.66,
+    "position_counts": {
+      "QB": 3,
+      "WR": 9,
+      "TE": 4,
+      "RB": 1
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 9
+    },
+    "max_single_position_share": 0.5294117647058824,
+    "concentration_index": 0.370242214532872
+  },
+  {
+    "season": 2024,
+    "slot": 4,
+    "tier": "P1c",
+    "total_roster_points": 2833.52,
+    "starter_points": 1858.66,
+    "position_counts": {
+      "QB": 3,
+      "WR": 9,
+      "TE": 4,
+      "RB": 1
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 9
+    },
+    "max_single_position_share": 0.5294117647058824,
+    "concentration_index": 0.370242214532872
+  },
+  {
+    "season": 2024,
+    "slot": 4,
+    "tier": "P2",
+    "total_roster_points": 2662.7000000000003,
+    "starter_points": 1816.26,
+    "position_counts": {
+      "QB": 4,
+      "WR": 7,
+      "RB": 2,
+      "TE": 4
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 7
+    },
+    "max_single_position_share": 0.4117647058823529,
+    "concentration_index": 0.29411764705882354
+  },
+  {
+    "season": 2024,
+    "slot": 4,
+    "tier": "P3",
+    "total_roster_points": 2747.9,
+    "starter_points": 1884.66,
+    "position_counts": {
+      "QB": 4,
+      "WR": 7,
+      "TE": 4,
+      "RB": 2
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 7
+    },
+    "max_single_position_share": 0.4117647058823529,
+    "concentration_index": 0.29411764705882354
+  },
+  {
+    "season": 2024,
+    "slot": 5,
+    "tier": "P0",
+    "total_roster_points": 2480.34,
+    "starter_points": 1664.64,
+    "position_counts": {
+      "WR": 8,
+      "QB": 5,
+      "RB": 2,
+      "TE": 2
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 8
+    },
+    "max_single_position_share": 0.47058823529411764,
+    "concentration_index": 0.33564013840830453
+  },
+  {
+    "season": 2024,
+    "slot": 5,
+    "tier": "P1",
+    "total_roster_points": 2570.36,
+    "starter_points": 1662.14,
+    "position_counts": {
+      "WR": 9,
+      "QB": 4,
+      "TE": 3,
+      "RB": 1
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 9
+    },
+    "max_single_position_share": 0.5294117647058824,
+    "concentration_index": 0.370242214532872
+  },
+  {
+    "season": 2024,
+    "slot": 5,
+    "tier": "P1b",
+    "total_roster_points": 2570.36,
+    "starter_points": 1662.14,
+    "position_counts": {
+      "WR": 9,
+      "QB": 4,
+      "TE": 3,
+      "RB": 1
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 9
+    },
+    "max_single_position_share": 0.5294117647058824,
+    "concentration_index": 0.370242214532872
+  },
+  {
+    "season": 2024,
+    "slot": 5,
+    "tier": "P1c",
+    "total_roster_points": 2570.36,
+    "starter_points": 1662.14,
+    "position_counts": {
+      "WR": 9,
+      "QB": 4,
+      "TE": 3,
+      "RB": 1
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 9
+    },
+    "max_single_position_share": 0.5294117647058824,
+    "concentration_index": 0.370242214532872
+  },
+  {
+    "season": 2024,
+    "slot": 5,
+    "tier": "P2",
+    "total_roster_points": 2382.44,
+    "starter_points": 1619.74,
+    "position_counts": {
+      "WR": 7,
+      "QB": 5,
+      "RB": 2,
+      "TE": 3
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 7
+    },
+    "max_single_position_share": 0.4117647058823529,
+    "concentration_index": 0.30103806228373703
+  },
+  {
+    "season": 2024,
+    "slot": 5,
+    "tier": "P3",
+    "total_roster_points": 2484.7400000000002,
+    "starter_points": 1688.14,
+    "position_counts": {
+      "WR": 7,
+      "QB": 5,
+      "TE": 3,
+      "RB": 2
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 7
+    },
+    "max_single_position_share": 0.4117647058823529,
+    "concentration_index": 0.30103806228373703
+  },
+  {
+    "season": 2024,
+    "slot": 6,
+    "tier": "P0",
+    "total_roster_points": 2502.54,
+    "starter_points": 1664.64,
+    "position_counts": {
+      "WR": 8,
+      "QB": 5,
+      "RB": 2,
+      "TE": 2
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 8
+    },
+    "max_single_position_share": 0.47058823529411764,
+    "concentration_index": 0.33564013840830453
+  },
+  {
+    "season": 2024,
+    "slot": 6,
+    "tier": "P1",
+    "total_roster_points": 2518.56,
+    "starter_points": 1733.04,
+    "position_counts": {
+      "WR": 8,
+      "QB": 4,
+      "TE": 3,
+      "RB": 2
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 8
+    },
+    "max_single_position_share": 0.47058823529411764,
+    "concentration_index": 0.3217993079584775
+  },
+  {
+    "season": 2024,
+    "slot": 6,
+    "tier": "P1b",
+    "total_roster_points": 2518.56,
+    "starter_points": 1733.04,
+    "position_counts": {
+      "WR": 8,
+      "QB": 4,
+      "TE": 3,
+      "RB": 2
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 8
+    },
+    "max_single_position_share": 0.47058823529411764,
+    "concentration_index": 0.3217993079584775
+  },
+  {
+    "season": 2024,
+    "slot": 6,
+    "tier": "P1c",
+    "total_roster_points": 2518.56,
+    "starter_points": 1733.04,
+    "position_counts": {
+      "WR": 8,
+      "QB": 4,
+      "TE": 3,
+      "RB": 2
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 8
+    },
+    "max_single_position_share": 0.47058823529411764,
+    "concentration_index": 0.3217993079584775
+  },
+  {
+    "season": 2024,
+    "slot": 6,
+    "tier": "P2",
+    "total_roster_points": 2444.14,
+    "starter_points": 1664.64,
+    "position_counts": {
+      "WR": 7,
+      "QB": 5,
+      "RB": 2,
+      "TE": 3
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 7
+    },
+    "max_single_position_share": 0.4117647058823529,
+    "concentration_index": 0.30103806228373703
+  },
+  {
+    "season": 2024,
+    "slot": 6,
+    "tier": "P3",
+    "total_roster_points": 2546.44,
+    "starter_points": 1733.04,
+    "position_counts": {
+      "WR": 7,
+      "QB": 5,
+      "TE": 3,
+      "RB": 2
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 7
+    },
+    "max_single_position_share": 0.4117647058823529,
+    "concentration_index": 0.30103806228373703
+  },
+  {
+    "season": 2024,
+    "slot": 7,
+    "tier": "P0",
+    "total_roster_points": 2537.2400000000002,
+    "starter_points": 1699.34,
+    "position_counts": {
+      "WR": 8,
+      "QB": 5,
+      "RB": 2,
+      "TE": 2
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 8
+    },
+    "max_single_position_share": 0.47058823529411764,
+    "concentration_index": 0.33564013840830453
+  },
+  {
+    "season": 2024,
+    "slot": 7,
+    "tier": "P1",
+    "total_roster_points": 2795.56,
+    "starter_points": 2010.04,
+    "position_counts": {
+      "WR": 8,
+      "QB": 4,
+      "RB": 2,
+      "TE": 3
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 8
+    },
+    "max_single_position_share": 0.47058823529411764,
+    "concentration_index": 0.3217993079584775
+  },
+  {
+    "season": 2024,
+    "slot": 7,
+    "tier": "P1b",
+    "total_roster_points": 2553.26,
+    "starter_points": 1767.74,
+    "position_counts": {
+      "WR": 8,
+      "QB": 4,
+      "TE": 3,
+      "RB": 2
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 8
+    },
+    "max_single_position_share": 0.47058823529411764,
+    "concentration_index": 0.3217993079584775
+  },
+  {
+    "season": 2024,
+    "slot": 7,
+    "tier": "P1c",
+    "total_roster_points": 2795.56,
+    "starter_points": 2010.04,
+    "position_counts": {
+      "WR": 8,
+      "QB": 4,
+      "RB": 2,
+      "TE": 3
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 8
+    },
+    "max_single_position_share": 0.47058823529411764,
+    "concentration_index": 0.3217993079584775
+  },
+  {
+    "season": 2024,
+    "slot": 7,
+    "tier": "P2",
+    "total_roster_points": 2478.84,
+    "starter_points": 1699.34,
+    "position_counts": {
+      "WR": 7,
+      "QB": 5,
+      "RB": 2,
+      "TE": 3
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 7
+    },
+    "max_single_position_share": 0.4117647058823529,
+    "concentration_index": 0.30103806228373703
+  },
+  {
+    "season": 2024,
+    "slot": 7,
+    "tier": "P3",
+    "total_roster_points": 2823.44,
+    "starter_points": 2010.04,
+    "position_counts": {
+      "WR": 7,
+      "QB": 5,
+      "RB": 2,
+      "TE": 3
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 7
+    },
+    "max_single_position_share": 0.4117647058823529,
+    "concentration_index": 0.30103806228373703
+  },
+  {
+    "season": 2024,
+    "slot": 8,
+    "tier": "P0",
+    "total_roster_points": 2537.2400000000002,
+    "starter_points": 1699.34,
+    "position_counts": {
+      "WR": 8,
+      "QB": 5,
+      "RB": 2,
+      "TE": 2
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 8
+    },
+    "max_single_position_share": 0.47058823529411764,
+    "concentration_index": 0.33564013840830453
+  },
+  {
+    "season": 2024,
+    "slot": 8,
+    "tier": "P1",
+    "total_roster_points": 2795.56,
+    "starter_points": 2010.04,
+    "position_counts": {
+      "WR": 8,
+      "QB": 4,
+      "RB": 2,
+      "TE": 3
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 8
+    },
+    "max_single_position_share": 0.47058823529411764,
+    "concentration_index": 0.3217993079584775
+  },
+  {
+    "season": 2024,
+    "slot": 8,
+    "tier": "P1b",
+    "total_roster_points": 2553.26,
+    "starter_points": 1767.74,
+    "position_counts": {
+      "WR": 8,
+      "QB": 4,
+      "TE": 3,
+      "RB": 2
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 8
+    },
+    "max_single_position_share": 0.47058823529411764,
+    "concentration_index": 0.3217993079584775
+  },
+  {
+    "season": 2024,
+    "slot": 8,
+    "tier": "P1c",
+    "total_roster_points": 2795.56,
+    "starter_points": 2010.04,
+    "position_counts": {
+      "WR": 8,
+      "QB": 4,
+      "RB": 2,
+      "TE": 3
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 8
+    },
+    "max_single_position_share": 0.47058823529411764,
+    "concentration_index": 0.3217993079584775
+  },
+  {
+    "season": 2024,
+    "slot": 8,
+    "tier": "P2",
+    "total_roster_points": 2478.84,
+    "starter_points": 1699.34,
+    "position_counts": {
+      "WR": 7,
+      "QB": 5,
+      "RB": 2,
+      "TE": 3
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 7
+    },
+    "max_single_position_share": 0.4117647058823529,
+    "concentration_index": 0.30103806228373703
+  },
+  {
+    "season": 2024,
+    "slot": 8,
+    "tier": "P3",
+    "total_roster_points": 2737.16,
+    "starter_points": 2010.04,
+    "position_counts": {
+      "WR": 7,
+      "QB": 4,
+      "RB": 2,
+      "TE": 4
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 7
+    },
+    "max_single_position_share": 0.4117647058823529,
+    "concentration_index": 0.29411764705882354
+  },
+  {
+    "season": 2024,
+    "slot": 9,
+    "tier": "P0",
+    "total_roster_points": 2537.2400000000002,
+    "starter_points": 1699.34,
+    "position_counts": {
+      "WR": 8,
+      "QB": 5,
+      "RB": 2,
+      "TE": 2
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 8
+    },
+    "max_single_position_share": 0.47058823529411764,
+    "concentration_index": 0.33564013840830453
+  },
+  {
+    "season": 2024,
+    "slot": 9,
+    "tier": "P1",
+    "total_roster_points": 2553.26,
+    "starter_points": 1767.74,
+    "position_counts": {
+      "WR": 8,
+      "QB": 4,
+      "TE": 3,
+      "RB": 2
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 8
+    },
+    "max_single_position_share": 0.47058823529411764,
+    "concentration_index": 0.3217993079584775
+  },
+  {
+    "season": 2024,
+    "slot": 9,
+    "tier": "P1b",
+    "total_roster_points": 2553.26,
+    "starter_points": 1767.74,
+    "position_counts": {
+      "WR": 8,
+      "QB": 4,
+      "TE": 3,
+      "RB": 2
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 8
+    },
+    "max_single_position_share": 0.47058823529411764,
+    "concentration_index": 0.3217993079584775
+  },
+  {
+    "season": 2024,
+    "slot": 9,
+    "tier": "P1c",
+    "total_roster_points": 2553.26,
+    "starter_points": 1767.74,
+    "position_counts": {
+      "WR": 8,
+      "QB": 4,
+      "TE": 3,
+      "RB": 2
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 8
+    },
+    "max_single_position_share": 0.47058823529411764,
+    "concentration_index": 0.3217993079584775
+  },
+  {
+    "season": 2024,
+    "slot": 9,
+    "tier": "P2",
+    "total_roster_points": 2478.84,
+    "starter_points": 1699.34,
+    "position_counts": {
+      "WR": 7,
+      "QB": 5,
+      "RB": 2,
+      "TE": 3
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 7
+    },
+    "max_single_position_share": 0.4117647058823529,
+    "concentration_index": 0.30103806228373703
+  },
+  {
+    "season": 2024,
+    "slot": 9,
+    "tier": "P3",
+    "total_roster_points": 2494.86,
+    "starter_points": 1767.74,
+    "position_counts": {
+      "WR": 7,
+      "QB": 4,
+      "TE": 4,
+      "RB": 2
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 7
+    },
+    "max_single_position_share": 0.4117647058823529,
+    "concentration_index": 0.29411764705882354
+  },
+  {
+    "season": 2024,
+    "slot": 10,
+    "tier": "P0",
+    "total_roster_points": 2537.2400000000002,
+    "starter_points": 1699.34,
+    "position_counts": {
+      "WR": 8,
+      "QB": 5,
+      "RB": 2,
+      "TE": 2
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 8
+    },
+    "max_single_position_share": 0.47058823529411764,
+    "concentration_index": 0.33564013840830453
+  },
+  {
+    "season": 2024,
+    "slot": 10,
+    "tier": "P1",
+    "total_roster_points": 2553.26,
+    "starter_points": 1767.74,
+    "position_counts": {
+      "WR": 8,
+      "QB": 4,
+      "TE": 3,
+      "RB": 2
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 8
+    },
+    "max_single_position_share": 0.47058823529411764,
+    "concentration_index": 0.3217993079584775
+  },
+  {
+    "season": 2024,
+    "slot": 10,
+    "tier": "P1b",
+    "total_roster_points": 2553.26,
+    "starter_points": 1767.74,
+    "position_counts": {
+      "WR": 8,
+      "QB": 4,
+      "TE": 3,
+      "RB": 2
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 8
+    },
+    "max_single_position_share": 0.47058823529411764,
+    "concentration_index": 0.3217993079584775
+  },
+  {
+    "season": 2024,
+    "slot": 10,
+    "tier": "P1c",
+    "total_roster_points": 2553.26,
+    "starter_points": 1767.74,
+    "position_counts": {
+      "WR": 8,
+      "QB": 4,
+      "TE": 3,
+      "RB": 2
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 8
+    },
+    "max_single_position_share": 0.47058823529411764,
+    "concentration_index": 0.3217993079584775
+  },
+  {
+    "season": 2024,
+    "slot": 10,
+    "tier": "P2",
+    "total_roster_points": 2478.84,
+    "starter_points": 1699.34,
+    "position_counts": {
+      "WR": 7,
+      "QB": 5,
+      "RB": 2,
+      "TE": 3
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 7
+    },
+    "max_single_position_share": 0.4117647058823529,
+    "concentration_index": 0.30103806228373703
+  },
+  {
+    "season": 2024,
+    "slot": 10,
+    "tier": "P3",
+    "total_roster_points": 2494.86,
+    "starter_points": 1767.74,
+    "position_counts": {
+      "WR": 7,
+      "QB": 4,
+      "TE": 4,
+      "RB": 2
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 7
+    },
+    "max_single_position_share": 0.4117647058823529,
+    "concentration_index": 0.29411764705882354
+  },
+  {
+    "season": 2025,
+    "slot": 1,
+    "tier": "P0",
+    "total_roster_points": 2416.44,
+    "starter_points": 1758.44,
+    "position_counts": {
+      "QB": 3,
+      "WR": 9,
+      "RB": 2,
+      "TE": 3
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 9
+    },
+    "max_single_position_share": 0.5294117647058824,
+    "concentration_index": 0.356401384083045
+  },
+  {
+    "season": 2025,
+    "slot": 1,
+    "tier": "P1",
+    "total_roster_points": 2584.94,
+    "starter_points": 1744.24,
+    "position_counts": {
+      "QB": 3,
+      "WR": 10,
+      "RB": 1,
+      "TE": 3
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 10
+    },
+    "max_single_position_share": 0.5882352941176471,
+    "concentration_index": 0.411764705882353
+  },
+  {
+    "season": 2025,
+    "slot": 1,
+    "tier": "P1b",
+    "total_roster_points": 2584.94,
+    "starter_points": 1744.24,
+    "position_counts": {
+      "QB": 3,
+      "WR": 10,
+      "RB": 1,
+      "TE": 3
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 10
+    },
+    "max_single_position_share": 0.5882352941176471,
+    "concentration_index": 0.411764705882353
+  },
+  {
+    "season": 2025,
+    "slot": 1,
+    "tier": "P1c",
+    "total_roster_points": 2416.44,
+    "starter_points": 1758.44,
+    "position_counts": {
+      "QB": 3,
+      "WR": 9,
+      "RB": 2,
+      "TE": 3
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 9
+    },
+    "max_single_position_share": 0.5294117647058824,
+    "concentration_index": 0.356401384083045
+  },
+  {
+    "season": 2025,
+    "slot": 1,
+    "tier": "P2",
+    "total_roster_points": 2428.74,
+    "starter_points": 1763.84,
+    "position_counts": {
+      "QB": 3,
+      "WR": 8,
+      "RB": 2,
+      "TE": 4
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 8
+    },
+    "max_single_position_share": 0.47058823529411764,
+    "concentration_index": 0.3217993079584775
+  },
+  {
+    "season": 2025,
+    "slot": 1,
+    "tier": "P3",
+    "total_roster_points": 2428.74,
+    "starter_points": 1763.84,
+    "position_counts": {
+      "QB": 3,
+      "WR": 8,
+      "RB": 2,
+      "TE": 4
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 8
+    },
+    "max_single_position_share": 0.47058823529411764,
+    "concentration_index": 0.3217993079584775
+  },
+  {
+    "season": 2025,
+    "slot": 2,
+    "tier": "P0",
+    "total_roster_points": 2163.38,
+    "starter_points": 1546.08,
+    "position_counts": {
+      "QB": 3,
+      "WR": 9,
+      "RB": 2,
+      "TE": 3
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 9
+    },
+    "max_single_position_share": 0.5294117647058824,
+    "concentration_index": 0.356401384083045
+  },
+  {
+    "season": 2025,
+    "slot": 2,
+    "tier": "P1",
+    "total_roster_points": 2421.38,
+    "starter_points": 1531.8799999999999,
+    "position_counts": {
+      "QB": 3,
+      "WR": 11,
+      "RB": 1,
+      "TE": 2
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 11
+    },
+    "max_single_position_share": 0.6470588235294118,
+    "concentration_index": 0.46712802768166095
+  },
+  {
+    "season": 2025,
+    "slot": 2,
+    "tier": "P1b",
+    "total_roster_points": 2421.38,
+    "starter_points": 1531.8799999999999,
+    "position_counts": {
+      "QB": 3,
+      "WR": 11,
+      "RB": 1,
+      "TE": 2
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 11
+    },
+    "max_single_position_share": 0.6470588235294118,
+    "concentration_index": 0.46712802768166095
+  },
+  {
+    "season": 2025,
+    "slot": 2,
+    "tier": "P1c",
+    "total_roster_points": 2252.88,
+    "starter_points": 1546.08,
+    "position_counts": {
+      "QB": 3,
+      "WR": 10,
+      "RB": 2,
+      "TE": 2
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 10
+    },
+    "max_single_position_share": 0.5882352941176471,
+    "concentration_index": 0.4048442906574395
+  },
+  {
+    "season": 2025,
+    "slot": 2,
+    "tier": "P2",
+    "total_roster_points": 2216.38,
+    "starter_points": 1551.48,
+    "position_counts": {
+      "QB": 3,
+      "WR": 8,
+      "RB": 2,
+      "TE": 4
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 8
+    },
+    "max_single_position_share": 0.47058823529411764,
+    "concentration_index": 0.3217993079584775
+  },
+  {
+    "season": 2025,
+    "slot": 2,
+    "tier": "P3",
+    "total_roster_points": 2216.38,
+    "starter_points": 1551.48,
+    "position_counts": {
+      "QB": 3,
+      "WR": 8,
+      "RB": 2,
+      "TE": 4
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 8
+    },
+    "max_single_position_share": 0.47058823529411764,
+    "concentration_index": 0.3217993079584775
+  },
+  {
+    "season": 2025,
+    "slot": 3,
+    "tier": "P0",
+    "total_roster_points": 2261.18,
+    "starter_points": 1643.8799999999999,
+    "position_counts": {
+      "QB": 3,
+      "WR": 9,
+      "RB": 2,
+      "TE": 3
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 9
+    },
+    "max_single_position_share": 0.5294117647058824,
+    "concentration_index": 0.356401384083045
+  },
+  {
+    "season": 2025,
+    "slot": 3,
+    "tier": "P1",
+    "total_roster_points": 2429.68,
+    "starter_points": 1629.68,
+    "position_counts": {
+      "QB": 3,
+      "WR": 10,
+      "RB": 1,
+      "TE": 3
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 10
+    },
+    "max_single_position_share": 0.5882352941176471,
+    "concentration_index": 0.411764705882353
+  },
+  {
+    "season": 2025,
+    "slot": 3,
+    "tier": "P1b",
+    "total_roster_points": 2429.68,
+    "starter_points": 1629.68,
+    "position_counts": {
+      "QB": 3,
+      "WR": 10,
+      "RB": 1,
+      "TE": 3
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 10
+    },
+    "max_single_position_share": 0.5882352941176471,
+    "concentration_index": 0.411764705882353
+  },
+  {
+    "season": 2025,
+    "slot": 3,
+    "tier": "P1c",
+    "total_roster_points": 2261.18,
+    "starter_points": 1643.8799999999999,
+    "position_counts": {
+      "QB": 3,
+      "WR": 9,
+      "RB": 2,
+      "TE": 3
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 9
+    },
+    "max_single_position_share": 0.5294117647058824,
+    "concentration_index": 0.356401384083045
+  },
+  {
+    "season": 2025,
+    "slot": 3,
+    "tier": "P2",
+    "total_roster_points": 2314.18,
+    "starter_points": 1649.28,
+    "position_counts": {
+      "QB": 3,
+      "WR": 8,
+      "RB": 2,
+      "TE": 4
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 8
+    },
+    "max_single_position_share": 0.47058823529411764,
+    "concentration_index": 0.3217993079584775
+  },
+  {
+    "season": 2025,
+    "slot": 3,
+    "tier": "P3",
+    "total_roster_points": 2314.18,
+    "starter_points": 1649.28,
+    "position_counts": {
+      "QB": 3,
+      "WR": 8,
+      "RB": 2,
+      "TE": 4
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 8
+    },
+    "max_single_position_share": 0.47058823529411764,
+    "concentration_index": 0.3217993079584775
+  },
+  {
+    "season": 2025,
+    "slot": 4,
+    "tier": "P0",
+    "total_roster_points": 2324.2799999999997,
+    "starter_points": 1663.08,
+    "position_counts": {
+      "QB": 3,
+      "WR": 9,
+      "RB": 2,
+      "TE": 3
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 9
+    },
+    "max_single_position_share": 0.5294117647058824,
+    "concentration_index": 0.356401384083045
+  },
+  {
+    "season": 2025,
+    "slot": 4,
+    "tier": "P1",
+    "total_roster_points": 2430.58,
+    "starter_points": 1769.28,
+    "position_counts": {
+      "QB": 4,
+      "WR": 9,
+      "RB": 1,
+      "TE": 3
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 9
+    },
+    "max_single_position_share": 0.5294117647058824,
+    "concentration_index": 0.370242214532872
+  },
+  {
+    "season": 2025,
+    "slot": 4,
+    "tier": "P1b",
+    "total_roster_points": 2430.58,
+    "starter_points": 1769.28,
+    "position_counts": {
+      "QB": 4,
+      "WR": 9,
+      "RB": 1,
+      "TE": 3
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 9
+    },
+    "max_single_position_share": 0.5294117647058824,
+    "concentration_index": 0.370242214532872
+  },
+  {
+    "season": 2025,
+    "slot": 4,
+    "tier": "P1c",
+    "total_roster_points": 2430.58,
+    "starter_points": 1769.28,
+    "position_counts": {
+      "QB": 4,
+      "WR": 9,
+      "RB": 1,
+      "TE": 3
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 9
+    },
+    "max_single_position_share": 0.5294117647058824,
+    "concentration_index": 0.370242214532872
+  },
+  {
+    "season": 2025,
+    "slot": 4,
+    "tier": "P2",
+    "total_roster_points": 2377.2799999999997,
+    "starter_points": 1663.08,
+    "position_counts": {
+      "QB": 3,
+      "WR": 8,
+      "RB": 2,
+      "TE": 4
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 8
+    },
+    "max_single_position_share": 0.47058823529411764,
+    "concentration_index": 0.3217993079584775
+  },
+  {
+    "season": 2025,
+    "slot": 4,
+    "tier": "P3",
+    "total_roster_points": 2483.58,
+    "starter_points": 1769.28,
+    "position_counts": {
+      "QB": 4,
+      "WR": 8,
+      "RB": 1,
+      "TE": 4
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 8
+    },
+    "max_single_position_share": 0.47058823529411764,
+    "concentration_index": 0.33564013840830453
+  },
+  {
+    "season": 2025,
+    "slot": 5,
+    "tier": "P0",
+    "total_roster_points": 2201.9,
+    "starter_points": 1367.52,
+    "position_counts": {
+      "WR": 10,
+      "RB": 2,
+      "TE": 3,
+      "QB": 2
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 10
+    },
+    "max_single_position_share": 0.5882352941176471,
+    "concentration_index": 0.4048442906574395
+  },
+  {
+    "season": 2025,
+    "slot": 5,
+    "tier": "P1",
+    "total_roster_points": 2370.4,
+    "starter_points": 1334.22,
+    "position_counts": {
+      "WR": 11,
+      "RB": 1,
+      "TE": 3,
+      "QB": 2
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 11
+    },
+    "max_single_position_share": 0.6470588235294118,
+    "concentration_index": 0.46712802768166095
+  },
+  {
+    "season": 2025,
+    "slot": 5,
+    "tier": "P1b",
+    "total_roster_points": 2370.4,
+    "starter_points": 1334.22,
+    "position_counts": {
+      "WR": 11,
+      "RB": 1,
+      "TE": 3,
+      "QB": 2
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 11
+    },
+    "max_single_position_share": 0.6470588235294118,
+    "concentration_index": 0.46712802768166095
+  },
+  {
+    "season": 2025,
+    "slot": 5,
+    "tier": "P1c",
+    "total_roster_points": 2201.9,
+    "starter_points": 1367.52,
+    "position_counts": {
+      "WR": 10,
+      "RB": 2,
+      "TE": 3,
+      "QB": 2
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 10
+    },
+    "max_single_position_share": 0.5882352941176471,
+    "concentration_index": 0.4048442906574395
+  },
+  {
+    "season": 2025,
+    "slot": 5,
+    "tier": "P2",
+    "total_roster_points": 2384.92,
+    "starter_points": 1636.42,
+    "position_counts": {
+      "WR": 8,
+      "RB": 3,
+      "TE": 4,
+      "QB": 2
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 8
+    },
+    "max_single_position_share": 0.47058823529411764,
+    "concentration_index": 0.3217993079584775
+  },
+  {
+    "season": 2025,
+    "slot": 5,
+    "tier": "P3",
+    "total_roster_points": 2384.92,
+    "starter_points": 1636.42,
+    "position_counts": {
+      "WR": 8,
+      "RB": 3,
+      "TE": 4,
+      "QB": 2
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 8
+    },
+    "max_single_position_share": 0.47058823529411764,
+    "concentration_index": 0.3217993079584775
+  },
+  {
+    "season": 2025,
+    "slot": 6,
+    "tier": "P0",
+    "total_roster_points": 2259.46,
+    "starter_points": 1646.66,
+    "position_counts": {
+      "WR": 8,
+      "QB": 4,
+      "RB": 2,
+      "TE": 3
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 8
+    },
+    "max_single_position_share": 0.47058823529411764,
+    "concentration_index": 0.3217993079584775
+  },
+  {
+    "season": 2025,
+    "slot": 6,
+    "tier": "P1",
+    "total_roster_points": 2427.96,
+    "starter_points": 1613.36,
+    "position_counts": {
+      "WR": 9,
+      "QB": 4,
+      "RB": 1,
+      "TE": 3
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 9
+    },
+    "max_single_position_share": 0.5294117647058824,
+    "concentration_index": 0.370242214532872
+  },
+  {
+    "season": 2025,
+    "slot": 6,
+    "tier": "P1b",
+    "total_roster_points": 2427.96,
+    "starter_points": 1613.36,
+    "position_counts": {
+      "WR": 9,
+      "QB": 4,
+      "RB": 1,
+      "TE": 3
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 9
+    },
+    "max_single_position_share": 0.5294117647058824,
+    "concentration_index": 0.370242214532872
+  },
+  {
+    "season": 2025,
+    "slot": 6,
+    "tier": "P1c",
+    "total_roster_points": 2259.46,
+    "starter_points": 1646.66,
+    "position_counts": {
+      "WR": 8,
+      "QB": 4,
+      "RB": 2,
+      "TE": 3
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 8
+    },
+    "max_single_position_share": 0.47058823529411764,
+    "concentration_index": 0.3217993079584775
+  },
+  {
+    "season": 2025,
+    "slot": 6,
+    "tier": "P2",
+    "total_roster_points": 2312.46,
+    "starter_points": 1646.66,
+    "position_counts": {
+      "WR": 7,
+      "QB": 4,
+      "RB": 2,
+      "TE": 4
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 7
+    },
+    "max_single_position_share": 0.4117647058823529,
+    "concentration_index": 0.29411764705882354
+  },
+  {
+    "season": 2025,
+    "slot": 6,
+    "tier": "P3",
+    "total_roster_points": 2312.46,
+    "starter_points": 1646.66,
+    "position_counts": {
+      "WR": 7,
+      "QB": 4,
+      "RB": 2,
+      "TE": 4
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 7
+    },
+    "max_single_position_share": 0.4117647058823529,
+    "concentration_index": 0.29411764705882354
+  },
+  {
+    "season": 2025,
+    "slot": 7,
+    "tier": "P0",
+    "total_roster_points": 2164.52,
+    "starter_points": 1547.62,
+    "position_counts": {
+      "WR": 9,
+      "QB": 3,
+      "RB": 2,
+      "TE": 3
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 9
+    },
+    "max_single_position_share": 0.5294117647058824,
+    "concentration_index": 0.356401384083045
+  },
+  {
+    "season": 2025,
+    "slot": 7,
+    "tier": "P1",
+    "total_roster_points": 2424.42,
+    "starter_points": 1514.32,
+    "position_counts": {
+      "WR": 9,
+      "TE": 4,
+      "QB": 3,
+      "RB": 1
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 9
+    },
+    "max_single_position_share": 0.5294117647058824,
+    "concentration_index": 0.370242214532872
+  },
+  {
+    "season": 2025,
+    "slot": 7,
+    "tier": "P1b",
+    "total_roster_points": 2424.42,
+    "starter_points": 1514.32,
+    "position_counts": {
+      "WR": 9,
+      "TE": 4,
+      "QB": 3,
+      "RB": 1
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 9
+    },
+    "max_single_position_share": 0.5294117647058824,
+    "concentration_index": 0.370242214532872
+  },
+  {
+    "season": 2025,
+    "slot": 7,
+    "tier": "P1c",
+    "total_roster_points": 2255.32,
+    "starter_points": 1489.92,
+    "position_counts": {
+      "WR": 9,
+      "TE": 4,
+      "QB": 3,
+      "RB": 1
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 9
+    },
+    "max_single_position_share": 0.5294117647058824,
+    "concentration_index": 0.370242214532872
+  },
+  {
+    "season": 2025,
+    "slot": 7,
+    "tier": "P2",
+    "total_roster_points": 2217.52,
+    "starter_points": 1547.62,
+    "position_counts": {
+      "WR": 8,
+      "QB": 3,
+      "RB": 2,
+      "TE": 4
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 8
+    },
+    "max_single_position_share": 0.47058823529411764,
+    "concentration_index": 0.3217993079584775
+  },
+  {
+    "season": 2025,
+    "slot": 7,
+    "tier": "P3",
+    "total_roster_points": 2322.62,
+    "starter_points": 1490.52,
+    "position_counts": {
+      "WR": 9,
+      "TE": 4,
+      "QB": 3,
+      "RB": 1
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 9
+    },
+    "max_single_position_share": 0.5294117647058824,
+    "concentration_index": 0.370242214532872
+  },
+  {
+    "season": 2025,
+    "slot": 8,
+    "tier": "P0",
+    "total_roster_points": 2231.8199999999997,
+    "starter_points": 1547.62,
+    "position_counts": {
+      "WR": 9,
+      "QB": 3,
+      "RB": 2,
+      "TE": 3
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 9
+    },
+    "max_single_position_share": 0.5294117647058824,
+    "concentration_index": 0.356401384083045
+  },
+  {
+    "season": 2025,
+    "slot": 8,
+    "tier": "P1",
+    "total_roster_points": 2412.72,
+    "starter_points": 1547.62,
+    "position_counts": {
+      "WR": 9,
+      "TE": 3,
+      "QB": 3,
+      "RB": 2
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 9
+    },
+    "max_single_position_share": 0.5294117647058824,
+    "concentration_index": 0.356401384083045
+  },
+  {
+    "season": 2025,
+    "slot": 8,
+    "tier": "P1b",
+    "total_roster_points": 2412.72,
+    "starter_points": 1547.62,
+    "position_counts": {
+      "WR": 9,
+      "TE": 3,
+      "QB": 3,
+      "RB": 2
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 9
+    },
+    "max_single_position_share": 0.5294117647058824,
+    "concentration_index": 0.356401384083045
+  },
+  {
+    "season": 2025,
+    "slot": 8,
+    "tier": "P1c",
+    "total_roster_points": 2243.62,
+    "starter_points": 1523.82,
+    "position_counts": {
+      "WR": 9,
+      "TE": 3,
+      "QB": 3,
+      "RB": 2
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 9
+    },
+    "max_single_position_share": 0.5294117647058824,
+    "concentration_index": 0.356401384083045
+  },
+  {
+    "season": 2025,
+    "slot": 8,
+    "tier": "P2",
+    "total_roster_points": 2217.52,
+    "starter_points": 1547.62,
+    "position_counts": {
+      "WR": 8,
+      "QB": 3,
+      "RB": 2,
+      "TE": 4
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 8
+    },
+    "max_single_position_share": 0.47058823529411764,
+    "concentration_index": 0.3217993079584775
+  },
+  {
+    "season": 2025,
+    "slot": 8,
+    "tier": "P3",
+    "total_roster_points": 2229.32,
+    "starter_points": 1509.52,
+    "position_counts": {
+      "WR": 8,
+      "TE": 4,
+      "QB": 3,
+      "RB": 2
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 8
+    },
+    "max_single_position_share": 0.47058823529411764,
+    "concentration_index": 0.3217993079584775
+  },
+  {
+    "season": 2025,
+    "slot": 9,
+    "tier": "P0",
+    "total_roster_points": 2231.8199999999997,
+    "starter_points": 1547.62,
+    "position_counts": {
+      "WR": 9,
+      "QB": 3,
+      "RB": 2,
+      "TE": 3
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 9
+    },
+    "max_single_position_share": 0.5294117647058824,
+    "concentration_index": 0.356401384083045
+  },
+  {
+    "season": 2025,
+    "slot": 9,
+    "tier": "P1",
+    "total_roster_points": 2340.22,
+    "starter_points": 1530.62,
+    "position_counts": {
+      "WR": 10,
+      "TE": 2,
+      "QB": 3,
+      "RB": 2
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 10
+    },
+    "max_single_position_share": 0.5882352941176471,
+    "concentration_index": 0.4048442906574395
+  },
+  {
+    "season": 2025,
+    "slot": 9,
+    "tier": "P1b",
+    "total_roster_points": 2369.1,
+    "starter_points": 1385.92,
+    "position_counts": {
+      "WR": 10,
+      "TE": 3,
+      "RB": 2,
+      "QB": 2
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 10
+    },
+    "max_single_position_share": 0.5882352941176471,
+    "concentration_index": 0.4048442906574395
+  },
+  {
+    "season": 2025,
+    "slot": 9,
+    "tier": "P1c",
+    "total_roster_points": 2243.62,
+    "starter_points": 1523.82,
+    "position_counts": {
+      "WR": 9,
+      "TE": 3,
+      "QB": 3,
+      "RB": 2
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 9
+    },
+    "max_single_position_share": 0.5294117647058824,
+    "concentration_index": 0.356401384083045
+  },
+  {
+    "season": 2025,
+    "slot": 9,
+    "tier": "P2",
+    "total_roster_points": 2217.52,
+    "starter_points": 1547.62,
+    "position_counts": {
+      "WR": 8,
+      "QB": 3,
+      "RB": 2,
+      "TE": 4
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 8
+    },
+    "max_single_position_share": 0.47058823529411764,
+    "concentration_index": 0.3217993079584775
+  },
+  {
+    "season": 2025,
+    "slot": 9,
+    "tier": "P3",
+    "total_roster_points": 2229.32,
+    "starter_points": 1509.52,
+    "position_counts": {
+      "WR": 8,
+      "TE": 4,
+      "QB": 3,
+      "RB": 2
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 8
+    },
+    "max_single_position_share": 0.47058823529411764,
+    "concentration_index": 0.3217993079584775
+  },
+  {
+    "season": 2025,
+    "slot": 10,
+    "tier": "P0",
+    "total_roster_points": 2021.1999999999998,
+    "starter_points": 1482.3,
+    "position_counts": {
+      "WR": 9,
+      "QB": 3,
+      "RB": 2,
+      "TE": 3
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 9
+    },
+    "max_single_position_share": 0.5294117647058824,
+    "concentration_index": 0.356401384083045
+  },
+  {
+    "season": 2025,
+    "slot": 10,
+    "tier": "P1",
+    "total_roster_points": 1991.5,
+    "starter_points": 1425.1,
+    "position_counts": {
+      "WR": 10,
+      "TE": 2,
+      "QB": 3,
+      "RB": 2
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 10
+    },
+    "max_single_position_share": 0.5882352941176471,
+    "concentration_index": 0.4048442906574395
+  },
+  {
+    "season": 2025,
+    "slot": 10,
+    "tier": "P1b",
+    "total_roster_points": 2233.1,
+    "starter_points": 1485.6,
+    "position_counts": {
+      "WR": 9,
+      "TE": 3,
+      "QB": 3,
+      "RB": 2
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 9
+    },
+    "max_single_position_share": 0.5294117647058824,
+    "concentration_index": 0.356401384083045
+  },
+  {
+    "season": 2025,
+    "slot": 10,
+    "tier": "P1c",
+    "total_roster_points": 2064.0,
+    "starter_points": 1442.1,
+    "position_counts": {
+      "WR": 9,
+      "TE": 3,
+      "QB": 3,
+      "RB": 2
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 9
+    },
+    "max_single_position_share": 0.5294117647058824,
+    "concentration_index": 0.356401384083045
+  },
+  {
+    "season": 2025,
+    "slot": 10,
+    "tier": "P2",
+    "total_roster_points": 2006.8999999999999,
+    "starter_points": 1468.0,
+    "position_counts": {
+      "WR": 8,
+      "QB": 3,
+      "RB": 2,
+      "TE": 4
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 8
+    },
+    "max_single_position_share": 0.47058823529411764,
+    "concentration_index": 0.3217993079584775
+  },
+  {
+    "season": 2025,
+    "slot": 10,
+    "tier": "P3",
+    "total_roster_points": 2049.7,
+    "starter_points": 1427.8,
+    "position_counts": {
+      "WR": 8,
+      "TE": 4,
+      "QB": 3,
+      "RB": 2
+    },
+    "zero_drafted_starting_positions": [],
+    "positions_over_feasibility_cap": {
+      "WR": 8
+    },
+    "max_single_position_share": 0.47058823529411764,
+    "concentration_index": 0.3217993079584775
+  }
+]

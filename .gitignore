@@ -23,6 +23,18 @@ predictions/**
 !predictions/.gitkeep
 reports/**
 !reports/.gitkeep
+# Narrow, deliberate exceptions (M17 draft-engine forensic audit): unlike everything else
+# under reports/, these two are NOT reproducible from `alpha-squad ingest` -- they are raw
+# diagnostic evidence from a specific ~42-minute forensic run, and three tracked documents
+# (docs/DRAFT_ENGINE_FORENSIC_AUDIT.md, docs/DRAFT_CONTROLLED_EXPERIMENTS.md,
+# docs/DRAFT_ENGINE_REDESIGN_RECOMMENDATION.md) cite them as their evidence base. Ignoring
+# them would leave those documents pointing at dangling evidence after a fresh clone.
+!reports/draft_decision_trace.json
+!reports/draft_forensics_experiment_results.json
+# D55 adds two more: the P-tier ablation that chose the shipped formula, and the
+# post-implementation re-trace proving the mechanism (not just the roster counts) changed.
+!reports/draft_forensics_ptier_results.json
+!reports/draft_decision_trace_d55.json
 state/**
 !state/.gitkeep
 *.duckdb

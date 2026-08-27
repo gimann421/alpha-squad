@@ -125,6 +125,7 @@ export const api = {
       roster_id?: number;
       available_player_ids?: string[];
       next_pick_overall?: number;
+      current_pick_overall?: number;
       ecr_type?: string;
       top_n?: number;
     },

@@ -110,9 +110,9 @@ state at the time each milestone was first built.
 | Target league settings are supported | ✅ | `config/league_configs/target_league.yaml` — 10 teams, 2QB/2RB/2WR/1TE/2FLEX |
 | Multiple leagues can be configured and switched between | ✅ | `league/context.py::resolve_league` + `config/league_configs/registry.yaml` (D33/D34) — every CLI league command, the API, and `LeagueView.tsx`'s league picker resolve through the same registry; 3 leagues registered today (1 YAML, 2 live Sleeper), no hardcoded single-league assumption remains |
 | Replacement level is calculated | ✅ | `league/replacement.py::replacement_level`, derived from the league's own starting-slot config (verified: 2QB league's QB replacement sits at real rank ~20-24, materially different from a 1QB league) |
-| Positional scarcity is calculated | ✅ | `positional_scarcity` |
+| Positional scarcity is calculated | ✅ | `league/replacement.py::positional_scarcity`, consulted by `league/waiver.py`. The draft engine deliberately does **not** use it: M17/M18 measured that adding it raises the RB=0 rate from 20% to 32%, because it rates QB as more scarce than RB in this league's real data (`docs/DRAFT_CONTROLLED_EXPERIMENTS.md`). The draft engine instead prices forward-looking positional value via `league/opportunity_cost.py` (D55), which is what the criterion is substantively asking for |
 | Roster fit is calculated | ✅ | `roster_fit_multiplier` |
-| Expected pick value exists | ✅ | `recommend_draft_pick`'s VORP × fit × confidence score |
+| Expected pick value exists | ✅ | `recommend_draft_pick`: `(VORP + positional opportunity cost) × roster fit × confidence × survival × [feasibility cap]` (D55) |
 | Next-pick survival probability exists | ✅ | `next_pick_survival_probability` (Uniform over ECR best/worst) |
 | Draft recommendation includes alternatives and reasoning | ✅ | `DraftRecommendation.alternatives`/`.reasons` |
 | Waiver/FAAB recommendations include roster fit and replacement | ✅ | `recommend_waiver_pickup` |
@@ -169,6 +169,32 @@ state at the time each milestone was first built.
 | A player's universal value is distinguished from its value in a specific league | ✅ | D53: `GET /players/{id}/detail` + `PlayerDetailView.tsx` — universal section (projection/uncertainty/market/EDGE/evidence/rookie info, same everywhere) rendered separately from a "my league value" section (dynasty trade action, roster fit) that changes per selected league for the identical player |
 | Recommendation explanations show relevant evidence/provenance | ✅ | reasons rendered alongside every recommendation; `PlayerDetailView.tsx`'s "why did this change" evidence timeline (D53) |
 | UI does not duplicate or bypass core model/decision logic | ✅ | D27; every API field traces to a persisted table or a direct M10 function call — verified literally by killing the API process and confirming the UI breaks rather than serving stale data. D53 kept this true through productization: the one client-side computation added (`DraftView.tsx`'s `available_player_ids`) is pure set-subtraction over already-ranked/already-drafted ids, not a decision |
+
+## Empirical validation (M16, D54)
+
+M15's "does the feature exist and run" rows above are necessary but not sufficient — this
+section maps each of the empirical-validation directive's own required questions to the
+module/test/report that answers it, and its own honest verdict (**VALIDATED** / **PROMISING**
+/ **INCONCLUSIVE** / **FAILED, cause identified** / **NOT YET EVALUATED**), matching the
+taxonomy `docs/PROJECT_STATE.md`'s M16 section and `docs/DECISIONS.md` D54 use. This is a
+different axis than ✅/⚠️/❌ above: a row can be ✅ MET above (the feature works and is wired
+up) and still **FAILED** here (the feature, exercised against real historical outcomes,
+produces worse decisions than a baseline).
+
+| Question | Verdict | Module / test | Report |
+|---|---|---|---|
+| Does player intelligence beat simple baselines? | **VALIDATED** | `evaluation/projection_benchmark.py`, `tests/unit/test_evaluation_projection_benchmark.py` | `reports/projection_benchmark.md` |
+| Is the EDGE model-vs-market signal useful? | **PROMISING** (BUY); **INCONCLUSIVE** (SELL) | `market/edge.py` (M8), re-run this phase | `reports/edge_backtest.md` |
+| Does disagreement magnitude alone carry predictive information? | **INCONCLUSIVE** — not monotonic absent the evidence gate; validates the D21 gate itself instead | `evaluation/market_inefficiency.py`, `tests/unit/test_evaluation_market_inefficiency.py` | `reports/market_inefficiency.md` |
+| Does league-aware decision-making improve on generic/BPA rankings? | **MIXED** — beats `alpha_bpa` on starter points (context helps the started lineup), loses to it on total points and to `market_consensus` on every measure | `evaluation/draft_simulation.py`, `tests/unit/test_evaluation_draft_simulation.py` | `reports/draft_simulation.md` |
+| Do draft recommendations outperform market consensus? | **FAILED, cause identified, partially fixed** — root-caused to two compounding mechanisms in `roster_fit_multiplier`/`roster_need`; one (weak same-position saturation penalty) fixed and re-verified (starter points +2.7%, gap to market consensus only ~12% closed), the other (positional-scarcity blindness) remains open; see `docs/IMPLEMENTATION_GAP_ANALYSIS.md` P1-0 | same as above | same as above |
+| Do waiver/FAAB recommendations create useful value? | **INCONCLUSIVE** — real proxy only, no historical bidding log exists in this environment | `evaluation/waiver_evaluation.py`, `tests/unit/test_evaluation_waiver.py` | `reports/waiver_tier_evaluation.md` |
+| Does rookie evaluation beat baselines? | **MIXED, by round tier** — late rounds (5-7) validated as an Alpha win; early/mid rounds remain a draft-capital-baseline win | `evaluation/rookie_benchmark.py`, `tests/unit/test_evaluation_rookie_benchmark.py` | `reports/rookie_benchmark.md` |
+| Do dynasty pick-value/age-curve heuristics match real outcomes? | **PROMISING** (pick value direction); **INCONCLUSIVE** (age-curve ages, confounded by survivorship bias, named explicitly rather than resolved) | `evaluation/dynasty_validation.py`, `tests/unit/test_evaluation_dynasty_validation.py` | `reports/dynasty_heuristic_validation.md` |
+| Does trade/roster intelligence improve decisions? | **NOT YET EVALUATED** (causal attribution) / inherits EDGE's evidence (action quality) | `evaluation/trade_evaluation.py`, `tests/unit/test_evaluation_trade_evaluation.py` | `reports/trade_evaluation.md` |
+| Where does Alpha fail, and why? | Answered directly — draft-decision-logic bug, root cause named | `evaluation/failure_analysis.py`, `tests/unit/test_evaluation_failure_analysis.py` | `reports/failure_analysis.md` |
+| Evaluation framework itself is leakage-safe and reproducible | ✅ MET | walk-forward season filters throughout (`season < target`/`year(scrape_date) < target`); every unit test above uses synthetic `:memory:` DuckDB fixtures, not real data, so framework correctness is verified independently of any specific historical result |
+| Evaluation methodology committed before results, not tuned after | ✅ MET | `docs/DECISIONS.md` D54's "Committed before results" list, written and committed before any evaluation command was run against the real database |
 
 ## Completion standard
 

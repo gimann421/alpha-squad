@@ -321,6 +321,18 @@ class TestRosterNeed:
         needs = roster_need(league, ["QB", "QB", "QB", "QB", "QB"])
         assert needs["QB"] < 0
 
+    def test_one_player_past_a_full_bench_hits_the_fit_multiplier_floor_immediately(self):
+        """Regression (D54): the old oversaturation coefficient (-0.2) took ~15 extra
+        players at one position to reach roster_fit_multiplier's 0.7 floor, which is why a
+        real historical draft simulation could stack 7 QBs into a 2-QB league before this
+        signal ever meaningfully discouraged it (verified by replaying the real draft
+        pick-by-pick). A single player beyond starters + a healthy 2-deep bench should already
+        hit the full floor -- there is essentially no real scenario where a 3rd+ bench QB in a
+        2-QB league has usable value."""
+        league = _flat_league(1, {"QB": 2})  # depth_target = 2 + 2 = 4
+        needs = roster_need(league, ["QB", "QB", "QB", "QB", "QB"])  # 5th QB: one past depth_target
+        assert roster_fit_multiplier(needs["QB"]) == pytest.approx(0.7)
+
     def test_fit_multiplier_is_bounded(self):
         assert roster_fit_multiplier(100) == pytest.approx(1.3)
         assert roster_fit_multiplier(-100) == pytest.approx(0.7)
@@ -335,29 +347,51 @@ class TestNextPickSurvivalProbability:
         yield connection
         connection.close()
 
-    def _seed(self, con, player_id, best, worst):
+    def _seed(self, con, player_id, best, worst, scrape_date="2025-08-01"):
         con.execute(
             "INSERT INTO market_snapshot (player_id, scrape_date, ecr_type, position, ecr_rank, ecr_best, ecr_worst) "
-            "VALUES (?, '2025-08-01', 'rsf', 'WR', ?, ?, ?)",
-            [player_id, (best + worst) / 2, best, worst],
+            "VALUES (?, ?, 'rsf', 'WR', ?, ?, ?)",
+            [player_id, scrape_date, (best + worst) / 2, best, worst],
         )
 
     def test_certainly_gone_before_the_best_case_rank(self, con):
         self._seed(con, "p1", best=5, worst=15)
-        assert next_pick_survival_probability(con, "p1", next_pick_overall=20) == pytest.approx(0.0)
+        assert next_pick_survival_probability(
+            con, "p1", next_pick_overall=20, season=2025
+        ) == pytest.approx(0.0)
 
     def test_certainly_available_after_the_worst_case_rank(self, con):
         self._seed(con, "p1", best=5, worst=15)
-        assert next_pick_survival_probability(con, "p1", next_pick_overall=1) == pytest.approx(1.0)
+        assert next_pick_survival_probability(
+            con, "p1", next_pick_overall=1, season=2025
+        ) == pytest.approx(1.0)
 
     def test_interpolates_within_the_expert_dispersion(self, con):
         self._seed(con, "p1", best=10, worst=20)
-        prob = next_pick_survival_probability(con, "p1", next_pick_overall=15)
+        prob = next_pick_survival_probability(con, "p1", next_pick_overall=15, season=2025)
         assert 0.0 < prob < 1.0
         assert prob == pytest.approx(0.5)
 
     def test_no_market_data_returns_none(self, con):
-        assert next_pick_survival_probability(con, "nobody", next_pick_overall=10) is None
+        assert (
+            next_pick_survival_probability(con, "nobody", next_pick_overall=10, season=2025) is None
+        )
+
+    def test_does_not_leak_a_snapshot_recorded_after_the_draft_season(self, con):
+        """Regression (D54): a real historical draft simulation for season 2021 must not see
+        expert-rank dispersion recorded in 2026 -- found live via a real draft_simulation.py
+        run where many players' market_snapshot rows span 2021-2026 and the un-scoped
+        `ORDER BY scrape_date DESC LIMIT 1` picked up the 2026 row regardless of which
+        historical season was being drafted."""
+        self._seed(con, "p1", best=5, worst=15, scrape_date="2026-08-01")
+        assert next_pick_survival_probability(con, "p1", next_pick_overall=20, season=2021) is None
+
+    def test_uses_the_snapshot_from_the_season_being_drafted_not_a_later_one(self, con):
+        self._seed(con, "p1", best=5, worst=15, scrape_date="2021-08-01")
+        self._seed(con, "p1", best=50, worst=60, scrape_date="2026-08-01")
+        assert next_pick_survival_probability(
+            con, "p1", next_pick_overall=20, season=2021
+        ) == pytest.approx(0.0)
 
 
 @pytest.fixture
@@ -411,6 +445,17 @@ class TestRecommendDraftPick:
         league = load_league_context()
         with pytest.raises(RuntimeError):
             recommend_draft_pick(con, league, 2025, [], {"nobody"})
+
+    def test_exact_score_ties_break_deterministically_by_player_id(self, con):
+        """Regression (D54): candidates are built by iterating `available_player_ids` (a
+        `set`), whose order depends on hash randomization that differs across process runs
+        (confirmed: PYTHONHASHSEED unset in this environment) -- an exact score tie could
+        otherwise pick a different player on a re-run of the identical historical draft."""
+        league = load_league_context()
+        _seed_uncertainty(con, "zeta", 2025, "QB", 300.0)
+        _seed_uncertainty(con, "alpha_p", 2025, "QB", 300.0)
+        rec = recommend_draft_pick(con, league, 2025, [], {"zeta", "alpha_p"})
+        assert rec.recommendation == "alpha_p"
 
 
 class TestRecommendWaiverPickup:

@@ -18,6 +18,21 @@ from alpha_squad.agents.orchestrator import run_pipeline
 from alpha_squad.agents.planner import plan_full_refresh
 from alpha_squad.agents.state import reconstruct_run
 from alpha_squad.config.settings import get_settings
+from alpha_squad.evaluation.draft_simulation import (
+    persist_draft_sim_results,
+    run_draft_simulation,
+    write_draft_simulation_report,
+)
+from alpha_squad.evaluation.dynasty_validation import write_dynasty_validation_report
+from alpha_squad.evaluation.failure_analysis import write_failure_analysis_report
+from alpha_squad.evaluation.market_inefficiency import write_market_inefficiency_report
+from alpha_squad.evaluation.projection_benchmark import write_projection_benchmark_report
+from alpha_squad.evaluation.rookie_benchmark import (
+    run_rookie_baselines,
+    write_rookie_benchmark_report,
+)
+from alpha_squad.evaluation.trade_evaluation import write_trade_evaluation_report
+from alpha_squad.evaluation.waiver_evaluation import write_waiver_evaluation_report
 from alpha_squad.evidence.events import build_evidence_events_range
 from alpha_squad.evidence.prior_update import run_prior_update
 from alpha_squad.evidence.sleeper_trending import detect_sleeper_trending
@@ -67,7 +82,11 @@ from alpha_squad.models.established.train import run_established_ml
 from alpha_squad.models.report import write_evaluation_report
 from alpha_squad.models.rookie.ablation import compare_arms, write_ablation_report
 from alpha_squad.models.rookie.data import load_rookie_projection_data
-from alpha_squad.models.rookie.features import COLLEGE_FEATURE_VERSION, FEATURES_WITH_COLLEGE
+from alpha_squad.models.rookie.features import (
+    COLLEGE_FEATURE_VERSION,
+    FEATURE_VERSION,
+    FEATURES_WITH_COLLEGE,
+)
 from alpha_squad.models.rookie.train import (
     project_rookie_class,
     run_rookie_models,
@@ -507,6 +526,206 @@ def evaluate_baselines(
     console.print(table)
 
     write_evaluation_report(con, Path(report_path))
+    console.print(f"report written to [green]{report_path}[/green]")
+    con.close()
+
+
+@evaluate_app.command("draft-simulation")
+def evaluate_draft_simulation(
+    season_start: int = typer.Option(
+        2021, help="First season (uncertainty_predictions coverage starts 2021)"
+    ),
+    season_end: int = typer.Option(2025, help="Last season"),
+    league_id: str = typer.Option("target_league", help="League config to draft under"),
+    report_path: str = typer.Option(
+        "reports/draft_simulation.md", help="Markdown report output path"
+    ),
+) -> None:
+    """Empirical validation phase (D54): simulate a real historical snake draft under 4
+    strategies (market_consensus/generic_prior_year/alpha_bpa/alpha_league_aware), from
+    every draft slot, for every season with real walk-forward Alpha predictions. Scores
+    rosters on real end-of-season outcomes. `alpha_league_aware` calls the real
+    `recommend_draft_pick` once per pick, so this is slow (tens of minutes) -- it is a
+    one-off evaluation run, not something meant to run per-request."""
+    settings = get_settings()
+    con = get_connection(settings)
+    init_db(con)
+    league = resolve_league(league_id, con=con, settings=settings)
+    seasons = list(range(season_start, season_end + 1))
+
+    results = run_draft_simulation(con, league, seasons)
+    persist_draft_sim_results(con, results)
+
+    summary = write_draft_simulation_report(con, Path(report_path), seasons)
+    table = Table(title="Draft simulation summary (pooled across seasons/slots)")
+    for col in ("strategy", "n", "mean_starter_pts", "mean_total_pts"):
+        table.add_column(col)
+    for row in summary:
+        table.add_row(
+            row["strategy"],
+            str(row["n"]),
+            f"{row['mean_starter_points']:.1f}",
+            f"{row['mean_total_roster_points']:.1f}",
+        )
+    console.print(table)
+    console.print(f"report written to [green]{report_path}[/green]")
+    con.close()
+
+
+@evaluate_app.command("projection-benchmark")
+def evaluate_projection_benchmark(
+    season_start: int = typer.Option(2020, help="First season"),
+    season_end: int = typer.Option(2025, help="Last season"),
+    report_path: str = typer.Option(
+        "reports/projection_benchmark.md", help="Markdown report output path"
+    ),
+) -> None:
+    """D54: does Alpha's season-level ML beat the M4 baselines? Reads already-computed
+    `evaluation_results` rows (no new predictions made here) and reports the real
+    season-intersection window where every model family actually has a row."""
+    settings = get_settings()
+    con = get_connection(settings)
+    init_db(con)
+    result = write_projection_benchmark_report(con, Path(report_path), season_start, season_end)
+    console.print(f"common seasons: {result['common_seasons']}")
+    console.print(f"report written to [green]{report_path}[/green]")
+    con.close()
+
+
+@evaluate_app.command("market-inefficiency")
+def evaluate_market_inefficiency(
+    season_start: int = typer.Option(
+        2022, help="First season (edge_snapshot coverage starts 2022)"
+    ),
+    season_end: int = typer.Option(2025, help="Last season"),
+    ecr_type: str = typer.Option(DEFAULT_ECR_TYPE, help="Market series EDGE was built against"),
+    report_path: str = typer.Option(
+        "reports/market_inefficiency.md", help="Markdown report output path"
+    ),
+) -> None:
+    """D54: does disagreement magnitude/confidence/evidence-backing actually predict outcome
+    quality, or is a strong disagreement no better than a mild one? Requires `edge build` to
+    have already run for these seasons."""
+    settings = get_settings()
+    con = get_connection(settings)
+    init_db(con)
+    tiers = write_market_inefficiency_report(
+        con, Path(report_path), season_start, season_end, ecr_type
+    )
+    for t in tiers:
+        console.print(f"{t.tier}: n={t.n} signed_edge={t.mean_signed_edge}")
+    console.print(f"report written to [green]{report_path}[/green]")
+    con.close()
+
+
+@evaluate_app.command("dynasty-heuristics")
+def evaluate_dynasty_heuristics(
+    draft_year_end: int = typer.Option(
+        2023, help="Last draft class (needs 3 real seasons of data)"
+    ),
+    report_path: str = typer.Option(
+        "reports/dynasty_heuristic_validation.md", help="Markdown report output path"
+    ),
+) -> None:
+    """D54: does real production actually decline by round/age the way pick_value (D45) and
+    age_curve_multiplier (D25) assume? Both are documented heuristics, never fit to data --
+    this checks the assumed shape against real draft_picks/player_season_stats history."""
+    settings = get_settings()
+    con = get_connection(settings)
+    init_db(con)
+    write_dynasty_validation_report(con, Path(report_path), draft_year_end)
+    console.print(f"report written to [green]{report_path}[/green]")
+    con.close()
+
+
+@evaluate_app.command("waiver-tier")
+def evaluate_waiver_tier(
+    season_start: int = typer.Option(2020, help="First season"),
+    season_end: int = typer.Option(2025, help="Last season"),
+    report_path: str = typer.Option(
+        "reports/waiver_tier_evaluation.md", help="Markdown report output path"
+    ),
+) -> None:
+    """D54: preseason waiver-tier value-discovery proxy (NOT a FAAB-bidding simulation -- see
+    module docstring in evaluation/waiver_evaluation.py for why a real historical bidding
+    backtest isn't feasible in this environment)."""
+    settings = get_settings()
+    con = get_connection(settings)
+    init_db(con)
+    write_waiver_evaluation_report(con, Path(report_path), season_start, season_end)
+    console.print(f"report written to [green]{report_path}[/green]")
+    con.close()
+
+
+@evaluate_app.command("rookie-benchmark")
+def evaluate_rookie_benchmark(
+    draft_class_start: int = typer.Option(2019, help="First draft class"),
+    draft_class_end: int = typer.Option(
+        2024, help="Last draft class (needs a played rookie season)"
+    ),
+    report_path: str = typer.Option(
+        "reports/rookie_benchmark.md", help="Markdown report output path"
+    ),
+) -> None:
+    """D54: adds two real external baselines (draft-capital-only, rookie-season market ECR)
+    for Alpha's rookie regression, split by real draft-round tier. First computes the two new
+    baselines walk-forward and records them into the shared evaluation_results table."""
+    settings = get_settings()
+    con = get_connection(settings)
+    init_db(con)
+    run_rookie_baselines(con, list(range(draft_class_start, draft_class_end + 1)))
+    write_rookie_benchmark_report(con, Path(report_path), draft_class_start, draft_class_end)
+    console.print(f"report written to [green]{report_path}[/green]")
+    con.close()
+
+
+@evaluate_app.command("trade-evidence")
+def evaluate_trade_evidence(
+    season_start: int = typer.Option(
+        2022, help="First season (edge_snapshot coverage starts 2022)"
+    ),
+    season_end: int = typer.Option(2025, help="Last season"),
+    ecr_type: str = typer.Option(DEFAULT_ECR_TYPE, help="Market series EDGE was built against"),
+    report_path: str = typer.Option(
+        "reports/trade_evaluation.md", help="Markdown report output path"
+    ),
+) -> None:
+    """D54: states what is and isn't measurable about trade recommendation quality in this
+    environment, and reproduces the real BUY/SELL evidence recommend_dynasty_trade's action
+    inherits from EDGE. Requires `edge validate` to have already run for these seasons."""
+    settings = get_settings()
+    con = get_connection(settings)
+    init_db(con)
+    write_trade_evaluation_report(con, Path(report_path), season_start, season_end, ecr_type)
+    console.print(f"report written to [green]{report_path}[/green]")
+    con.close()
+
+
+@evaluate_app.command("failure-analysis")
+def evaluate_failure_analysis(
+    edge_season_start: int = typer.Option(2022, help="First EDGE season"),
+    edge_season_end: int = typer.Option(2025, help="Last EDGE season"),
+    rookie_class_start: int = typer.Option(2019, help="First rookie draft class"),
+    rookie_class_end: int = typer.Option(2024, help="Last rookie draft class"),
+    report_path: str = typer.Option(
+        "reports/failure_analysis.md", help="Markdown report output path"
+    ),
+) -> None:
+    """D54 (directive section 18, mandatory): concrete named misses, not just aggregate
+    win/loss statistics. Requires `edge build`/`edge validate` and `train rookie` to have
+    already run for these ranges."""
+    settings = get_settings()
+    con = get_connection(settings)
+    init_db(con)
+    write_failure_analysis_report(
+        con,
+        Path(report_path),
+        edge_season_start,
+        edge_season_end,
+        FEATURE_VERSION,
+        rookie_class_start,
+        rookie_class_end,
+    )
     console.print(f"report written to [green]{report_path}[/green]")
     con.close()
 
@@ -1275,9 +1494,15 @@ def league_draft(
         DEFAULT_LEAGUE_ID, help="Registered league id to use (see `alpha-squad league list`)"
     ),
     top_n: int = typer.Option(5, help="Number of alternatives to show"),
+    current_pick: int = typer.Option(
+        None,
+        help="Your current overall pick number. Together with --next-pick this enables the "
+        "positional opportunity-cost term (D55); omit it and that term is simply not applied.",
+    ),
 ) -> None:
-    """Recommend a draft pick: VORP, roster fit, model confidence, and next-pick survival
-    probability, with alternatives and reasoning (AGENT_CONTRACTS.md's Decision contract)."""
+    """Recommend a draft pick: VORP, positional opportunity cost, roster fit, model confidence,
+    and next-pick survival probability, with alternatives and reasoning (AGENT_CONTRACTS.md's
+    Decision contract)."""
     settings = get_settings()
     con = get_connection(settings)
     init_db(con)
@@ -1291,7 +1516,15 @@ def league_draft(
 
     try:
         rec = recommend_draft_pick(
-            con, league, season, roster_positions, available_ids, next_pick, ecr_type, top_n
+            con,
+            league,
+            season,
+            roster_positions,
+            available_ids,
+            next_pick,
+            ecr_type,
+            top_n,
+            current_pick_overall=current_pick,
         )
     except RuntimeError as e:
         console.print(f"[red]{e}[/red]")

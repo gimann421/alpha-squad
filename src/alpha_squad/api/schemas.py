@@ -255,6 +255,9 @@ class DraftRequest(BaseModel):
     roster_id: int | None = None
     available_player_ids: list[str] | None = None
     next_pick_overall: int | None = None
+    # D55: enables the positional opportunity-cost term. Optional -- when absent the
+    # engine simply omits that term rather than guessing where the draft is.
+    current_pick_overall: int | None = None
     ecr_type: str = "rsf"
     top_n: int = 5
 
