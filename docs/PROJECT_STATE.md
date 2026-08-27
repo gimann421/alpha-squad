@@ -922,3 +922,41 @@ layering in `positional_scarcity` given the finding above) — not a rebuild, no
 positional cap, not a full Monte Carlo lookahead — with the honest
 caveat that its sufficiency at full scale, and in combination with the already-landed
 saturation-penalty fix, remains `UNKNOWN` and must be measured before being claimed as solved.
+
+
+## M18 summary — positional opportunity cost shipped to the draft engine (D55)
+
+M17 diagnosed the draft engine's root cause without fixing it; M18 implemented the fix, measured
+it on the official benchmark, and recorded what it did and did not achieve. Full account:
+`docs/DECISIONS.md` D55.
+
+**The recommendation was not implemented as written, and that mattered.** Verifying
+`docs/DRAFT_ENGINE_REDESIGN_RECOMMENDATION.md` against the source before building found its
+proposed formula (`production + opportunity_cost`) had never actually been measured: Experiment
+F — the number the recommendation rested on — includes `positional_scarcity` (the mechanism the
+experiments proved harmful) and excludes production's confidence and survival terms. A new
+pre-registered P-tier ablation (300 real drafts, decision rule committed to source before
+running) resolved it. The integrated form that won, `(VORP + opportunity_cost) × fit × risk ×
+survival × [cap]`, beat both the recommendation's raw additive form and Experiment F itself.
+
+**Measured on the official `alpha-squad evaluate draft-simulation` benchmark, full 2021-2025:**
+mean starter points **1688.2 → 1801.1 (+112.9, +6.7%)**. Alpha's draft engine moves from 3rd of
+four strategies to 2nd, now ahead of the non-market `generic_prior_year` baseline it previously
+trailed. RB=0 rosters fell 10/50 → 2/50. The D54 QB-stacking pathology is materially reduced:
+7-and-8-QB rosters (9 of 50 before) no longer occur at all, max QB 8 → 6, concentration index
+0.345 → 0.304. All 10 draft slots improved; none regressed. The benchmark reproduced the
+diagnostic harness's prediction to the decimal, per season.
+
+**Mechanism verified from the decision trace, not inferred from roster counts.** Re-tracing the
+2021 slot-1 pathological draft: pick #1 is now RB where it was TE, and the engine's own reason
+string states why — *"RB opportunity cost +60.5 pts"*. The RB wins **despite lower VORP** than
+the TE it beat. 2025 slot 1, which never had the pathology, is essentially unchanged: the term
+is targeted, not a blanket re-weighting.
+
+**Reported regressions, not just gains:** 2023 lost 6.4 starter points (0.35%); pooled total
+roster points dipped 6.8; the feasibility cap fires on every draft both before and after. Most
+importantly, **`market_consensus` still leads by 219.6 starter points and Alpha has still never
+won a single season against it** — `docs/IMPLEMENTATION_GAP_ANALYSIS.md` P1-0's acceptance
+criterion remains unmet. Determinism passed (two separate-process benchmark runs, byte-identical)
+and runtime cost is negligible (+0.099 s/call, +3.4%). 474 offline tests passing (up from 450);
+lint and `tsc` clean.

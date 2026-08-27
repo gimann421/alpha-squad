@@ -743,3 +743,20 @@ the current production engine on mean starter points. No fix was implemented in 
 `docs/DRAFT_ENGINE_FORENSIC_AUDIT.md`, `docs/DRAFT_CONTROLLED_EXPERIMENTS.md`, and
 `docs/DRAFT_ENGINE_REDESIGN_RECOMMENDATION.md` for the full account and the proposed
 (unimplemented) next step.
+
+
+## Postscript (2026-08-27): opportunity-cost fix shipped and measured (M18, D55)
+
+The gap this audit's M17 postscript identified as "the project's current top recommended action"
+has now been implemented and measured. `recommend_draft_pick` gained a continuous,
+points-denominated positional opportunity-cost term fed by a literal opponent replay, plus a
+league-derived positional feasibility cap that finally makes `LeagueContext.bench_size` (which
+M17 found was dead code) load-bearing.
+
+Official benchmark, full 2021-2025: **+112.9 mean starter points (1688.2 → 1801.1)**, RB=0
+rosters 10/50 → 2/50, QB stacking materially reduced (7-and-8-QB rosters eliminated), all 10
+draft slots improved. This changes this audit's standing characterisation of the draft engine
+from "loses to a naive non-market baseline" to "2nd of four strategies" — but **not** its
+core finding: `market_consensus` still leads by 219.6 starter points and Alpha has never won a
+season against it. The weakest-component assessment for the *decision-logic layer* stands,
+narrowed rather than resolved. See `docs/DECISIONS.md` D55.

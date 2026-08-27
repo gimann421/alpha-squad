@@ -2226,3 +2226,23 @@ blanket re-weighting.
 - **The opponent replay assumes market-consensus opponents.** Exactly true inside the benchmark;
   an approximation against real human drafters — the same class of assumption
   `next_pick_survival_probability` already makes.
+
+**Determinism: PASS.** The full benchmark was run twice in separate processes and the reports
+are byte-identical (`md5 d34d5a3deb8ba2be233d7746e5a5a251`). This matters more than usual here:
+D54 found a real hash-randomization bug in exactly this harness, and D55 fixed two more of the
+same class in the diagnostic tiers. The opportunity-cost term is deterministic by construction —
+it maxes over VORP *values*, so tied players cannot change the figure regardless of `set`
+iteration order — and the replay uses the canonical `player_id`-tie-broken market pick.
+
+**Runtime: negligible.** Measured against the real 2021 universe (559 candidates):
+
+| | per `recommend_draft_pick` call |
+|---|---|
+| without the term (`current_pick_overall` omitted) | 2.909 s |
+| with the term (18 opponent picks replayed) | 3.008 s |
+
+**+0.099 s (+3.4%).** The 2.9 s baseline is dominated by the pre-existing per-candidate database
+round-trips (two queries × 559 candidates), not by anything D55 added — the replay itself is
+pure in-memory work costing ~10k comparisons. Computing the cost once per position rather than
+once per candidate is what keeps it there; the per-candidate form measured ~9× slower in the
+diagnostic harness for byte-identical results.

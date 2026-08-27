@@ -36,7 +36,7 @@ items with no listed dependency can start immediately.
 
 ## P1 — High value, ready to build
 
-### P1-0: Fix `recommend_draft_pick`'s roster-balance failure — PARTIALLY FIXED (D54; mechanism 2 remains open)
+### P1-0: Fix `recommend_draft_pick`'s roster-balance failure — BOTH MECHANISMS FIXED (D54 + D55); acceptance criterion still unmet
 
 - **What was found:** A real historical draft simulation (`src/alpha_squad/evaluation/
   draft_simulation.py`, `docs/DECISIONS.md` D54) showed the actual production draft
@@ -123,14 +123,28 @@ items with no listed dependency can start immediately.
   diagnostic harness (`src/alpha_squad/evaluation/draft_forensics.py`) already has the
   opportunity-cost mechanism implemented and unit-tested in isolation — it has not been ported
   into production `league/draft.py`, which is the actual remaining work.
-- **Acceptance criteria (still unmet):** `alpha_league_aware` beats or matches
-  `market_consensus` on mean starter points across the same 5 real seasons this finding was
-  measured on, without re-tuning the evaluation's own thresholds/strategies to produce that
-  result. Mechanism 1's fix improved starter points but did not meet this bar; a fix for
-  mechanism 2 is still needed to reasonably attempt it, and should be re-verified the same
-  way — a full `alpha-squad evaluate draft-simulation` re-run plus a replayed draft's
-  pick-by-pick reasoning, not summary metrics alone (M17 found the aggregate metrics alone hid
-  exactly this kind of mechanism-level detail).
+- **Mechanism 2 — FIXED (M18 / D55) and measured on the official benchmark.** A continuous,
+  points-denominated positional opportunity-cost term fed by a literal opponent replay
+  (`league/opportunity_cost.py`), integrated as `(VORP + opp_cost) × fit × risk × survival`,
+  plus a league-derived positional feasibility cap. Chosen by a pre-registered P-tier ablation
+  (300 real drafts) rather than by implementing the redesign recommendation as written — that
+  document's proposed formula turned out never to have been measured. Full 2021-2025 benchmark:
+  mean starter points **1688.2 → 1801.1 (+112.9)**, RB=0 rosters 10/50 → 2/50, 7-and-8-QB
+  rosters eliminated, all 10 draft slots improved, determinism verified byte-identical across
+  processes, runtime +3.4%.
+- **Acceptance criteria — STILL UNMET, and this item stays open.** The bar was:
+  `alpha_league_aware` beats or matches `market_consensus` on mean starter points across the
+  same 5 real seasons, without re-tuning the evaluation to produce that result. After both
+  fixes Alpha reaches 1801.1 against market consensus's 2020.7 — a 219.6-point shortfall, and
+  it has still never won a single season outright. The two identified mechanisms are now
+  genuinely fixed (worth +156.6 combined), so the remaining gap is **not** attributable to
+  either of them, and no further draft-scoring mechanism is currently evidence-backed as the
+  next step.
+- **Recommended next action (changed):** stop adding scoring mechanisms on intuition. The two
+  wins so far both came from diagnosing first and measuring against a pre-registered rule. The
+  defensible next step is another targeted diagnostic — establish where the residual 219.6
+  points actually come from (D55 notes 2023 regressed while four seasons improved, which is
+  itself an unexplained signal) — rather than a third mechanism chosen by plausibility.
 
 ### ~~P1-1: Wire waiver, trade, and roster-need recommendations into the web UI~~ — CLOSED (D44)
 

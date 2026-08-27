@@ -20,27 +20,25 @@ phase's explicit instruction not to design the evaluation to make Alpha look goo
    2022-2023, roughly neutral 2024, wrong-direction 2025). Disagreement *magnitude* alone
    (rank-edge tiers 1-3, no evidence gate) does **not** show a clean monotonic relationship
    with outcome — only the evidence-gated BUY/SELL tier does. See §2, §3.
-3. **Does league context improve decisions?** — **Mixed, but net No as currently
-   implemented — a real, unfavorable finding, partially improved by a fix made and re-verified
-   during this phase.** `alpha_league_aware` (real roster context + VORP) beats `alpha_bpa`
-   (identical player values, no context) on mean *starter* points (1688.2 vs 1429.1 pooled,
-   after the fix — up from 1644.5) but loses to it on mean *total roster* points (2606.6 vs
-   2756.1, a wider gap than before the fix) — context helps the lineup you actually start but
-   leaves more value stranded on the bench overall — and loses to plain `market_consensus` on
-   every measure. See §4 for the root cause found while investigating this, and the fix's real,
-   incomplete effect.
-4. **Does Alpha make better draft decisions?** — **No — a real, unfavorable finding, one
-   mechanism of which has now been partially fixed.** `market_consensus` beat
-   `alpha_league_aware` on mean starter points in every one of the 5 real seasons tested both
-   before (2020.7 vs 1644.5 pooled) and after a fix to the weaker of two identified failure
-   mechanisms (2020.7 vs 1688.2 pooled) — `alpha_league_aware` still never won a single season
-   outright. See §4.
+3. **Does league context improve decisions?** — **Yes on the metric that matters, no overall.**
+   `alpha_league_aware` beats `alpha_bpa` (identical player values, no context) on mean
+   *starter* points by a wide and now-widened margin (1801.1 vs 1429.1 pooled after D55; was
+   1688.2), while still trailing it on mean *total roster* points (2599.8 vs 2756.1) — context
+   helps the lineup you actually start and leaves more value on the bench. It still loses to
+   plain `market_consensus`. See §4 and its D55 update.
+4. **Does Alpha make better draft decisions?** — **No, but the gap has closed substantially.**
+   `market_consensus` beat `alpha_league_aware` on mean starter points in every one of the 5
+   real seasons tested, before (2020.7 vs 1644.5) and still after both fixes
+   (2020.7 vs 1801.1) — `alpha_league_aware` has never won a season outright. What did change:
+   it now ranks 2nd of four strategies rather than 3rd, ahead of the non-market
+   `generic_prior_year` baseline it used to trail. See §4.
 5. **Does Alpha make better waiver/FAAB decisions?** — **Inconclusive with this proxy; the
    full question isn't measurable here.** See §5 and `docs/EVALUATION_LIMITATIONS.md`.
 6. **Does Alpha make better roster decisions?** — Mixed with §4's finding: Alpha's underlying
-   player values are good (§1), but the roster-construction logic that turns them into an
-   actual draft has a real, identified bug (§4) — one of its two compounding mechanisms now
-   has a real, measured (if partial) fix; the other, positional-scarcity-awareness, does not.
+   player values are good (§1), and both of the roster-construction bugs §4 identified now have
+   real, measured fixes (D54 and D55). Roster feasibility improved on every metric tracked
+   (RB=0 10/50 → 2/50; 7-and-8-QB rosters eliminated; concentration 0.345 → 0.304), but the
+   engine still loses to market consensus overall.
 7. **Does Alpha's trade/roster intelligence improve decisions?** — Trade action quality
    inherits EDGE's real, partially-confirmed evidence (§2); the *value* heuristics it also
    uses have mixed real-world support (§6). A causal trade-outcome study isn't measurable here.
@@ -52,12 +50,14 @@ phase's explicit instruction not to design the evaluation to make Alpha look goo
     gate) is predictive (§3); early-round rookie evaluation vs. draft capital alone (§7);
     the age-curve heuristic's specific decline ages, confounded by survivorship (§6); FAAB
     bid quality (§5, not measurable here).
-11. **What should we improve next?** — `recommend_draft_pick`'s roster-balance logic had two
-    identified failure mechanisms (§4); one (weak same-position saturation penalty) now has a
-    real, measured fix in place. The other — positional-scarcity-awareness, so the engine can
-    anticipate a run on a position rather than only react to its own current roster
-    composition — remains, and is now the single highest-value, most concrete, most actionable
-    finding of this phase.
+11. **What should we improve next?** — Both of `recommend_draft_pick`'s identified failure
+    mechanisms have now been fixed and measured (D54's saturation penalty, D55's positional
+    opportunity cost), together worth +156.6 mean starter points. The engine nonetheless still
+    trails `market_consensus` by 219.6, and no single further draft-scoring mechanism is
+    currently evidence-backed as the next step. The most defensible next action is therefore
+    diagnostic rather than another scoring term: establish *where* the remaining gap comes from
+    (§4's D55 update notes 2023 regressed while four seasons improved), rather than adding
+    mechanisms on intuition — the approach that produced both measured wins so far.
 
 ---
 
@@ -230,6 +230,33 @@ cause, PARTIALLY ADDRESSED** — mechanism 1 has a real fix in place (measured, 
 mechanism 2 (positional-scarcity-awareness — anticipating a run on a position rather than only
 reacting to a roster's current composition) remains unfixed and is the clearly-identified next
 step. This is still the single most useful finding of this phase (directive question 11).
+
+### Update (M18 / D55): mechanism 2 has since been fixed and measured
+
+Everything above is preserved as the M16/M17 record. A later phase implemented the
+forward-looking piece — a continuous, points-denominated **positional opportunity cost** fed by
+a literal opponent replay (`league/opportunity_cost.py`) — and re-ran this same official
+benchmark over the same 2021-2025 window:
+
+| Strategy | Mean starter pts (pooled) | Mean total pts |
+|---|---|---|
+| market_consensus | 2020.7 | 2935.1 |
+| **alpha_league_aware (D55)** | **1801.1** | 2599.8 |
+| *alpha_league_aware (M16/M17 state, above)* | *1688.2* | *2606.6* |
+| generic_prior_year | 1708.3 | 2882.0 |
+| alpha_bpa | 1429.1 | 2756.1 |
+
+**+112.9 starter points.** Alpha's draft engine now ranks **2nd of four**, ahead of
+`generic_prior_year` — reversing this document's §4 finding that it trailed a naive non-market
+baseline. RB=0 rosters fell 10/50 → 2/50; 7-and-8-QB rosters no longer occur. It wins 4 of 5
+seasons (2023 regresses by 6.4 starter points).
+
+**What this does *not* change:** `market_consensus` still leads by 219.6 starter points, and
+`alpha_league_aware` still does not win a single season against it. This document's headline
+answers to directive questions 3, 4 and 9 therefore stand — Alpha's draft decisions remain worse
+than simply following market consensus, just by a materially smaller margin than when this
+document was written. See `docs/DECISIONS.md` D55 for the full measured result, the mechanism-
+level trace verification, and the remaining limitations.
 
 ## 5. Waiver-tier value discovery (preseason proxy)
 
