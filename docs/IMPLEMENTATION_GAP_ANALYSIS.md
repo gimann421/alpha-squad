@@ -104,13 +104,20 @@ items with no listed dependency can start immediately.
   engine already consults, is never imported by the draft engine at all — a genuine, previously
   undocumented gap; (c) 90 real homogeneous-league drafts under 3 independent non-Alpha
   strategies never produced a zero-RB roster, validating the simulator and ruling out both it
-  and the player-projection model as causes; (d) a controlled ablation found that adding
-  positional scarcity, analytical future scarcity, or a hard feasibility cap did not, alone,
-  recover the neglected position — only an explicit, continuously-priced opportunity-cost term
-  did, and only partially (1 of 2 needed RB slots in the deep-dive example). The recommended
-  next step (not implemented, per the diagnostic phase's own scope) is an explicit per-position
-  opportunity-cost term, continuously priced, using an opponent-behavior replay as its input —
-  see the redesign recommendation doc for why this and not a more complex or simpler alternative.
+  and the player-projection model as causes; (d) a full-scale controlled ablation (400 real
+  drafts: 5 seasons × 10 slots × 8 tiers) confirmed the failure generalizes but is
+  season-concentrated — the current production engine zeros RB in 10/50 trials, all of them the
+  real 2021 season (10/10 slots that year, 0/10 every other season) — and found that adding
+  positional scarcity or analytical future scarcity made the RB=0 rate *worse* (32% vs. 20% with
+  neither), because `positional_scarcity()` rates QB, not RB, as the scarce position in this
+  league's real data, reinforcing the QB-stacking side of the same pathology. Only an explicit,
+  continuously-priced opportunity-cost term reduced the RB=0 rate to 4% and beat the current
+  production engine on mean starter points (1789.1 vs. 1688.2 pooled, winning 4 of 5 real
+  seasons). The recommended next step (not implemented, per the diagnostic phase's own scope) is
+  an explicit per-position opportunity-cost term, continuously priced, using an opponent-behavior
+  replay as its input, applied directly to the existing production formula — deliberately without
+  adding `positional_scarcity`, now shown to backfire — see the redesign recommendation doc for
+  the full reasoning.
 - **Dependencies:** None — the evaluation harness to verify a fix already exists, mechanism 1's
   fix demonstrates the verify-with-a-real-rerun workflow to follow for mechanism 2, and M17's
   diagnostic harness (`src/alpha_squad/evaluation/draft_forensics.py`) already has the

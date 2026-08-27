@@ -11,11 +11,16 @@ forward-looking scarcity — only a single-candidate survival probability. Demon
 inferred: in both fully-traced pathological drafts, a real, viable RB was a live top-5 candidate
 at pick #1 and fell out of consideration entirely by the team's second pick, before any
 same-position saturation penalty (the mechanism already fixed once this phase, D54) was even
-relevant, since RB was never being over-drafted — it was never being drafted at all. Layering in
-current positional scarcity (a real production function already computed for the waiver engine
-but never consulted by the draft engine), analytical future scarcity, or a hard feasibility cap
-did not, alone, recover the neglected position in the traced example. Only an explicit,
-points-denominated opportunity-cost term did, and even then only partially.
+relevant, since RB was never being over-drafted — it was never being drafted at all. At full
+scale (400 real drafts, 5 seasons × 10 slots × 8 tiers), the current production engine zeros RB
+in 10/50 trials, concentrated entirely in the real 2021 season (10/10 slots that year, 0/10 in
+every other season). Layering in current positional scarcity, analytical future scarcity, or a
+hard feasibility cap did not recover the neglected position — current and future positional
+scarcity in particular made it *worse* (RB=0 rate rose to 32%, because `positional_scarcity()`
+rates QB, not RB, as the scarce position in this league's real data). Only an explicit,
+points-denominated opportunity-cost term recovered it substantially (RB=0 down to 2/50) and,
+unlike every other tier tested, also improved mean starter points above the current production
+engine (1789.1 vs. 1688.2, beating it in 4 of 5 real seasons).
 
 ## Proposed fix: an explicit, per-position opportunity-cost term, continuously priced
 
@@ -60,32 +65,40 @@ because it sounds sophisticated. Considered and set aside:
   baseline on MAE at every position, and the forensic audit's pick-1 trace shows VORP correctly
   identified the passed-over RB as valuable (VORP 103.1, 2nd-best candidate) — the value layer is
   not the problem.
-- **Add `positional_scarcity` (Experiment C) alone, without a forward-looking term.** Tested
-  directly; did not recover the neglected position in the traced example (§ ablation results).
-  Real and worth adding as supporting context (it is a real production signal wrongly excluded
-  from the draft engine per the forensic audit §2), but not sufficient alone — a genuinely useful
-  negative result from testing, not an assumption.
+- **Add `positional_scarcity` (Experiment C), with or without a forward-looking term.** Tested
+  directly at full scale (400 real drafts) and actively rejected, not merely found insufficient:
+  adding it *raised* the RB=0 rate from 20% (current production engine) to 32% — worse than
+  doing nothing. Real data explains why: `positional_scarcity()` ("mean starter value minus
+  replacement level") rates QB as the most scarce position in real 2021/2023 data and RB as one
+  of the least, the opposite of the popular fantasy-strategy sense of "RB scarcity," and
+  reinforces the QB-stacking side of the same pathology rather than fixing the RB side
+  (`docs/DRAFT_CONTROLLED_EXPERIMENTS.md`). **This function should not be added to the draft
+  engine in its current form.** The proposed fix below does not use it.
 
 ## Complexity
 
 Moderate, not high. `_future_position_pool_after_market_consensus`-equivalent logic already
 exists and was exercised across the full controlled-experiment grid without correctness issues;
-porting it into `recommend_draft_pick` mainly means: (a) also importing `positional_scarcity`
-there (already computed, already tested elsewhere) as the multiplicative scarcity term
-Experiment C added, since the audit found it real and missing rather than tested-and-rejected;
-(b) computing, once per pick (not once per candidate — the opponent replay is positional, not
-per-player, so it can be computed once per distinct position among the candidates, not once per
-candidate), the expected best-available VORP at each position after replaying the known opponent
-model forward to the team's next pick; (c) adding the resulting per-position opportunity-cost
-term to the score. No new data sources, no new model, no new database tables.
+porting it into `recommend_draft_pick` mainly means: (a) computing, once per pick (not once per
+candidate — the opponent replay is positional, not per-player, so it can be computed once per
+distinct position among the candidates, not once per candidate), the expected best-available
+VORP at each position after replaying the known opponent model forward to the team's next pick;
+(b) adding the resulting per-position opportunity-cost term to the score, applied directly to
+the *existing* production formula (`vorp × fit_mult × risk_mult × survival_mult`) — deliberately
+*not* layering in `positional_scarcity` first, per the finding above. No new data sources, no
+new model, no new database tables.
 
 ## Expected benefits
 
 Directly targets the demonstrated failure mode (RB disappearing at the team's first 1-2 picks)
-rather than a proxy for it. Should reduce, and the controlled experiments suggest may not fully
-eliminate, the specific "zero at a heavily-demanded position" pathology — F alone recovered 1 of
-2 needed RB slots in the deep-dive example, not both, so this should be framed to stakeholders as
-a demonstrated partial fix pending re-verification at full scale, not a guaranteed complete one.
+rather than a proxy for it. Measured at full scale (400 real drafts), this mechanism reduces the
+RB=0 rate from 20% to 4% and is the only tested tier that improves mean starter points above the
+current production engine (1789.1 vs. 1688.2 pooled). It is not a complete fix — 2/50 trials
+still zero RB, and F loses to the current engine outright in 1 of 5 real seasons (2023) — so this
+should be framed to stakeholders as a demonstrated, substantial, measured improvement, not a
+guaranteed complete one, and should still be re-verified against the official benchmark
+(`alpha-squad evaluate draft-simulation`) rather than assumed to transfer unchanged from this
+diagnostic harness's numbers.
 
 ## Risks
 

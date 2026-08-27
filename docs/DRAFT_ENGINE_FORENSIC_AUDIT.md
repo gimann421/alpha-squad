@@ -194,10 +194,14 @@ Alpha's decision logic.**
   forward-looking scarcity — only a single-player survival probability.** Directly demonstrated
   in §4: RB disappears from serious consideration within the team's first 1-2 picks in both
   pathological examples, and nothing in the score would have flagged "this position specifically
-  empties out fast, weight it up now" at the one point it mattered. Confirmed as load-bearing by
-  the controlled experiments in `docs/DRAFT_CONTROLLED_EXPERIMENTS.md` (Experiment F, explicit
-  opportunity cost, is the first tier to recover any RB at all in the 2021/slot-1 case that every
-  earlier tier still zeroes out).
+  empties out fast, weight it up now" at the one point it mattered. Confirmed as load-bearing at
+  full scale, not just the two traced examples, by the controlled experiments in
+  `docs/DRAFT_ENGINE_FORENSIC_AUDIT.md`'s companion document: across 400 real drafts (5 seasons ×
+  10 slots × 8 tiers), the real production engine zeros RB in 10/50 trials (concentrated entirely
+  in the real 2021 season, 10/10 slots that year); adding an explicit, points-denominated
+  opportunity-cost term (Experiment F) cuts that to 2/50 — the only tier tested that both reduces
+  the failure rate substantially and improves mean starter points above the current production
+  engine.
 
 ### CONTRIBUTING FACTOR
 - **`roster_need`'s same-position saturation penalty was too weak to prevent runaway stacking of
@@ -206,9 +210,15 @@ Alpha's decision logic.**
   This makes *already-hot* positions worse but is not what causes RB — a position that never gets
   hot in the first place — to disappear.
 - **`positional_scarcity` (§2) is computed but never consulted by the draft engine**, unlike the
-  waiver engine, which does use it. A real, load-bearing gap, but §5's Experiment C in the
-  companion document shows adding it alone, without the forward-looking piece, does not recover
-  RB in the traced examples — it is necessary supporting context for a fix, not sufficient alone.
+  waiver engine, which does use it — but the full-scale ablation in
+  `docs/DRAFT_CONTROLLED_EXPERIMENTS.md` found something more specific and more important than
+  "it's missing": adding it, in its *current form*, makes the RB=0 rate *worse* (20%→32% of 400
+  real drafts), because the metric ("mean starter value minus replacement level") rates QB as
+  the most scarce position in real 2021/2023 data and RB as one of the least — the opposite of
+  the popular fantasy-strategy sense of "RB scarcity." This is downgraded from "necessary
+  supporting context for a fix" to a specific, tested caution: the *existing* function should
+  not be added to the draft engine as-is; a genuinely useful positional-risk signal would need
+  to measure something else (see the redesign recommendation).
 - **`roster_need`'s depth target is a hardcoded constant unrelated to the league's real bench
   size** (§3). Makes the saturation-penalty fix's threshold arbitrary rather than principled, but
   is not itself what causes early-position abandonment.
@@ -237,14 +247,28 @@ Alpha's decision logic.**
   penalty would even be relevant to RB (RB is never drafted, so its own saturation term never
   engages).
 
-### UNKNOWN
+### RESOLVED (was UNKNOWN prior to the full 400-draft grid)
 - **Whether the RB-specific pattern generalizes across all 5 seasons × 10 slots, or is
-  concentrated in a subset.** Only 2 slots were traced in full pick-by-pick detail (§4); the
-  broader ablation grid in `docs/DRAFT_CONTROLLED_EXPERIMENTS.md` covers more slots/seasons at
-  the roster-composition level (not full pick-by-pick) and should be read alongside this section
-  before treating "RB specifically" as a universal law rather than this dataset's dominant
-  pattern.
-- **Whether a combined fix (forward-looking scarcity + feasibility + the already-landed
-  saturation-penalty fix) fully closes the gap to market consensus, or only reduces it further.**
-  Not yet tested as a combined tier; `docs/DRAFT_ENGINE_REDESIGN_RECOMMENDATION.md` proposes but
-  does not implement this.
+  concentrated in a subset — resolved: concentrated, not uniform.** The real production engine
+  (tier H) zeros RB in exactly 10 of 10 draft slots in the real 2021 season and 0 of 10 in every
+  one of 2022, 2023, 2024, and 2025 (`docs/DRAFT_CONTROLLED_EXPERIMENTS.md`, full grid). This is
+  neither a single-slot fluke (the traced §4 example was one of ten identically-failing 2021
+  slots) nor an every-season constant — it is real, and specific to 2021's particular real RB
+  market/VORP dynamics that season. *Why 2021 specifically* triggered it remains open (see
+  below) — this phase diagnosed the mechanism, not the season-level trigger.
+
+### UNKNOWN
+- **Why 2021 specifically, and not 2022-2025, triggered the RB-disappearance mechanism.** The
+  mechanism (§4, §6 root cause) is general — nothing in the score is season-specific — so 2021
+  must have had some real, unexamined property (an unusually front-loaded real RB draft market,
+  an unusual VORP distribution that season, or something else) that made the *conditions* for
+  the failure line up, while 2022-2025 did not. Not investigated in this phase; a natural
+  starting point for anyone pursuing this further, but out of scope for a mechanism-focused
+  diagnostic phase.
+- **Whether a combined fix (explicit opportunity cost, the standout single mechanism, plus the
+  already-landed saturation-penalty fix, and explicitly *without* naively adding
+  `positional_scarcity`, now shown to backfire) fully closes the gap to market consensus, or only
+  reduces it further.** Not yet tested as a combined tier — the full grid confirms F (1789.1 mean
+  starter pts) beats H (1688.2) but both still trail `market_consensus`'s pooled 2020.7
+  (`docs/ALPHA_VS_BASELINES_EVALUATION.md` §4). `docs/DRAFT_ENGINE_REDESIGN_RECOMMENDATION.md`
+  proposes but does not implement or measure this combination.

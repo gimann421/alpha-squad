@@ -898,19 +898,27 @@ well-known, legitimate real fantasy strategy of "punting" a shallow-demand posit
 simulator defect. This directly rules out the simulator and the player-projection model (already
 separately validated, D54 §1) as root causes.
 
-**Controlled ablation (tiers A-H, each adding one mechanism from the directive's list on top of
-the last) found that adding current positional scarcity, analytical future scarcity, or even a
-hard roster-feasibility cap did not, alone, recover the neglected position in the traced
-example — only an explicit, points-denominated opportunity-cost term did, and only partially
-(1 of 2 needed RB slots).** A literal opponent-behavior replay (rather than an analytical
-estimate) was tested too and, counter-intuitively, performed worse — its binary "position
-empties or it doesn't" trigger missed the everyday case of a position merely getting worse
-rather than vanishing outright, a specific, evidence-based design implication carried into the
-redesign recommendation.
+**Controlled ablation at full scale (400 real drafts: 5 seasons × 10 slots × 8 tiers, each tier
+adding one mechanism from the directive's list on top of the last) confirms the single-slot
+finding generalizes, with one important, counter-intuitive refinement.** The real production
+engine zeros RB in 10 of 50 trials — concentrated entirely in the real 2021 season (10/10 slots
+that year, 0/10 in every one of 2022-2025; why 2021 specifically remains open). Adding current
+positional scarcity, analytical future scarcity, or a literal opponent-behavior replay each made
+the RB=0 rate *worse* (32%, 32%, and 36% respectively) than plain roster-fit alone (20%) — a
+real, tested, negative result, not smoothed over: `positional_scarcity()`, the exact real
+production function required by `PRODUCT_SPEC.md` and already used by the waiver engine, rates
+QB as the most "scarce" position in real 2021/2023 data and RB as one of the least, reinforcing
+the QB-stacking side of the same pathology rather than fixing the RB side. Only an explicit,
+points-denominated opportunity-cost term (Experiment F) both cut the RB=0 rate to 4% and
+improved mean starter points above the current production engine (1789.1 vs. 1688.2 pooled,
+winning 4 of 5 real seasons) — despite inheriting the same QB-favoring scarcity distortion every
+other tier from C onward carries, making its improvement the more notable for overcoming that
+headwind rather than avoiding it.
 
 **No further fix was implemented in this phase, per its own explicit instruction.** The
 recommendation is a moderate-complexity addition (an explicit per-position opportunity-cost
-term, priced continuously, using an opponent-behavior replay as its input) — not a
-rebuild, not a hardcoded positional cap, not a full Monte Carlo lookahead — with the honest
+term, priced continuously, using an opponent-behavior replay as its input, deliberately *not*
+layering in `positional_scarcity` given the finding above) — not a rebuild, not a hardcoded
+positional cap, not a full Monte Carlo lookahead — with the honest
 caveat that its sufficiency at full scale, and in combination with the already-landed
 saturation-penalty fix, remains `UNKNOWN` and must be measured before being claimed as solved.

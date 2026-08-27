@@ -732,10 +732,14 @@ they are effectively decided within the team's first 1-2 picks — a real, viabl
 top-5 candidate at pick #1 in both cases and falls out of consideration entirely by the team's
 second turn, not a slow multi-round feedback loop. 90 real homogeneous-league drafts under three
 independent non-Alpha strategies never produced a zero-RB roster once, validating the simulator
-and pointing conclusively at the draft engine's decision logic specifically. A controlled
-ablation found that positional scarcity, analytical future scarcity, and even a hard
-roster-feasibility cap did not, alone, recover the neglected position — only an explicit,
-continuously-priced opportunity-cost term did, and only partially. No fix was implemented in
-this phase; see `docs/DRAFT_ENGINE_FORENSIC_AUDIT.md`, `docs/DRAFT_CONTROLLED_EXPERIMENTS.md`,
-and `docs/DRAFT_ENGINE_REDESIGN_RECOMMENDATION.md` for the full account and the proposed
+and pointing conclusively at the draft engine's decision logic specifically. A full-scale
+controlled ablation (400 real drafts) confirmed the pattern generalizes but is season-concentrated
+(the real production engine zeros RB in 10/10 slots in 2021, 0/10 in every other season) and
+found something genuinely counter-intuitive: adding positional scarcity or analytical future
+scarcity made the failure rate *worse* (32% vs. 20% with neither), because `positional_scarcity()`
+rates QB, not RB, as the scarce position in this league's real data. Only an explicit,
+continuously-priced opportunity-cost term reduced the failure rate substantially (to 4%) and beat
+the current production engine on mean starter points. No fix was implemented in this phase; see
+`docs/DRAFT_ENGINE_FORENSIC_AUDIT.md`, `docs/DRAFT_CONTROLLED_EXPERIMENTS.md`, and
+`docs/DRAFT_ENGINE_REDESIGN_RECOMMENDATION.md` for the full account and the proposed
 (unimplemented) next step.

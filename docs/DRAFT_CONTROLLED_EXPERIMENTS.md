@@ -111,14 +111,66 @@ analytically, does *not* recover RB here, and in fact stacks QB even harder (11)
 production engine (H, 6) — a genuinely counter-intuitive result addressed below rather than
 smoothed over.
 
-### Full grid (5 seasons × 10 slots × 8 tiers, 400 drafts)
+### Full grid (5 seasons × 10 slots × 8 tiers, 400 real drafts)
 
-*Data collection for the full 400-draft grid is still running in the background as of this
-commit (tier H alone costs ~37s/draft against the real database). This section will be updated
-with the complete aggregate table, and the §6 "UNKNOWN: does the RB-specific pattern
-generalize" question in `docs/DRAFT_ENGINE_FORENSIC_AUDIT.md` resolved one way or the other with
-real data, in a follow-up commit — not asserted from the single-slot deep dive above, which is
-illustrative of mechanism, not a claim about prevalence.*
+Raw data: `reports/draft_forensics_experiment_results.json`. Pooled across all 5 seasons and 10
+slots (n=50 per tier):
+
+| Tier | Mean total pts | Mean starter pts | RB=0 rate | QB=0 | TE=0 | Avg. concentration index |
+|---|---|---|---|---|---|---|
+| A (raw value) | 2760.6 | 1433.6 | **40/50 (80%)** | 0/50 | 20/50 | 0.468 |
+| B (+ current fit) | 2791.7 | 1733.7 | 10/50 (20%) | 5/50 | 0/50 | 0.368 |
+| C (+ current scarcity) | 2739.4 | 1610.1 | 16/50 (32%) | 5/50 | 0/50 | 0.385 |
+| D (+ future scarcity, analytical) | 2756.3 | 1599.5 | 16/50 (32%) | 4/50 | 0/50 | 0.393 |
+| E (+ feasibility cap) | 2723.4 | 1654.5 | 7/50 (14%) | 4/50 | 0/50 | 0.344 |
+| F (+ opportunity cost) | 2733.8 | **1789.1** | **2/50 (4%)** | 0/50 | 0/50 | 0.320 |
+| G (+ opponent replay) | 2837.8 | 1682.7 | 18/50 (36%) | 4/50 | 3/50 | 0.403 |
+| H (real production engine) | 2606.6 | 1688.2 | 10/50 (20%) | 0/50 | 0/50 | 0.345 |
+
+**This resolves the forensic audit's open "does the RB-specific pattern generalize" question,
+precisely rather than by extrapolating from the single traced slot: yes, but concentrated, not
+uniform.** The real production engine (H) zeros RB in exactly **10 of 10 draft slots in the real
+2021 season and 0 of 10 in every one of 2022, 2023, 2024, and 2025.** This is not a rare,
+single-slot fluke (§4's traced example was one of ten identically-failing 2021 slots) nor a
+constant, every-season failure — it is a real, season-specific pathology, concentrated the year
+the underlying real RB market apparently ran hottest and fastest relative to Alpha's VORP
+valuations that year specifically. *Why 2021 specifically* is not established here (`UNKNOWN`,
+carried into the forensic audit) — investigating the real 2021 RB market/VORP data in detail was
+out of this phase's scope once the mechanism (not the trigger season) was the diagnostic target.
+
+**F is confirmed, at full scale, as the standout mechanism** — its 4% RB=0 rate is a fifth of
+the production engine's own 20%, and its mean starter points (1789.1) is the *highest of any
+tier including H* (1688.2), beating H in 4 of the 5 real seasons (all but 2023, where H's
+1813.3 edges F's 1728.8). This is not a uniform win — reported as found, not smoothed into "F is
+strictly better."
+
+**A genuinely important, real, counter-intuitive finding that changes what should be
+recommended: naively adding `positional_scarcity()` makes things *worse*, not better.**
+Tiers C, D, E, F, and G all inherit the same scarcity-adjusted base score (`vorp × fit_mult ×
+(0.7 + 0.6×scarcity_norm[pos])`) before adding their own further term — and C alone, with
+nothing else changed from B, raises the RB=0 rate from 20% to 32%. Querying the real
+`positional_scarcity()` values directly explains why: in real 2021 and 2023 data, **QB scores
+the *highest* scarcity of any position (`scarcity_norm=1.0`) and RB one of the *lowest*
+(0.16–0.26)**:
+
+| Season | RB scarcity (raw / normalized) | WR | QB | TE |
+|---|---|---|---|---|
+| 2021 | 40.2 / 0.26 | 45.6 / 0.45 | 60.7 / **1.00** | 33.2 / 0.00 |
+| 2023 | 36.3 / 0.16 | 62.1 / 0.49 | 102.2 / **1.00** | 23.5 / 0.00 |
+| 2025 | 45.2 / 0.62 | 60.4 / 1.00 | 57.9 / 0.94 | 20.7 / 0.00 |
+
+`positional_scarcity()`'s real definition — mean starter value minus replacement level — measures
+*value concentration at the top of a position*, not the popular fantasy-strategy sense of "RB
+scarcity" (touch concentration and injury risk making a comparable *replacement* hard to find
+quickly mid-draft). A 2-dedicated-QB-slot league with no QB-eligible FLEX slot has a small,
+elite top tier scoring far above a low replacement floor, which this metric reads as "QB is the
+scarce position" — precisely reinforcing the QB-stacking side of the same pathology this whole
+investigation started from. **Adding this specific signal, in its current form, to the draft
+engine would make the documented QB-stacking problem worse, not better — a real, tested finding,
+not an assumption, and a direct reason the redesign recommendation does not propose adding it.**
+F's improvement is therefore more impressive than it first appears: it overcomes this same
+QB-favoring headwind (F inherits the identical scarcity multiplier C does) through its
+additive opportunity-cost term alone.
 
 ## Why did G (opponent simulation) not outperform F (explicit opportunity cost)?
 
@@ -146,13 +198,22 @@ roster construction are demonstrated as genuinely separable outcomes, not merely
 
 ## Conclusions
 
-1. The simulator is valid (baseline sanity checks, RB never zero in 90 trials).
+1. The simulator is valid (baseline sanity checks, RB never zero in 90 trials under 3
+   independent non-Alpha strategies).
 2. The player projection model is not the cause (`docs/ALPHA_VS_BASELINES_EVALUATION.md` §1;
    the pick-1 trace shows the RB was correctly valued and simply outscored by the formula, not
    mis-projected).
-3. Layering in current scarcity (C), analytical future scarcity (D), or a hard feasibility cap (E)
-   alone — in the traced pathological example — does not recover the neglected position. Explicit,
-   points-denominated opportunity cost (F) is the first mechanism that does, even if only
-   partially.
-4. This is a single-slot deep dive; see the full grid below for whether the pattern holds broadly
-   or is concentrated in specific seasons/slots.
+3. At full scale (400 real drafts, all 5 seasons, all 10 slots), the real production engine (H)
+   zeros RB in exactly 10 of 10 slots in 2021 and 0 of 10 in every other season — a real,
+   season-concentrated pathology, not a single-slot fluke or a uniform every-season failure.
+4. Layering in current scarcity (C), analytical future scarcity (D), or a hard feasibility cap
+   (E) does not recover the neglected position at scale either — C, D, and G all made the RB=0
+   rate *worse* than plain roster-fit (B) alone (32%, 32%, 36% vs. 20%), because
+   `positional_scarcity()`, as currently defined, rates QB as more "scarce" than RB in this
+   league's real data and reinforces the QB-stacking side of the same pathology rather than
+   fixing the RB side. This is a genuine, tested, counter-intuitive finding, not smoothed over.
+5. Explicit, points-denominated opportunity cost (F) is the only tier that both reduces RB=0
+   substantially (4% vs. H's 20%) and improves mean starter points above the real production
+   engine (1789.1 vs. 1688.2, beating H in 4 of 5 seasons) — while still inheriting the same
+   QB-favoring scarcity multiplier every other tier from C onward carries, making its
+   improvement the more notable for having overcome that headwind rather than avoided it.
