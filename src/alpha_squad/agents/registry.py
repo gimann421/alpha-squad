@@ -153,6 +153,7 @@ def run_fantasy_strategy(con: duckdb.DuckDBPyConnection, settings: Settings, tas
     from alpha_squad.league.draft import recommend_draft_pick
     from alpha_squad.league.trade import recommend_dynasty_trade
     from alpha_squad.league.waiver import recommend_waiver_pickup
+    from alpha_squad.market.edge import DEFAULT_ECR_TYPE
 
     p = task.params
     league = resolve_league(p.get("league", DEFAULT_LEAGUE_ID), con=con, settings=settings)
@@ -166,7 +167,8 @@ def run_fantasy_strategy(con: duckdb.DuckDBPyConnection, settings: Settings, tas
                 p.get("roster_positions", []),
                 set(p["available_player_ids"]),
                 p.get("next_pick_overall"),
-                p.get("ecr_type", "rsf"),
+                # None -> resolved from the league context (D56).
+                p.get("ecr_type"),
                 p.get("top_n", 5),
             )
             findings = [f"recommended {rec.recommendation}"] + rec.reasons
@@ -179,7 +181,7 @@ def run_fantasy_strategy(con: duckdb.DuckDBPyConnection, settings: Settings, tas
             confidence = rec.meaningful_role_probability
         elif decision_type == "dynasty_trade":
             rec = recommend_dynasty_trade(
-                con, p["player_id"], p["season"], p.get("ecr_type", "rsf")
+                con, p["player_id"], p["season"], p.get("ecr_type", DEFAULT_ECR_TYPE)
             )
             findings = [f"action {rec.action}"] + rec.reasons
             confidence = None

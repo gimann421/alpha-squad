@@ -120,3 +120,69 @@ def test_init_db_on_a_completely_fresh_database_still_works(pre_d38_con):
         assert "college_usage_overall" in cols
     finally:
         fresh.close()
+
+
+PRE_D56_MARKET_SNAPSHOT = """
+CREATE TABLE market_snapshot (
+    player_id VARCHAR NOT NULL,
+    scrape_date DATE NOT NULL,
+    ecr_type VARCHAR NOT NULL,
+    position VARCHAR,
+    ecr_rank DOUBLE NOT NULL,
+    ecr_best DOUBLE,
+    ecr_worst DOUBLE,
+    source_snapshot_id VARCHAR,
+    source VARCHAR NOT NULL DEFAULT 'dynastyprocess',
+    PRIMARY KEY (player_id, scrape_date, ecr_type, source)
+)
+"""
+
+
+@pytest.fixture
+def pre_d56_con():
+    """A database at the D38 schema: it has `source` but not `page_type`."""
+    con = duckdb.connect(":memory:")
+    con.execute(PRE_D38_ROOKIE_FEATURES)
+    con.execute(PRE_D56_MARKET_SNAPSHOT)
+    yield con
+    con.close()
+
+
+def test_init_db_adds_page_type_to_a_d38_era_market_snapshot(pre_d56_con):
+    init_db(pre_d56_con)
+    cols = {r[0] for r in pre_d56_con.execute("DESCRIBE market_snapshot").fetchall()}
+    assert "page_type" in cols
+
+
+def test_page_type_rebuild_preserves_rows_without_inventing_a_page(pre_d56_con):
+    """Which FantasyPros page a pre-D56 row came from is genuinely unrecorded. The migration
+    must carry the row across rather than drop it, and must leave page_type empty rather than
+    guess -- a guessed page is fabricated provenance."""
+    pre_d56_con.execute(
+        "INSERT INTO market_snapshot (player_id, scrape_date, ecr_type, position, ecr_rank) "
+        "VALUES ('p1', DATE '2025-08-01', 'ro', 'WR', 12.0)"
+    )
+    init_db(pre_d56_con)
+    rows = pre_d56_con.execute(
+        "SELECT player_id, ecr_type, ecr_rank, source, page_type FROM market_snapshot"
+    ).fetchall()
+    assert rows == [("p1", "ro", 12.0, "dynastyprocess", "")]
+
+
+def test_migrated_market_snapshot_keeps_both_pages_of_one_ecr_type(pre_d56_con):
+    """THE bug D56 fixes. DynastyProcess labels several independently-ranked FantasyPros pages
+    with the same ecr_type: 'ro' carries both the PPR draft board (`redraft-overall`) and a
+    separate 1..N IDP ranking (`redraft-idp`). Under the pre-D56 key these two rows for the
+    same player and date collide, so one silently overwrites the other."""
+    init_db(pre_d56_con)
+    for page_type, rank in (("redraft-overall", 12.0), ("redraft-idp", 3.0)):
+        pre_d56_con.execute(
+            "INSERT INTO market_snapshot "
+            "(player_id, scrape_date, ecr_type, position, ecr_rank, page_type) "
+            "VALUES ('p1', DATE '2025-08-01', 'ro', 'WR', ?, ?)",
+            [rank, page_type],
+        )
+    rows = dict(
+        pre_d56_con.execute("SELECT page_type, ecr_rank FROM market_snapshot").fetchall()
+    )
+    assert rows == {"redraft-overall": 12.0, "redraft-idp": 3.0}

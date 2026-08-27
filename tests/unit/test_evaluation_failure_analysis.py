@@ -6,6 +6,8 @@ import duckdb
 import pytest
 
 from alpha_squad.evaluation.failure_analysis import worst_edge_misses, worst_rookie_misses
+from alpha_squad.market.edge import DEFAULT_ECR_TYPE
+from alpha_squad.market.series import series_for_ecr_type
 from alpha_squad.storage.db import init_db
 
 MIN_CURVE_TRAINING_ROWS = 10
@@ -19,13 +21,14 @@ def con():
     connection.close()
 
 
-def _seed_curve_training(con, season_before, ecr_type="rsf"):
+def _seed_curve_training(con, season_before, ecr_type=DEFAULT_ECR_TYPE):
     for i in range(MIN_CURVE_TRAINING_ROWS + 5):
         player_id = f"train_{i}"
         con.execute(
-            "INSERT INTO market_snapshot (player_id, scrape_date, ecr_type, position, ecr_rank) "
-            "VALUES (?, ?, ?, 'WR', ?)",
-            [player_id, f"{season_before}-08-01", ecr_type, float(i + 1)],
+            "INSERT INTO market_snapshot (player_id, scrape_date, ecr_type, position, ecr_rank, page_type) "
+            "VALUES (?, ?, ?, 'WR', ?, ?)",
+            [player_id, f"{season_before}-08-01", ecr_type, float(i + 1),
+             series_for_ecr_type(ecr_type).page_type],
         )
         con.execute(
             "INSERT INTO player_season_stats (player_id, season, position, games_played, "
@@ -43,7 +46,7 @@ def _seed_edge_row(
     rank_edge,
     market_rank,
     actual_points,
-    ecr_type="rsf",
+    ecr_type=DEFAULT_ECR_TYPE,
 ):
     con.execute(
         "INSERT INTO players (player_id, gsis_id, display_name, position) VALUES (?, ?, ?, 'WR')",

@@ -7,6 +7,8 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
+from alpha_squad.market.edge import DEFAULT_ECR_TYPE
+
 
 class PlayerSummary(BaseModel):
     player_id: str
@@ -258,7 +260,7 @@ class DraftRequest(BaseModel):
     # D55: enables the positional opportunity-cost term. Optional -- when absent the
     # engine simply omits that term rather than guessing where the draft is.
     current_pick_overall: int | None = None
-    ecr_type: str = "rsf"
+    ecr_type: str = DEFAULT_ECR_TYPE
     top_n: int = 5
 
 
@@ -273,7 +275,7 @@ class WaiverRequest(BaseModel):
 class TradeRequest(BaseModel):
     season: int
     player_id: str
-    ecr_type: str = "rsf"
+    ecr_type: str = DEFAULT_ECR_TYPE
 
 
 class PickAssetRequest(BaseModel):
@@ -291,7 +293,7 @@ class TradePackageRequest(BaseModel):
     season: int
     side_a: TradePackageSideRequest
     side_b: TradePackageSideRequest
-    ecr_type: str = "rsf"
+    ecr_type: str = DEFAULT_ECR_TYPE
 
 
 class TradePackageResponse(BaseModel):

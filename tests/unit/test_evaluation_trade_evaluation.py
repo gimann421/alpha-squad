@@ -6,6 +6,7 @@ import duckdb
 import pytest
 
 from alpha_squad.evaluation.trade_evaluation import build_trade_evidence_summary
+from alpha_squad.market.edge import DEFAULT_ECR_TYPE
 from alpha_squad.storage.db import init_db
 
 
@@ -18,7 +19,7 @@ def con():
 
 
 def _seed_validation_row(
-    con, season, action, n, mean_actual, mean_implied, mean_outperf, ecr_type="rsf"
+    con, season, action, n, mean_actual, mean_implied, mean_outperf, ecr_type=DEFAULT_ECR_TYPE
 ):
     con.execute(
         """
@@ -48,7 +49,7 @@ class TestTradeEvidenceSummary:
         assert evidence[0]["season"] == 2024
 
     def test_respects_ecr_type_filter(self, con):
-        _seed_validation_row(con, 2023, "BUY", 10, 200.0, 150.0, 50.0, ecr_type="rsf")
+        _seed_validation_row(con, 2023, "BUY", 10, 200.0, 150.0, 50.0, ecr_type=DEFAULT_ECR_TYPE)
         _seed_validation_row(con, 2023, "BUY", 10, 200.0, 150.0, 50.0, ecr_type="dsf")
         evidence = build_trade_evidence_summary(con, 2023, 2023, ecr_type="dsf")
         assert len(evidence) == 1

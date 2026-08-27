@@ -39,13 +39,14 @@ def build_market_snapshot(
 
     rows = con.execute(
         f"""
-        INSERT INTO market_snapshot (player_id, scrape_date, ecr_type, position, ecr_rank, ecr_best, ecr_worst, source_snapshot_id)
+        INSERT INTO market_snapshot (player_id, scrape_date, ecr_type, position, ecr_rank, ecr_best, ecr_worst, source_snapshot_id, page_type)
         SELECT
-            m.player_id, CAST(e.scrape_date AS DATE), e.ecr_type, e.pos, e.ecr, e.best, e.worst, ?
+            m.player_id, CAST(e.scrape_date AS DATE), e.ecr_type, e.pos, e.ecr, e.best, e.worst, ?,
+            COALESCE(e.page_type, '')
         FROM {src} e
         JOIN player_id_map m ON m.id_type = 'fantasypros_id' AND m.id_value = CAST(e.id AS VARCHAR)
         WHERE e.ecr_type = ANY(?) AND e.ecr IS NOT NULL
-        ON CONFLICT (player_id, scrape_date, ecr_type, source) DO UPDATE SET
+        ON CONFLICT (player_id, scrape_date, ecr_type, page_type, source) DO UPDATE SET
             position = excluded.position,
             ecr_rank = excluded.ecr_rank,
             ecr_best = excluded.ecr_best,
@@ -55,6 +56,21 @@ def build_market_snapshot(
         """,
         [snapshot_id, list(ecr_types)],
     ).fetchall()
+
+    # Retire rows this rebuild has just superseded. A pre-D56 database carries its existing
+    # DynastyProcess rows forward with page_type '' (the migration refuses to invent a page it
+    # cannot know -- see storage/schema.py), and the widened PRIMARY KEY means those un-labelled
+    # rows no longer collide with the re-ingested, properly-labelled ones: without this they
+    # would sit alongside them as silent duplicates and every unscoped read would double-count.
+    # Scoped to this source and to the ecr_types actually just rebuilt, so it can never touch
+    # `fantasypros_live` rows (D38: a today-only capture with no lookback -- genuinely
+    # irreplaceable, never reproducible by re-running this).
+    if rows:
+        con.execute(
+            "DELETE FROM market_snapshot "
+            "WHERE source = 'dynastyprocess' AND page_type = '' AND ecr_type = ANY(?)",
+            [list(ecr_types)],
+        )
     return len(rows)
 
 
@@ -64,6 +80,11 @@ def build_market_snapshot(
 # 'draft_overall' rather than something implying ROS, so this table never claims data this
 # key's tier doesn't actually provide.
 LIVE_ECR_TYPE = "draft_overall"
+
+# The live API returns one ranking list, not DynastyProcess's many-pages-per-ecr_type mirror,
+# so its `page_type` (D56) is a single constant naming what that list actually is. Recorded
+# explicitly rather than left '' so this series is addressable the same way as every other.
+LIVE_PAGE_TYPE = "live-draft-overall"
 
 
 def build_live_fantasypros_snapshot(
@@ -96,13 +117,14 @@ def build_live_fantasypros_snapshot(
         rows = con.execute(
             """
             INSERT INTO market_snapshot
-                (player_id, scrape_date, ecr_type, position, ecr_rank, ecr_best, ecr_worst, source_snapshot_id, source)
+                (player_id, scrape_date, ecr_type, position, ecr_rank, ecr_best, ecr_worst, source_snapshot_id, source, page_type)
             SELECT
-                m.player_id, d.scrape_date, ?, d.position, d.ecr_rank, d.ecr_best, d.ecr_worst, ?, 'fantasypros_live'
+                m.player_id, d.scrape_date, ?, d.position, d.ecr_rank, d.ecr_best, d.ecr_worst, ?, 'fantasypros_live',
+                ?
             FROM fp_live_df d
             JOIN player_id_map m ON m.id_type = 'fantasypros_id' AND m.id_value = d.fp_player_id
             WHERE d.ecr_rank IS NOT NULL
-            ON CONFLICT (player_id, scrape_date, ecr_type, source) DO UPDATE SET
+            ON CONFLICT (player_id, scrape_date, ecr_type, page_type, source) DO UPDATE SET
                 position = excluded.position,
                 ecr_rank = excluded.ecr_rank,
                 ecr_best = excluded.ecr_best,
@@ -110,7 +132,7 @@ def build_live_fantasypros_snapshot(
                 source_snapshot_id = excluded.source_snapshot_id
             RETURNING player_id
             """,
-            [LIVE_ECR_TYPE, snap.snapshot_id],
+            [LIVE_ECR_TYPE, snap.snapshot_id, LIVE_PAGE_TYPE],
         ).fetchall()
     finally:
         con.unregister("fp_live_df")

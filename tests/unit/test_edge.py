@@ -22,6 +22,7 @@ from alpha_squad.market.edge import (
     store_edges,
     write_edge_backtest_report,
 )
+from alpha_squad.market.series import series_for_ecr_type
 from alpha_squad.models.uncertainty.run import MODEL_VERSION as UNCERTAINTY_MODEL_VERSION
 from alpha_squad.storage.db import init_db
 
@@ -127,9 +128,10 @@ def con():
 def _seed_market(con, ecr_type, season, month, rows):
     for player_id, position, ecr_rank in rows:
         con.execute(
-            "INSERT INTO market_snapshot (player_id, scrape_date, ecr_type, position, ecr_rank) "
-            "VALUES (?, ?, ?, ?, ?)",
-            [player_id, f"{season}-{month:02d}-01", ecr_type, position, ecr_rank],
+            "INSERT INTO market_snapshot (player_id, scrape_date, ecr_type, position, ecr_rank, page_type) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            [player_id, f"{season}-{month:02d}-01", ecr_type, position, ecr_rank,
+             series_for_ecr_type(ecr_type).page_type],
         )
 
 

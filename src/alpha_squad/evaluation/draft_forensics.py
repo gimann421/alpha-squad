@@ -50,6 +50,7 @@ from alpha_squad.league.replacement import (
 )
 from alpha_squad.league.roster import roster_fit_multiplier, roster_need
 from alpha_squad.market.edge import _preseason_overall_market
+from alpha_squad.market.series import resolve_market_series
 from alpha_squad.models.uncertainty.run import MODEL_VERSION as UNCERTAINTY_MODEL_VERSION
 
 Tier = Literal["A", "B", "C", "D", "E", "F", "G", "H", "P0", "P1", "P1b", "P1c", "P2", "P3"]
@@ -143,8 +144,14 @@ def _normalize(values: dict[str, float]) -> dict[str, float]:
 
 
 def load_season_static(
-    con: duckdb.DuckDBPyConnection, league: LeagueContext, season: int, ecr_type: str = "rsf"
+    con: duckdb.DuckDBPyConnection,
+    league: LeagueContext,
+    season: int,
+    ecr_type: str | None = None,
 ) -> SeasonStatic:
+    # D56: the board has to match the league format the experiment is run against.
+    if ecr_type is None:
+        ecr_type = resolve_market_series(league).ecr_type
     projections, positions = load_season_projections(con, season)
     vorp = marginal_value_over_replacement(league, projections, positions)
     levels = replacement_level(league, projections, positions)

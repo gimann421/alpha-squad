@@ -37,6 +37,7 @@ from alpha_squad.league.draft import recommend_draft_pick
 from alpha_squad.league.opportunity_cost import best_by_market_rank
 from alpha_squad.league.replacement import compute_league_starters, load_season_projections
 from alpha_squad.market.edge import _preseason_overall_market
+from alpha_squad.market.series import resolve_market_series
 from alpha_squad.models.baselines.simple import previous_year_baseline
 from alpha_squad.sources.base import utcnow
 
@@ -123,7 +124,7 @@ def simulate_draft(
     strategy: str,
     draft_slot: int,
     *,
-    ecr_type: str = "rsf",
+    ecr_type: str | None = None,
 ) -> DraftSimResult:
     """Simulate one full snake draft for `season`, with `draft_slot` (1..league.teams) drafting
     by `strategy` and every other slot drafting by real market consensus. Returns the
@@ -132,6 +133,11 @@ def simulate_draft(
         raise ValueError(f"unknown draft strategy '{strategy}'")
     if not (1 <= draft_slot <= league.teams):
         raise ValueError(f"draft_slot must be in [1, {league.teams}], got {draft_slot}")
+    # The consensus opponents ARE the benchmark, so the board they draft from has to be the
+    # one that matches this league's format (D56). Resolved from the league rather than fixed:
+    # scoring a 1-QB league against the superflex board measures a different game.
+    if ecr_type is None:
+        ecr_type = resolve_market_series(league).ecr_type
 
     projections, positions = load_season_projections(con, season)
     available = set(projections)
@@ -227,7 +233,7 @@ def run_draft_simulation(
     seasons: list[int],
     strategies: list[str] | None = None,
     *,
-    ecr_type: str = "rsf",
+    ecr_type: str | None = None,
 ) -> list[DraftSimResult]:
     """Every (season, strategy, draft_slot) combination -- every real draft slot drafts under
     every strategy once per season, so no single lucky/unlucky slot drives a strategy's

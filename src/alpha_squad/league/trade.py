@@ -24,6 +24,8 @@ from dataclasses import dataclass, field
 
 import duckdb
 
+from alpha_squad.market.edge import DEFAULT_ECR_TYPE
+
 # Position-specific age curve breakpoints, fantasy-analytics convention (peak, decline
 # start, cliff). A documented heuristic (D25), not fit from data.
 AGE_CURVE_PARAMS: dict[str, dict[str, int]] = {
@@ -60,7 +62,7 @@ class TradeRecommendation:
 
 
 def recommend_dynasty_trade(
-    con: duckdb.DuckDBPyConnection, player_id: str, season: int, ecr_type: str = "rsf"
+    con: duckdb.DuckDBPyConnection, player_id: str, season: int, ecr_type: str = DEFAULT_ECR_TYPE
 ) -> TradeRecommendation:
     dv_row = con.execute(
         "SELECT value_2qb, age FROM dynasty_values WHERE player_id = ?", [player_id]
@@ -196,7 +198,7 @@ def evaluate_trade_package(
     side_b: TradePackageSide,
     season: int,
     teams: int,
-    ecr_type: str = "rsf",
+    ecr_type: str = DEFAULT_ECR_TYPE,
     *,
     even_threshold: float = 0.10,
 ) -> TradePackageValuation:

@@ -178,8 +178,9 @@ def _seed(con, player_id, season, position, points, confidence=0.8, ecr_rank=1.0
         ],
     )
     con.execute(
-        "INSERT INTO market_snapshot (player_id, scrape_date, ecr_type, position, ecr_rank) "
-        "VALUES (?, ?, 'rsf', ?, ?)",
+        "INSERT INTO market_snapshot (player_id, scrape_date, ecr_type, position, ecr_rank, page_type) "
+        # _league() is a 1-QB redraft league, which resolves to the 'ro' board (D56).
+        "VALUES (?, ?, 'ro', ?, ?, 'redraft-overall')",
         [player_id, f"{season}-08-01", position, ecr_rank],
     )
 

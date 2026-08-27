@@ -56,8 +56,8 @@ def _seed_player(
     )
     if ecr_rank is not None:
         con.execute(
-            "INSERT INTO market_snapshot (player_id, scrape_date, ecr_type, position, ecr_rank) "
-            "VALUES (?, ?, 'rsf', ?, ?)",
+            "INSERT INTO market_snapshot (player_id, scrape_date, ecr_type, position, ecr_rank, page_type) "
+            "VALUES (?, ?, 'ro', ?, ?, 'redraft-overall')",
             [player_id, f"{season}-08-01", position, ecr_rank],
         )
     if prior_year_points is not None:

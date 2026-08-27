@@ -12,6 +12,8 @@ from __future__ import annotations
 import json
 from dataclasses import asdict, dataclass, field
 
+from alpha_squad.market.edge import DEFAULT_ECR_TYPE
+
 EVALUATION_FRAMEWORK_VERSION = "2026.1"
 
 # The real, verified data windows this phase's analyses can honestly claim to cover --
@@ -34,7 +36,7 @@ class EvaluationConfig:
     be misleading provenance."""
 
     framework_version: str = EVALUATION_FRAMEWORK_VERSION
-    ecr_type: str = "rsf"
+    ecr_type: str = DEFAULT_ECR_TYPE
     edge_model_version: str | None = None
     uncertainty_model_version: str | None = None
     season_start: int | None = None

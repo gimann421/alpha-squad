@@ -33,6 +33,7 @@ from alpha_squad.league.roster import (
     roster_fit_multiplier,
     roster_need,
 )
+from alpha_squad.market.series import resolve_market_series
 from alpha_squad.models.uncertainty.run import MODEL_VERSION as UNCERTAINTY_MODEL_VERSION
 
 
@@ -112,10 +113,17 @@ def recommend_draft_pick(
     roster_positions: list[str],
     available_player_ids: set[str],
     next_pick_overall: int | None = None,
-    ecr_type: str = "rsf",
+    ecr_type: str | None = None,
     top_n: int = 5,
     current_pick_overall: int | None = None,
 ) -> DraftRecommendation:
+    # Which consensus board this league's market signals should come from is a property of
+    # the league, not a constant (D56): a 1-QB league and a superflex league price QBs very
+    # differently, and reading the wrong board reads the wrong market. An explicit ecr_type
+    # still wins, so a caller can compare against a specific series deliberately.
+    if ecr_type is None:
+        ecr_type = resolve_market_series(league).ecr_type
+
     projections, positions = load_season_projections(con, season)
     vorp = marginal_value_over_replacement(league, projections, positions)
     needs = roster_need(league, roster_positions)

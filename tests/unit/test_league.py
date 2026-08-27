@@ -349,8 +349,8 @@ class TestNextPickSurvivalProbability:
 
     def _seed(self, con, player_id, best, worst, scrape_date="2025-08-01"):
         con.execute(
-            "INSERT INTO market_snapshot (player_id, scrape_date, ecr_type, position, ecr_rank, ecr_best, ecr_worst) "
-            "VALUES (?, ?, 'rsf', 'WR', ?, ?, ?)",
+            "INSERT INTO market_snapshot (player_id, scrape_date, ecr_type, position, ecr_rank, ecr_best, ecr_worst, page_type) "
+            "VALUES (?, ?, 'rsf', 'WR', ?, ?, ?, 'redraft-op')",
             [player_id, scrape_date, (best + worst) / 2, best, worst],
         )
 
@@ -601,7 +601,7 @@ class TestRecommendDynastyTrade:
                 (edge_id, player_id, season, position, ecr_type, model_version, model_rank,
                  market_rank, rank_edge, projected_points_edge, evidence_score, confidence,
                  action, reasons_json, built_at)
-            VALUES ('e1', 'p1', 2025, 'WR', 'rsf', 'edge_v1', 5, 40, 35, 50.0, 0.5, 0.8,
+            VALUES ('e1', 'p1', 2025, 'WR', 'ro', 'edge_v1', 5, 40, 35, 50.0, 0.5, 0.8,
                     'BUY', '["real edge reason"]', current_timestamp)
             """
         )

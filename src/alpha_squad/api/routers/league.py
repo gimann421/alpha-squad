@@ -53,6 +53,7 @@ from alpha_squad.league.trade import (
     recommend_dynasty_trade,
 )
 from alpha_squad.league.waiver import rank_waiver_targets, recommend_waiver_pickup
+from alpha_squad.market.edge import DEFAULT_ECR_TYPE
 
 router = APIRouter(prefix="/league", tags=["league"])
 
@@ -147,7 +148,7 @@ def get_my_team(
     league_id: str,
     season: int = Query(...),
     roster_id: int = Query(..., description="Real team id, from GET /league/{id}/teams"),
-    ecr_type: str = Query("rsf"),
+    ecr_type: str = Query(DEFAULT_ECR_TYPE),
     con: duckdb.DuckDBPyConnection = Depends(get_db),
 ) -> MyTeamResponse:
     """ "What's wrong with my roster?" -- every rostered player joined with real projection/
@@ -198,7 +199,7 @@ def get_drop_candidates(
     season: int = Query(...),
     roster_id: int = Query(..., description="Real team id, from GET /league/{id}/teams"),
     top_n: int = Query(5, le=20),
-    ecr_type: str = Query("rsf"),
+    ecr_type: str = Query(DEFAULT_ECR_TYPE),
     con: duckdb.DuckDBPyConnection = Depends(get_db),
 ) -> list[DropCandidateRow]:
     """ "Who can I drop?" -- the worst real bench players by marginal value over replacement
@@ -228,7 +229,7 @@ def get_action_center(
     roster_id: int = Query(..., description="Real team id, from GET /league/{id}/teams"),
     add_top_n: int = Query(10, le=50),
     drop_top_n: int = Query(5, le=20),
-    ecr_type: str = Query("rsf"),
+    ecr_type: str = Query(DEFAULT_ECR_TYPE),
     con: duckdb.DuckDBPyConnection = Depends(get_db),
 ) -> ActionCenterResponse:
     """ "What should I pay attention to right now?" -- pure aggregation of the waiver-target,

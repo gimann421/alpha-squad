@@ -18,6 +18,8 @@ from alpha_squad.evaluation.market_inefficiency import (
     build_market_inefficiency_tiers,
     write_market_inefficiency_report,
 )
+from alpha_squad.market.edge import DEFAULT_ECR_TYPE
+from alpha_squad.market.series import series_for_ecr_type
 from alpha_squad.storage.db import init_db
 
 
@@ -67,7 +69,7 @@ def _seed_edge_row(
     market_rank,
     confidence,
     actual_points,
-    ecr_type="rsf",
+    ecr_type=DEFAULT_ECR_TYPE,
 ):
     con.execute(
         """
@@ -96,7 +98,7 @@ def _seed_edge_row(
     )
 
 
-def _seed_market_curve_training(con, season_before, ecr_type="rsf"):
+def _seed_market_curve_training(con, season_before, ecr_type=DEFAULT_ECR_TYPE):
     """A minimal training set so `_market_implied_points_curve` (built on 'ro'-shaped
     preseason rank->points history) has enough rows to fit -- real seasons strictly before
     the target season, matching the module's own leakage-safe pattern."""
@@ -105,9 +107,10 @@ def _seed_market_curve_training(con, season_before, ecr_type="rsf"):
         rank = float(i + 1)
         points = 300.0 - i * 10
         con.execute(
-            "INSERT INTO market_snapshot (player_id, scrape_date, ecr_type, position, ecr_rank) "
-            "VALUES (?, ?, ?, 'WR', ?)",
-            [player_id, f"{season_before}-08-01", ecr_type, rank],
+            "INSERT INTO market_snapshot (player_id, scrape_date, ecr_type, position, ecr_rank, page_type) "
+            "VALUES (?, ?, ?, 'WR', ?, ?)",
+            [player_id, f"{season_before}-08-01", ecr_type, rank,
+             series_for_ecr_type(ecr_type).page_type],
         )
         con.execute(
             "INSERT INTO player_season_stats (player_id, season, position, games_played, "

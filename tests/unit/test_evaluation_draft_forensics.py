@@ -60,13 +60,14 @@ def _seed_league_season(con, season, n_per_position=6, with_dispersion=True):
             if with_dispersion:
                 con.execute(
                     "INSERT INTO market_snapshot (player_id, scrape_date, ecr_type, position, "
-                    "ecr_rank, ecr_best, ecr_worst) VALUES (?, ?, 'rsf', ?, ?, ?, ?)",
+                    "ecr_rank, ecr_best, ecr_worst, page_type) "
+                    "VALUES (?, ?, 'do', ?, ?, ?, ?, 'dynasty-overall')",
                     [player_id, f"{season}-08-01", position, float(rank), rank, rank + 3],
                 )
             else:
                 con.execute(
                     "INSERT INTO market_snapshot (player_id, scrape_date, ecr_type, position, "
-                    "ecr_rank) VALUES (?, ?, 'rsf', ?, ?)",
+                    "ecr_rank, page_type) VALUES (?, ?, 'do', ?, ?, 'dynasty-overall')",
                     [player_id, f"{season}-08-01", position, float(rank)],
                 )
             rank += 1

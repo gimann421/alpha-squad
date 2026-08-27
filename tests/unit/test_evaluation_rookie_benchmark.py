@@ -13,6 +13,7 @@ from alpha_squad.evaluation.rookie_benchmark import (
     rookie_market_ecr_baseline,
     run_rookie_baselines,
 )
+from alpha_squad.market.series import series_for_ecr_type
 from alpha_squad.models.rookie.features import FEATURE_VERSION
 from alpha_squad.storage.db import init_db
 
@@ -46,9 +47,10 @@ def _seed_training_class(con, position, draft_year, n=MIN_TRAINING_ROWS, ecr_typ
             [player_id, draft_year, position, points, points / 15],
         )
         con.execute(
-            "INSERT INTO market_snapshot (player_id, scrape_date, ecr_type, position, ecr_rank) "
-            "VALUES (?, ?, ?, ?, ?)",
-            [player_id, f"{draft_year}-08-01", ecr_type, position, float(pick)],
+            "INSERT INTO market_snapshot (player_id, scrape_date, ecr_type, position, ecr_rank, page_type) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            [player_id, f"{draft_year}-08-01", ecr_type, position, float(pick),
+             series_for_ecr_type(ecr_type).page_type],
         )
 
 
@@ -60,9 +62,10 @@ def _seed_target_rookie(con, player_id, position, draft_year, pick, ecr_rank=Non
     )
     if ecr_rank is not None:
         con.execute(
-            "INSERT INTO market_snapshot (player_id, scrape_date, ecr_type, position, ecr_rank) "
-            "VALUES (?, ?, ?, ?, ?)",
-            [player_id, f"{draft_year}-08-01", ecr_type, position, ecr_rank],
+            "INSERT INTO market_snapshot (player_id, scrape_date, ecr_type, position, ecr_rank, page_type) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            [player_id, f"{draft_year}-08-01", ecr_type, position, ecr_rank,
+             series_for_ecr_type(ecr_type).page_type],
         )
 
 

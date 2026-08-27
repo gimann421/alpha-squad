@@ -9,6 +9,7 @@ import hashlib
 
 import duckdb
 
+from alpha_squad.market.edge import DEFAULT_ECR_TYPE
 from alpha_squad.sources.base import utcnow
 
 # Same materiality bar M8's EDGE gate already uses (D21) -- a real, already-established
@@ -18,7 +19,7 @@ MAE_GAP_THRESHOLD = 5.0
 
 
 def detect_model_vs_market_disagreements(
-    con: duckdb.DuckDBPyConnection, season: int, ecr_type: str = "rsf"
+    con: duckdb.DuckDBPyConnection, season: int, ecr_type: str = DEFAULT_ECR_TYPE
 ) -> list[dict]:
     """Reuses M8's own already-computed rank_edge in edge_snapshot -- a real, stored
     disagreement between the model and the market -- rather than re-deriving a new

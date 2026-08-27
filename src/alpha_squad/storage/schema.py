@@ -206,7 +206,16 @@ M4_BASELINES_DDL = [
         -- 2026-08-23 -- a separate, provenance-tagged series, never blended into the
         -- DynastyProcess-sourced rows, so no existing leakage-safety guarantee changes.
         source VARCHAR NOT NULL DEFAULT 'dynastyprocess',
-        PRIMARY KEY (player_id, scrape_date, ecr_type, source)
+        -- Which FantasyPros ranking page a row came from (D56). `ecr_type` alone is NOT a
+        -- rank space: DynastyProcess labels several independently-ranked pages with the same
+        -- ecr_type -- 'ro' covers both `redraft-overall` (the PPR draft board) and
+        -- `redraft-idp` (a separate 1..N IDP ranking). Merging them produced colliding ranks
+        -- (preseason 2024 'ro' rank 3.0 was simultaneously an LB and a WR) and, because the
+        -- pre-D56 PRIMARY KEY did not include it, silently dropped one of any two rows a
+        -- player held on the same date. Part of the key, and required by every consumer that
+        -- needs a single coherent ordering.
+        page_type VARCHAR NOT NULL DEFAULT '',
+        PRIMARY KEY (player_id, scrape_date, ecr_type, page_type, source)
     )
     """,
     # One row per (baseline/model, position, season, player) prediction, so the evaluation
@@ -833,4 +842,34 @@ SELECT player_id, scrape_date, ecr_type, position, ecr_rank, ecr_best, ecr_worst
        source_snapshot_id, 'dynastyprocess'
 FROM market_snapshot_pre_d38;
 DROP TABLE market_snapshot_pre_d38;
+"""
+
+# D56 widens the key again, to include `page_type` -- same constraint as D38 (DuckDB cannot
+# ALTER a primary key in place) and the same remedy. Existing rows carry page_type '' rather
+# than a guessed value: which page a pre-D56 row came from is genuinely not recorded, and
+# inventing one would fabricate provenance. `alpha-squad market build` repopulates them for
+# real, so the empty marker is a transient "not yet re-ingested" state, and
+# `resolve_market_series` rejects it rather than treating it as a valid board.
+MARKET_SNAPSHOT_PAGE_TYPE_REBUILD = """
+ALTER TABLE market_snapshot RENAME TO market_snapshot_pre_d56;
+CREATE TABLE market_snapshot (
+    player_id VARCHAR NOT NULL,
+    scrape_date DATE NOT NULL,
+    ecr_type VARCHAR NOT NULL,
+    position VARCHAR,
+    ecr_rank DOUBLE NOT NULL,
+    ecr_best DOUBLE,
+    ecr_worst DOUBLE,
+    source_snapshot_id VARCHAR,
+    source VARCHAR NOT NULL DEFAULT 'dynastyprocess',
+    page_type VARCHAR NOT NULL DEFAULT '',
+    PRIMARY KEY (player_id, scrape_date, ecr_type, page_type, source)
+);
+INSERT INTO market_snapshot
+    (player_id, scrape_date, ecr_type, position, ecr_rank, ecr_best, ecr_worst,
+     source_snapshot_id, source, page_type)
+SELECT player_id, scrape_date, ecr_type, position, ecr_rank, ecr_best, ecr_worst,
+       source_snapshot_id, source, ''
+FROM market_snapshot_pre_d56;
+DROP TABLE market_snapshot_pre_d56;
 """

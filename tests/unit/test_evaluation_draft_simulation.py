@@ -124,8 +124,9 @@ def _seed_league_season(con, season, n_per_position=6):
                 [player_id, season, position, points, points / 15],
             )
             con.execute(
-                "INSERT INTO market_snapshot (player_id, scrape_date, ecr_type, position, ecr_rank) "
-                "VALUES (?, ?, 'rsf', ?, ?)",
+                "INSERT INTO market_snapshot (player_id, scrape_date, ecr_type, position, ecr_rank, page_type) "
+                # The test league is 1-QB dynasty, which resolves to the 'do' board (D56).
+                "VALUES (?, ?, 'do', ?, ?, 'dynasty-overall')",
                 [player_id, f"{season}-08-01", position, float(rank)],
             )
             rank += 1
