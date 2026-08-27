@@ -2040,3 +2040,115 @@ non-determinism bugs described above, and a `zip(..., strict=True)` crash
 in `dynasty_validation.py`/`market_inefficiency.py` that only triggers on a cleanly monotonic
 (i.e. "good") result. None of these were methodology changes made after seeing unfavorable
 results — the pre-committed thresholds and strategies above were not touched.
+
+## D55 — Positional opportunity cost in the production draft engine (M18)
+
+M17's forensic audit (`docs/DRAFT_ENGINE_FORENSIC_AUDIT.md`) identified the root cause of the
+draft engine's roster pathology: `recommend_draft_pick`'s score had no representation of
+*positional* opportunity cost — only a single-*player* survival probability, which asks "will
+THIS player still be there" and never "will a player THIS GOOD AT THIS POSITION still be
+there". This entry records the fix, and — more importantly — why the fix that shipped is not
+the one `docs/DRAFT_ENGINE_REDESIGN_RECOMMENDATION.md` proposed.
+
+### The recommendation's formula had never actually been measured
+
+Verifying the recommendation against source before implementing it (rather than implementing
+it because it was written down) found three *different* formulas in play:
+
+| | Formula |
+|---|---|
+| Production (pre-D55) | `vorp × fit × risk × survival` |
+| Experiment F (the best A-H performer) | `vorp × fit × scarcity × future × [feasibility] + opp_cost` |
+| What the recommendation proposed | `production + opp_cost` |
+
+Experiment F **includes** `scarcity_mult` — the one mechanism the controlled experiments proved
+actively harmful — plus tiers D and E, and **excludes** production's `risk_mult` and
+`survival_mult`. So F's measured result (RB=0 → 4%, starter 1789.1) does not belong to the
+formula the recommendation asked for. Shipping it directly would have deployed an unmeasured
+combination on the strength of a number that described something else.
+
+Decomposing the existing 400-draft grid sharpened this further: `scarcity_mult` costs −123.6
+starter points, `future_mult` −10.6, while the feasibility cap gains +55.0 and the opportunity
+cost +134.6. F's headline number is the *net* of a large penalty and two large gains — and the
+feasibility cap, which the recommendation barely mentions, is a real contributor hiding inside
+it.
+
+### A new pre-registered ablation on the real production base
+
+Rather than guess, six new **P-tiers** were added to the diagnostic harness, holding the actual
+production formula fixed as the control and varying only the addition. The decision rule was
+written into `evaluation/draft_forensics.py` and committed **before** the tiers were ever run
+(the D39/D54 pre-registration discipline): primary metric = mean starter points; gate = RB=0
+rate must not exceed production's 10/50; second gate = no position may be zeroed at a higher
+rate than production; tie-break = fewer mechanisms. Explicitly: *a tier that improves RB=0
+while losing starter points does not qualify.*
+
+Results (300 real drafts, 5 seasons × 10 slots, n=50 per tier):
+
+| Tier | Formula | starter | total | RB=0 | concentration |
+|---|---|---|---|---|---|
+| P0 | production (control) | 1688.2 | 2606.6 | 10/50 | 0.345 |
+| P1 | `P0 + opp_cost` (the recommendation's literal proposal) | 1777.1 | 2673.9 | 6/50 | 0.344 |
+| P1b | `P0 + opp_cost × risk` | 1734.8 | 2644.4 | 8/50 | 0.344 |
+| P1c | `(vorp + opp_cost) × fit × risk × survival` | 1783.3 | 2617.3 | 5/50 | 0.331 |
+| P2 | `P0 × feasibility` | 1706.0 | 2624.0 | 10/50 | 0.315 |
+| **P3** | **P1c × feasibility** | **1801.1** | 2599.8 | **2/50** | **0.304** |
+
+P0 reproduces tier H (the real engine) exactly — 2829.8 / 1676.9 on the 2021 slot-1 control,
+identical roster — confirming the harness models production faithfully before any conclusion
+is drawn from it. All five candidates passed the gates; **P3 won the primary metric outright**
+and also beats Experiment F (1789.1) *while excluding `positional_scarcity` entirely* and
+retaining production's confidence and survival terms.
+
+### Shipped
+
+```
+score = (VORP + positional_opportunity_cost[position]) × fit × risk × survival
+        × [0.1 if already at this league's usable positional cap]
+```
+
+Three design decisions worth recording, each measured rather than assumed:
+
+- **The cost is added to VORP *before* the multipliers, not to the finished score.** This is
+  what prevents it from overwhelming the base: it is denominated in VORP points, so it is
+  discounted by the same roster-fit and confidence factors as the value it augments. The raw
+  additive form (P1) was measured at **8× the base score** in a real late round (2021 slot 5,
+  R13: base 2.4, opp cost 19.3), and scored worse than the integrated form.
+- **`positional_scarcity()` is deliberately not used.** It rates QB as the most "scarce"
+  position and RB as one of the least in this league's real data — adding it made the pathology
+  worse (RB=0 20% → 32%). The requirement in `PRODUCT_SPEC.md` that scarcity "is calculated"
+  remains satisfied by the waiver engine, which does consult it; `docs/TRACEABILITY.md` records
+  the draft engine's deliberate exclusion.
+- **Both sides of the comparison clamp at replacement level.** VORP already measures against
+  the waiver floor, so "losing" a below-replacement player costs nothing. Without this, a real
+  2021 late-round comparison between two below-replacement RBs (best available at VORP −135.4)
+  manufactures a spurious cost. This is a league-derived bound, not a tuned constant.
+
+### Supporting changes
+
+- New `league/opportunity_cost.py`: Experiment G's literal opponent replay feeding Experiment
+  F's continuous points pricing, exactly as the recommendation intended — computed **once per
+  position per pick**, not once per candidate. That is the mechanism's real shape (the cost is
+  a property of the position), and it measured 9× faster with byte-identical results.
+- `positional_feasibility_cap` in `league/roster.py`, derived from the league's real
+  `bench_size` — which M17 found was dead code, `roster_need` having used a hardcoded
+  `slots + 2` unrelated to the configured bench. It stacks with, rather than replaces, D54's
+  saturation fix.
+- **Two latent determinism bugs fixed** in the diagnostic F/G tiers: `sorted()` calls with no
+  `player_id` tie-break, the same bug class D54 fixed in `draft_simulation.py`. Real VORP ties
+  exist in production data (2021: 8 tied WR groups covering 17 players). Verified the fix left
+  tiers E and F numerically identical, so the M17 documents remain accurate.
+- One canonical `best_by_market_rank`, shared by the benchmark's `market_consensus` strategy
+  and the replay, so they cannot drift.
+- `current_pick_overall` threaded through the benchmark, API, CLI and `DraftView`. When absent
+  the term is simply omitted (the engine degrades to P2 behaviour, still measured better than
+  the old default) rather than guessing where the draft is.
+- Leakage-safe by construction: the replay reads season-scoped preseason ranks via the existing
+  `_preseason_overall_market`, the same helper D54 required after finding a real leak of
+  exactly this kind.
+
+### Results
+
+*(Official `alpha-squad evaluate draft-simulation` benchmark numbers, forensic re-traces,
+determinism and runtime appended below once measured — the diagnostic harness is not the
+benchmark, and the P-tier numbers above do not substitute for it.)*
