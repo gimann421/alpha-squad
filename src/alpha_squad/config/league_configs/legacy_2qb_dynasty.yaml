@@ -1,0 +1,31 @@
+# The pre-D58 target league: 10 teams, 2QB/2RB/2WR/1TE/2FLEX, dynasty PPR (D7).
+#
+# Retained as a real, registered league rather than deleted, for two reasons. It is the
+# format every draft number recorded before D58 was measured against, so it is what those
+# results can still be reproduced under; and it is live proof that the product is genuinely
+# league-contextual -- a superflex dynasty config here resolves to the superflex dynasty
+# consensus board and a different QB replacement level, automatically, from this file alone.
+#
+# Its declared roster arithmetic was internally inconsistent (9 starters + 10 bench vs
+# roster_size 17). Corrected here to 9 + 8 = 17, keeping the roster_size the benchmark
+# actually ran with, since that is the number the historical results depend on.
+league_id: legacy_2qb_dynasty
+format: dynasty
+teams: 10
+scoring:
+  ppr: true
+  ppr_value: 1.0
+lineup:
+  QB: 2
+  RB: 2
+  WR: 2
+  TE: 1
+  FLEX: 2
+roster:
+  bench: 8
+  roster_size: 17
+draft_state: {}
+waiver_state: {}
+faab:
+  budget: 100
+future_picks: {}

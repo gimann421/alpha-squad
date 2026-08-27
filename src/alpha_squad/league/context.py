@@ -31,6 +31,27 @@ FLEX_ELIGIBILITY: dict[str, tuple[str, ...]] = {
     "WRRB_FLEX": ("RB", "WR"),
 }
 
+# Lineup slots and player positions are named by different systems and do not always agree.
+# A league config (and Sleeper) calls the team-defense slot 'DEF'; nflverse and FantasyPros
+# both call the position 'DST'. Without this, a 'DEF: 1' slot would look for players at a
+# position no row in the database has, and the slot would silently go unfilled -- scoring
+# zero for it rather than failing loudly. Normalizing slot names to the position vocabulary
+# the data actually uses keeps every downstream consumer (replacement level, roster need,
+# feasibility caps) working in one vocabulary. Identity entries are listed explicitly so the
+# accepted spellings are visible rather than implied (D58).
+SLOT_POSITION_ALIASES: dict[str, str] = {
+    "DEF": "DST",
+    "D/ST": "DST",
+    "DST": "DST",
+    "PK": "K",
+    "K": "K",
+}
+
+
+def normalize_slot_position(slot: str) -> str:
+    """The player position a dedicated lineup slot is filled by."""
+    return SLOT_POSITION_ALIASES.get(slot, slot)
+
 _LEAGUE_CONFIGS_DIR = Path(__file__).parent.parent / "config" / "league_configs"
 DEFAULT_TARGET_LEAGUE_PATH = _LEAGUE_CONFIGS_DIR / "target_league.yaml"
 DEFAULT_REGISTRY_PATH = _LEAGUE_CONFIGS_DIR / "registry.yaml"
@@ -64,8 +85,17 @@ class LeagueContext(BaseModel):
         return float(self.faab.get("budget", 0))
 
     def dedicated_slots(self) -> dict[str, int]:
-        """{position: starting slot count} for non-flex slots only."""
-        return {pos: n for pos, n in self.lineup.items() if pos not in FLEX_ELIGIBILITY}
+        """{position: starting slot count} for non-flex slots only, keyed by the *player
+        position* the slot is filled by rather than the slot's own name -- so a 'DEF' slot
+        reports as 'DST', which is what the data calls it. Counts are summed rather than
+        overwritten in the rare case a config names the same position two ways."""
+        slots: dict[str, int] = {}
+        for slot_name, count in self.lineup.items():
+            if slot_name in FLEX_ELIGIBILITY:
+                continue
+            position = normalize_slot_position(slot_name)
+            slots[position] = slots.get(position, 0) + count
+        return slots
 
     def flex_slots(self) -> dict[str, int]:
         """{flex_slot_name: slot count} for flex-type slots only."""

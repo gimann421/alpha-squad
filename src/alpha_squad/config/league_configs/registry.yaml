@@ -17,6 +17,12 @@ target_league:
   source: yaml
   path: target_league.yaml
 
+# The pre-D58 2QB dynasty format, kept registered so the historical results measured against
+# it stay reproducible and so a second, genuinely different format is always exercised.
+legacy_2qb_dynasty:
+  source: yaml
+  path: legacy_2qb_dynasty.yaml
+
 dilworth:
   source: sleeper
   sleeper_league_id: "1395093181141381120"
