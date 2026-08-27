@@ -16,6 +16,7 @@ from __future__ import annotations
 import duckdb
 
 from alpha_squad.league.context import FLEX_ELIGIBILITY, LeagueContext
+from alpha_squad.models.baselines.kicking_defense import MODEL_NAME as KDST_MODEL_NAME
 from alpha_squad.models.uncertainty.run import MODEL_VERSION as UNCERTAINTY_MODEL_VERSION
 
 
@@ -146,6 +147,23 @@ def load_season_projections(
         [season],
     ).fetchall()
     for player_id, position, predicted_points in rookie_rows:
+        if player_id not in projections:
+            projections[player_id] = predicted_points
+            positions[player_id] = position
+
+    # K and DST (D57). M6's uncertainty model covers QB/RB/WR/TE only -- it is trained on a
+    # receiving/rushing/passing feature panel that has no meaning for a kicker or a team
+    # defense. A league that starts a K and a DEF still has to be able to evaluate them, so
+    # they come from the measured baseline in models/baselines/kicking_defense.py, which is
+    # deliberately a baseline rather than a model (both positions carry weak year-over-year
+    # signal; see that module for the numbers). Added last and only where absent, so a
+    # position the primary model does cover is never overwritten by a baseline.
+    kdst_rows = con.execute(
+        "SELECT player_id, position, predicted_points FROM projection_snapshot "
+        "WHERE model_name = ? AND season = ?",
+        [KDST_MODEL_NAME, season],
+    ).fetchall()
+    for player_id, position, predicted_points in kdst_rows:
         if player_id not in projections:
             projections[player_id] = predicted_points
             positions[player_id] = position

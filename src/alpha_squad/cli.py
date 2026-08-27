@@ -73,6 +73,7 @@ from alpha_squad.market.edge import (
     write_edge_backtest_report,
     write_edge_validation_report,
 )
+from alpha_squad.models.baselines.kicking_defense import build_kdst_projections
 from alpha_squad.models.baselines.run import run_baselines
 from alpha_squad.models.established.season_level import (
     load_season_level_data,
@@ -728,6 +729,26 @@ def evaluate_failure_analysis(
     )
     console.print(f"report written to [green]{report_path}[/green]")
     con.close()
+
+
+@train_app.command("kdst-projections")
+def train_kdst_projections(
+    season_start: int = typer.Option(2013, help="First season to project"),
+    season_end: int = typer.Option(2026, help="Last season to project"),
+) -> None:
+    """Build kicker and team-defense season projections (D57).
+
+    A measured baseline rather than an ML model: both positions carry weak year-over-year
+    signal (K r=0.41, DST r=0.29 over real 2015-2025 seasons), and the weighting each one
+    uses was chosen by walk-forward MAE, not assumed. See
+    models/baselines/kicking_defense.py for the comparison. Requires `features build` to have
+    run first, since the projections read `player_season_stats`."""
+    settings = get_settings()
+    con = get_connection(settings)
+    init_db(con)
+    seasons = list(range(season_start, season_end + 1))
+    n = build_kdst_projections(con, seasons)
+    console.print(f"K/DST projection rows written: [green]{n}[/green]")
 
 
 @train_app.command("established")

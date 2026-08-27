@@ -35,6 +35,13 @@ M2_IDENTITY_DDL = [
     """
     CREATE TABLE IF NOT EXISTS players (
         player_id VARCHAR PRIMARY KEY,
+        -- The source system's identifier for this entity. For every NFL player that is a
+        -- real nflverse GSIS id ('00-0034796'). A team defense (D57) is a draftable fantasy
+        -- entity that is not an NFL player and has no GSIS id at all, so it repeats its own
+        -- canonical id here, which is prefixed 'asq_dst_' and therefore self-evidently
+        -- Alpha-Squad-generated rather than passing itself off as an NFL identifier. The
+        -- column stays NOT NULL/UNIQUE: it is the join key the nflverse ingest path relies
+        -- on, and a synthetic value in that namespace can never collide with a real GSIS id.
         gsis_id VARCHAR UNIQUE NOT NULL,
         display_name VARCHAR,
         first_name VARCHAR,
