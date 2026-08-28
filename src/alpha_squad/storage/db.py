@@ -10,6 +10,7 @@ from alpha_squad.config.settings import Settings, get_settings
 from alpha_squad.storage.schema import (
     ADD_COLUMN_MIGRATIONS,
     ALL_DDL,
+    MARKET_SNAPSHOT_PAGE_TYPE_REBUILD,
     MARKET_SNAPSHOT_REBUILD,
 )
 
@@ -29,13 +30,19 @@ def _migrate(con: duckdb.DuckDBPyConnection) -> None:
     for statement in ADD_COLUMN_MIGRATIONS:
         con.execute(statement)
 
-    # Widening market_snapshot's PRIMARY KEY needs a rebuild, not an ALTER. Detected by the
-    # absence of the `source` column, which was added in the same change (D38).
-    columns = {row[0] for row in con.execute("DESCRIBE market_snapshot").fetchall()}
-    if "source" not in columns:
+    # Widening market_snapshot's PRIMARY KEY needs a rebuild, not an ALTER. Each step is
+    # detected by the absence of the column added alongside it, and they run in order so a
+    # database from before D38 lands on the current schema in one pass.
+    for marker, rebuild in (
+        ("source", MARKET_SNAPSHOT_REBUILD),  # D38
+        ("page_type", MARKET_SNAPSHOT_PAGE_TYPE_REBUILD),  # D56
+    ):
+        columns = {row[0] for row in con.execute("DESCRIBE market_snapshot").fetchall()}
+        if marker in columns:
+            continue
         con.execute("BEGIN TRANSACTION")
         try:
-            for statement in MARKET_SNAPSHOT_REBUILD.strip().split(";"):
+            for statement in rebuild.strip().split(";"):
                 if statement.strip():
                     con.execute(statement)
             con.execute("COMMIT")

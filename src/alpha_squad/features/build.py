@@ -13,6 +13,7 @@ import duckdb
 from alpha_squad.config.settings import Settings, get_settings
 from alpha_squad.features.combine import build_combine_results
 from alpha_squad.features.games import build_games_table
+from alpha_squad.features.kicking_defense import build_kicking_and_defense
 from alpha_squad.features.panel import build_player_week_features
 from alpha_squad.features.player import build_player_week_stats
 from alpha_squad.features.rookie import build_rookie_features
@@ -35,6 +36,9 @@ class FeatureBuildReport:
     player_panel_team_attached: int = 0
     combine_results_upserted: int = 0
     rookie_features_upserted: int = 0
+    kicker_week_rows_scored: int = 0
+    dst_entities_created: int = 0
+    dst_week_rows: int = 0
 
 
 def build_features(
@@ -45,8 +49,19 @@ def build_features(
     report.games_inserted = build_games_table(con, settings, seasons)
     report.player_week_stats_upserted = build_player_week_stats(con, settings, seasons)
     report.player_week_features_upserted = build_player_week_features(con)
-    report.player_season_stats_upserted = build_player_season_stats(con, seasons)
     report.team_week_stats_upserted = build_team_week_stats(con, settings, seasons)
+
+    # K/DEF scoring (D57) sits here deliberately: it needs `team_week_stats` (defensive
+    # counting stats) and `team_week_points` (points allowed) to already exist, and it writes
+    # into `player_week_stats`, so it must run BEFORE the season aggregate rolls those weekly
+    # rows up. Running it after would leave every kicker's and defense's season total at the
+    # stale value the aggregate had already computed.
+    kd = build_kicking_and_defense(con, settings, seasons)
+    report.kicker_week_rows_scored = kd["kicker_week_rows_scored"]
+    report.dst_entities_created = kd["dst_entities_created"]
+    report.dst_week_rows = kd["dst_week_rows"]
+
+    report.player_season_stats_upserted = build_player_season_stats(con, seasons)
     report.team_week_features_upserted = build_team_week_features(con)
     report.player_panel_team_attached = attach_team_features_to_player_panel(con)
     report.combine_results_upserted = build_combine_results(con, settings)

@@ -93,7 +93,7 @@ class TestPlayerDetail:
             "INSERT INTO edge_snapshot (edge_id, player_id, season, position, ecr_type, "
             "model_version, model_rank, market_rank, rank_edge, evidence_score, action, "
             "reasons_json, built_at) VALUES "
-            "('e1', 'p1', 2025, 'WR', 'rsf', 'edge_v1', 5, 20, 15, 0.5, 'BUY', "
+            "('e1', 'p1', 2025, 'WR', 'ro', 'edge_v1', 5, 20, 15, 0.5, 'BUY', "
             "'[\"real reason\"]', current_timestamp)"
         )
         con.execute(
@@ -323,7 +323,7 @@ class TestEdgeIsADirectProjection:
                 (edge_id, player_id, season, position, ecr_type, model_version, model_rank,
                  market_rank, rank_edge, projected_points_edge, evidence_score, confidence,
                  action, reasons_json, built_at)
-            VALUES ('e1', 'p1', 2025, 'WR', 'rsf', 'edge_v1', 5, 50, 45, 30.0, 0.5, 0.8, 'BUY', '["real reason"]', current_timestamp)
+            VALUES ('e1', 'p1', 2025, 'WR', 'ro', 'edge_v1', 5, 50, 45, 30.0, 0.5, 0.8, 'BUY', '["real reason"]', current_timestamp)
             """
         )
         r = client.get("/edge", params={"season": 2025})
@@ -339,7 +339,7 @@ class TestEdgeIsADirectProjection:
             con.execute(
                 "INSERT INTO edge_snapshot (edge_id, player_id, season, position, ecr_type, "
                 "model_version, model_rank, market_rank, rank_edge, evidence_score, action, reasons_json, built_at) "
-                "VALUES (?, ?, 2025, 'WR', 'rsf', 'edge_v1', 1, 2, 1, 0.5, ?, '[]', current_timestamp)",
+                "VALUES (?, ?, 2025, 'WR', 'ro', 'edge_v1', 1, 2, 1, 0.5, ?, '[]', current_timestamp)",
                 [f"e_{pid}", pid, action],
             )
         r = client.get("/edge", params={"season": 2025, "action": "BUY"})
@@ -489,12 +489,21 @@ class TestLeague:
         assert r.status_code == 200
         body = r.json()
         assert body["teams"] == 10
-        assert body["lineup"] == {"QB": 2, "RB": 2, "WR": 2, "TE": 1, "FLEX": 2}
+        assert body["lineup"] == {
+            "QB": 1,
+            "RB": 2,
+            "WR": 2,
+            "TE": 1,
+            "FLEX": 2,
+            "K": 1,
+            "DEF": 1,
+        }
 
     def test_roster_need_endpoint(self, client):
         r = client.get("/league/target_league/roster", params={"roster_positions": "QB"})
         assert r.status_code == 200
-        assert r.json()["need"]["QB"] > 0  # only 1 of 2 required QB slots filled
+        # The 1-QB slot is filled, but RB still needs two starters.
+        assert r.json()["need"]["RB"] > 0
 
     def test_roster_id_on_a_yaml_league_returns_422_rather_than_silently_ignoring_it(self, client):
         r = client.get("/league/target_league/roster", params={"roster_id": 1})
@@ -692,7 +701,7 @@ class TestLeague:
             "INSERT INTO edge_snapshot (edge_id, player_id, season, position, ecr_type, "
             "model_version, model_rank, market_rank, rank_edge, evidence_score, action, "
             "reasons_json, built_at) VALUES "
-            "('e1', 'star', 2025, 'WR', 'rsf', 'edge_v1', 5, 20, 15, 0.5, 'BUY', '[]', current_timestamp)"
+            "('e1', 'star', 2025, 'WR', 'ro', 'edge_v1', 5, 20, 15, 0.5, 'BUY', '[]', current_timestamp)"
         )
         r = client.post("/league/target_league/trade", json={"season": 2025, "player_id": "star"})
         assert r.status_code == 200
@@ -899,7 +908,7 @@ class TestProvenance:
         con.execute(
             "INSERT INTO edge_snapshot (edge_id, player_id, season, position, ecr_type, "
             "model_version, model_rank, market_rank, rank_edge, evidence_score, action, reasons_json, built_at) "
-            "VALUES ('edge123', 'p1', 2025, 'WR', 'rsf', 'edge_v1', 1, 2, 1, 0.5, 'BUY', '[]', current_timestamp)"
+            "VALUES ('edge123', 'p1', 2025, 'WR', 'ro', 'edge_v1', 1, 2, 1, 0.5, 'BUY', '[]', current_timestamp)"
         )
         r = client.get("/provenance/edge123")
         assert r.status_code == 200

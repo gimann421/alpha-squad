@@ -81,6 +81,44 @@ def load_season_level_data(
     return df
 
 
+def load_season_level_projection_data(
+    con: duckdb.DuckDBPyConnection, position: str, target_season: int
+) -> pd.DataFrame:
+    """The scoring-side counterpart to `load_season_level_data`, for a `target_season` whose
+    games have not been played yet. Same feature computation (season S-1 aggregate + preseason
+    ECR for season S), but with no join at all against `target_season`'s own
+    `player_season_stats` -- `load_season_level_data`'s `st` join is an INNER JOIN and
+    structurally requires the target season's actual points to already exist, which is exactly
+    right for walk-forward backtesting and exactly wrong for a genuinely future season (it
+    would silently return zero rows rather than a real gap, same failure shape D25 found for
+    rookies). Returns one row per player who has a season `target_season - 1` stat line,
+    matching the training loader's feature set with no target column -- there is nothing to
+    put there yet."""
+    df = con.execute(
+        """
+        SELECT
+            s1.player_id,
+            s1.season + 1 AS target_season,
+            s1.ppr_points_per_game AS prior_ppg,
+            s1.games_played AS prior_games,
+            COALESCE(0.65 * s1.total_fantasy_points_ppr + 0.35 * s2.total_fantasy_points_ppr,
+                     s1.total_fantasy_points_ppr) AS prior_weighted_total,
+            m.ecr_rank AS preseason_ecr_rank
+        FROM player_season_stats s1
+        LEFT JOIN player_season_stats s2 ON s2.player_id = s1.player_id AND s2.season = s1.season - 1
+        LEFT JOIN (
+            SELECT player_id, ecr_rank, year(scrape_date) AS yr,
+                   row_number() OVER (PARTITION BY player_id, year(scrape_date) ORDER BY scrape_date DESC) AS rn
+            FROM market_snapshot WHERE ecr_type = 'ro' AND month(scrape_date) IN (7, 8)
+        ) m ON m.player_id = s1.player_id AND m.yr = s1.season + 1 AND m.rn = 1
+        WHERE s1.position = ? AND s1.season = ?
+        """,
+        [position, target_season - 1],
+    ).fetchdf()
+    df["preseason_ecr_rank"] = df["preseason_ecr_rank"].fillna(999.0)
+    return df
+
+
 @dataclass
 class SeasonLevelTrainReport:
     metrics: list[EvaluationMetrics] = field(default_factory=list)

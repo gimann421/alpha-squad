@@ -691,3 +691,72 @@ races that would have affected any real deployed user. Full account in `docs/DEC
 `docs/PROJECT_STATE.md`'s M15 section. This audit's own "most important next thing to build"
 conclusion above (nothing product-critical remained queued) was about the M1-M14 backlog
 specifically, not a claim that the product was user-usable yet — M15 is what closes that gap.
+
+## Postscript (2026-08-26): empirical validation phase (M16, D54)
+
+M15 made the intelligence usable; M16 tested, adversarially, whether it is actually *good* —
+this audit's own methodology extended from "does the code exist and run" to "does it beat
+strong baselines on real historical outcomes." It found a genuine, previously-undetected product
+bug this audit's code-level review could not have caught: `recommend_draft_pick`'s real draft
+output loses to plain market consensus in every real historical season tested, because a
+deliberately-bounded roster-fit multiplier cannot stop the recommender from stacking one
+position (7 QBs and zero RBs; 12 WRs against 3 QBs, in two real trials) once that position's
+VORP runs hot for several consecutive picks. (This finding was independently re-verified after
+a follow-up audit found and fixed two further real bugs in the draft-simulation harness itself
+— a missing season filter and non-deterministic tie-breaking — confirmed via byte-identical
+results across separate re-runs; see D54's "Results" section.) A fix for one of the two
+compounding mechanisms behind the bug (the roster-fit penalty's too-gentle saturation curve)
+was implemented and re-verified against a full re-run: starter points improved (+2.7% pooled)
+but the gap to market consensus is only ~12% closed, and a real 2021 roster still drafted zero
+RBs after the fix — the second mechanism (positional-scarcity blindness) remains unaddressed,
+see D54 and `docs/IMPLEMENTATION_GAP_ANALYSIS.md` P1-0. This does not change this
+audit's "Strongest component" finding above
+(the established-player ML pipeline's *point-value* accuracy is separately re-confirmed as
+beating every baseline, D54) — the newly-found gap is specifically in the decision-logic layer
+that turns good values into a pick sequence, not in the values themselves. Full account in
+`docs/DECISIONS.md` D54, `docs/ALPHA_VS_BASELINES_EVALUATION.md`, and `docs/PROJECT_STATE.md`'s
+M16 section. The fix is not yet implemented — tracked as the project's current top recommended
+action, ahead of P2-3 in `docs/IMPLEMENTATION_GAP_ANALYSIS.md`.
+
+## Postscript (2026-08-27): draft-engine forensic audit (M17)
+
+A diagnostic-only phase, explicitly not permitted to redesign the engine before understanding
+the failure mechanism. Two real, previously-undocumented findings this audit's own prior passes
+missed: `positional_scarcity()` — a real function `PRODUCT_SPEC.md`/`ACCEPTANCE_CRITERIA.md`
+both require and which the waiver engine already consults — is never imported by the draft
+engine at all; and `roster_need`'s bench-depth assumption is a hardcoded constant unrelated to
+the league's actual configured bench size (a real property, `league.bench_size`, that was dead
+code before this phase). Replaying the real, unmodified `recommend_draft_pick` pick-by-pick
+against the same real 2021/2025 pathological drafts this audit already knew about (D54) found
+they are effectively decided within the team's first 1-2 picks — a real, viable RB is a live
+top-5 candidate at pick #1 in both cases and falls out of consideration entirely by the team's
+second turn, not a slow multi-round feedback loop. 90 real homogeneous-league drafts under three
+independent non-Alpha strategies never produced a zero-RB roster once, validating the simulator
+and pointing conclusively at the draft engine's decision logic specifically. A full-scale
+controlled ablation (400 real drafts) confirmed the pattern generalizes but is season-concentrated
+(the real production engine zeros RB in 10/10 slots in 2021, 0/10 in every other season) and
+found something genuinely counter-intuitive: adding positional scarcity or analytical future
+scarcity made the failure rate *worse* (32% vs. 20% with neither), because `positional_scarcity()`
+rates QB, not RB, as the scarce position in this league's real data. Only an explicit,
+continuously-priced opportunity-cost term reduced the failure rate substantially (to 4%) and beat
+the current production engine on mean starter points. No fix was implemented in this phase; see
+`docs/DRAFT_ENGINE_FORENSIC_AUDIT.md`, `docs/DRAFT_CONTROLLED_EXPERIMENTS.md`, and
+`docs/DRAFT_ENGINE_REDESIGN_RECOMMENDATION.md` for the full account and the proposed
+(unimplemented) next step.
+
+
+## Postscript (2026-08-27): opportunity-cost fix shipped and measured (M18, D55)
+
+The gap this audit's M17 postscript identified as "the project's current top recommended action"
+has now been implemented and measured. `recommend_draft_pick` gained a continuous,
+points-denominated positional opportunity-cost term fed by a literal opponent replay, plus a
+league-derived positional feasibility cap that finally makes `LeagueContext.bench_size` (which
+M17 found was dead code) load-bearing.
+
+Official benchmark, full 2021-2025: **+112.9 mean starter points (1688.2 → 1801.1)**, RB=0
+rosters 10/50 → 2/50, QB stacking materially reduced (7-and-8-QB rosters eliminated), all 10
+draft slots improved. This changes this audit's standing characterisation of the draft engine
+from "loses to a naive non-market baseline" to "2nd of four strategies" — but **not** its
+core finding: `market_consensus` still leads by 219.6 starter points and Alpha has never won a
+season against it. The weakest-component assessment for the *decision-logic layer* stands,
+narrowed rather than resolved. See `docs/DECISIONS.md` D55.

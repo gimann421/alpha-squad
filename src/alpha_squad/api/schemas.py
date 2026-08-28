@@ -7,6 +7,8 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
+from alpha_squad.market.edge import DEFAULT_ECR_TYPE
+
 
 class PlayerSummary(BaseModel):
     player_id: str
@@ -253,9 +255,19 @@ class DraftRequest(BaseModel):
     season: int
     roster_positions: list[str] = []
     roster_id: int | None = None
+    # D60: the roster's actual drafted player ids, when the caller tracks them (e.g. the web
+    # draft picker, which already maintains this list client-side). Enables marginal starter
+    # value; omitted entirely, the engine falls back to VORP -- see league/draft.py.
+    roster_player_ids: list[str] | None = None
     available_player_ids: list[str] | None = None
     next_pick_overall: int | None = None
-    ecr_type: str = "rsf"
+    # D55: enables the positional opportunity-cost term. Optional -- when absent the
+    # engine simply omits that term rather than guessing where the draft is.
+    current_pick_overall: int | None = None
+    # None means "resolve the consensus board from the league" (D56) -- a 1-QB league reads
+    # the 1-QB board, a superflex league the superflex one. An explicit value still wins, so
+    # a caller can compare against a specific series deliberately.
+    ecr_type: str | None = None
     top_n: int = 5
 
 
@@ -270,7 +282,7 @@ class WaiverRequest(BaseModel):
 class TradeRequest(BaseModel):
     season: int
     player_id: str
-    ecr_type: str = "rsf"
+    ecr_type: str = DEFAULT_ECR_TYPE
 
 
 class PickAssetRequest(BaseModel):
@@ -288,7 +300,7 @@ class TradePackageRequest(BaseModel):
     season: int
     side_a: TradePackageSideRequest
     side_b: TradePackageSideRequest
-    ecr_type: str = "rsf"
+    ecr_type: str = DEFAULT_ECR_TYPE
 
 
 class TradePackageResponse(BaseModel):

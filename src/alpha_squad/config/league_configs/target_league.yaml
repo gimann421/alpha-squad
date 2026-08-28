@@ -1,21 +1,35 @@
-# The target league (docs/DECISIONS.md D7): 10 teams, 2QB/2RB/2WR/1TE/2FLEX, dynasty PPR.
-# Bench size and FAAB budget are unspecified anywhere in the docs -- D7 defaults them here,
-# explicitly, rather than silently assuming.
+# The target league (docs/TARGET_FORMAT_1QB.md, docs/DECISIONS.md D58): a standard 10-team
+# 1-QB redraft PPR league. This is the product's DEFAULT format, not a hard-coded limitation
+# -- supplying a different config selects a different lineup, different replacement levels,
+# and (via market/series.py) a different consensus board, with no code change.
+#
+# Roster arithmetic, stated explicitly because the previous config's did not add up
+# (9 starters + 10 bench declared alongside roster_size 17):
+#
+#     starters  QB 1 + RB 2 + WR 2 + TE 1 + FLEX 2 + K 1 + DEF 1  = 10
+#     bench                                                        =  6
+#     roster_size                                                  = 16
+#
+# 10 + 6 = 16, and a test asserts that identity so the three numbers cannot drift apart
+# again. `roster_size` is also the number of rounds the draft benchmark runs, so it has to
+# be the real total rather than an independent figure.
 league_id: target_league
-format: dynasty
+format: redraft
 teams: 10
 scoring:
   ppr: true
   ppr_value: 1.0
 lineup:
-  QB: 2
+  QB: 1
   RB: 2
   WR: 2
   TE: 1
   FLEX: 2
+  K: 1
+  DEF: 1
 roster:
-  bench: 10
-  roster_size: 17
+  bench: 6
+  roster_size: 16
 draft_state: {}
 waiver_state: {}
 faab:

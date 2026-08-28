@@ -35,6 +35,13 @@ M2_IDENTITY_DDL = [
     """
     CREATE TABLE IF NOT EXISTS players (
         player_id VARCHAR PRIMARY KEY,
+        -- The source system's identifier for this entity. For every NFL player that is a
+        -- real nflverse GSIS id ('00-0034796'). A team defense (D57) is a draftable fantasy
+        -- entity that is not an NFL player and has no GSIS id at all, so it repeats its own
+        -- canonical id here, which is prefixed 'asq_dst_' and therefore self-evidently
+        -- Alpha-Squad-generated rather than passing itself off as an NFL identifier. The
+        -- column stays NOT NULL/UNIQUE: it is the join key the nflverse ingest path relies
+        -- on, and a synthetic value in that namespace can never collide with a real GSIS id.
         gsis_id VARCHAR UNIQUE NOT NULL,
         display_name VARCHAR,
         first_name VARCHAR,
@@ -206,7 +213,16 @@ M4_BASELINES_DDL = [
         -- 2026-08-23 -- a separate, provenance-tagged series, never blended into the
         -- DynastyProcess-sourced rows, so no existing leakage-safety guarantee changes.
         source VARCHAR NOT NULL DEFAULT 'dynastyprocess',
-        PRIMARY KEY (player_id, scrape_date, ecr_type, source)
+        -- Which FantasyPros ranking page a row came from (D56). `ecr_type` alone is NOT a
+        -- rank space: DynastyProcess labels several independently-ranked pages with the same
+        -- ecr_type -- 'ro' covers both `redraft-overall` (the PPR draft board) and
+        -- `redraft-idp` (a separate 1..N IDP ranking). Merging them produced colliding ranks
+        -- (preseason 2024 'ro' rank 3.0 was simultaneously an LB and a WR) and, because the
+        -- pre-D56 PRIMARY KEY did not include it, silently dropped one of any two rows a
+        -- player held on the same date. Part of the key, and required by every consumer that
+        -- needs a single coherent ordering.
+        page_type VARCHAR NOT NULL DEFAULT '',
+        PRIMARY KEY (player_id, scrape_date, ecr_type, page_type, source)
     )
     """,
     # One row per (baseline/model, position, season, player) prediction, so the evaluation
@@ -738,6 +754,29 @@ M14_PRODUCTIZATION_DDL: list[str] = [
     """,
 ]
 
+# D54: the empirical-validation phase. One row per simulated historical draft
+# (season, strategy, draft_slot) -- see evaluation/draft_simulation.py's module docstring for
+# why draft_slot is a dimension (every real slot drafts under every strategy, so no single
+# lucky/unlucky slot drives an apparent result) and why only the drafted_player_ids plus the
+# two real-outcome-scored metrics are persisted (the raw per-pick reasoning is reproducible on
+# demand from the same walk-forward inputs; persisting it here would just be a second,
+# driftable copy).
+M16_EVALUATION_DDL = [
+    """
+    CREATE TABLE IF NOT EXISTS draft_simulation_results (
+        season INTEGER NOT NULL,
+        strategy VARCHAR NOT NULL,
+        draft_slot INTEGER NOT NULL,
+        drafted_player_ids_json VARCHAR NOT NULL,
+        total_roster_points DOUBLE NOT NULL,
+        starter_points DOUBLE NOT NULL,
+        framework_version VARCHAR NOT NULL,
+        evaluated_at TIMESTAMP NOT NULL,
+        PRIMARY KEY (season, strategy, draft_slot, framework_version)
+    )
+    """,
+]
+
 # M15+ DDL is appended here as later milestones are implemented.
 ALL_DDL: list[str] = [
     *M1_SNAPSHOTS_DDL,
@@ -754,6 +793,7 @@ ALL_DDL: list[str] = [
     *M11_AGENTS_DDL,
     *M13_SIMULATION_DDL,
     *M14_PRODUCTIZATION_DDL,
+    *M16_EVALUATION_DDL,
 ]
 
 # ---------------------------------------------------------------------------
@@ -809,4 +849,34 @@ SELECT player_id, scrape_date, ecr_type, position, ecr_rank, ecr_best, ecr_worst
        source_snapshot_id, 'dynastyprocess'
 FROM market_snapshot_pre_d38;
 DROP TABLE market_snapshot_pre_d38;
+"""
+
+# D56 widens the key again, to include `page_type` -- same constraint as D38 (DuckDB cannot
+# ALTER a primary key in place) and the same remedy. Existing rows carry page_type '' rather
+# than a guessed value: which page a pre-D56 row came from is genuinely not recorded, and
+# inventing one would fabricate provenance. `alpha-squad market build` repopulates them for
+# real, so the empty marker is a transient "not yet re-ingested" state, and
+# `resolve_market_series` rejects it rather than treating it as a valid board.
+MARKET_SNAPSHOT_PAGE_TYPE_REBUILD = """
+ALTER TABLE market_snapshot RENAME TO market_snapshot_pre_d56;
+CREATE TABLE market_snapshot (
+    player_id VARCHAR NOT NULL,
+    scrape_date DATE NOT NULL,
+    ecr_type VARCHAR NOT NULL,
+    position VARCHAR,
+    ecr_rank DOUBLE NOT NULL,
+    ecr_best DOUBLE,
+    ecr_worst DOUBLE,
+    source_snapshot_id VARCHAR,
+    source VARCHAR NOT NULL DEFAULT 'dynastyprocess',
+    page_type VARCHAR NOT NULL DEFAULT '',
+    PRIMARY KEY (player_id, scrape_date, ecr_type, page_type, source)
+);
+INSERT INTO market_snapshot
+    (player_id, scrape_date, ecr_type, position, ecr_rank, ecr_best, ecr_worst,
+     source_snapshot_id, source, page_type)
+SELECT player_id, scrape_date, ecr_type, position, ecr_rank, ecr_best, ecr_worst,
+       source_snapshot_id, source, ''
+FROM market_snapshot_pre_d56;
+DROP TABLE market_snapshot_pre_d56;
 """

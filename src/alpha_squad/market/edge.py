@@ -1,11 +1,16 @@
 """Model-vs-market EDGE (AGENT_CONTRACTS.md's Edge contract; ACCEPTANCE_CRITERIA.md's
 Market/EDGE section). Compares the M6 uncertainty model's single-season point/probability
-predictions against the market's redraft-superflex ECR ('rsf' — an overall, cross-position
-rank that values QBs the way the target league's 2QB format actually does; see D21), both
+predictions against the market's redraft overall ECR — an overall, cross-position rank
 horizon-matched to a single season. A dynasty-horizon EDGE (using 'dsf' + dynasty_values'
 value_2qb, blended with age curves) is left to M10's trade logic — mixing a single-season
 point model against a multi-year dynasty value would conflate two different things the model
 was never asked to predict.
+
+The series is format-matched, not fixed: D21 chose 'rsf' (redraft *superflex*) because the
+target league was then 2QB. The target format is now a 1-QB redraft league, so the matching
+board is 'ro' (D56) — `market/series.py` explains why these are genuinely different markets
+rather than two spellings of the same ranking. Callers with a real league context should
+resolve the series from it; `DEFAULT_ECR_TYPE` is only the fallback for those without one.
 
 Hard rule (ACCEPTANCE_CRITERIA.md: "a raw ranking discrepancy cannot alone produce a strong
 EDGE"), encoded in `classify_action`: BUY/SELL requires rank edge AND points edge to agree in
@@ -27,12 +32,18 @@ import duckdb
 from sklearn.isotonic import IsotonicRegression
 
 from alpha_squad.evidence.prior_update import evidence_score_for_action
+from alpha_squad.market.series import DEFAULT_SERIES, series_for_ecr_type
 from alpha_squad.models.uncertainty.run import MODEL_VERSION as UNCERTAINTY_MODEL_VERSION
 from alpha_squad.sources.base import utcnow
 
 EDGE_MODEL_VERSION = "edge_v1"
 SKILL_POSITIONS = ("QB", "RB", "WR", "TE")
-DEFAULT_ECR_TYPE = "rsf"
+
+# The 1-QB redraft board ('ro'), matching the product's target format (D56). Was 'rsf'
+# (superflex) while the target league was 2QB (D21) -- a format change, not a data-quality
+# correction, so pre-D56 numbers measured against 'rsf' remain valid for the league they
+# described and are labelled as such rather than restated.
+DEFAULT_ECR_TYPE = DEFAULT_SERIES.ecr_type
 
 RANK_EDGE_THRESHOLD = 15
 POINTS_EDGE_THRESHOLD = 15.0
@@ -80,21 +91,45 @@ def _edge_id(player_id: str, season: int, ecr_type: str, model_version: str) -> 
 
 
 def _preseason_overall_market(
-    con: duckdb.DuckDBPyConnection, ecr_type: str, season: int
+    con: duckdb.DuckDBPyConnection,
+    ecr_type: str,
+    season: int,
+    page_type: str | None = None,
 ) -> dict[str, tuple[str, float]]:
-    """Latest Jul/Aug snapshot per player for `ecr_type` in `season` -> (position, ecr_rank).
+    """Latest Jul/Aug snapshot per player for one board in `season` -> (position, ecr_rank).
+
     Preseason-only, mirroring models/baselines/market_implied.py's leakage-safe pattern: an
-    EDGE "as of" a season never reads market movement that happened later in that season."""
+    EDGE "as of" a season never reads market movement that happened later in that season.
+
+    Scoped to a single `page_type` (D56), because `ecr_type` alone is not a rank space --
+    'ro' merges FantasyPros' PPR draft board with a separately-ranked IDP board, so an
+    unscoped query returns two overlapping 1..N sequences as if they were one ordering.
+
+    `page_type` defaults to the one `market/series.py` maps this `ecr_type` to, so every
+    existing caller is scoped correctly without having to thread a new argument through.
+    An `ecr_type` with no known series (the live FantasyPros capture, a test fixture) has
+    only one page by construction and stays unscoped -- filtering it on a page_type nothing
+    wrote would silently return an empty board."""
+    if page_type is None:
+        try:
+            page_type = series_for_ecr_type(ecr_type).page_type
+        except ValueError:
+            page_type = None
+    where = "ecr_type = ? AND year(scrape_date) = ? AND month(scrape_date) IN (7, 8)"
+    params: list[object] = [ecr_type, season]
+    if page_type is not None:
+        where += " AND page_type = ?"
+        params.append(page_type)
     rows = con.execute(
-        """
+        f"""
         SELECT player_id, position, ecr_rank FROM (
             SELECT player_id, position, ecr_rank,
                    row_number() OVER (PARTITION BY player_id ORDER BY scrape_date DESC) AS rn
             FROM market_snapshot
-            WHERE ecr_type = ? AND year(scrape_date) = ? AND month(scrape_date) IN (7, 8)
+            WHERE {where}
         ) WHERE rn = 1
         """,
-        [ecr_type, season],
+        params,
     ).fetchall()
     return {player_id: (position, ecr_rank) for player_id, position, ecr_rank in rows}
 

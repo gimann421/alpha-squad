@@ -9,6 +9,7 @@ import pytest
 import yaml
 
 from alpha_squad.league.context import (
+    _LEAGUE_CONFIGS_DIR,
     LeagueContext,
     list_registered_leagues,
     load_league_context,
@@ -37,19 +38,69 @@ from alpha_squad.storage.db import init_db
 
 class TestLeagueContext:
     def test_loads_the_target_league_config_exactly(self):
+        """The 1-QB redraft target format (docs/TARGET_FORMAT_1QB.md, D58)."""
         league = load_league_context()
         assert league.league_id == "target_league"
-        assert league.format == "dynasty"
+        assert league.format == "redraft"
         assert league.teams == 10
-        assert league.lineup == {"QB": 2, "RB": 2, "WR": 2, "TE": 1, "FLEX": 2}
+        assert league.lineup == {
+            "QB": 1,
+            "RB": 2,
+            "WR": 2,
+            "TE": 1,
+            "FLEX": 2,
+            "K": 1,
+            "DEF": 1,
+        }
         assert league.is_ppr
-        assert league.bench_size == 10
+        assert league.bench_size == 6
         assert league.faab_budget == 100
+
+    def test_target_league_roster_arithmetic_is_internally_consistent(self):
+        """REGRESSION (D58). The pre-D58 config declared 9 starters + 10 bench alongside
+        roster_size 17 -- three numbers that could not all be true. `roster_size` is also
+        the number of rounds the draft benchmark runs, so an inconsistent one silently
+        drafts the wrong number of players."""
+        league = load_league_context()
+        starters = sum(league.lineup.values())
+        assert starters == 10
+        assert starters + league.bench_size == league.roster["roster_size"] == 16
+
+    def test_every_registered_yaml_league_has_consistent_roster_arithmetic(self):
+        """Holds for every shipped config, not just the default one."""
+        for path in sorted(_LEAGUE_CONFIGS_DIR.glob("*.yaml")):
+            if path.name == "registry.yaml":
+                continue
+            league = load_league_context(path)
+            starters = sum(league.lineup.values())
+            assert starters + league.bench_size == league.roster["roster_size"], path.name
 
     def test_dedicated_and_flex_slots_split_correctly(self):
         league = load_league_context()
-        assert league.dedicated_slots() == {"QB": 2, "RB": 2, "WR": 2, "TE": 1}
+        assert league.dedicated_slots() == {
+            "QB": 1,
+            "RB": 2,
+            "WR": 2,
+            "TE": 1,
+            "K": 1,
+            "DST": 1,
+        }
         assert league.flex_slots() == {"FLEX": 2}
+
+    def test_the_def_slot_is_reported_as_the_dst_position(self):
+        """The config (and Sleeper) call the slot DEF; nflverse and FantasyPros call the
+        position DST. Without normalization the slot looks for a position no row has, and
+        goes silently unfilled rather than failing."""
+        league = load_league_context()
+        assert "DEF" not in league.dedicated_slots()
+        assert league.dedicated_slots()["DST"] == 1
+
+    def test_a_second_format_is_registered_and_resolves_differently(self):
+        """The 1-QB format is the default, not a limitation: another config selects a
+        different lineup and a different consensus board with no code change."""
+        legacy = load_league_context(_LEAGUE_CONFIGS_DIR / "legacy_2qb_dynasty.yaml")
+        assert legacy.format == "dynasty"
+        assert legacy.dedicated_slots()["QB"] == 2
 
     def test_missing_config_raises_actionable_error(self, tmp_path):
         with pytest.raises(RuntimeError, match="league context"):
@@ -321,6 +372,18 @@ class TestRosterNeed:
         needs = roster_need(league, ["QB", "QB", "QB", "QB", "QB"])
         assert needs["QB"] < 0
 
+    def test_one_player_past_a_full_bench_hits_the_fit_multiplier_floor_immediately(self):
+        """Regression (D54): the old oversaturation coefficient (-0.2) took ~15 extra
+        players at one position to reach roster_fit_multiplier's 0.7 floor, which is why a
+        real historical draft simulation could stack 7 QBs into a 2-QB league before this
+        signal ever meaningfully discouraged it (verified by replaying the real draft
+        pick-by-pick). A single player beyond starters + a healthy 2-deep bench should already
+        hit the full floor -- there is essentially no real scenario where a 3rd+ bench QB in a
+        2-QB league has usable value."""
+        league = _flat_league(1, {"QB": 2})  # depth_target = 2 + 2 = 4
+        needs = roster_need(league, ["QB", "QB", "QB", "QB", "QB"])  # 5th QB: one past depth_target
+        assert roster_fit_multiplier(needs["QB"]) == pytest.approx(0.7)
+
     def test_fit_multiplier_is_bounded(self):
         assert roster_fit_multiplier(100) == pytest.approx(1.3)
         assert roster_fit_multiplier(-100) == pytest.approx(0.7)
@@ -335,29 +398,51 @@ class TestNextPickSurvivalProbability:
         yield connection
         connection.close()
 
-    def _seed(self, con, player_id, best, worst):
+    def _seed(self, con, player_id, best, worst, scrape_date="2025-08-01"):
         con.execute(
-            "INSERT INTO market_snapshot (player_id, scrape_date, ecr_type, position, ecr_rank, ecr_best, ecr_worst) "
-            "VALUES (?, '2025-08-01', 'rsf', 'WR', ?, ?, ?)",
-            [player_id, (best + worst) / 2, best, worst],
+            "INSERT INTO market_snapshot (player_id, scrape_date, ecr_type, position, ecr_rank, ecr_best, ecr_worst, page_type) "
+            "VALUES (?, ?, 'rsf', 'WR', ?, ?, ?, 'redraft-op')",
+            [player_id, scrape_date, (best + worst) / 2, best, worst],
         )
 
     def test_certainly_gone_before_the_best_case_rank(self, con):
         self._seed(con, "p1", best=5, worst=15)
-        assert next_pick_survival_probability(con, "p1", next_pick_overall=20) == pytest.approx(0.0)
+        assert next_pick_survival_probability(
+            con, "p1", next_pick_overall=20, season=2025
+        ) == pytest.approx(0.0)
 
     def test_certainly_available_after_the_worst_case_rank(self, con):
         self._seed(con, "p1", best=5, worst=15)
-        assert next_pick_survival_probability(con, "p1", next_pick_overall=1) == pytest.approx(1.0)
+        assert next_pick_survival_probability(
+            con, "p1", next_pick_overall=1, season=2025
+        ) == pytest.approx(1.0)
 
     def test_interpolates_within_the_expert_dispersion(self, con):
         self._seed(con, "p1", best=10, worst=20)
-        prob = next_pick_survival_probability(con, "p1", next_pick_overall=15)
+        prob = next_pick_survival_probability(con, "p1", next_pick_overall=15, season=2025)
         assert 0.0 < prob < 1.0
         assert prob == pytest.approx(0.5)
 
     def test_no_market_data_returns_none(self, con):
-        assert next_pick_survival_probability(con, "nobody", next_pick_overall=10) is None
+        assert (
+            next_pick_survival_probability(con, "nobody", next_pick_overall=10, season=2025) is None
+        )
+
+    def test_does_not_leak_a_snapshot_recorded_after_the_draft_season(self, con):
+        """Regression (D54): a real historical draft simulation for season 2021 must not see
+        expert-rank dispersion recorded in 2026 -- found live via a real draft_simulation.py
+        run where many players' market_snapshot rows span 2021-2026 and the un-scoped
+        `ORDER BY scrape_date DESC LIMIT 1` picked up the 2026 row regardless of which
+        historical season was being drafted."""
+        self._seed(con, "p1", best=5, worst=15, scrape_date="2026-08-01")
+        assert next_pick_survival_probability(con, "p1", next_pick_overall=20, season=2021) is None
+
+    def test_uses_the_snapshot_from_the_season_being_drafted_not_a_later_one(self, con):
+        self._seed(con, "p1", best=5, worst=15, scrape_date="2021-08-01")
+        self._seed(con, "p1", best=50, worst=60, scrape_date="2026-08-01")
+        assert next_pick_survival_probability(
+            con, "p1", next_pick_overall=20, season=2021
+        ) == pytest.approx(0.0)
 
 
 @pytest.fixture
@@ -411,6 +496,17 @@ class TestRecommendDraftPick:
         league = load_league_context()
         with pytest.raises(RuntimeError):
             recommend_draft_pick(con, league, 2025, [], {"nobody"})
+
+    def test_exact_score_ties_break_deterministically_by_player_id(self, con):
+        """Regression (D54): candidates are built by iterating `available_player_ids` (a
+        `set`), whose order depends on hash randomization that differs across process runs
+        (confirmed: PYTHONHASHSEED unset in this environment) -- an exact score tie could
+        otherwise pick a different player on a re-run of the identical historical draft."""
+        league = load_league_context()
+        _seed_uncertainty(con, "zeta", 2025, "QB", 300.0)
+        _seed_uncertainty(con, "alpha_p", 2025, "QB", 300.0)
+        rec = recommend_draft_pick(con, league, 2025, [], {"zeta", "alpha_p"})
+        assert rec.recommendation == "alpha_p"
 
 
 class TestRecommendWaiverPickup:
@@ -556,7 +652,7 @@ class TestRecommendDynastyTrade:
                 (edge_id, player_id, season, position, ecr_type, model_version, model_rank,
                  market_rank, rank_edge, projected_points_edge, evidence_score, confidence,
                  action, reasons_json, built_at)
-            VALUES ('e1', 'p1', 2025, 'WR', 'rsf', 'edge_v1', 5, 40, 35, 50.0, 0.5, 0.8,
+            VALUES ('e1', 'p1', 2025, 'WR', 'ro', 'edge_v1', 5, 40, 35, 50.0, 0.5, 0.8,
                     'BUY', '["real edge reason"]', current_timestamp)
             """
         )

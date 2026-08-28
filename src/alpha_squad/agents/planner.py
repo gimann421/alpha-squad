@@ -23,6 +23,7 @@ rather than wired in half-correctly; a real follow-up, not silently dropped."""
 from __future__ import annotations
 
 from alpha_squad.agents.contracts import Task
+from alpha_squad.market.edge import DEFAULT_ECR_TYPE
 
 DEFAULT_QA_POSITIONS = ("QB", "RB", "WR", "TE")
 DEFAULT_IDENTITY_DATASETS: list[list] = [
@@ -42,7 +43,7 @@ def plan_full_refresh(
     class_start: int | None = None,
     class_end: int | None = None,
     min_train_class: int = 2000,
-    ecr_type: str = "rsf",
+    ecr_type: str = DEFAULT_ECR_TYPE,
     include_rookie: bool = True,
     include_market_edge: bool = True,
     include_evidence: bool = True,

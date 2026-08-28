@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import typer
@@ -18,6 +19,29 @@ from alpha_squad.agents.orchestrator import run_pipeline
 from alpha_squad.agents.planner import plan_full_refresh
 from alpha_squad.agents.state import reconstruct_run
 from alpha_squad.config.settings import get_settings
+from alpha_squad.evaluation.draft_forensics import (
+    run_tier_ablation,
+    summarize_tier_ablation,
+)
+from alpha_squad.evaluation.draft_simulation import (
+    persist_draft_sim_results,
+    run_draft_simulation,
+    write_draft_simulation_report,
+)
+from alpha_squad.evaluation.dynasty_validation import write_dynasty_validation_report
+from alpha_squad.evaluation.failure_analysis import write_failure_analysis_report
+from alpha_squad.evaluation.market_inefficiency import write_market_inefficiency_report
+from alpha_squad.evaluation.pick_attribution import (
+    run_pick_attribution,
+    write_pick_attribution_artifacts,
+)
+from alpha_squad.evaluation.projection_benchmark import write_projection_benchmark_report
+from alpha_squad.evaluation.rookie_benchmark import (
+    run_rookie_baselines,
+    write_rookie_benchmark_report,
+)
+from alpha_squad.evaluation.trade_evaluation import write_trade_evaluation_report
+from alpha_squad.evaluation.waiver_evaluation import write_waiver_evaluation_report
 from alpha_squad.evidence.events import build_evidence_events_range
 from alpha_squad.evidence.prior_update import run_prior_update
 from alpha_squad.evidence.sleeper_trending import detect_sleeper_trending
@@ -58,6 +82,7 @@ from alpha_squad.market.edge import (
     write_edge_backtest_report,
     write_edge_validation_report,
 )
+from alpha_squad.models.baselines.kicking_defense import build_kdst_projections
 from alpha_squad.models.baselines.run import run_baselines
 from alpha_squad.models.established.season_level import (
     load_season_level_data,
@@ -67,7 +92,11 @@ from alpha_squad.models.established.train import run_established_ml
 from alpha_squad.models.report import write_evaluation_report
 from alpha_squad.models.rookie.ablation import compare_arms, write_ablation_report
 from alpha_squad.models.rookie.data import load_rookie_projection_data
-from alpha_squad.models.rookie.features import COLLEGE_FEATURE_VERSION, FEATURES_WITH_COLLEGE
+from alpha_squad.models.rookie.features import (
+    COLLEGE_FEATURE_VERSION,
+    FEATURE_VERSION,
+    FEATURES_WITH_COLLEGE,
+)
 from alpha_squad.models.rookie.train import (
     project_rookie_class,
     run_rookie_models,
@@ -79,7 +108,14 @@ from alpha_squad.models.simulation.correlated import (
     simulate_team_season,
 )
 from alpha_squad.models.simulation.team_scores import build_team_week_points
-from alpha_squad.models.uncertainty.run import run_uncertainty, score_with_persisted_model
+from alpha_squad.models.uncertainty.run import (
+    MODEL_VERSION as UNCERTAINTY_MODEL_VERSION,
+)
+from alpha_squad.models.uncertainty.run import (
+    project_uncertainty_season,
+    run_uncertainty,
+    score_with_persisted_model,
+)
 from alpha_squad.sources.base import SourceError, SourceHealth, SourceStatus, utcnow
 from alpha_squad.sources.registry import all_adapters
 from alpha_squad.storage.db import get_connection, init_db
@@ -511,6 +547,308 @@ def evaluate_baselines(
     con.close()
 
 
+@evaluate_app.command("tier-ablation")
+def evaluate_tier_ablation(
+    tiers: str = typer.Option("M0,M1,M2,M3", help="Comma-separated tier codes"),
+    season_start: int = typer.Option(2021, help="First season"),
+    season_end: int = typer.Option(2025, help="Last season"),
+    league_id: str = typer.Option("target_league", help="League config to draft under"),
+    json_path: str = typer.Option(
+        "reports/draft_forensics_mtier_results.json", help="Raw per-draft rows"
+    ),
+) -> None:
+    """Run a ceteris-paribus scoring ablation across a tier grid (D55/D58).
+
+    Diagnostic, not the official benchmark: `evaluation/draft_forensics.py` reproduces
+    production's formulas against pre-loaded season data so hundreds of drafts are affordable.
+    A tier that wins here still has to clear the real benchmark
+    (`evaluate draft-simulation`) before it ships."""
+    settings = get_settings()
+    con = get_connection(settings)
+    init_db(con)
+    league = resolve_league(league_id, con=con, settings=settings)
+    seasons = list(range(season_start, season_end + 1))
+    tier_list = tuple(t.strip() for t in tiers.split(",") if t.strip())
+
+    rows = run_tier_ablation(con, league, seasons, tier_list)
+    summary = summarize_tier_ablation(rows, league)
+
+    out = Path(json_path)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps({"rows": rows, "summary": summary}, indent=2, sort_keys=True))
+
+    table = Table(title=f"Tier ablation ({season_start}-{season_end}, {len(rows)} drafts)")
+    for col in ("tier", "n", "mean starter pts", "mean total pts", "infeasible", "zero by pos"):
+        table.add_column(col)
+    for r in summary:
+        zeros = ", ".join(f"{p}:{c}" for p, c in sorted(r["zero_rate_by_position"].items()) if c)
+        table.add_row(
+            r["tier"],
+            str(r["n"]),
+            f"{r['mean_starter_points']:.1f}",
+            f"{r['mean_total_roster_points']:.1f}",
+            str(r["n_infeasible_rosters"]),
+            zeros or "-",
+        )
+    console.print(table)
+    console.print(f"raw rows written to [green]{json_path}[/green]")
+    con.close()
+
+
+@evaluate_app.command("pick-attribution")
+def evaluate_pick_attribution(
+    season_start: int = typer.Option(2021, help="First season"),
+    season_end: int = typer.Option(2025, help="Last season"),
+    league_id: str = typer.Option("target_league", help="League config to draft under"),
+    slots: str = typer.Option("", help="Comma-separated draft slots; default every slot"),
+    json_path: str = typer.Option("reports/pick_attribution.json", help="Raw per-pick rows"),
+    report_path: str = typer.Option(
+        "reports/pick_attribution.md", help="Markdown summary output path"
+    ),
+) -> None:
+    """Where Alpha's draft diverges from consensus, and whether each divergence helped or
+    hurt realized starter points (D58). Replays Alpha's draft once and asks, at each of its
+    turns, what the consensus rule would have taken from the same pool -- a real
+    counterfactual at a real decision point. Slow for the same reason the draft benchmark
+    is: it calls the real `recommend_draft_pick` once per pick."""
+    settings = get_settings()
+    con = get_connection(settings)
+    init_db(con)
+    league = resolve_league(league_id, con=con, settings=settings)
+    seasons = list(range(season_start, season_end + 1))
+    slot_list = [int(s) for s in slots.split(",") if s.strip()] or None
+
+    rows = run_pick_attribution(con, league, seasons, slot_list)
+    write_pick_attribution_artifacts(rows, Path(json_path), Path(report_path))
+    disagreements = [r for r in rows if not r.agreed]
+    console.print(
+        f"picks analysed: [green]{len(rows)}[/green], "
+        f"disagreements: [yellow]{len(disagreements)}[/yellow]"
+    )
+    console.print(f"report written to [green]{report_path}[/green]")
+    con.close()
+
+
+@evaluate_app.command("draft-simulation")
+def evaluate_draft_simulation(
+    season_start: int = typer.Option(
+        2021, help="First season (uncertainty_predictions coverage starts 2021)"
+    ),
+    season_end: int = typer.Option(2025, help="Last season"),
+    league_id: str = typer.Option("target_league", help="League config to draft under"),
+    report_path: str = typer.Option(
+        "reports/draft_simulation.md", help="Markdown report output path"
+    ),
+) -> None:
+    """Empirical validation phase (D54): simulate a real historical snake draft under 4
+    strategies (market_consensus/generic_prior_year/alpha_bpa/alpha_league_aware), from
+    every draft slot, for every season with real walk-forward Alpha predictions. Scores
+    rosters on real end-of-season outcomes. `alpha_league_aware` calls the real
+    `recommend_draft_pick` once per pick, so this is slow (tens of minutes) -- it is a
+    one-off evaluation run, not something meant to run per-request."""
+    settings = get_settings()
+    con = get_connection(settings)
+    init_db(con)
+    league = resolve_league(league_id, con=con, settings=settings)
+    seasons = list(range(season_start, season_end + 1))
+
+    results = run_draft_simulation(con, league, seasons)
+    persist_draft_sim_results(con, results)
+
+    summary = write_draft_simulation_report(con, Path(report_path), seasons)
+    table = Table(title="Draft simulation summary (pooled across seasons/slots)")
+    for col in ("strategy", "n", "mean_starter_pts", "mean_total_pts"):
+        table.add_column(col)
+    for row in summary:
+        table.add_row(
+            row["strategy"],
+            str(row["n"]),
+            f"{row['mean_starter_points']:.1f}",
+            f"{row['mean_total_roster_points']:.1f}",
+        )
+    console.print(table)
+    console.print(f"report written to [green]{report_path}[/green]")
+    con.close()
+
+
+@evaluate_app.command("projection-benchmark")
+def evaluate_projection_benchmark(
+    season_start: int = typer.Option(2020, help="First season"),
+    season_end: int = typer.Option(2025, help="Last season"),
+    report_path: str = typer.Option(
+        "reports/projection_benchmark.md", help="Markdown report output path"
+    ),
+) -> None:
+    """D54: does Alpha's season-level ML beat the M4 baselines? Reads already-computed
+    `evaluation_results` rows (no new predictions made here) and reports the real
+    season-intersection window where every model family actually has a row."""
+    settings = get_settings()
+    con = get_connection(settings)
+    init_db(con)
+    result = write_projection_benchmark_report(con, Path(report_path), season_start, season_end)
+    console.print(f"common seasons: {result['common_seasons']}")
+    console.print(f"report written to [green]{report_path}[/green]")
+    con.close()
+
+
+@evaluate_app.command("market-inefficiency")
+def evaluate_market_inefficiency(
+    season_start: int = typer.Option(
+        2022, help="First season (edge_snapshot coverage starts 2022)"
+    ),
+    season_end: int = typer.Option(2025, help="Last season"),
+    ecr_type: str = typer.Option(DEFAULT_ECR_TYPE, help="Market series EDGE was built against"),
+    report_path: str = typer.Option(
+        "reports/market_inefficiency.md", help="Markdown report output path"
+    ),
+) -> None:
+    """D54: does disagreement magnitude/confidence/evidence-backing actually predict outcome
+    quality, or is a strong disagreement no better than a mild one? Requires `edge build` to
+    have already run for these seasons."""
+    settings = get_settings()
+    con = get_connection(settings)
+    init_db(con)
+    tiers = write_market_inefficiency_report(
+        con, Path(report_path), season_start, season_end, ecr_type
+    )
+    for t in tiers:
+        console.print(f"{t.tier}: n={t.n} signed_edge={t.mean_signed_edge}")
+    console.print(f"report written to [green]{report_path}[/green]")
+    con.close()
+
+
+@evaluate_app.command("dynasty-heuristics")
+def evaluate_dynasty_heuristics(
+    draft_year_end: int = typer.Option(
+        2023, help="Last draft class (needs 3 real seasons of data)"
+    ),
+    report_path: str = typer.Option(
+        "reports/dynasty_heuristic_validation.md", help="Markdown report output path"
+    ),
+) -> None:
+    """D54: does real production actually decline by round/age the way pick_value (D45) and
+    age_curve_multiplier (D25) assume? Both are documented heuristics, never fit to data --
+    this checks the assumed shape against real draft_picks/player_season_stats history."""
+    settings = get_settings()
+    con = get_connection(settings)
+    init_db(con)
+    write_dynasty_validation_report(con, Path(report_path), draft_year_end)
+    console.print(f"report written to [green]{report_path}[/green]")
+    con.close()
+
+
+@evaluate_app.command("waiver-tier")
+def evaluate_waiver_tier(
+    season_start: int = typer.Option(2020, help="First season"),
+    season_end: int = typer.Option(2025, help="Last season"),
+    report_path: str = typer.Option(
+        "reports/waiver_tier_evaluation.md", help="Markdown report output path"
+    ),
+) -> None:
+    """D54: preseason waiver-tier value-discovery proxy (NOT a FAAB-bidding simulation -- see
+    module docstring in evaluation/waiver_evaluation.py for why a real historical bidding
+    backtest isn't feasible in this environment)."""
+    settings = get_settings()
+    con = get_connection(settings)
+    init_db(con)
+    write_waiver_evaluation_report(con, Path(report_path), season_start, season_end)
+    console.print(f"report written to [green]{report_path}[/green]")
+    con.close()
+
+
+@evaluate_app.command("rookie-benchmark")
+def evaluate_rookie_benchmark(
+    draft_class_start: int = typer.Option(2019, help="First draft class"),
+    draft_class_end: int = typer.Option(
+        2024, help="Last draft class (needs a played rookie season)"
+    ),
+    report_path: str = typer.Option(
+        "reports/rookie_benchmark.md", help="Markdown report output path"
+    ),
+) -> None:
+    """D54: adds two real external baselines (draft-capital-only, rookie-season market ECR)
+    for Alpha's rookie regression, split by real draft-round tier. First computes the two new
+    baselines walk-forward and records them into the shared evaluation_results table."""
+    settings = get_settings()
+    con = get_connection(settings)
+    init_db(con)
+    run_rookie_baselines(con, list(range(draft_class_start, draft_class_end + 1)))
+    write_rookie_benchmark_report(con, Path(report_path), draft_class_start, draft_class_end)
+    console.print(f"report written to [green]{report_path}[/green]")
+    con.close()
+
+
+@evaluate_app.command("trade-evidence")
+def evaluate_trade_evidence(
+    season_start: int = typer.Option(
+        2022, help="First season (edge_snapshot coverage starts 2022)"
+    ),
+    season_end: int = typer.Option(2025, help="Last season"),
+    ecr_type: str = typer.Option(DEFAULT_ECR_TYPE, help="Market series EDGE was built against"),
+    report_path: str = typer.Option(
+        "reports/trade_evaluation.md", help="Markdown report output path"
+    ),
+) -> None:
+    """D54: states what is and isn't measurable about trade recommendation quality in this
+    environment, and reproduces the real BUY/SELL evidence recommend_dynasty_trade's action
+    inherits from EDGE. Requires `edge validate` to have already run for these seasons."""
+    settings = get_settings()
+    con = get_connection(settings)
+    init_db(con)
+    write_trade_evaluation_report(con, Path(report_path), season_start, season_end, ecr_type)
+    console.print(f"report written to [green]{report_path}[/green]")
+    con.close()
+
+
+@evaluate_app.command("failure-analysis")
+def evaluate_failure_analysis(
+    edge_season_start: int = typer.Option(2022, help="First EDGE season"),
+    edge_season_end: int = typer.Option(2025, help="Last EDGE season"),
+    rookie_class_start: int = typer.Option(2019, help="First rookie draft class"),
+    rookie_class_end: int = typer.Option(2024, help="Last rookie draft class"),
+    report_path: str = typer.Option(
+        "reports/failure_analysis.md", help="Markdown report output path"
+    ),
+) -> None:
+    """D54 (directive section 18, mandatory): concrete named misses, not just aggregate
+    win/loss statistics. Requires `edge build`/`edge validate` and `train rookie` to have
+    already run for these ranges."""
+    settings = get_settings()
+    con = get_connection(settings)
+    init_db(con)
+    write_failure_analysis_report(
+        con,
+        Path(report_path),
+        edge_season_start,
+        edge_season_end,
+        FEATURE_VERSION,
+        rookie_class_start,
+        rookie_class_end,
+    )
+    console.print(f"report written to [green]{report_path}[/green]")
+    con.close()
+
+
+@train_app.command("kdst-projections")
+def train_kdst_projections(
+    season_start: int = typer.Option(2013, help="First season to project"),
+    season_end: int = typer.Option(2026, help="Last season to project"),
+) -> None:
+    """Build kicker and team-defense season projections (D57).
+
+    A measured baseline rather than an ML model: both positions carry weak year-over-year
+    signal (K r=0.41, DST r=0.29 over real 2015-2025 seasons), and the weighting each one
+    uses was chosen by walk-forward MAE, not assumed. See
+    models/baselines/kicking_defense.py for the comparison. Requires `features build` to have
+    run first, since the projections read `player_season_stats`."""
+    settings = get_settings()
+    con = get_connection(settings)
+    init_db(con)
+    seasons = list(range(season_start, season_end + 1))
+    n = build_kdst_projections(con, seasons)
+    console.print(f"K/DST projection rows written: [green]{n}[/green]")
+
+
 @train_app.command("established")
 def train_established(
     season_start: int = typer.Option(2020, help="First target season to walk-forward evaluate"),
@@ -668,6 +1006,61 @@ def train_uncertainty(
     Path(report_path).parent.mkdir(parents=True, exist_ok=True)
     Path(report_path).write_text("\n".join(lines) + "\n")
     console.print(f"report written to [green]{report_path}[/green]")
+    con.close()
+
+
+@train_app.command("uncertainty-project")
+def train_uncertainty_project(
+    season: int = typer.Option(..., help="Season to project (has not been played yet)"),
+    min_train_season: int = typer.Option(2015, help="Earliest season usable for training data"),
+    top_n: int = typer.Option(20, help="How many to print, per position"),
+    persist: bool = typer.Option(
+        True,
+        help="Save the fitted model + calibration residuals, so `models rescore-uncertainty` "
+        "can re-score without retraining.",
+    ),
+) -> None:
+    """Project an UNPLAYED season for established (non-rookie) players -- the forward-looking
+    counterpart to `train uncertainty`, which is a backtest over seasons whose outcomes are
+    already known. Writes no calibration_diagnostics row, because there is no real outcome yet
+    to check coverage against (D40's rookie-projection reasoning, applied here). Requires
+    `features build` and `market build` for the target season's preseason window; true rookies
+    are not covered here -- see `train rookie-project`."""
+    settings = get_settings()
+    con = get_connection(settings)
+    init_db(con)
+
+    report = project_uncertainty_season(con, season, min_train_season, persist=persist)
+
+    rows = con.execute(
+        """
+        SELECT p.display_name, up.position, up.point_prediction, up.p10, up.p90
+        FROM uncertainty_predictions up
+        LEFT JOIN players p ON p.player_id = up.player_id
+        WHERE up.season = ? AND up.model_version = ?
+        ORDER BY up.position, up.point_prediction DESC
+        """,
+        [season, UNCERTAINTY_MODEL_VERSION],
+    ).fetchall()
+
+    by_position: dict[str, list] = {}
+    for name, pos, point_pred, p10, p90 in rows:
+        by_position.setdefault(pos, []).append((name, point_pred, p10, p90))
+
+    for pos, players in by_position.items():
+        table = Table(title=f"{season} {pos} projection (top {top_n})")
+        for col in ("player", "proj pts", "p10", "p90"):
+            table.add_column(col)
+        for name, point_pred, p10, p90 in players[:top_n]:
+            table.add_row(name or "-", f"{point_pred:.1f}", f"{p10:.1f}", f"{p90:.1f}")
+        console.print(table)
+
+    console.print(
+        f"predictions written: [green]{report.predictions_written}[/green] "
+        f"(trained through {report.trained_through}, projecting {season})"
+    )
+    if report.skipped:
+        console.print(f"[yellow]skipped: {report.skipped}[/yellow]")
     con.close()
 
 
@@ -1275,9 +1668,15 @@ def league_draft(
         DEFAULT_LEAGUE_ID, help="Registered league id to use (see `alpha-squad league list`)"
     ),
     top_n: int = typer.Option(5, help="Number of alternatives to show"),
+    current_pick: int = typer.Option(
+        None,
+        help="Your current overall pick number. Together with --next-pick this enables the "
+        "positional opportunity-cost term (D55); omit it and that term is simply not applied.",
+    ),
 ) -> None:
-    """Recommend a draft pick: VORP, roster fit, model confidence, and next-pick survival
-    probability, with alternatives and reasoning (AGENT_CONTRACTS.md's Decision contract)."""
+    """Recommend a draft pick: VORP, positional opportunity cost, roster fit, model confidence,
+    and next-pick survival probability, with alternatives and reasoning (AGENT_CONTRACTS.md's
+    Decision contract)."""
     settings = get_settings()
     con = get_connection(settings)
     init_db(con)
@@ -1291,7 +1690,15 @@ def league_draft(
 
     try:
         rec = recommend_draft_pick(
-            con, league, season, roster_positions, available_ids, next_pick, ecr_type, top_n
+            con,
+            league,
+            season,
+            roster_positions,
+            available_ids,
+            next_pick,
+            ecr_type,
+            top_n,
+            current_pick_overall=current_pick,
         )
     except RuntimeError as e:
         console.print(f"[red]{e}[/red]")

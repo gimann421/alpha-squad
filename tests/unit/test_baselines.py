@@ -64,8 +64,8 @@ class TestEcrImpliedWalkForwardDiscipline:
     def _seed_market(self, con, player_id: str, season: int, position: str, rank: float):
         con.execute(
             """
-            INSERT INTO market_snapshot (player_id, scrape_date, ecr_type, position, ecr_rank)
-            VALUES (?, ?, 'ro', ?, ?)
+            INSERT INTO market_snapshot (player_id, scrape_date, ecr_type, position, ecr_rank, page_type)
+            VALUES (?, ?, 'ro', ?, ?, 'redraft-overall')
             """,
             [player_id, date(season, 8, 15), position, rank],
         )

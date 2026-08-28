@@ -76,7 +76,7 @@ def con():
         "INSERT INTO edge_snapshot (edge_id, player_id, season, position, ecr_type, "
         "model_version, model_rank, market_rank, rank_edge, evidence_score, action, "
         "reasons_json, built_at) VALUES "
-        "('e1', 'rb1', ?, 'RB', 'rsf', 'edge_v1', 5, 20, 15, 0.5, 'BUY', '[]', current_timestamp)",
+        "('e1', 'rb1', ?, 'RB', 'ro', 'edge_v1', 5, 20, 15, 0.5, 'BUY', '[]', current_timestamp)",
         [SEASON],
     )
     connection.execute(
@@ -140,7 +140,7 @@ def _fake_get(monkeypatch, call_log: list[str] | None = None):
 class TestBuildMyTeamReport:
     def test_real_starter_bench_split_and_totals(self, con, settings, monkeypatch):
         _fake_get(monkeypatch)
-        report = build_my_team_report(con, _league(), SEASON, roster_id=1, ecr_type="rsf")
+        report = build_my_team_report(con, _league(), SEASON, roster_id=1, ecr_type="ro")
 
         assert report.owner_display_name == "gimann"
         assert report.team_name == "My Team"
@@ -156,7 +156,7 @@ class TestBuildMyTeamReport:
 
     def test_edge_and_dynasty_value_join_correctly(self, con, settings, monkeypatch):
         _fake_get(monkeypatch)
-        report = build_my_team_report(con, _league(), SEASON, roster_id=1, ecr_type="rsf")
+        report = build_my_team_report(con, _league(), SEASON, roster_id=1, ecr_type="ro")
 
         rb1 = next(p for p in report.players if p.player_id == "rb1")
         assert rb1.market_rank == 20

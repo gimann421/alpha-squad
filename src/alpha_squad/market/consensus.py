@@ -21,11 +21,24 @@ import duckdb
 import pandas as pd
 
 from alpha_squad.config.settings import Settings
+from alpha_squad.features.kicking_defense import (
+    DST_ID_PREFIX,
+    DST_POSITION,
+    FANTASYPROS_TEAM_ALIASES,
+)
 from alpha_squad.identity.canonical import reader_expr, require_snapshot
 from alpha_squad.sources.fantasypros import FantasyProsSource
 from alpha_squad.storage.snapshots import record_snapshot
 
 DEFAULT_ECR_TYPES = ("ro", "do", "rsf", "dsf")
+
+# Rendered into the DST join as a literal VALUES list rather than bound as parameters,
+# because DuckDB cannot parameterise a VALUES table. The keys are a fixed, closed set of
+# team abbreviations defined in this codebase, never user input.
+_ALIAS_VALUES_SQL = ", ".join(
+    f"('{source_code}', '{normalized}')"
+    for source_code, normalized in sorted(FANTASYPROS_TEAM_ALIASES.items())
+)
 
 
 def build_market_snapshot(
@@ -39,13 +52,14 @@ def build_market_snapshot(
 
     rows = con.execute(
         f"""
-        INSERT INTO market_snapshot (player_id, scrape_date, ecr_type, position, ecr_rank, ecr_best, ecr_worst, source_snapshot_id)
+        INSERT INTO market_snapshot (player_id, scrape_date, ecr_type, position, ecr_rank, ecr_best, ecr_worst, source_snapshot_id, page_type)
         SELECT
-            m.player_id, CAST(e.scrape_date AS DATE), e.ecr_type, e.pos, e.ecr, e.best, e.worst, ?
+            m.player_id, CAST(e.scrape_date AS DATE), e.ecr_type, e.pos, e.ecr, e.best, e.worst, ?,
+            COALESCE(e.page_type, '')
         FROM {src} e
         JOIN player_id_map m ON m.id_type = 'fantasypros_id' AND m.id_value = CAST(e.id AS VARCHAR)
         WHERE e.ecr_type = ANY(?) AND e.ecr IS NOT NULL
-        ON CONFLICT (player_id, scrape_date, ecr_type, source) DO UPDATE SET
+        ON CONFLICT (player_id, scrape_date, ecr_type, page_type, source) DO UPDATE SET
             position = excluded.position,
             ecr_rank = excluded.ecr_rank,
             ecr_best = excluded.ecr_best,
@@ -54,6 +68,67 @@ def build_market_snapshot(
         RETURNING player_id
         """,
         [snapshot_id, list(ecr_types)],
+    ).fetchall()
+
+    # Retire rows this rebuild has just superseded. A pre-D56 database carries its existing
+    # DynastyProcess rows forward with page_type '' (the migration refuses to invent a page it
+    # cannot know -- see storage/schema.py), and the widened PRIMARY KEY means those un-labelled
+    # rows no longer collide with the re-ingested, properly-labelled ones: without this they
+    # would sit alongside them as silent duplicates and every unscoped read would double-count.
+    # Scoped to this source and to the ecr_types actually just rebuilt, so it can never touch
+    # `fantasypros_live` rows (D38: a today-only capture with no lookback -- genuinely
+    # irreplaceable, never reproducible by re-running this).
+    if rows:
+        con.execute(
+            "DELETE FROM market_snapshot "
+            "WHERE source = 'dynastyprocess' AND page_type = '' AND ecr_type = ANY(?)",
+            [list(ecr_types)],
+        )
+    return len(rows) + _build_dst_market_rows(con, src, snapshot_id, ecr_types)
+
+
+def _build_dst_market_rows(
+    con: duckdb.DuckDBPyConnection,
+    src: str,
+    snapshot_id: str,
+    ecr_types: tuple[str, ...],
+) -> int:
+    """Team-defense consensus ranks (D57).
+
+    DST rows are on the same overall board as every skill player -- FantasyPros' PPR
+    cheatsheet ranks them in the same 1..N sequence -- but they never reached this table,
+    because the join above resolves identity through `fantasypros_id` and a team defense has
+    no player row to resolve to. They were silently dropped, so a benchmark drafting from
+    this board could never take a defense at all.
+
+    They join on the team abbreviation instead, which is the DST's real identifier, mapped
+    through `FANTASYPROS_TEAM_ALIASES` for the three franchises the two sources spell
+    differently. `ensure_dst_entities` must have run first; a DST with no canonical entity is
+    skipped rather than inserted against a dangling id."""
+    rows = con.execute(
+        f"""
+        INSERT INTO market_snapshot (player_id, scrape_date, ecr_type, position, ecr_rank,
+                                     ecr_best, ecr_worst, source_snapshot_id, page_type)
+        SELECT
+            d.player_id, CAST(e.scrape_date AS DATE), e.ecr_type, e.pos, e.ecr, e.best,
+            e.worst, ?, COALESCE(e.page_type, '')
+        FROM {src} e
+        JOIN players d
+          ON d.position = ?
+         AND d.player_id = ? || COALESCE(
+                (SELECT alias.normalized FROM (VALUES {_ALIAS_VALUES_SQL})
+                   AS alias(source_code, normalized)
+                 WHERE alias.source_code = e.team), e.team)
+        WHERE e.ecr_type = ANY(?) AND e.ecr IS NOT NULL AND e.pos = ? AND e.team IS NOT NULL
+        ON CONFLICT (player_id, scrape_date, ecr_type, page_type, source) DO UPDATE SET
+            position = excluded.position,
+            ecr_rank = excluded.ecr_rank,
+            ecr_best = excluded.ecr_best,
+            ecr_worst = excluded.ecr_worst,
+            source_snapshot_id = excluded.source_snapshot_id
+        RETURNING player_id
+        """,
+        [snapshot_id, DST_POSITION, DST_ID_PREFIX, list(ecr_types), DST_POSITION],
     ).fetchall()
     return len(rows)
 
@@ -64,6 +139,11 @@ def build_market_snapshot(
 # 'draft_overall' rather than something implying ROS, so this table never claims data this
 # key's tier doesn't actually provide.
 LIVE_ECR_TYPE = "draft_overall"
+
+# The live API returns one ranking list, not DynastyProcess's many-pages-per-ecr_type mirror,
+# so its `page_type` (D56) is a single constant naming what that list actually is. Recorded
+# explicitly rather than left '' so this series is addressable the same way as every other.
+LIVE_PAGE_TYPE = "live-draft-overall"
 
 
 def build_live_fantasypros_snapshot(
@@ -96,13 +176,14 @@ def build_live_fantasypros_snapshot(
         rows = con.execute(
             """
             INSERT INTO market_snapshot
-                (player_id, scrape_date, ecr_type, position, ecr_rank, ecr_best, ecr_worst, source_snapshot_id, source)
+                (player_id, scrape_date, ecr_type, position, ecr_rank, ecr_best, ecr_worst, source_snapshot_id, source, page_type)
             SELECT
-                m.player_id, d.scrape_date, ?, d.position, d.ecr_rank, d.ecr_best, d.ecr_worst, ?, 'fantasypros_live'
+                m.player_id, d.scrape_date, ?, d.position, d.ecr_rank, d.ecr_best, d.ecr_worst, ?, 'fantasypros_live',
+                ?
             FROM fp_live_df d
             JOIN player_id_map m ON m.id_type = 'fantasypros_id' AND m.id_value = d.fp_player_id
             WHERE d.ecr_rank IS NOT NULL
-            ON CONFLICT (player_id, scrape_date, ecr_type, source) DO UPDATE SET
+            ON CONFLICT (player_id, scrape_date, ecr_type, page_type, source) DO UPDATE SET
                 position = excluded.position,
                 ecr_rank = excluded.ecr_rank,
                 ecr_best = excluded.ecr_best,
@@ -110,7 +191,7 @@ def build_live_fantasypros_snapshot(
                 source_snapshot_id = excluded.source_snapshot_id
             RETURNING player_id
             """,
-            [LIVE_ECR_TYPE, snap.snapshot_id],
+            [LIVE_ECR_TYPE, snap.snapshot_id, LIVE_PAGE_TYPE],
         ).fetchall()
     finally:
         con.unregister("fp_live_df")
