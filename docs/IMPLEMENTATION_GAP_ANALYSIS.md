@@ -36,7 +36,19 @@ items with no listed dependency can start immediately.
 
 ## P1 — High value, ready to build
 
-### ~~P1-0: Fix `recommend_draft_pick`'s roster-balance failure~~ — CLOSED (D56–D60)
+### P1-0: Fix `recommend_draft_pick`'s roster-balance failure — **REOPENED (D61)**
+
+> **REOPENED.** This item was closed at D60 on a benchmark whose `market_consensus` opponent
+> drafts 0.00 kickers and 0.30 defenses per draft, leaving two of its ten starting slots empty
+> — an artifact worth **+245.3 starter points**, more than the entire +165.7 margin the closure
+> relied on. Against an opponent that merely fills those slots, Alpha scores **−48.3 with a
+> 25/50 (50%) win rate**, 95% CI [−122.2, +25.6]. On the eight skill slots Alpha is **79.6
+> points behind**. The acceptance criterion below ("beats market consensus") is therefore
+> **not met**. Full evidence: `docs/DRAFT_STRATEGY_FORENSIC_ANALYSIS.md`; decision: D61; the
+> path forward: `docs/DRAFT_STRATEGY_NEXT_PHASE_PLAN.md`.
+>
+> The D54 and D55 mechanism fixes remain real. What is retracted is the *claim of
+> outperformance*, not the underlying engineering.
 
 > **The benchmark below is invalid for the current target format and is preserved as-is,
 > labelled, not restated.** Everything through "Acceptance criteria — STILL UNMET" was

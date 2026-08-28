@@ -2494,7 +2494,7 @@ harness's tier H, so it keeps mirroring real production.
 
 | Strategy | Mean starter pts | Mean total roster pts |
 |---|---|---|
-| **alpha_league_aware (M3/D60)** | **1990.9** | 2775.9 |
+| **alpha_league_aware (M3/D60)** | **1990.9** | 2455.0 |
 | `market_consensus` | 1825.2 | 2806.7 |
 
 **+165.7 mean starter points (+9.1%) over consensus, 37/50 (74%) win rate** — up from D59's
@@ -2508,3 +2508,103 @@ overperformed their own projections by a mean +45.2 points, n=206, 2021–2025) 
 projection-layer question, not a draft-engine one; D55's opportunity-cost term was held fixed
 across every M-tier and was not independently re-ablated against an opportunity-cost-off
 control under the 1-QB format specifically.
+
+**SUPERSEDED BY D61.** The benchmark this entry reports against has a `market_consensus`
+opponent that forfeits two of its ten starting slots. D60's shipping decision was correctly
+reasoned on the evidence available at the time; the evidence itself was contaminated. The
+mechanism change (MSV replacing VORP) is retained pending re-measurement, not endorsed.
+
+## D61 — The 1-QB benchmark's consensus opponent forfeits two starting slots; D59/D60's margin is an artifact
+
+Forensic re-examination of the shipped D60 engine (full analysis:
+`docs/DRAFT_STRATEGY_FORENSIC_ANALYSIS.md`) found that the headline result — Alpha beating
+market consensus by +165.7 starter points (+9.1%), 37/50 win rate — is produced by the
+benchmark opponent rather than by Alpha's decisions.
+
+**The mechanism.** `market_consensus` picks best-available by preseason overall ECR with no
+roster awareness. On the real `ro`/`redraft-overall` board the best DST ranks **155th** overall
+and the best K ranks **186th**. A 16-round 10-team draft is **160 picks**. So the consensus bot
+drafts a mean of **0.00 kickers and 0.30 defenses** across 50 drafts and leaves its K and DEF
+starting slots empty, scoring ~0 there. This is a real property of the FantasyPros overall
+board — it ranks K/DST by overall value while every human applies a last-two-rounds positional
+override — not a data defect. `docs/FORMAT_MIGRATION_DIAGNOSTIC.md` §2 and
+`docs/EVALUATION_LIMITATIONS.md` both named the missing roster awareness as a limitation; what
+was never quantified is that it exceeds the entire measured margin.
+
+**Decomposing the 50 benchmark drafts by slot type:**
+
+| | K + DEF slots | the 8 skill slots | total |
+|---|---|---|---|
+| `alpha_league_aware` | **275.1** | 1715.8 | 1990.9 |
+| `market_consensus` | **29.8** | 1795.4 | 1825.2 |
+| Alpha − consensus | **+245.3** | **−79.6** | +165.7 |
+
+148% of the edge comes from two forfeited slots; on the eight skill slots Alpha is **behind by
+79.6**.
+
+**The fair comparison.** Re-simulating consensus with one change — fill K and DEF in the last
+two rounds if still empty, best-available by ECR within the position, no hindsight:
+
+| opponent | mean starter pts |
+|---|---|
+| consensus as-implemented | 1825.2 |
+| consensus, roster-aware | **2039.2** (+214.0) |
+| `alpha_league_aware` (shipped) | 1990.9 |
+
+**Alpha vs a fair opponent: −48.3 mean starter points, win rate 25/50 (50%), 95% CI
+[−122.2, +25.6] — the interval contains zero.** Per season: 2021 −25.9, 2022 +69.5,
+2023 −145.3, 2024 −155.7, 2025 +15.9. The fair opponent's K+DEF slots score 270.2 against
+Alpha's 275.1 — the advantage vanishes entirely, exactly as the mechanism predicts.
+
+**Why Alpha trails on the skill slots.** D60 made `marginal_starter_value` the value base,
+replacing VORP. On an empty roster MSV is mathematically identical to the candidate's own
+projection, i.e. pure best-player-available by raw points — and in a 1-QB league raw points
+favour quarterbacks, which is precisely what VORP existed to correct. Measured top-5 by each
+value base: MSV yields 4–5 QBs in 2021/2023/2025; VORP yields **zero** in all three. The
+behavioural consequence in real drafts: Alpha takes a QB in round 2 in **68%** of drafts, takes
+WR almost exclusively through round 5, reaches its first RB at mean round **5.24** (consensus:
+2.72), and finishes with **2.74** RBs (consensus: 5.12). This is the same pathology that
+collapses `alpha_bpa` to 463.5, mitigated only by the bounded roster-fit multiplier.
+
+MSV's benefit was real and is retained as a finding: it fixed genuine K/DST *hoarding*
+(M0 drafted 3.78 K and 2.26 DST per draft, breaching the cap in 50/50 drafts; M3 drafts
+1.60/1.26, breaching 0/50). It over-corrected on *timing* — Alpha now takes DST in round 10 in
+**100%** of drafts and K at median round 9, against a measured cost of waiting of only 20–50
+realized points. The `opportunity_cost` term cannot counteract this because it is
+VORP-denominated while the value base is MSV: a scale mismatch introduced by D60.
+
+**Two measurement defects found in the same pass.**
+1. `evaluation/draft_forensics.py::_feasibility_cap` is the pre-D58 flex-blind formula while
+   production calls the D58 flex-aware `positional_feasibility_cap`. Measured caps diverge:
+   RB 3 vs 6, WR 3 vs 6, TE 2 vs 4. So tier M0, documented as "the shipped production formula,
+   unchanged — the control", is not, and M3's winning WR count of 5.54 exceeded the harness cap
+   it was measured under. This also explains the previously unreconciled gap between harness
+   numbers (M0 1894.2, M3 2003.8) and official-benchmark numbers (1927.8, 1990.9).
+2. `evaluation/pick_attribution.py` never passed `roster_player_ids`, so the 800-pick
+   attribution in `docs/FORMAT_MIGRATION_DIAGNOSTIC.md` §7 measured the D55 VORP engine, not
+   the shipped D60 MSV engine. The RB-residual finding must be re-derived before being cited
+   about the shipped engine.
+
+**Also corrected:** D60 and the diagnostic reported `alpha_league_aware` mean total roster
+points as 2775.9; the real value in `reports/draft_simulation.md` is **2455.0**. The starter
+figure (1990.9) was correct. The genuine 2785.4 → 2455.0 drop from D59 to D60 is itself a
+finding — MSV concentrates value into starters and gives up bench depth.
+
+**Decision.** No engine change is made on this evidence. The measurement is fixed first: the
+benchmark opponent becomes roster-aware (derived from `dedicated_slots()`, never hardcoded),
+both opponents are reported side by side so no published number is silently restated, the
+forensic cap is reconciled with production, and attribution is pointed at the shipped engine.
+Only then is a value-base ablation run — testing formulations that retain **both** league-wide
+scarcity and lineup saturation rather than trading one for the other. Sequencing, candidate
+tiers, the pre-registered decision rule (now including a per-season consistency gate and a
+positional-timing gate that would have caught this regression), and the explicit
+do-not-pursue list are in `docs/DRAFT_STRATEGY_NEXT_PHASE_PLAN.md`.
+
+`docs/IMPLEMENTATION_GAP_ANALYSIS.md` P1-0 is **reopened**: its acceptance criterion was
+declared met against the contaminated benchmark.
+
+**What still stands from D56–D60, re-verified in this pass:** the market-series correction
+(D56), the computed K/DST scoring and measured baselines (D57), the 1-QB format retarget and
+flex-aware capacity (D58). None of the findings above impugn them. Also genuinely real and
+worth preserving: Alpha's consistency advantage — starter-points stdev **158.9** vs consensus's
+**214.5**, and a higher floor (worst draft 1570.3 vs 1392.7).
