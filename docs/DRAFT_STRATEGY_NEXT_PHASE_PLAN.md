@@ -6,6 +6,13 @@ not to change.
 Evidence base: `docs/DRAFT_STRATEGY_FORENSIC_ANALYSIS.md`. Objectives:
 `docs/DRAFT_OBJECTIVE_MODES.md`. Benchmark mechanics: `docs/BENCHMARK_SPEC.md`.
 
+> **Status: Stage 1 LANDED (D62).** All of §1.1–1.5 shipped and the official benchmark
+> re-ran against real 2021–2025 data: Alpha vs the fair opponent, measured directly,
+> **−45.4 mean starter points, 25/50 win rate, 95% CI [−117.1, +25.6]** — confirming this
+> document's expected result (§Stage 1 exit criterion: "Alpha ≈ −48 vs fair consensus,
+> 25/50") to within 3 points. No material disagreement, so no investigation was triggered.
+> Stages 2–5 below are unstarted.
+
 ---
 
 ## 0. The governing principle for this phase

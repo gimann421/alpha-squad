@@ -12,6 +12,15 @@ Companions: `docs/DRAFT_OBJECTIVE_MODES.md` (what we are optimizing),
 `docs/FORMAT_MIGRATION_DIAGNOSTIC.md` (the D56–D60 phase this supersedes in part),
 `docs/BENCHMARK_SPEC.md` (benchmark definition), `docs/DECISIONS.md` D56–D61.
 
+> **Update (D62):** the fair-opponent numbers in this document (§1, "−48.3, 25/50") were a
+> targeted re-simulation, not the shipped benchmark code. Stage 1 of the next-phase plan has
+> since shipped the fair opponent into `evaluation/draft_simulation.py` for real
+> (`market_consensus_roster_aware`) and re-run it against real 2021–2025 data: **−45.4 mean
+> starter points, 25/50 win rate, 95% CI [−117.1, +25.6]** — confirming this document's
+> estimate to within 3 points. Read the fair-opponent numbers below as directionally and
+> quantitatively correct, now with a direct measurement backing them; see D62 for the
+> shipped-code figures.
+
 ---
 
 ## 0. Headline

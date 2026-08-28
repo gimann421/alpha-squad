@@ -49,6 +49,13 @@ items with no listed dependency can start immediately.
 >
 > The D54 and D55 mechanism fixes remain real. What is retracted is the *claim of
 > outperformance*, not the underlying engineering.
+>
+> **Update (D62):** the D61 estimate above was a targeted re-simulation; Stage 1 of
+> `docs/DRAFT_STRATEGY_NEXT_PHASE_PLAN.md` has now shipped the fix into the real benchmark
+> code (`market_consensus_roster_aware`) and re-run it against real 2021–2025 data. Measured
+> directly: **Alpha −45.4 mean starter points vs. the fair opponent, 25/50 win rate, 95% CI
+> [−117.1, +25.6]** — confirming D61's estimate to within 3 points. **Still not met.** Stage 1
+> is measurement-only by design (see D62); no engine change has been attempted yet.
 
 > **The benchmark below is invalid for the current target format and is preserved as-is,
 > labelled, not restated.** Everything through "Acceptance criteria — STILL UNMET" was

@@ -2608,3 +2608,69 @@ declared met against the contaminated benchmark.
 flex-aware capacity (D58). None of the findings above impugn them. Also genuinely real and
 worth preserving: Alpha's consistency advantage — starter-points stdev **158.9** vs consensus's
 **214.5**, and a higher floor (worst draft 1570.3 vs 1392.7).
+
+## D62 — Stage 1 measurement fixes land; D61's fair-opponent estimate confirmed by direct re-run
+
+`docs/DRAFT_STRATEGY_NEXT_PHASE_PLAN.md` Stage 1 (measurement only, no engine change) is
+implemented and the official benchmark re-run against real 2021–2025 data. This section records
+what shipped and the true current baseline; it supersedes D61's *simulated* fair-opponent
+estimate with a *measured* one from the actual shipped code.
+
+**What shipped, all in this pass:**
+1. **Roster-aware consensus opponent** (`evaluation/draft_simulation.py`). A new
+   `market_consensus_roster_aware` strategy/opponent: once a drafter has exactly as many picks
+   left as still-unfilled mandatory dedicated slots (`league/roster.py::unfilled_dedicated_slots`,
+   new — derived from `dedicated_slots()`, never hardcoded), it is restricted to filling one,
+   still best-available by ECR within that pool. `market_consensus` is kept byte-identical so
+   every number published through D60 stays reproducible under its original label (the D56
+   precedent). `simulate_draft`/`run_draft_simulation` gain an `opponent_strategy`/
+   `opponent_strategies` parameter; `draft_simulation_results` gains `opponent_strategy` (now
+   part of the persistence key) and `n_unfilled_mandatory_slots` columns, with a migration for
+   pre-D61 databases (`storage/db.py::_migrate` — caught by running the CLI against the real
+   local database, not just fresh in-memory test fixtures; see the migration commit for why the
+   table is dropped rather than carried forward: it is a pure evaluation-result cache, and
+   inventing an `n_unfilled_mandatory_slots` value for rows that predate the column would
+   fabricate data no version of the code ever measured).
+2. **Feasibility cap reconciled.** `evaluation/draft_forensics.py`'s pre-D58 flex-blind
+   `_feasibility_cap` is deleted; the harness now calls production's
+   `league/roster.py::positional_feasibility_cap` directly, with a test asserting no
+   forensic-local copy can reappear.
+3. **Attribution measures the shipped engine.** `pick_attribution.py` now passes
+   `roster_player_ids=my_roster` to `recommend_draft_pick`, activating D60 marginal starter
+   value instead of silently falling back to D55 VORP.
+4. **Unfilled slots are reported, not silently zeroed.** `write_draft_simulation_report` shows
+   both opponent fields side by side with a banner naming the headline claim, plus mean/count of
+   unfilled mandatory slots per strategy.
+5. **`next_pick_survival_probability` scoped by `page_type`** (`league/draft.py`), closing the
+   last market consumer that filtered on `ecr_type` alone.
+
+**The re-run, against real 2021–2025 data, 10 slots, both opponent fields (500 total simulated
+drafts):**
+
+| opponent field | strategy | mean starter pts | stdev | unfilled slots |
+|---|---|---|---|---|
+| `market_consensus_roster_aware` | `market_consensus_roster_aware` | 2034.8 | 202.7 | 0.00 |
+| `market_consensus_roster_aware` | `alpha_league_aware` | 1989.3 | 160.8 | 0.00 |
+| `market_consensus` (as published through D60) | `market_consensus` | 1825.2 | 214.5 | 1.88 |
+| `market_consensus` (as published through D60) | `alpha_league_aware` | 1990.9 | 158.9 | 0.00 |
+
+**Alpha vs the fair opponent, measured (not simulated): −45.4 mean starter points, win rate
+25/50 (50%), 95% CI [−117.1, +26.2] — the interval contains zero.** Per season: 2021 −30.5,
+2022 +99.0, 2023 −125.9, 2024 −160.3, 2025 −9.4. This confirms D61's simulated estimate
+(−48.3, 25/50) to within 3 points and the same sign pattern per season — the two independent
+computations (D61's targeted re-simulation vs this pass's full shipped-code re-run) agree, which
+is itself evidence the mechanism is understood correctly rather than an artifact of either
+measurement's specific implementation.
+
+**Determinism.** The new roster-aware opponent path was run twice as separate `uv run python3`
+processes (`PYTHONHASHSEED` unset) against 2021 data, both opponent fields,
+`market_consensus_roster_aware` and `alpha_league_aware` strategies: byte-identical JSON output,
+confirming the fix introduced no new non-determinism (`available`/`unfilled_dedicated_slots`
+build ordinary Python sets/dicts, but the final selection is still resolved through
+`best_by_market_rank`'s existing `(rank, player_id)` tie-break).
+
+**Status.** `docs/IMPLEMENTATION_GAP_ANALYSIS.md` P1-0 stays **reopened**: Alpha does not beat a
+fair consensus opponent (−45.4, 95% CI includes zero). Stage 1 is closed; Stage 2 (re-run the
+M-tier ablation honestly under the fair opponent and production's real caps) and Stage 3 (the
+pre-registered N0–N4 value-base ablation) remain, per
+`docs/DRAFT_STRATEGY_NEXT_PHASE_PLAN.md`, not started in this pass.
