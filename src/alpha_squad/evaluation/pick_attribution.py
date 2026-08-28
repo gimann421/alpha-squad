@@ -177,8 +177,7 @@ def attribute_draft_picks(
         else:
             swapped = [consensus_pick if p == alpha_pick else p for p in my_roster]
             delta = (
-                _lineup_points(league, swapped, positions, actual_points)
-                - baseline_starter_points
+                _lineup_points(league, swapped, positions, actual_points) - baseline_starter_points
             )
         alpha_pos = positions.get(alpha_pick, "UNKNOWN")
         cons_pos = positions.get(consensus_pick, "UNKNOWN")
@@ -220,9 +219,7 @@ def run_pick_attribution(
     rows: list[PickAttribution] = []
     for season in seasons:
         for slot in slots:
-            rows.extend(
-                attribute_draft_picks(con, league, season, slot, ecr_type=ecr_type)
-            )
+            rows.extend(attribute_draft_picks(con, league, season, slot, ecr_type=ecr_type))
     return rows
 
 

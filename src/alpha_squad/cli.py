@@ -594,9 +594,7 @@ def evaluate_pick_attribution(
     season_end: int = typer.Option(2025, help="Last season"),
     league_id: str = typer.Option("target_league", help="League config to draft under"),
     slots: str = typer.Option("", help="Comma-separated draft slots; default every slot"),
-    json_path: str = typer.Option(
-        "reports/pick_attribution.json", help="Raw per-pick rows"
-    ),
+    json_path: str = typer.Option("reports/pick_attribution.json", help="Raw per-pick rows"),
     report_path: str = typer.Option(
         "reports/pick_attribution.md", help="Markdown summary output path"
     ),

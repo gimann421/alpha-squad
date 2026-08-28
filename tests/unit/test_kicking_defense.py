@@ -343,9 +343,7 @@ class TestKickerWeekScoring:
 
     def test_misses_subtract(self, con, tmp_path):
         # 2 x 30-39 (6) + 3 PAT (3) - 1 FG miss (1) - 1 PAT miss (1) = 7.
-        self._seed(
-            con, tmp_path, fg_made_30_39=2, pat_made=3, fg_missed=1, pat_missed=1
-        )
+        self._seed(con, tmp_path, fg_made_30_39=2, pat_made=3, fg_missed=1, pat_missed=1)
         build_kicker_week_points(con, None, [2024])
         assert self._points(con) == (7.0, 7.0)
 

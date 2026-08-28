@@ -38,15 +38,33 @@ def _league(**overrides) -> LeagueContext:
 
 
 PROJ = {
-    "rb1": 300.0, "rb2": 260.0, "rb3": 220.0, "rb4": 180.0, "rb5": 140.0,
-    "wr1": 290.0, "wr2": 250.0, "wr3": 210.0,
-    "te1": 200.0, "qb1": 320.0, "k1": 130.0, "d1": 120.0,
+    "rb1": 300.0,
+    "rb2": 260.0,
+    "rb3": 220.0,
+    "rb4": 180.0,
+    "rb5": 140.0,
+    "wr1": 290.0,
+    "wr2": 250.0,
+    "wr3": 210.0,
+    "te1": 200.0,
+    "qb1": 320.0,
+    "k1": 130.0,
+    "d1": 120.0,
     "superstar": 500.0,
 }
 POS = {
-    "rb1": "RB", "rb2": "RB", "rb3": "RB", "rb4": "RB", "rb5": "RB",
-    "wr1": "WR", "wr2": "WR", "wr3": "WR",
-    "te1": "TE", "qb1": "QB", "k1": "K", "d1": "DST",
+    "rb1": "RB",
+    "rb2": "RB",
+    "rb3": "RB",
+    "rb4": "RB",
+    "rb5": "RB",
+    "wr1": "WR",
+    "wr2": "WR",
+    "wr3": "WR",
+    "te1": "TE",
+    "qb1": "QB",
+    "k1": "K",
+    "d1": "DST",
     "superstar": "RB",
 }
 
@@ -95,9 +113,7 @@ class TestMarginalStarterValue:
         league, roster = _league(), ["rb1", "wr1"]
         base = best_lineup_points(league, roster, PROJ, POS)
         for candidate in ("rb2", "te1", "qb1"):
-            hoisted = marginal_starter_value(
-                league, roster, candidate, PROJ, POS, base_points=base
-            )
+            hoisted = marginal_starter_value(league, roster, candidate, PROJ, POS, base_points=base)
             assert hoisted == pytest.approx(_msv(roster, candidate))
 
     def test_flex_eligibility_is_respected(self):

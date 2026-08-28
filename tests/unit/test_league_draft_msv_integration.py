@@ -55,8 +55,16 @@ def _seed(con, player_id, position, points, confidence=0.8, ecr_rank=1.0):
              predicted_at)
         VALUES (?, ?, ?, ?, ?, 'test_v1', ?, 0.2, 0.4, ?, ?, current_timestamp)
         """,
-        [f"p_{player_id}", player_id, SEASON, position, UNCERTAINTY_MODEL_VERSION,
-         points, confidence, SEASON - 1],
+        [
+            f"p_{player_id}",
+            player_id,
+            SEASON,
+            position,
+            UNCERTAINTY_MODEL_VERSION,
+            points,
+            confidence,
+            SEASON - 1,
+        ],
     )
     con.execute(
         "INSERT INTO market_snapshot (player_id, scrape_date, ecr_type, position, ecr_rank, "
@@ -138,9 +146,7 @@ class TestMarginalStarterValueChangesTheRecommendation:
 
     def test_reasons_disclose_marginal_starter_value_when_active(self, con):
         _seed(con, "rb1", "RB", 300.0, ecr_rank=1.0)
-        rec = recommend_draft_pick(
-            con, _league(), SEASON, [], {"rb1"}, roster_player_ids=[]
-        )
+        rec = recommend_draft_pick(con, _league(), SEASON, [], {"rb1"}, roster_player_ids=[])
         assert any("marginal starter value" in r for r in rec.reasons)
 
     def test_reasons_omit_it_when_falling_back_to_vorp(self, con):
@@ -162,9 +168,7 @@ class TestKickerDefenseHoardingIsFixed:
         unlike VORP, which still prices him against league-wide replacement level."""
         _seed(con, "k1", "K", 130.0, ecr_rank=1.0)
         _seed(con, "k2", "K", 125.0, ecr_rank=2.0)
-        rec = recommend_draft_pick(
-            con, _league(), SEASON, ["K"], {"k2"}, roster_player_ids=["k1"]
-        )
+        rec = recommend_draft_pick(con, _league(), SEASON, ["K"], {"k2"}, roster_player_ids=["k1"])
         msv = next(c for c in rec.candidates if c.player_id == "k2").marginal_starter_value
         assert msv == pytest.approx(0.0)
 
@@ -186,8 +190,6 @@ class TestKickerDefenseHoardingIsFixed:
         position. This is the intended behavior, not a loophole."""
         _seed(con, "k1", "K", 130.0, ecr_rank=1.0)
         _seed(con, "k2", "K", 200.0, ecr_rank=2.0)  # meaningfully better
-        rec = recommend_draft_pick(
-            con, _league(), SEASON, ["K"], {"k2"}, roster_player_ids=["k1"]
-        )
+        rec = recommend_draft_pick(con, _league(), SEASON, ["K"], {"k2"}, roster_player_ids=["k1"])
         msv = next(c for c in rec.candidates if c.player_id == "k2").marginal_starter_value
         assert msv == pytest.approx(70.0)  # 200 - 130: the upgrade over the current starter

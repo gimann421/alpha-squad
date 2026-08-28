@@ -52,6 +52,7 @@ def normalize_slot_position(slot: str) -> str:
     """The player position a dedicated lineup slot is filled by."""
     return SLOT_POSITION_ALIASES.get(slot, slot)
 
+
 _LEAGUE_CONFIGS_DIR = Path(__file__).parent.parent / "config" / "league_configs"
 DEFAULT_TARGET_LEAGUE_PATH = _LEAGUE_CONFIGS_DIR / "target_league.yaml"
 DEFAULT_REGISTRY_PATH = _LEAGUE_CONFIGS_DIR / "registry.yaml"

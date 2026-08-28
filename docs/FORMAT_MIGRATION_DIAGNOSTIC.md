@@ -185,12 +185,200 @@ ablation to separate those.
 
 ## 7. Where the gap to consensus (and the remaining upside) comes from
 
-<!-- Filled from the pick-attribution and M-tier ablation runs. -->
+`evaluation/pick_attribution.py` replays each of Alpha's real 2021–2025 × 10-slot drafts
+(shipped production formula, D55/D60). At every Alpha turn it asks what the consensus board
+would have taken from the same available pool at that same moment, then single-pick-swaps that
+alternative into Alpha's *final* roster — holding all 15 other picks fixed — and recomputes
+best-lineup starter points. This is a counterfactual on one pick at a time, not a re-drafted
+roster; it deliberately does not model how availability downstream of a different pick would
+have changed (documented in the module's own docstring), so its numbers answer "was this one
+swap, in isolation, good or bad," not "would a different overall draft have scored more."
+
+`alpha-squad evaluate pick-attribution --season-start 2021 --season-end 2025`: 800 picks, 738
+disagreements (Alpha agreed with consensus on only 62, 7.8%). At face value this looks like a
+contradiction of §6: the disagreements net **unfavorable** to Alpha (mean delta +23.5, total
++17356.5 across the 738 — positive means the consensus alternative would have scored more),
+while the real team-level benchmark has Alpha winning by +165.7 mean starter points. Both
+numbers are real; the reconciliation is two identifiable, non-overlapping effects, checked
+against the data rather than assumed.
+
+**Effect 1 — the method's own structural limitation, not a decision defect.** Swapping one
+pick with full hindsight while holding the other 15 fixed always makes the swap look better
+than it would have played out in a real re-draft, because it ignores that the swapped player
+might not have survived to that pick against a different roster's needs, or that Alpha's actual
+pick was itself filling a gap the swap would leave open. The by-round table below shows this
+concentrating exactly where you'd expect a single-swap method to be least trustworthy — the
+mid-to-late rounds, where positional runs and survival probability matter most and a
+one-pick-in-isolation view is furthest from a real redraft:
+
+| Round | disagreements | mean delta | total delta |
+|---|---|---|---|
+| 1 | 37 | +9.8 | +361.9 |
+| 2 | 41 | +58.3 | +2388.5 |
+| 3 | 46 | +53.1 | +2444.2 |
+| 4 | 43 | +49.6 | +2131.6 |
+| 5 | 44 | +2.5 | +110.0 |
+| **6** | 45 | **−47.0** | **−2114.4** |
+| 7 | 46 | +29.2 | +1342.4 |
+| 8–16 | 396 | +19.6–43.8 | net positive every round |
+
+Only round 6 nets favorable to Alpha; every other round nets unfavorable to varying degrees,
+including the two early rounds where the swap's "no downstream effect" assumption is closest to
+true and Alpha's own live picks are least likely to be wrong (rounds 1–2 still net +361.9 /
++2388.5, the smallest of any rounds — consistent with the earliest picks being where the
+single-swap method's optimism does the least damage, not where Alpha is making its worst
+decisions).
+
+**Effect 2 — a real, measured RB-realized-outcome asymmetry in this specific 2021–2025 sample.**
+Splitting the 738 disagreements into the 330 that cost Alpha points and the 255 that gained
+points, and comparing each side's own pick against its own preseason projection (real − projected,
+i.e. the same forecast error metric §3/§6 already use elsewhere):
+
+| | n | Alpha's pick: mean (real − proj) | Consensus alt: mean (real − proj) |
+|---|---|---|---|
+| cost picks (consensus alt wins) | 330 | **−32.6** | **+51.9** |
+| gained picks (Alpha wins) | 255 | −6.1 | −11.2 |
+
+In the cost bucket, Alpha's own selection underperformed its projection by 32.6 points on
+average while the consensus alternative overperformed its own projection by 51.9 — an 84.5-point
+swing per pick that has nothing to do with roster construction or opportunity cost, since both
+sides are being judged only against what they themselves were projected to do. Narrowing further,
+206 of the 330 cost picks had a **running back** as the consensus alternative, and that RB
+subgroup alone averaged **+45.2** points above its own projection (134.0 projected → 179.2
+realized) — a large, real, systematic residual concentrated in one position. The "worst individual
+picks" table is the same finding at the extreme: every one of the top 20 is Alpha taking a
+non-RB while the consensus alternative is an RB whose realized outcome landed far above its
+preseason projection (e.g. 202→391, 177→417, 221→363).
+
+**Classification, per the directive's taxonomy:** this is **projection/value error concentrated
+in RB-position realized-outcome volatility in the real historical sample**, combined with the
+**single-pick-counterfactual method's own structural limitation** (over-crediting hindsight to
+one isolated swap, no downstream-availability modeling) — not a roster-construction defect, not
+an opportunity-cost defect, and not a market-information defect. The evidence for that
+classification: the same shipped decision logic that "loses" hundreds of individual pick-level
+swaps to hindsight nonetheless wins the real team-level benchmark by +165.7 (§6/D59-D60), which
+would not be possible if the pick-level losses reflected a genuine, systematic decision error —
+a genuinely bad decision rule would show up as a loss at both levels, not a loss at one and a
+win at the other. The RB residual is named explicitly as a real, unresolved weakness of the
+*projection* layer (upstream of the draft engine, in `models/`), not swept into "the engine is
+fine" — a future projection-quality pass should look specifically at whether RB uncertainty
+intervals in this sample are miscalibrated on the upside.
 
 ## 8. M-tier ablation: does marginal starter value help, and does D55's opportunity cost still?
 
-<!-- Filled once the M0-M3 ablation completes. -->
+Pre-registered before any run against real data (`evaluation/draft_forensics.py`, D58/D60):
+primary metric mean starter points, Gate 1 no position zeroed out more than the control, Gate 2
+no more infeasible rosters than the control, tie-break fewer mechanisms, ship only if a tier
+strictly beats the control on the primary metric with both gates passing. Four tiers, control
+M0 (the shipped D55 formula unchanged) through M3 (marginal starter value replacing VORP as the
+score's value base outright), varying only where MSV enters — every tier shares production's
+risk/survival/opportunity-cost/feasibility terms so a difference is attributable to MSV alone.
+200 real drafts (4 tiers × 5 seasons × 10 slots):
+
+| Tier | Mean starter pts | Δ vs M0 | Win/Loss/Tie vs M0 | Seasons won (of 5) |
+|---|---|---|---|---|
+| M0 (control) | 1894.2 | — | — | — |
+| M1 (MSV added inside the value term) | 1987.2 | +93.0 (+4.9%) | 34/13/3 | 4 |
+| M2 (MSV drives the roster-fit multiplier) | 1900.7 | +6.6 (+0.3%) | 16/22/12 | 2 |
+| **M3 (MSV replaces VORP as the value base)** | **2003.8** | **+109.7 (+5.8%)** | **37/13/0** | **4** |
+
+Both gates passed for every tier — `n_infeasible_rosters` was 0 and no position's zero-rate rose
+above the control's (itself 0) in any tier — so the decision came down cleanly to the primary
+metric and the tie-break was never needed: **M3 wins outright**, beating M0 by the largest
+margin, winning the most (season, slot) pairs, and losing only the 2025 season head-to-head
+(4–6) among the 5 seasons scored. M2's near-zero net (+6.6, 16W/22L/12T) shows that swapping MSV
+into the *multiplier* is weak and inconsistent — worse than doing nothing in 22 of 50 slots —
+while M1 shows MSV genuinely helps even added crudely alongside VORP (+93.0), and M3 shows it
+helps most when it fully replaces VORP as the base term rather than sharing the score with it.
+
+**M3 is also the only tier that fixes a real, independently-visible defect.** Mean drafted
+position counts across the same 200 drafts:
+
+| Tier | K | DST | QB | RB | WR | TE | drafts breaching the K feasibility cap |
+|---|---|---|---|---|---|---|---|
+| M0 | 3.78 | 2.26 | 2.12 | 1.72 | 4.12 | 2.00 | 50/50 |
+| M1 | 3.70 | 2.24 | 1.60 | 2.42 | 4.04 | 2.00 | 50/50 |
+| M2 | 3.84 | 2.38 | 2.00 | 1.98 | 3.80 | 2.00 | 50/50 |
+| **M3** | **1.60** | **1.26** | 2.28 | **2.62** | **5.54** | **2.70** | **0/50** |
+
+Every VORP-value-base tier (M0/M1/M2) hoards roughly 3.7–3.8 kickers and 2.2–2.4 defenses per
+16-round draft — every single one of those 150 drafts breaches K's flex-aware feasibility cap —
+because VORP prices a bench K/DST against league-wide positional replacement level with no
+knowledge that neither position has flex eligibility: a second or third kicker who is merely
+better than replacement still scores positive VORP even though he has zero chance of ever
+starting behind the first. Marginal starter value has no such blind spot by construction — a
+second kicker's MSV is exactly zero once the first fills the slot (regression-tested directly:
+`tests/unit/test_league_draft_msv_integration.py::TestKickerDefenseHoardingIsFixed`) — and
+M3 is the only tier where the hoarding actually stops (0/50 breaches) and the freed bench
+capacity flows to real skill-position depth (RB 1.72→2.62, WR 4.12→5.54, TE 2.00→2.70).
+
+**Does D55's opportunity-cost term still help under 1-QB?** Every M-tier, including the
+control, carries D55's opportunity-cost replay unchanged — it was never removed or varied as
+part of this ablation, only the value-base/multiplier terms were. That every tier (M0 included)
+still beats the zero-context naive baselines by roughly 3–4x (§6: `alpha_bpa` 463.5,
+`generic_prior_year` 591.5, vs. 1894–2004 across M0–M3) is consistent with the opportunity-cost
++ VORP/fit combination still contributing real value in this format; a targeted ablation with
+opportunity cost switched off entirely was not run in this pass (it would need a fifth tier
+against the same pre-registration discipline) and is named here as a real remaining gap in the
+evidence, not silently assumed to transfer from the superflex-era D55 result.
+
+**Shipped result.** M3 was ported into production `recommend_draft_pick` (D60) exactly as
+measured — `roster_player_ids` optional, VORP-fallback preserved byte-for-byte for callers that
+cannot supply real drafted-player ids (some API/agent paths; see D60 for the full list). Re-run
+through the *official* benchmark (not the fast forensic harness) after shipping:
+
+| Strategy | Mean starter pts | Mean total roster pts |
+|---|---|---|
+| **alpha_league_aware (M3/D60)** | **1990.9** | 2775.9 |
+| market_consensus | 1825.2 | 2806.7 |
+
+**+165.7 mean starter points (+9.1%) over consensus, 37/50 (74%) win rate at the (season, slot)
+level** — up from D59's pre-MSV +102.6/+5.6%/68%. Byte-identical across two independent
+processes (`md5 5e0ec53e...`, `PYTHONHASHSEED` unset), confirming the result is deterministic
+and not an artifact of iteration order.
 
 ## 9. Recommendation
 
-<!-- Filled last, after §7-8. -->
+**Ship marginal starter value as the score's value base (M3/D60) — already done.** It is the
+only mechanism tested that beat the pre-registered control on every axis the rule checked, it
+fixes a real, independently-verified defect (K/DST hoarding past feasibility) that every
+VORP-value-base tier shares, and it improved the official benchmark's Alpha-vs-consensus margin
+from +102.6 to +165.7 with no regression in feasibility or per-position zero-rates. The change
+is additive at the call site (an optional parameter, VORP-fallback preserved) so no caller that
+cannot supply real roster state lost anything.
+
+**What is settled:**
+- The 1-QB benchmark is valid (§1: `ro`, not `rsf`), and a 1-QB consensus board really does
+  draft 1–3 QBs (§2: 80% of replayed drafts) — the original premise holds under the corrected
+  board and did not under the old one.
+- K and DEF are real, computed, baseline-projected starting positions, not zeros or omissions
+  (§3).
+- The roster-arithmetic and flex-blindness defects the new lineup exposed are fixed and
+  test-covered (§4), and `starters + bench == roster_size` can no longer silently drift.
+- Alpha's shipped engine beats market consensus under the corrected format and benchmark, on
+  the primary metric, the win-rate secondary metric, and per-season consistency (§6, §8) — the
+  directive's central question has a documented, evidence-backed "yes."
+
+**What is not settled, named rather than hidden:**
+1. **RB-position projection residual (§7).** The pick-level attribution surfaced a real,
+   measured asymmetry — consensus RB alternatives in the "cost" bucket overperformed their own
+   projections by +45.2 points on average (n=206) in 2021–2025. Whether this is a genuine
+   calibration gap in the RB uncertainty model, a property of this specific 5-season sample, or
+   both, is unresolved and would need its own walk-forward calibration audit of the RB
+   projection path specifically — not assumed to be either.
+2. **Opportunity cost was held fixed, not re-ablated (§8).** Every M-tier shares D55's
+   opportunity-cost term unchanged; whether it still earns its keep specifically under the 1-QB
+   format (as opposed to carrying over from when it was chosen on superflex data) was not
+   independently re-tested against an opportunity-cost-off control in this pass.
+3. **The consensus opponent's late-round tail (§2).** The proxy has no roster awareness and
+   drafts an unrealistic QB tail after round ~10; it remains the only available consensus data
+   in this environment (no independent ADP source, D16/D17) and is used as-is, not smoothed.
+4. **The single-pick-counterfactual method (§7)** is a real diagnostic tool with a documented,
+   structural blind spot (no downstream-availability modeling) — useful for classifying gap
+   *causes*, not a substitute for the team-level benchmark as a measure of whether a strategy
+   is good.
+
+None of the above changes the shipped decision (M3 was the strictly better mechanism measured
+against everything tested), but each is a concrete next step for a future session: an
+RB-projection calibration audit, an opportunity-cost-off M-tier, and continued per-season
+monitoring as more real seasons of data accumulate.

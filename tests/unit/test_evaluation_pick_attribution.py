@@ -49,8 +49,15 @@ def _seed(con, player_id, position, projected, realized, ecr_rank):
              predicted_at)
         VALUES (?, ?, ?, ?, ?, 'test_v1', ?, 0.2, 0.4, 0.8, ?, current_timestamp)
         """,
-        [f"p_{player_id}", player_id, SEASON, position, UNCERTAINTY_MODEL_VERSION,
-         projected, SEASON - 1],
+        [
+            f"p_{player_id}",
+            player_id,
+            SEASON,
+            position,
+            UNCERTAINTY_MODEL_VERSION,
+            projected,
+            SEASON - 1,
+        ],
     )
     con.execute(
         "INSERT INTO market_snapshot (player_id, scrape_date, ecr_type, position, ecr_rank, "

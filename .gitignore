@@ -35,6 +35,13 @@ reports/**
 # post-implementation re-trace proving the mechanism (not just the roster counts) changed.
 !reports/draft_forensics_ptier_results.json
 !reports/draft_decision_trace_d55.json
+# D58/D60 (1-QB format retarget): the M-tier ablation that chose marginal starter value over
+# VORP as the score's value base, and the pick-level counterfactual attribution both
+# docs/FORMAT_MIGRATION_DIAGNOSTIC.md (S7-8) and docs/DECISIONS.md D60 cite as their evidence.
+# Same reasoning as the M17/D55 exceptions above: not reproducible without redoing the full
+# ingest/train/market pipeline, so kept alongside the documents that cite them.
+!reports/draft_forensics_mtier_results.json
+!reports/pick_attribution.json
 state/**
 !state/.gitkeep
 *.duckdb

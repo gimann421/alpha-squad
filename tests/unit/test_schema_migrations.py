@@ -182,7 +182,5 @@ def test_migrated_market_snapshot_keeps_both_pages_of_one_ecr_type(pre_d56_con):
             "VALUES ('p1', DATE '2025-08-01', 'ro', 'WR', ?, ?)",
             [rank, page_type],
         )
-    rows = dict(
-        pre_d56_con.execute("SELECT page_type, ecr_rank FROM market_snapshot").fetchall()
-    )
+    rows = dict(pre_d56_con.execute("SELECT page_type, ecr_rank FROM market_snapshot").fetchall())
     assert rows == {"redraft-overall": 12.0, "redraft-idp": 3.0}

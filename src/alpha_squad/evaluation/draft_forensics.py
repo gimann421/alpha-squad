@@ -56,9 +56,24 @@ from alpha_squad.market.series import resolve_market_series
 from alpha_squad.models.uncertainty.run import MODEL_VERSION as UNCERTAINTY_MODEL_VERSION
 
 Tier = Literal[
-    "A", "B", "C", "D", "E", "F", "G", "H",
-    "P0", "P1", "P1b", "P1c", "P2", "P3",
-    "M0", "M1", "M2", "M3",
+    "A",
+    "B",
+    "C",
+    "D",
+    "E",
+    "F",
+    "G",
+    "H",
+    "P0",
+    "P1",
+    "P1b",
+    "P1c",
+    "P2",
+    "P3",
+    "M0",
+    "M1",
+    "M2",
+    "M3",
 ]
 ALL_TIERS: tuple[Tier, ...] = ("A", "B", "C", "D", "E", "F", "G", "H")
 
@@ -114,6 +129,7 @@ def marginal_starter_multiplier(msv: float, projection: float) -> float:
         return MSV_MULT_FLOOR
     ratio = max(0.0, min(1.0, msv / projection))
     return MSV_MULT_FLOOR + MSV_MULT_RANGE * ratio
+
 
 # PRE-REGISTERED DECISION RULE -- committed before the P-tiers were ever run against real data,
 # following the D39/D54 discipline of fixing the rule before seeing the outcome so a result
@@ -850,9 +866,7 @@ def _candidate_to_dict(c: CandidateScore) -> dict:
         ),
         "feasibility_multiplier": c.feasibility_multiplier,
         "marginal_starter_value": (
-            round(c.marginal_starter_value, 2)
-            if c.marginal_starter_value is not None
-            else None
+            round(c.marginal_starter_value, 2) if c.marginal_starter_value is not None else None
         ),
         "opportunity_cost_pts": (
             round(c.opportunity_cost_pts, 2) if c.opportunity_cost_pts is not None else None

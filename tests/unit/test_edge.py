@@ -130,8 +130,14 @@ def _seed_market(con, ecr_type, season, month, rows):
         con.execute(
             "INSERT INTO market_snapshot (player_id, scrape_date, ecr_type, position, ecr_rank, page_type) "
             "VALUES (?, ?, ?, ?, ?, ?)",
-            [player_id, f"{season}-{month:02d}-01", ecr_type, position, ecr_rank,
-             series_for_ecr_type(ecr_type).page_type],
+            [
+                player_id,
+                f"{season}-{month:02d}-01",
+                ecr_type,
+                position,
+                ecr_rank,
+                series_for_ecr_type(ecr_type).page_type,
+            ],
         )
 
 

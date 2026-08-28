@@ -27,22 +27,23 @@ is implemented. Several places where they diverge turn out to matter.
 (not a paraphrase):
 
 ```python
-projections, positions = load_season_projections(con, season)          # PLAYER DATA + PROJECTION
+projections, positions = load_season_projections(con, season)  # PLAYER DATA + PROJECTION
 vorp = marginal_value_over_replacement(league, projections, positions)  # REPLACEMENT VALUE + VORP
-needs = roster_need(league, roster_positions)                           # ROSTER FIT (need side)
+needs = roster_need(league, roster_positions)  # ROSTER FIT (need side)
 
 for player_id in available_player_ids:
     pos = positions[player_id]
-    confidence = _confidence_for(con, player_id, season)                 # CONFIDENCE
-    survival = next_pick_survival_probability(con, player_id,
-                   next_pick_overall, season, ecr_type)                  # SURVIVAL
-    fit_mult = roster_fit_multiplier(needs.get(pos, 0.0))                # ROSTER FIT (multiplier)
+    confidence = _confidence_for(con, player_id, season)  # CONFIDENCE
+    survival = next_pick_survival_probability(
+        con, player_id, next_pick_overall, season, ecr_type
+    )  # SURVIVAL
+    fit_mult = roster_fit_multiplier(needs.get(pos, 0.0))  # ROSTER FIT (multiplier)
     risk_mult = confidence if confidence is not None else 0.7
     survival_mult = 1.0 if survival is None else (1.0 + 0.3 * (1.0 - survival))
-    score = vorp[player_id] * fit_mult * risk_mult * survival_mult       # FINAL SCORE
+    score = vorp[player_id] * fit_mult * risk_mult * survival_mult  # FINAL SCORE
 
 candidates.sort(key=lambda c: (-c.score, c.player_id))
-best = candidates[0]                                                     # PICK
+best = candidates[0]  # PICK
 ```
 
 `load_season_projections` (`league/replacement.py`) reads `uncertainty_predictions.point_prediction`

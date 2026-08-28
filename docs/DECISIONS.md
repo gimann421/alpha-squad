@@ -2444,3 +2444,67 @@ does Alpha beat it) but not why. Pick-level attribution and the M-tier ablation 
 whether marginal starter value improves further, and whether D55's opportunity-cost term
 still helps specifically under this format) are the next diagnostic step — see
 `docs/FORMAT_MIGRATION_DIAGNOSTIC.md` §7–9.
+
+## D60 — Marginal starter value ships to production, chosen by a pre-registered M-tier ablation
+
+The M-tier ablation (`evaluation/draft_forensics.py`, D58) tested where marginal starter value
+(`league/replacement.py::marginal_starter_value` — how much a candidate would improve *this*
+roster's own best legal lineup, as opposed to VORP's league-wide replacement level) belongs in
+the score, with the decision rule pre-registered before any run against real data: primary
+metric mean starter points, Gate 1 no position zeroed out more than the control, Gate 2 no more
+infeasible rosters than the control, tie-break fewer mechanisms, ship only if a tier strictly
+beats the pre-registered control (M0, the shipped D55 formula unchanged) with both gates
+passing. 200 real drafts (4 tiers × 5 seasons × 10 slots):
+
+| Tier | Mean starter pts | Δ vs M0 | Win/Loss/Tie vs M0 |
+|---|---|---|---|
+| M0 (control — shipped D55 formula, unchanged) | 1894.2 | — | — |
+| M1 (MSV added inside the value term) | 1987.2 | +93.0 (+4.9%) | 34/13/3 |
+| M2 (MSV drives the roster-fit multiplier) | 1900.7 | +6.6 (+0.3%) | 16/22/12 |
+| **M3 (MSV replaces VORP as the value base)** | **2003.8** | **+109.7 (+5.8%)** | **37/13/0** |
+
+Both gates passed for every tier. **M3 wins outright** on the primary metric, by the largest
+margin of any tier, winning 4 of 5 seasons head-to-head (loses only 2025, 4–6).
+
+**M3 is also the only tier that fixes a real, independently-visible defect.** Every
+VORP-value-base tier (M0/M1/M2) drafted a mean 3.7–3.8 kickers and 2.2–2.4 defenses per
+16-round draft — 50/50 drafts in each of those tiers breached K's flex-aware feasibility cap —
+because VORP prices a bench K/DST against league-wide positional replacement level with no
+knowledge that neither position has flex eligibility: a second or third kicker merely better
+than replacement still scores positive VORP despite having zero chance of ever starting. MSV
+has no such blind spot by construction (a second kicker's MSV is exactly zero once the first
+fills the slot). Only M3 stops the hoarding (0/50 breaches) and the freed bench capacity flows
+to real skill-position depth (mean RB 1.72→2.62, WR 4.12→5.54, TE 2.00→2.70).
+
+**Shipped exactly as measured.** `recommend_draft_pick` gains an optional `roster_player_ids`
+parameter. When a caller supplies the roster's actual drafted players, the score's value base
+becomes marginal starter value instead of VORP; when omitted, the function is byte-for-byte the
+D55 formula, so every caller that cannot supply real player ids (some API/agent paths — the web
+draft picker's `draftedIds` tracks every player drafted league-wide, not this team's own picks,
+so passing it would tell the engine "my roster already holds every position anyone has drafted,"
+which is actively wrong rather than merely incomplete; the CLI and `agents/registry.py` only
+ever resolve position counts, not player ids) sees no behavior change. VORP is still computed
+unconditionally, since the D55 opportunity-cost replay is itself VORP-denominated regardless of
+which term is the score's value base. Wired into the official benchmark
+(`draft_simulation.py`, which already tracks `drafted` as real player ids) and the forensic
+harness's tier H, so it keeps mirroring real production.
+
+**Official benchmark, re-run after shipping** (`alpha-squad evaluate draft-simulation`, full
+2021–2025 × 10 slots, `ro` board, 1-QB league config):
+
+| Strategy | Mean starter pts | Mean total roster pts |
+|---|---|---|
+| **alpha_league_aware (M3/D60)** | **1990.9** | 2775.9 |
+| `market_consensus` | 1825.2 | 2806.7 |
+
+**+165.7 mean starter points (+9.1%) over consensus, 37/50 (74%) win rate** — up from D59's
+pre-MSV +102.6/+5.6%/68%. Byte-identical across two independent processes
+(`md5 5e0ec53e...`, `PYTHONHASHSEED` unset), confirming the result is deterministic.
+
+**Not settled by this change, named rather than hidden (full discussion:
+`docs/FORMAT_MIGRATION_DIAGNOSTIC.md` §7–9):** pick-level counterfactual attribution surfaced a
+real RB-position projection residual (consensus RB alternatives in the "cost" bucket
+overperformed their own projections by a mean +45.2 points, n=206, 2021–2025) that is a
+projection-layer question, not a draft-engine one; D55's opportunity-cost term was held fixed
+across every M-tier and was not independently re-ablated against an opportunity-cost-off
+control under the 1-QB format specifically.

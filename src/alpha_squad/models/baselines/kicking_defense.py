@@ -48,9 +48,7 @@ DST_PRIOR_WEIGHT = 0.3  # remainder goes to the walk-forward positional mean
 MIN_PROJECTABLE_SEASON = 2013
 
 
-def _season_points(
-    con: duckdb.DuckDBPyConnection, position: str, season: int
-) -> dict[str, float]:
+def _season_points(con: duckdb.DuckDBPyConnection, position: str, season: int) -> dict[str, float]:
     rows = con.execute(
         "SELECT player_id, total_fantasy_points_ppr FROM player_season_stats "
         "WHERE season = ? AND position = ?",
@@ -59,9 +57,7 @@ def _season_points(
     return dict(rows)
 
 
-def _positional_mean_before(
-    con: duckdb.DuckDBPyConnection, position: str, season: int
-) -> float:
+def _positional_mean_before(con: duckdb.DuckDBPyConnection, position: str, season: int) -> float:
     """Mean season total across every prior season. Strictly `< season`, so a projection for
     S never sees S's own outcomes."""
     row = con.execute(
@@ -76,8 +72,9 @@ def project_kickers(con: duckdb.DuckDBPyConnection, season: int) -> dict[str, fl
     """0.65 * S-1 + 0.35 * S-2, with S-1 standing in for a missing S-2 (a kicker with one
     season of history is projected on that season rather than dropped -- dropping him would
     make him undraftable, which is a worse error than a noisy estimate)."""
-    prev, prev2 = _season_points(con, KICKER_POSITION, season - 1), _season_points(
-        con, KICKER_POSITION, season - 2
+    prev, prev2 = (
+        _season_points(con, KICKER_POSITION, season - 1),
+        _season_points(con, KICKER_POSITION, season - 2),
     )
     w1, w2 = KICKER_WEIGHTS
     return {pid: w1 * p1 + w2 * prev2.get(pid, p1) for pid, p1 in prev.items()}

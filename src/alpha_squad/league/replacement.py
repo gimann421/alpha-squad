@@ -146,9 +146,7 @@ def best_lineup_points(
     draft: a team with three players has three starters and seven holes."""
     roster_projections = {p: projections.get(p, 0.0) for p in roster}
     roster_positions = {p: positions.get(p, "UNKNOWN") for p in roster}
-    starters = compute_league_starters(
-        league, roster_projections, roster_positions, teams=1
-    )
+    starters = compute_league_starters(league, roster_projections, roster_positions, teams=1)
     return sum(roster_projections.get(p, 0.0) for p in starters["starters"])
 
 
@@ -179,9 +177,7 @@ def marginal_starter_value(
     loop; it is the only thing that does not vary across candidates at one pick."""
     if base_points is None:
         base_points = best_lineup_points(league, roster, projections, positions)
-    with_candidate = best_lineup_points(
-        league, [*roster, candidate], projections, positions
-    )
+    with_candidate = best_lineup_points(league, [*roster, candidate], projections, positions)
     return with_candidate - base_points
 
 

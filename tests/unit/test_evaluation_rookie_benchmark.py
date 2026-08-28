@@ -49,8 +49,14 @@ def _seed_training_class(con, position, draft_year, n=MIN_TRAINING_ROWS, ecr_typ
         con.execute(
             "INSERT INTO market_snapshot (player_id, scrape_date, ecr_type, position, ecr_rank, page_type) "
             "VALUES (?, ?, ?, ?, ?, ?)",
-            [player_id, f"{draft_year}-08-01", ecr_type, position, float(pick),
-             series_for_ecr_type(ecr_type).page_type],
+            [
+                player_id,
+                f"{draft_year}-08-01",
+                ecr_type,
+                position,
+                float(pick),
+                series_for_ecr_type(ecr_type).page_type,
+            ],
         )
 
 
@@ -64,8 +70,14 @@ def _seed_target_rookie(con, player_id, position, draft_year, pick, ecr_rank=Non
         con.execute(
             "INSERT INTO market_snapshot (player_id, scrape_date, ecr_type, position, ecr_rank, page_type) "
             "VALUES (?, ?, ?, ?, ?, ?)",
-            [player_id, f"{draft_year}-08-01", ecr_type, position, ecr_rank,
-             series_for_ecr_type(ecr_type).page_type],
+            [
+                player_id,
+                f"{draft_year}-08-01",
+                ecr_type,
+                position,
+                ecr_rank,
+                series_for_ecr_type(ecr_type).page_type,
+            ],
         )
 
 

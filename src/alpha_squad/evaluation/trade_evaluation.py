@@ -30,7 +30,10 @@ from alpha_squad.market.edge import DEFAULT_ECR_TYPE
 
 
 def build_trade_evidence_summary(
-    con: duckdb.DuckDBPyConnection, season_start: int, season_end: int, ecr_type: str = DEFAULT_ECR_TYPE
+    con: duckdb.DuckDBPyConnection,
+    season_start: int,
+    season_end: int,
+    ecr_type: str = DEFAULT_ECR_TYPE,
 ) -> list[dict]:
     rows = con.execute(
         """

@@ -27,8 +27,13 @@ def _seed_curve_training(con, season_before, ecr_type=DEFAULT_ECR_TYPE):
         con.execute(
             "INSERT INTO market_snapshot (player_id, scrape_date, ecr_type, position, ecr_rank, page_type) "
             "VALUES (?, ?, ?, 'WR', ?, ?)",
-            [player_id, f"{season_before}-08-01", ecr_type, float(i + 1),
-             series_for_ecr_type(ecr_type).page_type],
+            [
+                player_id,
+                f"{season_before}-08-01",
+                ecr_type,
+                float(i + 1),
+                series_for_ecr_type(ecr_type).page_type,
+            ],
         )
         con.execute(
             "INSERT INTO player_season_stats (player_id, season, position, games_played, "
