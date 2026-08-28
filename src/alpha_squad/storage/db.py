@@ -50,6 +50,18 @@ def _migrate(con: duckdb.DuckDBPyConnection) -> None:
             con.execute("ROLLBACK")
             raise
 
+    # draft_simulation_results (D61 Stage 1.1): opponent_strategy widens the primary key,
+    # which DuckDB cannot ALTER in place. Unlike market_snapshot, this table is a pure
+    # evaluation-result cache -- `alpha-squad evaluate draft-simulation` fully repopulates it
+    # on every run -- so a pre-D61 table is dropped outright rather than carried forward:
+    # inventing an n_unfilled_mandatory_slots value for rows that predate the column would
+    # fabricate data no version of the code ever measured.
+    columns = {row[0] for row in con.execute("DESCRIBE draft_simulation_results").fetchall()}
+    if "opponent_strategy" not in columns:
+        con.execute("DROP TABLE draft_simulation_results")
+        for ddl in ALL_DDL:
+            con.execute(ddl)
+
 
 def init_db(con: duckdb.DuckDBPyConnection) -> None:
     for ddl in ALL_DDL:
