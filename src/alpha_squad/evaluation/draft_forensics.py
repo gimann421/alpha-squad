@@ -24,7 +24,6 @@ and every tier that reuses a production concept calls the production function di
 
 from __future__ import annotations
 
-import math
 from dataclasses import dataclass, field
 from typing import Literal
 
@@ -50,7 +49,11 @@ from alpha_squad.league.replacement import (
     positional_scarcity,
     replacement_level,
 )
-from alpha_squad.league.roster import roster_fit_multiplier, roster_need
+from alpha_squad.league.roster import (
+    positional_feasibility_cap,
+    roster_fit_multiplier,
+    roster_need,
+)
 from alpha_squad.market.edge import _preseason_overall_market
 from alpha_squad.market.series import resolve_market_series
 from alpha_squad.models.uncertainty.run import MODEL_VERSION as UNCERTAINTY_MODEL_VERSION
@@ -288,20 +291,6 @@ def _survival_probability(
     return 1.0 - (next_pick_overall - best) / (worst - best)
 
 
-def _feasibility_cap(league: LeagueContext, position: str) -> int:
-    """A league-config-derived (not hardcoded) ceiling on how many players at one position a
-    real roster can use: starting slots at that position, plus an even share of the total
-    bench across every position that has a dedicated starting slot. Unlike
-    `roster_need`'s existing `depth_target = slots + 2` (a constant, verified in the forensic
-    audit to be unrelated to the league's actual configured bench size), this is derived from
-    `league.bench_size` and the real number of distinct dedicated positions."""
-    dedicated = league.dedicated_slots()
-    slots = dedicated.get(position, 0)
-    n_positions = max(len(dedicated), 1)
-    bench_share = league.bench_size / n_positions
-    return slots + max(1, math.ceil(bench_share))
-
-
 @dataclass
 class CandidateScore:
     player_id: str
@@ -439,7 +428,7 @@ def score_candidate(
         else:  # M3
             score = (msv + opp_cost) * fit_mult * risk_mult * survival_mult
 
-        cap = _feasibility_cap(league, position)
+        cap = positional_feasibility_cap(league, position)
         have = sum(1 for p in roster_positions if p == position)
         if have >= cap:
             feasibility_mult = 0.1
@@ -498,7 +487,7 @@ def score_candidate(
             score = (vorp + opp_cost) * fit_mult * risk_mult * survival_mult
 
         if tier in ("P2", "P3"):
-            cap = _feasibility_cap(league, position)
+            cap = positional_feasibility_cap(league, position)
             have = sum(1 for p in roster_positions if p == position)
             if have >= cap:
                 feasibility_mult = 0.1
@@ -583,7 +572,7 @@ def score_candidate(
                 )
 
         if tier in ("E", "F"):
-            cap = _feasibility_cap(league, position)
+            cap = positional_feasibility_cap(league, position)
             have = sum(1 for p in roster_positions if p == position)
             if have >= cap:
                 feasibility_mult = 0.1
@@ -937,7 +926,7 @@ def roster_feasibility_metrics(
     over_cap = {
         pos: counts.get(pos, 0)
         for pos in dedicated
-        if counts.get(pos, 0) > _feasibility_cap(league, pos)
+        if counts.get(pos, 0) > positional_feasibility_cap(league, pos)
     }
     n_distinct = len([p for p in counts if counts[p] > 0])
     total_drafted = len(drafted_positions)

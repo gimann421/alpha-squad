@@ -47,6 +47,27 @@ def positional_capacity(league: LeagueContext, position: str) -> int:
     return slots + bench_share
 
 
+def unfilled_dedicated_slots(league: LeagueContext, roster_positions: list[str]) -> dict[str, int]:
+    """{position: deficit} for every dedicated (non-flex) starting slot this roster has not
+    yet filled to its minimum -- e.g. a league with `K: 1` and no kicker drafted yet reports
+    `{"K": 1, ...}`. Positions already at or past their dedicated count are omitted entirely,
+    so an empty dict means every mandatory slot is covered.
+
+    Derived from `league.dedicated_slots()`, never hardcoded (D61 Stage 1.1) -- this is what
+    lets a roster-aware consensus drafter (`evaluation/draft_simulation.py`) know it must fill
+    a K/DEF slot in a league that has one, and correctly does nothing in a league that
+    doesn't."""
+    dedicated = league.dedicated_slots()
+    counts: dict[str, int] = {}
+    for pos in roster_positions:
+        counts[pos] = counts.get(pos, 0) + 1
+    return {
+        pos: slots - counts.get(pos, 0)
+        for pos, slots in dedicated.items()
+        if counts.get(pos, 0) < slots
+    }
+
+
 def roster_need(league: LeagueContext, roster_positions: list[str]) -> dict[str, float]:
     """{position: need_score} for every position with a dedicated slot. need_score > 0 means
     the roster cannot yet fill that position's starting slots at all (urgent); a small

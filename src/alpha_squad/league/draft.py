@@ -62,7 +62,7 @@ from alpha_squad.league.roster import (
     roster_fit_multiplier,
     roster_need,
 )
-from alpha_squad.market.series import resolve_market_series
+from alpha_squad.market.series import resolve_market_series, series_for_ecr_type
 from alpha_squad.models.uncertainty.run import MODEL_VERSION as UNCERTAINTY_MODEL_VERSION
 
 
@@ -113,15 +113,32 @@ def next_pick_survival_probability(
     snapshot ever recorded. Without this, a draft for a past `season` could see expert-rank
     dispersion recorded years after that draft actually happened (found via a real historical
     draft simulation, docs/DECISIONS.md D54: many players' market_snapshot rows span 2021 to
-    2026, so an un-scoped "latest" lookup for a 2021 draft could read a 2026 snapshot)."""
+    2026, so an un-scoped "latest" lookup for a 2021 draft could read a 2026 snapshot).
+
+    Also scoped to a single `page_type` (D56/D61 Stage 1.5), mirroring
+    `market/edge.py::_preseason_overall_market`: `ecr_type` alone is not a coherent rank
+    space -- 'ro' merges the PPR draft board with a separately-ranked IDP board -- and this
+    function was the one market consumer still filtering on `ecr_type` alone. An `ecr_type`
+    with no known series (e.g. a live-capture ecr_type with only one page) stays unscoped."""
+    try:
+        page_type: str | None = series_for_ecr_type(ecr_type).page_type
+    except ValueError:
+        page_type = None
+    where = (
+        "player_id = ? AND ecr_type = ? AND ecr_best IS NOT NULL AND ecr_worst IS NOT NULL "
+        "AND year(scrape_date) = ? AND month(scrape_date) IN (7, 8)"
+    )
+    params: list[object] = [player_id, ecr_type, season]
+    if page_type is not None:
+        where += " AND page_type = ?"
+        params.append(page_type)
     row = con.execute(
-        """
+        f"""
         SELECT ecr_best, ecr_worst FROM market_snapshot
-        WHERE player_id = ? AND ecr_type = ? AND ecr_best IS NOT NULL AND ecr_worst IS NOT NULL
-          AND year(scrape_date) = ? AND month(scrape_date) IN (7, 8)
+        WHERE {where}
         ORDER BY scrape_date DESC LIMIT 1
         """,
-        [player_id, ecr_type, season],
+        params,
     ).fetchone()
     if row is None:
         return None

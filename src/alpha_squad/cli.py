@@ -24,6 +24,7 @@ from alpha_squad.evaluation.draft_forensics import (
     summarize_tier_ablation,
 )
 from alpha_squad.evaluation.draft_simulation import (
+    ALL_OPPONENT_STRATEGIES,
     persist_draft_sim_results,
     run_draft_simulation,
     write_draft_simulation_report,
@@ -640,31 +641,37 @@ def evaluate_draft_simulation(
         "reports/draft_simulation.md", help="Markdown report output path"
     ),
 ) -> None:
-    """Empirical validation phase (D54): simulate a real historical snake draft under 4
-    strategies (market_consensus/generic_prior_year/alpha_bpa/alpha_league_aware), from
-    every draft slot, for every season with real walk-forward Alpha predictions. Scores
-    rosters on real end-of-season outcomes. `alpha_league_aware` calls the real
-    `recommend_draft_pick` once per pick, so this is slow (tens of minutes) -- it is a
-    one-off evaluation run, not something meant to run per-request."""
+    """Empirical validation phase (D54, D61): simulate a real historical snake draft under 5
+    strategies (market_consensus/market_consensus_roster_aware/generic_prior_year/alpha_bpa/
+    alpha_league_aware), against BOTH opponent fields (market_consensus, as published through
+    D60, and the fair market_consensus_roster_aware, D61 Stage 1.1), from every draft slot,
+    for every season with real walk-forward Alpha predictions. Scores rosters on real
+    end-of-season outcomes. `alpha_league_aware` calls the real `recommend_draft_pick` once
+    per pick against two opponent fields, so this is slow (tens of minutes) -- it is a one-off
+    evaluation run, not something meant to run per-request."""
     settings = get_settings()
     con = get_connection(settings)
     init_db(con)
     league = resolve_league(league_id, con=con, settings=settings)
     seasons = list(range(season_start, season_end + 1))
 
-    results = run_draft_simulation(con, league, seasons)
+    results = run_draft_simulation(
+        con, league, seasons, opponent_strategies=list(ALL_OPPONENT_STRATEGIES)
+    )
     persist_draft_sim_results(con, results)
 
     summary = write_draft_simulation_report(con, Path(report_path), seasons)
     table = Table(title="Draft simulation summary (pooled across seasons/slots)")
-    for col in ("strategy", "n", "mean_starter_pts", "mean_total_pts"):
+    for col in ("opponent", "strategy", "n", "mean_starter_pts", "mean_total_pts", "unfilled/n"):
         table.add_column(col)
     for row in summary:
         table.add_row(
+            row["opponent_strategy"],
             row["strategy"],
             str(row["n"]),
             f"{row['mean_starter_points']:.1f}",
             f"{row['mean_total_roster_points']:.1f}",
+            f"{row['n_trials_with_unfilled_slots']}/{row['n']}",
         )
     console.print(table)
     console.print(f"report written to [green]{report_path}[/green]")
