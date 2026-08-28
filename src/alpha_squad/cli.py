@@ -108,7 +108,14 @@ from alpha_squad.models.simulation.correlated import (
     simulate_team_season,
 )
 from alpha_squad.models.simulation.team_scores import build_team_week_points
-from alpha_squad.models.uncertainty.run import run_uncertainty, score_with_persisted_model
+from alpha_squad.models.uncertainty.run import (
+    MODEL_VERSION as UNCERTAINTY_MODEL_VERSION,
+)
+from alpha_squad.models.uncertainty.run import (
+    project_uncertainty_season,
+    run_uncertainty,
+    score_with_persisted_model,
+)
 from alpha_squad.sources.base import SourceError, SourceHealth, SourceStatus, utcnow
 from alpha_squad.sources.registry import all_adapters
 from alpha_squad.storage.db import get_connection, init_db
@@ -999,6 +1006,61 @@ def train_uncertainty(
     Path(report_path).parent.mkdir(parents=True, exist_ok=True)
     Path(report_path).write_text("\n".join(lines) + "\n")
     console.print(f"report written to [green]{report_path}[/green]")
+    con.close()
+
+
+@train_app.command("uncertainty-project")
+def train_uncertainty_project(
+    season: int = typer.Option(..., help="Season to project (has not been played yet)"),
+    min_train_season: int = typer.Option(2015, help="Earliest season usable for training data"),
+    top_n: int = typer.Option(20, help="How many to print, per position"),
+    persist: bool = typer.Option(
+        True,
+        help="Save the fitted model + calibration residuals, so `models rescore-uncertainty` "
+        "can re-score without retraining.",
+    ),
+) -> None:
+    """Project an UNPLAYED season for established (non-rookie) players -- the forward-looking
+    counterpart to `train uncertainty`, which is a backtest over seasons whose outcomes are
+    already known. Writes no calibration_diagnostics row, because there is no real outcome yet
+    to check coverage against (D40's rookie-projection reasoning, applied here). Requires
+    `features build` and `market build` for the target season's preseason window; true rookies
+    are not covered here -- see `train rookie-project`."""
+    settings = get_settings()
+    con = get_connection(settings)
+    init_db(con)
+
+    report = project_uncertainty_season(con, season, min_train_season, persist=persist)
+
+    rows = con.execute(
+        """
+        SELECT p.display_name, up.position, up.point_prediction, up.p10, up.p90
+        FROM uncertainty_predictions up
+        LEFT JOIN players p ON p.player_id = up.player_id
+        WHERE up.season = ? AND up.model_version = ?
+        ORDER BY up.position, up.point_prediction DESC
+        """,
+        [season, UNCERTAINTY_MODEL_VERSION],
+    ).fetchall()
+
+    by_position: dict[str, list] = {}
+    for name, pos, point_pred, p10, p90 in rows:
+        by_position.setdefault(pos, []).append((name, point_pred, p10, p90))
+
+    for pos, players in by_position.items():
+        table = Table(title=f"{season} {pos} projection (top {top_n})")
+        for col in ("player", "proj pts", "p10", "p90"):
+            table.add_column(col)
+        for name, point_pred, p10, p90 in players[:top_n]:
+            table.add_row(name or "-", f"{point_pred:.1f}", f"{p10:.1f}", f"{p90:.1f}")
+        console.print(table)
+
+    console.print(
+        f"predictions written: [green]{report.predictions_written}[/green] "
+        f"(trained through {report.trained_through}, projecting {season})"
+    )
+    if report.skipped:
+        console.print(f"[yellow]skipped: {report.skipped}[/yellow]")
     con.close()
 
 

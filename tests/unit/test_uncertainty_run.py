@@ -7,13 +7,17 @@ from __future__ import annotations
 import duckdb
 import pytest
 
-from alpha_squad.models.established.season_level import load_season_level_data
+from alpha_squad.models.established.season_level import (
+    load_season_level_data,
+    load_season_level_projection_data,
+)
 from alpha_squad.models.persistence import load_regressor
 from alpha_squad.models.uncertainty.run import (
     ARTIFACT_MODEL_NAME,
     MIN_CALIB_ROWS,
     MIN_TRAIN_ROWS,
     MODEL_VERSION,
+    project_uncertainty_season,
     run_uncertainty,
     score_with_persisted_model,
 )
@@ -158,3 +162,108 @@ class TestPersistedModelInference:
 
         with pytest.raises(FileNotFoundError):
             score_with_persisted_model(con, "WR", 2024, feature_rows, store=False)
+
+
+class TestUnplayedSeasonProjection:
+    """`project_uncertainty_season` (established-player counterpart to the D40 rookie
+    projection path) must produce real predictions for a season with no `player_season_stats`
+    rows of its own yet, using only prior seasons -- and must never fabricate an evaluation
+    metric for an outcome that doesn't exist."""
+
+    def _seed(self, con, through_season=2025):
+        for season in range(2015, through_season + 1):
+            for i in range(40):
+                pts = 30.0 + (i % 7) * 5 + season * 0.1
+                _seed_season(con, f"p{i}", season, pts, position="WR")
+
+    def test_projection_loader_returns_rows_with_no_target_season_stats_at_all(self, con):
+        """The bug this whole path exists to fix: `load_season_level_data`'s target join is an
+        INNER JOIN, so it silently returns zero rows for a season with no stats yet.
+        `load_season_level_projection_data` must return real feature rows for that same
+        unplayed season using only season-1 data."""
+        self._seed(con, through_season=2025)  # no 2026 rows seeded anywhere
+
+        via_training_loader = load_season_level_data(con, "WR", 2015, 2026)
+        assert via_training_loader[via_training_loader["target_season"] == 2026].empty
+
+        via_projection_loader = load_season_level_projection_data(con, "WR", 2026)
+        assert not via_projection_loader.empty
+        assert set(via_projection_loader["target_season"]) == {2026}
+        assert "target_points" not in via_projection_loader.columns
+
+    def test_projects_an_unplayed_season_and_writes_no_fabricated_calibration_row(self, con):
+        self._seed(con, through_season=2025)
+
+        report = project_uncertainty_season(con, 2026, min_train_season=2015, persist=False)
+        assert report.predictions_written > 0, f"skipped={report.skipped}"
+        assert report.trained_through == 2025
+
+        predictions = con.execute(
+            "SELECT player_id, season, calibration_season, point_prediction "
+            "FROM uncertainty_predictions WHERE season = 2026"
+        ).fetchall()
+        assert predictions
+        for _player_id, season, calibration_season, _point_pred in predictions:
+            assert season == 2026
+            assert calibration_season == 2025
+
+        # No real 2026 outcome exists, so no calibration_diagnostics row should exist for it --
+        # writing one would report a coverage metric against data that doesn't exist.
+        n_calib_rows = con.execute(
+            "SELECT count(*) FROM calibration_diagnostics WHERE season = 2026"
+        ).fetchone()[0]
+        assert n_calib_rows == 0
+
+    def test_seeding_huge_target_season_stats_never_changes_the_projection(self, con):
+        """Adversarial leakage check: even if a `player_season_stats` row for the "unplayed"
+        season somehow existed (e.g. a data error), the projection path must not read it --
+        it only ever queries `season = target_season - 1`. Confirms the loader isn't
+        accidentally reading target-season data through some other column."""
+        self._seed(con, through_season=2025)
+        baseline = project_uncertainty_season(con, 2026, min_train_season=2015, persist=False)
+        baseline_preds = dict(
+            con.execute(
+                "SELECT player_id, point_prediction FROM uncertainty_predictions WHERE season = 2026"
+            ).fetchall()
+        )
+
+        # Now seed absurd 2026 "actuals" for the same players and re-run.
+        for i in range(40):
+            _seed_season(con, f"p{i}", 2026, 99999.0, position="WR")
+
+        con.execute("DELETE FROM uncertainty_predictions WHERE season = 2026")
+        rerun = project_uncertainty_season(con, 2026, min_train_season=2015, persist=False)
+        rerun_preds = dict(
+            con.execute(
+                "SELECT player_id, point_prediction FROM uncertainty_predictions WHERE season = 2026"
+            ).fetchall()
+        )
+
+        assert rerun.predictions_written == baseline.predictions_written
+        for player_id, point_pred in baseline_preds.items():
+            assert rerun_preds[player_id] == pytest.approx(point_pred, abs=1e-6)
+
+    def test_persist_true_saves_an_artifact_a_persisted_call_can_load(
+        self, con, tmp_path, monkeypatch
+    ):
+        from alpha_squad.config.settings import get_settings
+
+        monkeypatch.setattr(get_settings(), "models_dir", tmp_path / "models")
+        self._seed(con, through_season=2025)
+
+        project_uncertainty_season(con, 2026, min_train_season=2015, persist=True)
+
+        model = load_regressor(ARTIFACT_MODEL_NAME, "WR", MODEL_VERSION)
+        assert model is not None
+
+    def test_skips_and_reports_when_insufficient_prior_season_data(self, con):
+        for i in range(5):
+            _seed_season(con, f"p{i}", 2025, 50.0 + i, position="WR")
+
+        report = project_uncertainty_season(con, 2026, min_train_season=2015, persist=False)
+        assert report.predictions_written == 0
+        assert report.skipped
+        n = con.execute(
+            "SELECT count(*) FROM uncertainty_predictions WHERE season = 2026"
+        ).fetchone()[0]
+        assert n == 0

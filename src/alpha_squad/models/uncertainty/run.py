@@ -18,6 +18,7 @@ from alpha_squad.models.established.season_level import (
     FEATURES,
     TARGET_COLUMN,
     load_season_level_data,
+    load_season_level_projection_data,
 )
 from alpha_squad.models.persistence import (
     load_calibration_residuals,
@@ -241,6 +242,109 @@ def run_uncertainty(
                 con, target_season, position, full_predictions, actual_target
             )
             report.calibration_rows.append(calib_row)
+
+    return report
+
+
+@dataclass
+class UncertaintyProjectionReport:
+    target_season: int = 0
+    predictions_written: int = 0
+    trained_through: int = 0
+    skipped: list[str] = field(default_factory=list)
+
+
+def project_uncertainty_season(
+    con: duckdb.DuckDBPyConnection,
+    target_season: int,
+    min_train_season: int = 2015,
+    *,
+    persist: bool = True,
+) -> UncertaintyProjectionReport:
+    """Score a season that has not been played yet -- the established-player counterpart to
+    `project_rookie_class` (docs/DECISIONS.md D40).
+
+    `run_uncertainty` is a backtest: for each target season in its range it trains, calibrates,
+    predicts, AND checks the predictions against that season's real outcomes
+    (`_record_calibration`). That last step is why `load_season_level_data`'s target join is an
+    INNER JOIN requiring `target_season`'s own `player_season_stats` to already exist -- correct
+    for walk-forward evaluation, but it structurally excludes a genuinely future season (an
+    empty `target` DataFrame, silently skipped) -- the same shape of gap D25 found for rookies.
+
+    This trains and calibrates exactly the way `run_uncertainty` does -- proper_train strictly
+    before `calib_season = target_season - 1`, conformal residuals fit on `calib_season` (for a
+    real future `target_season` this is always a season that has already been played) -- then
+    scores `load_season_level_projection_data`'s LEFT-JOIN feature rows for `target_season`
+    instead of requiring its own actuals. It deliberately writes no `calibration_diagnostics`
+    row: there is no real outcome yet to check coverage against, and reporting one would be
+    fabricating a metric (same reasoning as `project_rookie_class`)."""
+    calib_season = target_season - 1
+    report = UncertaintyProjectionReport(target_season=target_season, trained_through=calib_season)
+
+    for position in POSITIONS:
+        train_calib = load_season_level_data(con, position, min_train_season, calib_season)
+        proper_train = train_calib[train_calib["target_season"] < calib_season]
+        calib = train_calib[train_calib["target_season"] == calib_season]
+        target = load_season_level_projection_data(con, position, target_season)
+
+        if len(proper_train) < MIN_TRAIN_ROWS or len(calib) < MIN_CALIB_ROWS or target.empty:
+            report.skipped.append(
+                f"{position}/{target_season}: train={len(proper_train)} calib={len(calib)} "
+                f"target={len(target)}"
+            )
+            continue
+
+        model = CatBoostRegressor(
+            iterations=150,
+            depth=3,
+            learning_rate=0.08,
+            loss_function="MAE",
+            verbose=False,
+            random_seed=42,
+        )
+        model.fit(proper_train[FEATURES].to_numpy(), proper_train[TARGET_COLUMN].to_numpy())
+
+        calib_preds = model.predict(calib[FEATURES].to_numpy())
+        residuals = calib[TARGET_COLUMN].to_numpy() - calib_preds
+        quantile_offsets = fit_conformal_quantiles(residuals)
+
+        if persist:
+            path = save_model(model, ARTIFACT_MODEL_NAME, position, MODEL_VERSION)
+            register_artifact(
+                con,
+                ARTIFACT_MODEL_NAME,
+                position,
+                MODEL_VERSION,
+                FEATURE_VERSION,
+                min_train_season,
+                target_season,
+                path,
+                notes=f"servable uncertainty model, trained through {calib_season}, "
+                f"projecting unplayed season {target_season}",
+                calibration_residuals=residuals,
+            )
+
+        target_preds = model.predict(target[FEATURES].to_numpy())
+        point_predictions = dict(
+            zip(target["player_id"].tolist(), (float(p) for p in target_preds), strict=True)
+        )
+        mc_probs = monte_carlo_top_n_probabilities(point_predictions, residuals)
+
+        now = utcnow()
+        for player_id, point_pred in point_predictions.items():
+            quantiles = apply_quantiles(point_pred, quantile_offsets)
+            _store_prediction(
+                con,
+                player_id,
+                target_season,
+                position,
+                point_pred,
+                quantiles,
+                mc_probs[player_id],
+                calib_season,
+                now,
+            )
+            report.predictions_written += 1
 
     return report
 
