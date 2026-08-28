@@ -960,3 +960,77 @@ won a single season against it** — `docs/IMPLEMENTATION_GAP_ANALYSIS.md` P1-0'
 criterion remains unmet. Determinism passed (two separate-process benchmark runs, byte-identical)
 and runtime cost is negligible (+0.099 s/call, +3.4%). 474 offline tests passing (up from 450);
 lint and `tsc` clean.
+
+## M19 summary — 1-QB target format retarget: Alpha beats consensus (D56–D60)
+
+The product's target format changed from 10-team 2QB dynasty (D7) to 10-team 1-QB redraft
+(`docs/TARGET_FORMAT_1QB.md`). This milestone audited every format-dependent assumption in the
+codebase against the new format, found that the audit invalidated the project's entire recorded
+draft evaluation, re-baselined it correctly, and closed `docs/IMPLEMENTATION_GAP_ANALYSIS.md`'s
+P1-0 — the acceptance criterion open since M16. Full account: `docs/DECISIONS.md` D56–D60,
+`docs/FORMAT_MIGRATION_DIAGNOSTIC.md`.
+
+**The benchmark itself was wrong, not just the target.** `ecr_type='rsf'` — the board every
+prior draft evaluation ran against — is FantasyPros' *superflex* board (9 of the real
+preseason-2024 overall top 15 are QBs; the 1-QB board `ro` has none in its top 15). It was the
+correct board while the target league was 2QB (D21); it measures a different game now. A second,
+independent bug compounded it: `ecr_type` alone is not a rank space — DynastyProcess labels an
+IDP board with the same `ecr_type` as the real PPR board, and the pre-fix primary key silently
+dropped one of the two whenever they collided on a date (D56). `market_snapshot.page_type` and
+`market/series.py::resolve_market_series` fix both; every pre-D56 draft number is retained,
+labelled by the format it measured, not restated.
+
+**K and DEF, the new format's two new starting slots, had three separate gaps, all real and now
+closed (D57).** Kickers were ingested but scored 0.0 (nflverse prices only
+passing/rushing/receiving); team defenses did not exist as an entity anywhere; FantasyPros' DST
+market ranks were dropped at ingest. All three are now computed from real data — kicker points
+from real FG/PAT components, DST from real defensive stats plus real points allowed, DST market
+rank via a 3-entry team-code alias map. Both get measured baselines, not models, with the
+weighting chosen by walk-forward MAE over real 2015–2025 seasons (K: weighted 2-year, MAE 33.60;
+DST: shrunk hard to the positional mean, MAE 22.55) — an ML model would imply precision neither
+signal supports (K r=0.41, DST r=0.29 year-over-year).
+
+**Two format-shaped defects in previously-correct mechanisms (D58).** Positional capacity split
+the bench evenly across dedicated positions and ignored FLEX entirely — survivable at 4
+positions and a 2-QB lineup, first-order wrong once K/DEF joined the lineup (RB capped at 3 in a
+league starting 2 RB + up to 2 FLEX). `roster_need`'s depth target was the arbitrary constant
+`slots + 2`. Both now derive from the league's own config (`positional_capacity`,
+`startable_slots`). The config's own roster arithmetic was inconsistent (9 starters + 10 bench
+declared alongside `roster_size: 17`); now 10 + 6 = 16, asserted by test for every shipped
+config.
+
+**Re-baselined, with no engine change: Alpha already won.** `alpha_league_aware` (D55's shipped
+formula, unmodified) on the corrected `ro` board and 1-QB config: 1927.8 mean starter points vs.
+`market_consensus`'s 1825.2 (+102.6, +5.6%), 34/50 (68%) win rate, winning 4 of 5 seasons — the
+reverse of every pre-D56 result (D59).
+
+**Marginal starter value, measured and shipped (D60).** The audit re-asked M17's open question
+under the new format rather than assuming the answer transferred: does the engine understand
+whether a candidate would actually improve the team's starting lineup? It did not — VORP prices
+against league-wide replacement level, `roster_need` against a positional count, neither knows
+whether a specific candidate would start *on this specific roster*. `marginal_starter_value`
+supplies that. A pre-registered M-tier ablation (200 real drafts) found replacing VORP with it
+outright (tier M3) strictly won: +109.6 starter points (+5.8%), 37/50 win rate, zero infeasible
+rosters — and was the only tier that fixed a real, previously invisible defect: the VORP-based
+formula drafted a mean 3.78 kickers and 2.26 defenses per 16-round draft, because a bench K/DST
+still scores positive VORP despite zero chance of ever starting (neither has flex eligibility).
+Shipped as an additive, backward-compatible parameter (`roster_player_ids`) so callers without
+real per-team roster tracking see no behavior change.
+
+**Official benchmark, full 2021–2025, determinism verified:**
+
+| Strategy | Mean starter pts | vs. consensus |
+|---|---|---|
+| `alpha_league_aware` (D60) | **1990.9** | **+165.7 (+9.1%)** |
+| `market_consensus` | 1825.2 | — |
+
+Win rate: **37/50 (74%)**. Wins 4 of 5 seasons; 2024 is a near-miss (−10.1, down from D55's
+−80.1 measured under the same board). Two separate-process runs are byte-identical
+(`md5 5e0ec53e...`). **`docs/IMPLEMENTATION_GAP_ANALYSIS.md` P1-0's acceptance criterion is now
+met** — the fix that closed it was selected by a pre-registered decision rule measured against
+the corrected benchmark, not chosen to hit the target.
+
+602+ offline tests passing (up from 474); lint and `tsc` clean. New: `market/series.py`,
+`features/kicking_defense.py`, `models/baselines/kicking_defense.py`,
+`evaluation/pick_attribution.py`, M-tiers in `evaluation/draft_forensics.py`,
+`docs/TARGET_FORMAT_1QB.md`, `docs/BENCHMARK_SPEC.md`, `docs/FORMAT_MIGRATION_DIAGNOSTIC.md`.

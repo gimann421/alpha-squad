@@ -155,6 +155,46 @@ items with no listed dependency can start immediately.
   defensible next step is another targeted diagnostic — establish where the residual 219.6
   points actually come from (D55 notes 2023 regressed while four seasons improved, which is
   itself an unexplained signal) — rather than a third mechanism chosen by plausibility.
+- **UPDATE (D56–D60) — the diagnostic above was answered, and it closed this item.** Auditing
+  whether the benchmark itself was appropriate for the incoming 1-QB target format (per an
+  explicit directive not to assume it was) found the answer to the "residual 219.6 points"
+  question directly: **the entire benchmark above was invalid.** `ecr_type='rsf'` is
+  FantasyPros' *superflex* board (verified: 9 of the real preseason-2024 overall top 15 are
+  QBs), which was the correct board while the target league was 2QB (D21) and the wrong one
+  now that the target format is a 1-QB redraft league (`docs/TARGET_FORMAT_1QB.md`, D58). A
+  second, independent bug compounded it: `ecr_type` alone is not a rank space — DynastyProcess
+  labels an IDP board with the same `ecr_type` as the real PPR board, and the pre-D56 primary
+  key silently dropped one of the two whenever they collided (D56).
+  Re-baselined on the corrected `ro` board, under the corrected 1-QB league config, with
+  **no change to the scoring formula**: `alpha_league_aware` **already beat** market
+  consensus — 1927.8 vs 1825.2 mean starter points (+102.6, +5.6%), 34/50 (68%) win rate at
+  the (season, slot) level, winning 4 of 5 seasons (D59). The M-tier ablation then asked
+  whether the diagnosed gap in *this* item — the engine's score having no representation of
+  the team's own starting lineup — still applied under the new format, rather than assuming
+  it did: it did, and fixing it (marginal starter value replacing VORP as the score's value
+  base, D60) pushed the margin further. **Full official benchmark, both seasons and the
+  determinism requirement, verified:**
+
+  | Strategy | Mean starter pts | vs. consensus |
+  |---|---|---|
+  | `alpha_league_aware` (D60, shipped) | **1990.9** | **+165.7 (+9.1%)** |
+  | `market_consensus` | 1825.2 | — |
+
+  Win rate at the (season, slot) level: **37/50 (74%)**. Per-season: wins 4 of 5
+  (2021/2022/2023/2025); 2024 is a near-miss (1867.8 vs 1877.9, −10.1 — down from D55's
+  −80.1 under the same board). Determinism: two separate-process runs of the official
+  benchmark are byte-identical (`md5 5e0ec53e...`, matching across both files). The M-tier
+  ablation additionally surfaced and fixed a real defect neither D54 nor D55 touched: the
+  VORP-based formula drafted a mean 3.78 kickers and 2.26 defenses per 16-round draft, because
+  VORP prices a bench K/DST against league-wide replacement level with no knowledge that
+  neither position has flex eligibility — a "good" bench kicker scored positive VORP despite
+  zero chance of ever starting. Marginal starter value has no such blind spot by construction.
+  **Acceptance criterion met**, on the format the product now targets: `alpha_league_aware`
+  beats `market_consensus` on mean starter points, without re-tuning the evaluation to produce
+  that result — the fix that closed it (D60) was selected by a pre-registered decision rule
+  measured against the corrected benchmark, not chosen to hit this target. Full account,
+  including the pick-level attribution of what's still driving the residual per-pick variance
+  and the 2024 near-miss: `docs/FORMAT_MIGRATION_DIAGNOSTIC.md`.
 
 ### ~~P1-1: Wire waiver, trade, and roster-need recommendations into the web UI~~ — CLOSED (D44)
 
