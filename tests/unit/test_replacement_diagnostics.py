@@ -14,9 +14,11 @@ from alpha_squad.evaluation.replacement_diagnostics import (
     REPLACEMENT_VARIANTS,
     SWEEP_SCALES,
     available_pool_replacement,
+    consumption_replacement,
     dedicated_plus_one_bench_replacement,
     earned_starter_replacement,
     hybrid_capacity_replacement,
+    mock_draft_consumption_demand,
     remaining_demand_replacement,
     scaled_startable_replacement,
 )
@@ -305,3 +307,70 @@ class TestDemandDepthSweep:
         assert picks == 160
         assert league.teams * per_team == 140
         assert picks / (league.teams * per_team) == pytest.approx(1.142857, abs=1e-5)
+
+
+class TestMockDraftConsumptionDemand:
+    """D67: the demand target with no free parameter -- what a full draft of this league
+    actually consumes, counted off the preseason consensus board."""
+
+    @staticmethod
+    def _board(projections, positions) -> dict[str, tuple[str, float]]:
+        """A consensus board that ranks by projection, so the mock draft is deterministic and
+        its positional allocation is predictable from the pool alone."""
+        return {
+            pid: (positions[pid], float(rank))
+            for rank, pid in enumerate(sorted(projections, key=lambda p: -projections[p]), 1)
+        }
+
+    def test_target_sums_to_roster_size(self):
+        """The structural anchor: a draft makes exactly `teams x roster_size` picks, so demand
+        summed over positions must equal `roster_size` per team -- not the lineup size (10),
+        not `startable_slots` (14), not `positional_capacity` (22)."""
+        league = _target()
+        projections, positions = _pool()
+        target = mock_draft_consumption_demand(
+            league, self._board(projections, positions), projections, positions
+        )
+        assert sum(target.values()) == pytest.approx(float(league.roster["roster_size"]))
+
+    def test_every_mandatory_position_keeps_at_least_its_dedicated_requirement(self):
+        """A board that omits a position entirely must not collapse its demand to zero on pick
+        1 -- the real `ro` board carries no kickers in its top 160 in any season."""
+        league = _target()
+        projections, positions = _pool()
+        board = self._board(projections, positions)
+        no_kickers = {p: v for p, v in board.items() if positions[p] != "K"}
+        target = mock_draft_consumption_demand(league, no_kickers, projections, positions)
+        assert target["K"] >= league.dedicated_slots()["K"]
+
+    def test_it_adapts_to_the_league_format(self):
+        """Format-adaptivity is the whole claim that this is derived rather than hardcoded: the
+        2QB league must demand more QBs per team than the 1QB league, from the config alone."""
+        projections, positions = _pool()
+        board = self._board(projections, positions)
+        one_qb = mock_draft_consumption_demand(_target(), board, projections, positions)
+        two_qb = mock_draft_consumption_demand(
+            load_league_context("src/alpha_squad/config/league_configs/legacy_2qb_dynasty.yaml"),
+            board,
+            projections,
+            positions,
+        )
+        assert two_qb["QB"] > one_qb["QB"]
+
+    def test_consumption_replacement_uses_the_target_it_is_given(self):
+        league = _target()
+        projections, positions = _pool()
+        shallow = consumption_replacement({"K": 1.0})(
+            league, set(projections), projections, positions
+        )
+        deep = consumption_replacement({"K": 3.0})(league, set(projections), projections, positions)
+        assert deep["K"] < shallow["K"]
+
+    def test_a_full_pool_prices_the_boundary_player_not_the_best_one(self):
+        league = _target()
+        projections, positions = _pool()
+        levels = consumption_replacement({"WR": 5.0})(
+            league, set(projections), projections, positions
+        )
+        # demand 10 x 5 = 50 -> the 51st-best WR (0-indexed 50), a real boundary, not WR1
+        assert levels["WR"] == pytest.approx(projections["WR_050"])

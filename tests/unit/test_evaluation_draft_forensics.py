@@ -10,6 +10,12 @@ import pytest
 
 from alpha_squad.evaluation.draft_forensics import (
     ALL_TIERS,
+    DRAFT_AWARE_REPLACEMENT_TIERS,
+    PREREGISTERED_W_CONTROL,
+    TIER_DESCRIPTIONS,
+    W_TIER_SPEC,
+    W_TIERS,
+    W_TIERS_ENFORCING_LEGALITY,
     homogeneous_league_draft,
     load_season_static,
     roster_feasibility_metrics,
@@ -17,7 +23,7 @@ from alpha_squad.evaluation.draft_forensics import (
     simulate_forensic_draft,
 )
 from alpha_squad.league.context import LeagueContext, load_league_context
-from alpha_squad.league.roster import positional_feasibility_cap
+from alpha_squad.league.roster import positional_feasibility_cap, unfilled_dedicated_slots
 from alpha_squad.models.baselines.kicking_defense import MODEL_NAME as KDST_MODEL_NAME
 from alpha_squad.models.uncertainty.run import MODEL_VERSION as UNCERTAINTY_MODEL_VERSION
 from alpha_squad.storage.db import init_db
@@ -25,6 +31,7 @@ from alpha_squad.storage.db import init_db
 _LEAGUE_CONFIGS_DIR = (
     Path(__file__).parents[2] / "src" / "alpha_squad" / "config" / "league_configs"
 )
+TARGET_LEAGUE = _LEAGUE_CONFIGS_DIR / "target_league.yaml"
 
 
 def _seed_single_position_season(con, season, position, n_players=1):
@@ -375,3 +382,48 @@ class TestRosterFeasibilityMetrics:
         league = _small_league()
         metrics = roster_feasibility_metrics(league, ["QB", "RB", "WR", "TE"])
         assert metrics["concentration_index"] < 1.0
+
+
+class TestD67WTiers:
+    """D67: a structural demand target with no free parameter, plus roster legality as a
+    constraint kept separate from valuation."""
+
+    def test_the_control_reproduces_the_shipped_engine(self):
+        """W0 must be N4 exactly -- static replacement, no legality constraint. If the control
+        drifts from production, every W margin is measuring the wrong thing."""
+        assert W_TIER_SPEC["W0"] == (None, False)
+        assert PREREGISTERED_W_CONTROL == "W0"
+
+    def test_legality_tiers_are_derived_from_the_spec_not_listed_twice(self):
+        assert W_TIERS_ENFORCING_LEGALITY == ("W2", "W3")
+
+    def test_w3_isolates_legality_from_depth(self):
+        """The phase can only attribute a W2 win to depth if a tier exists that changes ONLY
+        legality. W3 is that tier: static replacement, constraint on."""
+        target, legality = W_TIER_SPEC["W3"]
+        assert target is None and legality is True
+
+    def test_every_w_tier_scores_through_the_draft_aware_branch(self):
+        for tier in W_TIERS:
+            assert tier in DRAFT_AWARE_REPLACEMENT_TIERS
+
+    def test_every_w_tier_is_described(self):
+        for tier in W_TIERS:
+            assert TIER_DESCRIPTIONS[tier]
+
+    def test_legality_restricts_to_a_mandatory_slot_at_the_deadline(self):
+        """The mechanism, at the level that matters: with exactly as many picks left as unfilled
+        mandatory slots, the pick must fill one -- and it must be the best of those by the
+        tier's own score, not a fixed position or a fixed round."""
+        league = load_league_context(TARGET_LEAGUE)
+        # A roster missing only K, with one pick left.
+        roster = ["QB", "RB", "RB", "WR", "WR", "TE", "DST"]
+        deficits = unfilled_dedicated_slots(league, roster)
+        assert deficits == {"K": 1}
+        assert sum(deficits.values()) == 1
+
+    def test_legality_does_nothing_while_picks_remain(self):
+        league = load_league_context(TARGET_LEAGUE)
+        roster = ["QB", "RB", "RB", "WR", "WR", "TE", "DST"]
+        # 5 picks left vs 1 unfilled slot -> the reservation must not trigger yet.
+        assert sum(unfilled_dedicated_slots(league, roster).values()) < 5

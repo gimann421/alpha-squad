@@ -38,7 +38,12 @@ from alpha_squad.evaluation.draft_simulation import (
     _next_pick_overall,
     _snake_overall_pick,
 )
-from alpha_squad.evaluation.replacement_diagnostics import REPLACEMENT_VARIANTS, SWEEP_SCALES
+from alpha_squad.evaluation.replacement_diagnostics import (
+    REPLACEMENT_VARIANTS,
+    SWEEP_SCALES,
+    consumption_replacement,
+    mock_draft_consumption_demand,
+)
 from alpha_squad.league.context import LeagueContext
 from alpha_squad.league.draft import recommend_draft_pick
 from alpha_squad.league.opportunity_cost import (
@@ -62,6 +67,7 @@ from alpha_squad.league.roster import (
     roster_need,
     saturated_surplus,
     startable_saturation,
+    unfilled_dedicated_slots,
 )
 from alpha_squad.market.edge import _preseason_overall_market
 from alpha_squad.market.series import resolve_market_series
@@ -113,6 +119,11 @@ Tier = Literal[
     "VS4",
     "VS5",
     "VS6",
+    "W0",
+    "W1",
+    "W2",
+    "W3",
+    "W4",
 ]
 ALL_TIERS: tuple[Tier, ...] = ("A", "B", "C", "D", "E", "F", "G", "H")
 
@@ -349,6 +360,86 @@ V_TIER_SPEC: dict[Tier, str | None] = {
 # against each other in rounds 11-16, which carry 16.1% of realized starter points.
 PREREGISTERED_V_CONTROL: Tier = "V0"
 
+# --- D67: a structural rule for replacement depth, and legality as a separate mechanism -----
+# D66 left `scale x2.5`/`x3.0` passing every gate but selected post-hoc off a 6-point sweep.
+# D67's diagnostics found why the multiplier works, and it is not a reason to keep it:
+#
+#   Deepening demand is arithmetically identical to adding a FIXED BONUS to every player at a
+#   position, and the bonus size is set by the shape of that position's projection tail. At
+#   x2.5, measured on real 2021-2025 data: RB +120.4, QB +108.9, TE +106.4, WR +92.0, but
+#   K +30.4 and DST +10.7. K hoarding vanished not because K was priced right but because
+#   everyone else got ~100 points and K got 30 -- an artifact of there being 225 WRs and 32
+#   DSTs. That is a positional re-weighting in disguise.
+#
+# Two further measurements shape this phase:
+#
+#   * A real 160-pick draft consumes QB 20.4 / RB 46.4 / WR 56.4 / TE 16.8 / K 10 / DST 10.
+#     `startable_slots` (QB 1, RB 4, WR 4, TE 3, K 1, DST 1 per team) is wrong in SHAPE -- it
+#     under-counts QB 2x and over-counts TE 1.8x -- so no uniform multiplier can repair it.
+#     Pool-clamping never occurs at any scale up to x3.0 (0/800 real pick-states); demand
+#     EXHAUSTION is the only binding constraint, and QB is what forces the scale past 2.5.
+#   * The engine has NO hard roster-legality constraint. `alpha_bpa` finishes 50/50 drafts with
+#     a mean 6.48 unfilled mandatory starting slots and nothing raises. `alpha_league_aware`'s
+#     current 0.00 is bought entirely by the static-replacement defect pricing a kicker at +30
+#     to +50 VORP all draft -- so changing depth puts legality at risk, and padding depth to
+#     keep K "valuable" would be solving a legality problem with a valuation knob.
+#
+# W1's demand target is therefore the classic VBD definition made literal (replacement level is
+# the best player who will still be undrafted when the draft ends), computed by
+# `replacement_diagnostics.mock_draft_consumption_demand`. It has NO free parameter.
+# W2/W3 add the endgame mandatory-slot reservation the fair opponent already uses
+# (`_market_consensus_roster_aware_pick`), which triggers only at the last possible pick and
+# only while a slot is still empty -- this is not "force a kicker in round 14", and it is what
+# lets depth be set on valuation grounds alone.
+W_TIERS: tuple[Tier, ...] = ("W0", "W1", "W2", "W3", "W4")
+
+#: {tier: (demand target, enforce endgame mandatory-slot legality)}. `None` target = static
+#: replacement, exactly as shipped N4. `"scale_2.5"` is D66's uniform multiplier, unchanged, so
+#: the correctly-shaped target is measured against it like-for-like rather than in isolation.
+W_TIER_SPEC: dict[Tier, tuple[str | None, bool]] = {
+    "W0": (None, False),  # control: shipped N4, static replacement, no legality constraint
+    "W1": ("consumption", False),  # the structural rule alone
+    "W2": ("consumption", True),  # the structural rule + legality
+    "W3": (None, True),  # legality ALONE -- isolates it from any depth change
+    "W4": ("scale_2.5", False),  # reference: D66's uniform x2.5, unchanged
+}
+
+# PRE-REGISTERED DECISION RULE for the W-tiers -- committed to source BEFORE any W-tier ran
+# against real data, same discipline as the N-, R- and V-tiers above.
+#
+#   Control        : W0 (= shipped N4, static replacement), fair opponent, production caps.
+#   Primary metric : mean realized starter points vs. the fair opponent, 95% CI excluding 0.
+#   Gates 1-4      : unchanged, reused verbatim via `evaluate_preregistered_gates`
+#                    (zero-rate, infeasibility, <=1 season worse, positional timing <=2 rounds).
+#   Gate 5         : must not increase cap breaches at any position vs. the control (D64).
+#   Gate 6         : leave-one-season-out positive on all five held-out seasons.
+#   Gate 7         : rerun unchanged on `legacy_2qb_dynasty`; report the sign either way.
+#   Ship           : the LOWEST-NUMBERED tier clearing every gate. If W3 alone clears them,
+#                    legality was the whole story and no depth change ships. If nothing clears
+#                    them, production stays N4 and this phase reports that.
+#
+# Recorded before running so the outcome cannot be reinterpreted afterwards: it is entirely
+# possible that W4's crude ~+100-point skill-position bonus is doing real work -- acting as a
+# proxy for "skill players are worth more than the lineup math says" -- that a correctly shaped
+# target does not reproduce. W4 is in the run precisely so that is measured rather than assumed,
+# and W1/W2 losing to it is a publishable result, not a reason to re-tune.
+#
+# Explicitly NOT goals, and not grounds to ship anything: fewer kickers, a lower TE count, a
+# demand target that sums to a satisfying number. Starter points first; roster feasibility is a
+# gate, never the objective.
+PREREGISTERED_W_CONTROL: Tier = "W0"
+
+#: Every tier scored as "N4, except VORP may use a draft-aware replacement level". V- and
+#: W-tiers share the scoring branch verbatim so a difference between them is attributable to the
+#: demand target (and, for W2/W3, the legality constraint) and nothing else.
+DRAFT_AWARE_REPLACEMENT_TIERS: tuple[Tier, ...] = (*ALL_V_TIERS, *W_TIERS)
+
+#: W-tiers that enforce the endgame mandatory-slot reservation, as a hard restriction on the
+#: candidate pool rather than a score adjustment -- roster legality is a constraint, not a value.
+W_TIERS_ENFORCING_LEGALITY: tuple[Tier, ...] = tuple(
+    t for t, (_, legality) in W_TIER_SPEC.items() if legality
+)
+
 # {tier: (apply startable-saturation to the VORP surplus, over-cap multiplier)}
 R_TIER_SPEC: dict[Tier, tuple[bool, float]] = {
     "R0": (False, OVER_CAP_VALUE_MULTIPLIER),  # N4 exactly, as shipped at D63 -- the control
@@ -476,6 +567,14 @@ TIER_DESCRIPTIONS: dict[Tier, str] = {
         t: f"D66 sensitivity sweep: demand = {sc}x startable_slots"
         for t, sc in zip(SWEEP_TIERS_SCALES[0], SWEEP_TIERS_SCALES[1], strict=True)
     },
+    "W0": "D67 control: shipped N4, static replacement, no roster-legality constraint",
+    "W1": "D67: replacement at the demand a full mock draft of this league actually CONSUMES "
+    "(mock_draft_consumption_demand) -- no free parameter",
+    "W2": "D67: W1 plus the endgame mandatory-slot reservation (roster legality as a hard "
+    "constraint, separate from valuation)",
+    "W3": "D67: the endgame mandatory-slot reservation ALONE, on static replacement -- isolates "
+    "legality from any depth change",
+    "W4": "D67 reference: D66's uniform 2.5x startable_slots demand, unchanged",
 }
 
 
@@ -499,6 +598,11 @@ class SeasonStatic:
     market_rank: dict[str, tuple[str, float]]  # player_id -> (position, ecr_rank)
     confidence: dict[str, float]
     ecr_dispersion: dict[str, tuple[float, float]]  # player_id -> (ecr_best, ecr_worst)
+    # D67: {position: players at that position a full draft of this league consumes, per team}.
+    # Loaded here rather than per pick because it depends only on the season's consensus board,
+    # exactly like `market_rank` and `vorp` -- computing it per pick would run a whole mock draft
+    # 160 times per draft. Diagnostic only; the W-tiers are its sole consumer.
+    consumption_demand: dict[str, float] = field(default_factory=dict)
 
 
 def _normalize(values: dict[str, float]) -> dict[str, float]:
@@ -559,6 +663,9 @@ def load_season_static(
         market_rank=market_rank,
         confidence=confidence,
         ecr_dispersion=ecr_dispersion,
+        consumption_demand=mock_draft_consumption_demand(
+            league, market_rank, projections, positions
+        ),
     )
 
 
@@ -689,9 +796,11 @@ def score_candidate(
     opp_cost = None
     opponent_mult = None
 
-    if tier in ALL_V_TIERS:
+    if tier in DRAFT_AWARE_REPLACEMENT_TIERS:
         # N4 exactly, except that `vorp` is recomputed against a draft-aware replacement level.
-        # V0 uses production's static level, so it reproduces N4 by construction.
+        # V0/W0 use production's static level, so they reproduce N4 by construction. The W-tiers'
+        # legality constraint is applied in `_pick_by_tier`, not here -- it restricts which
+        # candidates are eligible, it does not change any candidate's value.
         risk_mult = confidence if confidence is not None else 0.7
         survival_mult = 1.0 if survival is None else (1.0 + 0.3 * (1.0 - survival))
         opp_cost = _opportunity_cost_for(
@@ -1137,9 +1246,13 @@ def _pick_by_tier(
     current_pick_overall: int | None,
     next_pick_overall: int | None,
     roster_player_ids: list[str] | None = None,
+    picks_remaining: int | None = None,
 ) -> tuple[str, list[CandidateScore]]:
     """Returns (chosen_player_id, every scored candidate sorted best-first) -- the ranked list
-    is what a JSON trace needs to show runner-up reasoning, not just the winner."""
+    is what a JSON trace needs to show runner-up reasoning, not just the winner.
+
+    `picks_remaining` (counting this one) is only consulted by the W-tiers that enforce roster
+    legality; every other tier ignores it, so omitting it leaves them byte-identical."""
     if tier == "H":
         needs = roster_need(league, roster_positions)
         rec = recommend_draft_pick(
@@ -1201,9 +1314,22 @@ def _pick_by_tier(
         dynamic_levels = REPLACEMENT_VARIANTS[V_TIER_SPEC[tier]](
             league, available, static.projections, static.positions
         )
+    elif tier in W_TIERS and W_TIER_SPEC[tier][0] is not None:
+        target = W_TIER_SPEC[tier][0]
+        variant = (
+            consumption_replacement(static.consumption_demand)
+            if target == "consumption"
+            else REPLACEMENT_VARIANTS[target]
+        )
+        dynamic_levels = variant(league, available, static.projections, static.positions)
 
     base_lineup_points = None
-    if tier in M_TIERS or tier in ALL_N_TIERS or tier in R_TIERS or tier in ALL_V_TIERS:
+    if (
+        tier in M_TIERS
+        or tier in ALL_N_TIERS
+        or tier in R_TIERS
+        or tier in DRAFT_AWARE_REPLACEMENT_TIERS
+    ):
         base_lineup_points = best_lineup_points(
             league, roster_player_ids or [], static.projections, static.positions
         )
@@ -1231,7 +1357,7 @@ def _pick_by_tier(
         *M_TIERS,
         *(t for t in ALL_N_TIERS if N_TIER_SPEC[t][1]),
         *R_TIERS,
-        *ALL_V_TIERS,
+        *DRAFT_AWARE_REPLACEMENT_TIERS,
     )
     opportunity_costs: dict[str, float] | None = None
     if tier in tiers_using_opportunity_cost:
@@ -1283,6 +1409,23 @@ def _pick_by_tier(
         )
     else:
         scored.sort(key=lambda s: (-s.score, s.player_id))
+
+    # D67: roster legality as a hard CONSTRAINT, kept deliberately separate from valuation.
+    # Once this team has exactly as many picks left as it has unfilled mandatory dedicated
+    # slots, the pick is restricted to filling one of them -- still the best of those by the
+    # tier's own score, so nothing about how players are valued changes. This is the same rule
+    # `evaluation/draft_simulation.py::_market_consensus_roster_aware_pick` already applies to
+    # the fair opponent, which the engine has never had (measured: `alpha_bpa` finishes 50/50
+    # drafts with a mean 6.48 unfilled mandatory slots and nothing raises); applying it to both
+    # sides also makes the benchmark symmetric. It triggers at the last possible pick and only
+    # while a slot is still empty, so it is not a positional quota or a fixed round.
+    if tier in W_TIERS_ENFORCING_LEGALITY and picks_remaining is not None:
+        deficits = unfilled_dedicated_slots(league, roster_positions)
+        total_deficit = sum(deficits.values())
+        if total_deficit > 0 and picks_remaining <= total_deficit:
+            restricted = [s for s in scored if s.position in deficits]
+            if restricted:
+                return restricted[0].player_id, scored
     return scored[0].player_id, scored
 
 
@@ -1364,6 +1507,7 @@ def simulate_forensic_draft(
                     current_pick,
                     next_pick,
                     roster_player_ids=drafted,
+                    picks_remaining=picks_remaining,
                 )
                 if trace is not None:
                     top = scored[0]

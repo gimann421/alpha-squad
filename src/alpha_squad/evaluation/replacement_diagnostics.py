@@ -210,6 +210,116 @@ def earned_starter_replacement(
     return _remaining_demand_replacement(league, available, projections, positions, targets)
 
 
+def mock_draft_consumption_demand(
+    league: LeagueContext,
+    market_rank: dict[str, tuple[str, float]],
+    projections: dict[str, float],
+    positions: dict[str, str],
+) -> dict[str, float]:
+    """{position: players at that position a full draft of THIS league consumes, per team}
+    (docs/DECISIONS.md D67) -- the demand target for `consumption_replacement`.
+
+    Obtained by running one mock draft of this league on the **preseason consensus board
+    alone**: `teams x roster_size` picks, best-available by ECR, with the same endgame
+    mandatory-slot reservation `evaluation/draft_simulation.py::
+    _market_consensus_roster_aware_pick` already implements, then counting each position.
+    `sum(target) == roster_size` by construction, so league-wide demand is exactly the number
+    of picks the draft makes.
+
+    **Why this is the structural target and every previous one was not.** D66 established that
+    demand *depth* governs the draft-aware replacement level, and that a uniform multiplier on
+    `startable_slots` measures well. D67 established *why*, and it is not a reason to keep the
+    multiplier: deepening demand is arithmetically identical to adding a fixed bonus to every
+    player at a position, and the size of that bonus is set by the shape of the position's
+    projection tail, not by anything about scarcity. Measured at scale x2.5 on real 2021-2025
+    data, the per-position VORP bonus is RB +120.4, QB +108.9, TE +106.4, WR +92.0 -- but K
+    +30.4 and DST +10.7, because there are ~45 kickers whose tail collapses to a 2.0 floor and
+    exactly 32 team defenses. A knob whose effect size is governed by how many kickers exist in
+    the database is a positional re-weighting in disguise, not a criterion.
+
+    What replaces it is the classic VBD definition made literal: replacement level is the best
+    player at a position who will still be undrafted when the draft ends. That question has an
+    exact answer for a given board, and this function computes it.
+
+    The measured shape (2021-2025, target format, per team) is QB 2.04, RB 4.64, WR 5.64,
+    TE 1.68, K 1.00, DST 1.00 -- against `startable_slots`' QB 1, RB 4, WR 4, TE 3, K 1, DST 1.
+    `startable_slots` is wrong in SHAPE, not merely in scale: it under-counts QB 2x and
+    over-counts TE 1.8x, which is why no uniform multiplier can repair it, and why the scale
+    that keeps QB non-degenerate (>2.5, because QB's base is 1) simultaneously drives TE demand
+    to 75 and K demand to 25 against a 45-deep pool.
+
+    Properties that make it defensible rather than fitted:
+
+    * **No tunable.** There is no scale to choose, so there is no argmax to select.
+    * **Flex resolves itself.** Flex slots go to whoever the board says; the count reflects it.
+      No triple-counting (Candidates B/C), no under-counting (C4/C5), and no need to decide
+      whether TE *ought* to win flex slots.
+    * **Format-adaptive.** Run it on `legacy_2qb_dynasty` and it produces that format's
+      allocation from that format's board, with no code change.
+    * **Leakage-safe.** Preseason ECR only -- `market_rank` comes from `_preseason_overall_market`,
+      which is already scoped to the Jul/Aug snapshots of the season being drafted (D54). No
+      realized outcome touches it.
+
+    Positions absent from the board contribute nothing, and a position the mock draft never
+    takes gets 0.0 -- which `_remaining_demand_replacement` reads as "uncontested", the correct
+    statement for a position this league's market does not draft.
+    """
+    from alpha_squad.evaluation.draft_simulation import _market_consensus_roster_aware_pick
+
+    total_rounds = int(league.roster.get("roster_size", 0))
+    if total_rounds <= 0:
+        raise RuntimeError(f"league '{league.league_id}' has no positive roster_size to draft")
+
+    available = set(projections)
+    rosters: dict[int, list[str]] = {slot: [] for slot in range(1, league.teams + 1)}
+    counts: dict[str, int] = {}
+    for round_no in range(1, total_rounds + 1):
+        order = range(1, league.teams + 1) if round_no % 2 == 1 else range(league.teams, 0, -1)
+        picks_remaining = total_rounds - round_no + 1
+        for slot in order:
+            if not available:
+                break
+            pick = _market_consensus_roster_aware_pick(
+                available, market_rank, positions, league, rosters[slot], picks_remaining
+            )
+            pos = positions.get(pick, "UNKNOWN")
+            rosters[slot].append(pos)
+            counts[pos] = counts.get(pos, 0) + 1
+            available.discard(pick)
+
+    teams = league.teams or 1
+    targets = {pos: counts.get(pos, 0) / teams for pos in startable_slots(league)}
+    # A position the board never reaches but the lineup requires still has to be priced against
+    # something real, so it keeps its dedicated requirement as a floor rather than collapsing to
+    # zero demand on pick 1. In the target format the mock draft takes all 10 kickers and all 10
+    # defenses, so this floor is inert there -- it exists for a board that omits a position
+    # entirely (measured: the `ro` board carries 0 kickers in its top 160 in every season).
+    for pos, slots in league.dedicated_slots().items():
+        targets[pos] = max(targets.get(pos, 0.0), float(slots))
+    return targets
+
+
+def consumption_replacement(per_team_target: dict[str, float]):
+    """Factory: draft-aware replacement drawn at `mock_draft_consumption_demand`'s target.
+
+    Takes the target rather than computing it because it depends on the season's consensus
+    board, which the per-pick variant signature does not carry -- the caller computes it once
+    per season (`load_season_static`) exactly as it already does for VORP and market ranks.
+    """
+
+    def variant(
+        league: LeagueContext,
+        available: set[str],
+        projections: dict[str, float],
+        positions: dict[str, str],
+    ) -> dict[str, float]:
+        return _remaining_demand_replacement(
+            league, available, projections, positions, per_team_target
+        )
+
+    return variant
+
+
 #: Demand-depth multipliers for the D66 Phase 4 sensitivity sweep. Each scales the
 #: `startable_slots` target uniformly, so the ONLY thing that varies across the sweep is how
 #: deep into each position's pool the replacement level is drawn. Reference points on this
