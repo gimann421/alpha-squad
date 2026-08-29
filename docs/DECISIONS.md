@@ -2792,6 +2792,11 @@ Genuinely improved alongside the mean: the floor. Worst draft rises 1570.3 → 1
 starter-points stdev falls 160.8 → 131.7, so the consistency advantage D61 identified as real
 is extended rather than spent.
 
+**Determinism verified.** The new value base was run twice as separate `uv run python3`
+processes (`PYTHONHASHSEED` unset), 2021, both opponent fields, `alpha_league_aware`:
+byte-identical JSON (md5 `51fa3dd4…` both runs). Summing two float terms introduced no new
+ordering sensitivity — the score's tie-break is still `(-score, player_id)`.
+
 ### Known regression, reported rather than buried
 
 The blend trades one hoarding mode for another. MSV-dominant bases over-draft quarterbacks;
