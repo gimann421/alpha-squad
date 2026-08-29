@@ -38,6 +38,7 @@ from alpha_squad.evaluation.draft_simulation import (
     _next_pick_overall,
     _snake_overall_pick,
 )
+from alpha_squad.evaluation.replacement_diagnostics import REPLACEMENT_VARIANTS
 from alpha_squad.league.context import LeagueContext
 from alpha_squad.league.draft import recommend_draft_pick
 from alpha_squad.league.opportunity_cost import (
@@ -100,6 +101,10 @@ Tier = Literal[
     "R2",
     "R3",
     "R4",
+    "V0",
+    "VA",
+    "VB",
+    "VC",
 ]
 ALL_TIERS: tuple[Tier, ...] = ("A", "B", "C", "D", "E", "F", "G", "H")
 
@@ -260,6 +265,39 @@ R_TIERS: tuple[Tier, ...] = ("R0", "R1", "R2", "R3", "R4")
 # can -- at equal projected value the flex-eligible player strictly dominates on realized upside.
 R_TIERS_CAPACITY_TIEBREAK: tuple[Tier, ...] = ("R4",)
 
+# --- V-tiers (D65): draft-aware replacement levels -----------------------------------------
+# Production computes VORP from the FULL season pool every pick, so the replacement level a
+# candidate is scored against is numerically identical at pick 1 and pick 160 -- confirmed in
+# code: `available_player_ids` never reaches the VORP calculation in `league/draft.py`.
+#
+# These tiers hold the shipped N4 formula fixed -- (msv + vorp + opp_cost) x fit x risk x
+# survival x [cap] -- and change ONLY where the replacement level inside `vorp` comes from, so
+# any difference is attributable to staleness and nothing else. V0 is N4 unchanged.
+# Definitions live in `evaluation/replacement_diagnostics.py`, deliberately outside production.
+V_TIERS: tuple[Tier, ...] = ("V0", "VA", "VB", "VC")
+
+#: {tier: key into replacement_diagnostics.REPLACEMENT_VARIANTS, or None for the static control}
+V_TIER_SPEC: dict[Tier, str | None] = {
+    "V0": None,  # shipped N4: static, full-season replacement -- the control
+    "VA": "available_pool",  # Candidate A
+    "VB": "remaining_demand",  # Candidate B
+    "VC": "hybrid_capacity",  # Candidate C
+}
+
+# PRE-REGISTERED DECISION RULE for the V-tiers -- committed before any V-tier ran, same
+# discipline as the N- and R-tiers. Control V0 (= shipped N4), primary metric mean realized
+# starter points vs. the fair opponent, Gates 1-4 reused verbatim, robustness by
+# leave-one-season-out. Ship only on a strict primary win with all gates passing.
+#
+# Calibration recorded BEFORE running, so the result cannot be reinterpreted afterwards: the
+# surplus-kicker problem this hypothesis targets has a measured ceiling of about +5 starter
+# points (the 3rd and 4th kickers are worth EXACTLY 0.0 and never enter the realized lineup in
+# 0/32 drafts; a marginal skill pick is worth +7.3, so perfectly reallocating those picks is
+# worth ~7.3 x 32/50). That ceiling is far inside the +-33 confidence half-width, so a K-driven
+# win is not detectable here. If these tiers help, it must be by re-ranking SKILL positions
+# against each other in rounds 11-16, which carry 16.1% of realized starter points.
+PREREGISTERED_V_CONTROL: Tier = "V0"
+
 # {tier: (apply startable-saturation to the VORP surplus, over-cap multiplier)}
 R_TIER_SPEC: dict[Tier, tuple[bool, float]] = {
     "R0": (False, OVER_CAP_VALUE_MULTIPLIER),  # N4 exactly, as shipped at D63 -- the control
@@ -374,6 +412,12 @@ TIER_DESCRIPTIONS: dict[Tier, str] = {
     "R4": "Hypothesis A with the zero-score tie broken by remaining startable capacity, then "
     "projection, instead of alphabetically by player_id (post-hoc; repairs a measured defect "
     "in R1 that made 19% of its picks arbitrary)",
+    # V-tiers (D65): N4 held fixed, only the replacement level behind VORP varies.
+    "V0": "the shipped N4 formula with production's STATIC full-season replacement -- control",
+    "VA": "Candidate A: replacement recomputed from the currently AVAILABLE pool each pick",
+    "VB": "Candidate B: replacement at the league's REMAINING DEMAND boundary, demand from "
+    "startable slots",
+    "VC": "Candidate C: as B, with demand from positional_capacity (startable + bench share)",
 }
 
 
@@ -564,6 +608,7 @@ def score_candidate(
     base_lineup_points: float | None = None,
     replacement_msv: dict[str, float] | None = None,
     saturation_factors: dict[str, float] | None = None,
+    dynamic_levels: dict[str, float] | None = None,
 ) -> CandidateScore | None:
     position = static.positions.get(player_id)
     if position is None or player_id not in static.vorp:
@@ -585,6 +630,65 @@ def score_candidate(
     feasibility_mult = None
     opp_cost = None
     opponent_mult = None
+
+    if tier in V_TIERS:
+        # N4 exactly, except that `vorp` is recomputed against a draft-aware replacement level.
+        # V0 uses production's static level, so it reproduces N4 by construction.
+        risk_mult = confidence if confidence is not None else 0.7
+        survival_mult = 1.0 if survival is None else (1.0 + 0.3 * (1.0 - survival))
+        opp_cost = _opportunity_cost_for(
+            static,
+            position,
+            available,
+            current_pick_overall,
+            next_pick_overall,
+            opportunity_costs,
+        )
+        msv = marginal_starter_value(
+            league,
+            roster_player_ids or [],
+            player_id,
+            static.projections,
+            static.positions,
+            base_points=base_lineup_points,
+        )
+        if dynamic_levels is None:
+            vorp_term = vorp
+        else:
+            vorp_term = projection - dynamic_levels.get(position, level)
+            reasons.append(
+                f"draft-aware replacement {dynamic_levels.get(position, level):.1f} "
+                f"(static {level:.1f}) -> vorp {vorp_term:+.1f} (static {vorp:+.1f})"
+            )
+
+        score = (msv + N4_VORP_WEIGHT * vorp_term + opp_cost) * fit_mult * risk_mult * survival_mult
+        cap = positional_feasibility_cap(league, position)
+        have = sum(1 for p in roster_positions if p == position)
+        if have >= cap:
+            feasibility_mult = OVER_CAP_VALUE_MULTIPLIER
+            score *= feasibility_mult
+            reasons.append(f"over_cap_mult (have {have} {position}, cap {cap})")
+        reasons.append(f"marginal_starter_value={msv:+.1f} pts")
+        return CandidateScore(
+            player_id=player_id,
+            position=position,
+            projection=projection,
+            vorp=vorp,
+            replacement_level=level,
+            scarcity_raw=scarcity_raw,
+            scarcity_norm=scarcity_norm,
+            roster_need=need_score,
+            fit_multiplier=fit_mult,
+            confidence=confidence,
+            survival_probability=survival,
+            future_scarcity_multiplier=None,
+            feasibility_multiplier=feasibility_mult,
+            opportunity_cost_pts=opp_cost,
+            opponent_depletion_multiplier=None,
+            marginal_starter_value=msv,
+            score=score,
+            reasons=reasons,
+        )
 
     if tier in R_TIERS:
         # R-tiers share EVERY term with the shipped D63 engine; only the VORP surplus scaling
@@ -1032,8 +1136,16 @@ def _pick_by_tier(
     if tier in R_TIERS and R_TIER_SPEC[tier][0]:
         saturation_factors = startable_saturation(league, roster_positions)
 
+    # Draft-aware replacement depends only on the AVAILABLE pool, not the candidate, so it is
+    # computed once per pick rather than once per candidate (D65).
+    dynamic_levels: dict[str, float] | None = None
+    if tier in V_TIERS and V_TIER_SPEC[tier] is not None:
+        dynamic_levels = REPLACEMENT_VARIANTS[V_TIER_SPEC[tier]](
+            league, available, static.projections, static.positions
+        )
+
     base_lineup_points = None
-    if tier in M_TIERS or tier in ALL_N_TIERS or tier in R_TIERS:
+    if tier in M_TIERS or tier in ALL_N_TIERS or tier in R_TIERS or tier in V_TIERS:
         base_lineup_points = best_lineup_points(
             league, roster_player_ids or [], static.projections, static.positions
         )
@@ -1061,6 +1173,7 @@ def _pick_by_tier(
         *M_TIERS,
         *(t for t in ALL_N_TIERS if N_TIER_SPEC[t][1]),
         *R_TIERS,
+        *V_TIERS,
     )
     opportunity_costs: dict[str, float] | None = None
     if tier in tiers_using_opportunity_cost:
@@ -1092,6 +1205,7 @@ def _pick_by_tier(
             base_lineup_points=base_lineup_points,
             replacement_msv=replacement_msv,
             saturation_factors=saturation_factors,
+            dynamic_levels=dynamic_levels,
         )
         if s is not None:
             scored.append(s)

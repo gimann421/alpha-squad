@@ -76,6 +76,18 @@ items with no listed dependency can start immediately.
 > (CI [−32.0, +34.6]) while losing 27 of 50 drafts, failing two robustness gates. Alpha remains
 > **−5.6** vs fair consensus, 25/50. **P1-0 stays OPEN.** Highest-value next step: draft-aware
 > replacement levels (recompute replacement against the *currently available* pool).
+>
+> **Update (D65):** that investigation ran. The static replacement level **is** a real causal
+> defect — confirmed in code (`available_player_ids` never reaches the VORP calculation) and
+> quantified on real data (at round 13 the static level is +178 too high for QB, +69 for WR, but
+> only +2.2 for K, so the engine *under-values skill positions* rather than over-valuing
+> kickers). Correcting it with a hybrid remaining-demand definition (Candidate C) gained **+23.2**
+> over N4 (95% CI [+2.3, +44.1], LOSO-robust on all five seasons, zero cap breaches) and reached
+> **+17.6 vs fair consensus — the first positive figure this project has measured.** It is
+> **not shipped**: Gate 3 fails (worse in 2 of 5 seasons, losing 0/10 in 2024), traced to a
+> systematic TE-to-capacity loading whose payoff is season-dependent. Production remains N4 at
+> **−5.6**. **P1-0 stays OPEN**, but for the first time there is a concrete, measured path to
+> closing it — see D65's recommended next step.
 
 > **The benchmark below is invalid for the current target format and is preserved as-is,
 > labelled, not restated.** Everything through "Acceptance criteria — STILL UNMET" was

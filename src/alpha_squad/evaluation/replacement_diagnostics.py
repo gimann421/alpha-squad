@@ -1,0 +1,158 @@
+"""Diagnostic-only draft-aware replacement levels (docs/DECISIONS.md D65).
+
+**This module is NOT used by production.** `league/draft.py` computes VORP once per call from
+`load_season_projections`'s full-season pool, which never sees `available_player_ids` -- so the
+replacement level a real pick is scored against is numerically identical at pick 1 and pick 160.
+That staleness is the defect this module exists to quantify. Nothing here is imported by
+production code; the ablation tiers in `evaluation/draft_forensics.py` are the only consumers.
+
+**The measured problem.** Ten teams strip the skill-position pools while barely touching K/DST,
+so by the late rounds the static level is wildly wrong for skill positions and almost exactly
+right for kickers. Measured on real 2022 data at round 13 (`docs/DECISIONS.md` D65):
+
+    position   static replacement   available-pool replacement   error
+    WR                    149.0                          79.9   +69.1
+    QB                    289.2                         111.0  +178.2
+    RB                    146.7                          84.4   +62.3
+    TE                    133.7                          88.1   +45.6
+    K                     132.2                         130.0    +2.2
+    DST                    98.7                          92.4    +6.3
+
+So a late WR is scored against a replacement level 69 points too high (crushing its VORP toward
+zero) while a late kicker is scored against a nearly correct one. The engine is not
+over-valuing kickers so much as *under-valuing everyone else*.
+
+Three definitions are offered, all derived from the league's own configuration and the observed
+draft state. None introduces a tuned constant.
+"""
+
+from __future__ import annotations
+
+from alpha_squad.league.context import LeagueContext
+from alpha_squad.league.replacement import replacement_level
+from alpha_squad.league.roster import positional_capacity, startable_slots
+
+
+def available_pool_replacement(
+    league: LeagueContext,
+    available: set[str],
+    projections: dict[str, float],
+    positions: dict[str, str],
+) -> dict[str, float]:
+    """**Candidate A -- available-pool replacement.**
+
+        replacement_A[pos] = replacement_level(league, pool restricted to `available`)[pos]
+
+    i.e. run the *existing, unmodified* VBD allocation (`league/replacement.py::
+    replacement_level`: fill `teams x dedicated` slots by within-position rank, then flex by
+    best-remaining across eligible positions, then take the best non-starter) over only the
+    players still on the board.
+
+    The most literal reading of "make replacement draft-aware", and deliberately the least
+    inventive: it changes the *pool* and nothing else, so any effect is attributable to
+    staleness alone. Its known weakness is that it keeps demanding `teams x slots` starters
+    from a shrinking pool even in the last round, when most teams have long since filled those
+    slots -- it corrects the pool but not the demand. Candidates B and C address that.
+    """
+    pool_projections = {p: projections[p] for p in available if p in projections}
+    pool_positions = {p: positions[p] for p in available if p in positions}
+    return replacement_level(league, pool_projections, pool_positions)
+
+
+def _remaining_demand_replacement(
+    league: LeagueContext,
+    available: set[str],
+    projections: dict[str, float],
+    positions: dict[str, str],
+    per_team_target: dict[str, int],
+) -> dict[str, float]:
+    """Shared engine for Candidates B and C: replacement is the projection of the player who
+    sits exactly at the boundary of what the league still needs at that position.
+
+        drafted[pos]           = (players at pos in the FULL pool) - (players at pos available)
+        remaining_demand[pos]  = max(0, teams * per_team_target[pos] - drafted[pos])
+        replacement[pos]       = projection of the remaining_demand-th best AVAILABLE player
+                                 (0-indexed), or the worst available if demand exceeds supply,
+                                 or 0.0 if the position is exhausted
+
+    `remaining_demand` counts how many more players at that position the league as a whole still
+    has to absorb before the position stops being contested. When it is 0 -- every team that
+    could use one already has one -- replacement collapses to the best available player, which
+    correctly prices a surplus body at zero surplus.
+    """
+    full_by_pos: dict[str, int] = {}
+    for player_id in projections:
+        pos = positions.get(player_id)
+        if pos is not None:
+            full_by_pos[pos] = full_by_pos.get(pos, 0) + 1
+
+    avail_by_pos: dict[str, list[str]] = {}
+    for player_id in available:
+        pos = positions.get(player_id)
+        if pos is not None and player_id in projections:
+            avail_by_pos.setdefault(pos, []).append(player_id)
+
+    levels: dict[str, float] = {}
+    for pos, target in per_team_target.items():
+        pool = sorted(avail_by_pos.get(pos, []), key=lambda p: -projections[p])
+        if not pool:
+            levels[pos] = 0.0
+            continue
+        drafted = full_by_pos.get(pos, 0) - len(pool)
+        remaining_demand = max(0, league.teams * target - drafted)
+        index = min(remaining_demand, len(pool) - 1)
+        levels[pos] = projections[pool[index]]
+    return levels
+
+
+def remaining_demand_replacement(
+    league: LeagueContext,
+    available: set[str],
+    projections: dict[str, float],
+    positions: dict[str, str],
+) -> dict[str, float]:
+    """**Candidate B -- remaining-demand replacement (starters only).**
+
+    `per_team_target` = `startable_slots(league)`: the slots a position could actually start in,
+    dedicated plus flex-eligible. In the 1-QB target format that is QB 1, RB 4, WR 4, TE 3,
+    K 1, DST 1.
+
+    This is the definition that makes K structurally different without naming it: the league
+    needs only `10 x 1 = 10` kickers in total, so once ten are gone the eleventh is priced
+    against the best available kicker and its surplus goes to zero -- while WR, needing
+    `10 x 4 = 40`, stays contested far longer. Demand comes from the lineup, not from a rule.
+    """
+    return _remaining_demand_replacement(
+        league, available, projections, positions, startable_slots(league)
+    )
+
+
+def hybrid_capacity_replacement(
+    league: LeagueContext,
+    available: set[str],
+    projections: dict[str, float],
+    positions: dict[str, str],
+) -> dict[str, float]:
+    """**Candidate C -- hybrid: remaining demand including bench depth.**
+
+    Identical to Candidate B except `per_team_target` = `positional_capacity(league, pos)`, the
+    architecture's existing notion of how many bodies at a position a roster can *use* --
+    startable slots plus that position's proportional share of the bench. In the target format
+    that is QB 2, RB 6, WR 6, TE 4, K 2, DST 2.
+
+    Reusing `positional_capacity` is what keeps this defensible rather than invented: it is the
+    same function `positional_feasibility_cap` already relies on, so the bench component is the
+    one the project already derived and tested (D58), not a new constant. Candidate B prices a
+    position as uncontested the moment its starting slots are covered; C keeps it contested
+    while teams still have bench room they would plausibly spend on it.
+    """
+    targets = {pos: positional_capacity(league, pos) for pos in startable_slots(league)}
+    return _remaining_demand_replacement(league, available, projections, positions, targets)
+
+
+#: The three diagnostic definitions, keyed by the ablation tier that uses each.
+REPLACEMENT_VARIANTS = {
+    "available_pool": available_pool_replacement,
+    "remaining_demand": remaining_demand_replacement,
+    "hybrid_capacity": hybrid_capacity_replacement,
+}

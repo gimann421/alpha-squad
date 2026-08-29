@@ -2955,3 +2955,141 @@ substantive change to `league/replacement.py` and belongs in its own pre-registe
 Retained regardless of the outcome: `startable_saturation`/`saturated_surplus` stay in
 `league/roster.py` with tests, unused by production. They are correct, measured, and the natural
 building blocks for the next attempt.
+
+## D65 — Static replacement level is a real causal defect; draft-aware replacement is promising but not yet shippable
+
+Forensic study, **no production change**. `league/draft.py` is byte-identical to its D63 state.
+This entry answers the question D64 left open: is the stale, static replacement level actually
+causing N4's late-draft behaviour, and what is the principled way to make it draft-aware?
+
+**Verdict: hypothesis SUPPORTED on mechanism, and the correction produces the first measured
+result that beats fair consensus — but it fails a pre-registered robustness gate, so it does
+not ship in this phase.**
+
+### Phase 1 — how replacement level actually works (traced in code, not assumed)
+
+| question | answer |
+|---|---|
+| How is it calculated? | `league/replacement.py::replacement_level` → `compute_league_starters`: fill `teams × dedicated` slots by within-position rank, then flex slots by best-remaining across eligible positions; replacement = projection of the **best non-starter** at that position |
+| What pool? | `load_season_projections(con, season)` — the **entire preseason universe** |
+| Based on what? | Full preseason pool + league starter demand + real flex allocation. No bench component |
+| Position-specific? | Yes |
+| Once per season or dynamic? | Recomputed **every pick**, but always from the identical full pool, so it is **numerically constant across the draft**. Confirmed structurally: `available_player_ids` never reaches the VORP calculation (`draft.py:198` vs its only uses at 214/217/235) |
+| Includes K/DEF? | Yes |
+
+**The measured staleness (2022, round 13, real data).** Static level vs. the level implied by
+the players actually still on the board:
+
+| position | static | available-pool | error |
+|---|---|---|---|
+| QB | 289.2 | 111.0 | **+178.2** |
+| WR | 149.0 | 79.9 | **+69.1** |
+| RB | 146.7 | 84.4 | +62.3 |
+| TE | 133.7 | 88.1 | +45.6 |
+| **K** | 132.2 | 130.0 | **+2.2** |
+| **DST** | 98.7 | 92.4 | +6.3 |
+
+So the engine is **not over-valuing kickers — it is under-valuing everyone else.** Ten teams
+strip the skill pools while barely touching K/DST, so the static level stays almost exactly
+right for kickers and becomes wildly wrong for skill positions. A late WR is scored against a
+replacement level 69 points too high, crushing its VORP toward zero.
+
+**MSV's role, measured across four traced drafts** (2021 slot 1, 2025 slot 1, the best N4 draft
+2022 slot 8, and the worst K-hoarder 2022 slot 4): MSV hits exactly 0.0 at **round 11 in all
+four**, and stays there. From that point the value base *is* VORP, so the stale level governs
+the last 6 of 16 rounds — which carry **16.1% of realized starter points** (327.4 of 2029.2),
+with 36% of those picks entering the realized lineup.
+
+### The premise of D64's kicker concern was itself wrong
+
+Before testing fixes, the target was quantified by a drop-one counterfactual on real rosters:
+
+| | value of that kicker | changed the lineup |
+|---|---|---|
+| 2nd kicker | **+27.4** starter pts | 17/18 drafts |
+| 3rd kicker | **0.0** | **0/27** |
+| 4th kicker | **0.0** | **0/5** |
+
+The 2nd kicker is genuinely valuable — the benchmark scores the best legal lineup from
+*realized* points, so holding two kickers is a max-of-2 draw on a high-variance slot. The 3rd
+and 4th are worth **exactly nothing** and never start. Since a marginal late skill pick is worth
++7.3, perfectly reallocating those wasted picks is worth about **+4.7 starter points** — far
+inside the ±33 confidence half-width. **A kicker-driven win was never detectable**, which
+explains D64's R4 (+1.3) precisely. This ceiling was recorded in source *before* the variants
+ran, so the result could not be reinterpreted afterwards.
+
+### Phase 2 — three draft-aware definitions (`evaluation/replacement_diagnostics.py`)
+
+Diagnostic-only, asserted by test to stay out of production. No tuned constants.
+
+- **Candidate A — available-pool.** Run the *existing, unmodified* VBD allocation over only the
+  players still on the board. Changes the pool and nothing else.
+- **Candidate B — remaining-demand.** `remaining_demand[pos] = max(0, teams × startable_slots[pos] − drafted[pos])`;
+  replacement = the `remaining_demand`-th best available player. Demand comes from the lineup:
+  the league needs 10 kickers total but 40 WRs.
+- **Candidate C — hybrid.** As B, with demand from the existing `positional_capacity`
+  (startable + proportional bench share, the same function `positional_feasibility_cap` uses).
+
+### Phase 3 — results (control V0 = shipped N4; V0 reproduces it exactly)
+
+| tier | starter | margin vs N4 | 95% CI | W/L | vs fair consensus | QB/RB/WR/TE/K/DST | cap breaches |
+|---|---|---|---|---|---|---|---|
+| **VC** (hybrid) | **2052.4** | **+23.2** | **[+2.3, +44.1]** | 30/20 | **+17.6** | 1.48/3.06/4.74/4.00/1.72/1.00 | **0** |
+| VA (available-pool) | 2042.6 | +13.4 | [−6.4, +33.2] | 32/18 | +7.8 | 2.00/2.88/5.76/3.36/1.00/1.00 | **0** |
+| V0 (= N4) | 2029.2 | — | — | — | −5.6 | 1.60/2.20/5.42/2.06/2.74/1.98 | 34 |
+| VB (starters-only demand) | 2017.9 | −11.3 | [−43.3, +20.6] | 21/29 | −16.9 | 1.06/2.00/3.74/5.36/2.00/1.84 | 47 (TE) |
+
+**VC's margin over N4 is statistically significant** (CI excludes zero) and **survives
+leave-one-season-out on all five seasons** (+28.5 / +32.5 / +2.3 / +38.0 / +14.7). It eliminates
+*every* cap breach (34 → 0), lowers positional concentration (0.339 → 0.301), and is the first
+configuration ever measured that **beats fair consensus (+17.6)** — though that interval still
+contains zero.
+
+**VB is rejected outright**: forcing demand to starters-only makes TE look permanently scarce,
+producing 5.36 TEs and 47/50 TE cap breaches — the mechanism turned too blunt.
+
+### Phase 4 — stress tests, including one that materially weakens the case
+
+- **The gain is NOT the kicker fix.** Splitting the 50 drafts: where VC drafted *the same*
+  number of kickers as the control it still gained **+13.3** (n=8); where it drafted fewer,
+  +25.1 (n=42). Consistent with the pre-registered +4.7 kicker ceiling — most of the benefit is
+  skill re-ranking, exactly as the mechanism predicts.
+- **The late-round regime genuinely changes.** Rounds 11–16 composition moves from
+  K 1.74 / DST 0.98 / RB 0.22 to K 0.72 / DST 0.38 / RB 1.06 / TE 2.82. Skill positions become
+  competitive again.
+- **Per-slot:** VC is worse on average in only 2 of 10 draft slots.
+- **Per-season — the real weakness.** VC is worse in **2 of 5 seasons**, and in 2024 it loses
+  **0/10 drafts** (−36.1). Against that, 2023 is +106.9 (9/10) and 2025 is +57.4 (10/10).
+  **Gate 3 (at most 1 worse season) therefore FAILS**, for both VC and VA.
+- **Diagnosed cause of the season dependence:** VC loads TE to exactly its capacity of 4.0 in
+  *every* season (up from ~2.06). The 2024 pools are not structurally unusual, so this is a
+  systematic strategy shift whose payoff is genuinely season-dependent, not a data artifact.
+  Five seasons cannot distinguish a real edge from TE-outcome variance here.
+
+Determinism verified for all four V-tiers across repeated runs.
+
+### Decision
+
+**Hypothesis supported; nothing shipped.** Under the pre-registered rule VC does not ship
+(Gate 3 fails), and this phase was scoped as forensic regardless. N4 remains production.
+
+That said, VC is the **strongest candidate this project has produced**: significant paired
+margin, LOSO-robust, zero cap breaches, better concentration, and the first positive number
+against fair consensus. The blocker is concentrated and understood — a TE-loading behaviour
+whose payoff varies by season.
+
+### Recommended next step
+
+A dedicated pre-registered phase for Candidate C, addressing exactly the Gate 3 failure:
+
+1. **Investigate the TE loading.** VC hits the TE capacity of 4 in every season. Establish
+   whether that is genuinely optimal or an artifact of `positional_capacity` giving TE a bench
+   share that the remaining-demand formula then treats as real league-wide demand.
+2. **Test a C-variant with the demand target between B's and C's** — e.g. startable slots plus
+   *one* bench slot rather than the proportional share — measured, not assumed.
+3. **Widen the evidence base if possible.** The blocker is a 5-season sample against a
+   season-dependent effect. Additional seasons would do more than any further tuning.
+4. Only then re-run the full gate set, and ship only on a clean pass.
+
+Retained for that work, unused by production and covered by tests:
+`evaluation/replacement_diagnostics.py` and the V-tiers.
