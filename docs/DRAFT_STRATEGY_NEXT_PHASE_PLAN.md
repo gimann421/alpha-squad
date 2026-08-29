@@ -11,7 +11,15 @@ Evidence base: `docs/DRAFT_STRATEGY_FORENSIC_ANALYSIS.md`. Objectives:
 > **−45.4 mean starter points, 25/50 win rate, 95% CI [−117.1, +25.6]** — confirming this
 > document's expected result (§Stage 1 exit criterion: "Alpha ≈ −48 vs fair consensus,
 > 25/50") to within 3 points. No material disagreement, so no investigation was triggered.
-> Stages 2–5 below are unstarted.
+> **Stages 2 and 3 LANDED (D63).** Stage 2 first had to fix a defect this plan did not
+> anticipate: the forensic harness still ran the pre-D61 *unaware* opponent, so an M-tier
+> re-run would have re-measured the artifact. Fixed; the harness now reproduces the official
+> benchmark exactly (max|diff| = 0.000000). MSV does beat VORP undistorted (+62.6), but the
+> Stage 1.2 cap fix flipped the M-tier ranking, showing D60 selected M3 under diverged caps.
+> Stage 3 ran all ten N-tiers: **N4 (`msv + 1.0*VORP`) won**, +39.9 over the control, all four
+> gates passed, leave-one-season-out survived. Both predicted front-runners (N2 `min`, N3
+> `msv-over-replacement`) LOST to the control — summing the signals beats selecting between
+> them. Shipped; the benchmark gap closed from -45.4 to -5.6. Stages 4 and 5 are unstarted.
 
 ---
 

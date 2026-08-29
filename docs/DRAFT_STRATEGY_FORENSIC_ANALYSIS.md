@@ -20,6 +20,20 @@ Companions: `docs/DRAFT_OBJECTIVE_MODES.md` (what we are optimizing),
 > estimate to within 3 points. Read the fair-opponent numbers below as directionally and
 > quantitatively correct, now with a direct measurement backing them; see D62 for the
 > shipped-code figures.
+>
+> **Update (D63):** the diagnosis in this document was acted on and the engine changed — the
+> value base is now `marginal_starter_value + VORP`, closing the fair-opponent gap from −45.4
+> to **−5.6**. Two caveats on the *behavioural* figures below, which were measured on the
+> pre-Stage-1.2 harness whose feasibility caps diverged from production (RB/WR capped at 3
+> against production's 6):
+>   * §"68% of drafts take a QB in round 2" re-measures at **92%** under the corrected caps,
+>     against *both* opponent fields — so the opponent is ruled out as the cause of the
+>     difference and this document's figure should not be quoted as current.
+>   * The mechanism this document identifies (MSV discarding positional scarcity) is
+>     **confirmed** — but its proposed remedies were wrong. Both clamping formulations
+>     (`min(vorp, msv)`, and marginal starter value over replacement, called "most likely to be
+>     right" in the next-phase plan) were measured and both LOST to the control. Summing the
+>     two signals wins; selecting between them per-candidate does not. See D63.
 
 ---
 

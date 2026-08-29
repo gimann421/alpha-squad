@@ -56,6 +56,15 @@ items with no listed dependency can start immediately.
 > directly: **Alpha −45.4 mean starter points vs. the fair opponent, 25/50 win rate, 95% CI
 > [−117.1, +25.6]** — confirming D61's estimate to within 3 points. **Still not met.** Stage 1
 > is measurement-only by design (see D62); no engine change has been attempted yet.
+>
+> **Update (D63):** Stages 2 and 3 have now run, and the engine change shipped. The value base
+> became `marginal_starter_value + VORP`, chosen by a 500-draft ablation under a rule
+> pre-registered in git before any run. Against the fair opponent Alpha improves from **-45.4
+> to -5.6** mean starter points (95% CI [-68.4, +57.2], win rate 25/50) — **88% of the gap
+> closed, and the floor rose from 1570.3 to 1765.3 with stdev falling 160.8 to 131.7.**
+> **Still not met:** the margin is negative, the win rate is 25/50, and the interval contains
+> zero. P1-0 stays OPEN. The leading remaining defect is that the new blend over-drafts kickers
+> (the K cap is breached in 32 of 50 drafts) — see D63.
 
 > **The benchmark below is invalid for the current target format and is preserved as-is,
 > labelled, not restated.** Everything through "Acceptance criteria — STILL UNMET" was

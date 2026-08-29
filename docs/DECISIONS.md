@@ -2674,3 +2674,146 @@ fair consensus opponent (−45.4, 95% CI includes zero). Stage 1 is closed; Stag
 M-tier ablation honestly under the fair opponent and production's real caps) and Stage 3 (the
 pre-registered N0–N4 value-base ablation) remain, per
 `docs/DRAFT_STRATEGY_NEXT_PHASE_PLAN.md`, not started in this pass.
+
+## D63 — The draft value base becomes `msv + VORP`, chosen by a pre-registered N-tier ablation
+
+Stages 2 and 3 of `docs/DRAFT_STRATEGY_NEXT_PHASE_PLAN.md`. The pre-registered decision rule
+was committed to `evaluation/draft_forensics.py` (commit `622c468`) **before any N-tier was
+run**, per the D39/D54/D55 discipline and the plan's explicit instruction.
+
+### A measurement defect found first (Stage 2)
+
+`evaluation/draft_forensics.py` still ran its 9-slot opponent field on the pre-D61 *unaware*
+consensus. An M-tier re-run would therefore have re-measured the very artifact D61 identified.
+Fixed before measuring anything: `simulate_forensic_draft`/`run_tier_ablation` take an
+`opponent_strategy`, and it is recorded on every result row so a tier figure can never be read
+without knowing which opponent produced it.
+
+**Harness validation.** With the Stage 1.2 cap fix and the fair opponent in place, the forensic
+harness reproduces the official benchmark **exactly** for the shipped formula — max|difference|
+= 0.000000 over 50 paired drafts. Forensic tier numbers are therefore directly comparable to
+benchmark numbers, which is what makes the rest of this entry load-bearing rather than merely
+indicative.
+
+### Stage 2 — does MSV actually beat VORP once undistorted?
+
+M-tiers, 2021–2025 × 10 slots, against both opponent fields:
+
+| tier | value base | vs unaware opponent | vs FAIR opponent |
+|---|---|---|---|
+| M1 | vorp + msv | 2028.8 | **2029.2** |
+| M3 | msv (shipped D60) | 1990.9 | 1989.3 |
+| M0 | vorp (D55) | 1927.8 | 1926.8 |
+| M2 | msv as a bounded multiplier | 1929.0 | 1924.4 |
+
+**Yes** — MSV beats VORP by +62.6 against the fair opponent, essentially unchanged from +63.1
+against the unaware one. The opponent artifact invalidated D59/D60's *claim of beating
+consensus*; it did not distort the internal M-tier ranking.
+
+**But D60 still selected the wrong tier.** M1 now leads M3 by +39.9; the pre-D63 harness had M3
+ahead (2003.8 vs 1987.2). The cause is the Stage 1.2 cap reconciliation, not the opponent: the
+old forensic `_feasibility_cap` capped RB/WR at 3 where production allows 6. The opponent is
+ruled out directly — M3 − M0 is +63.1 unaware and +62.6 fair, and M3's QB-by-round-2 rate is
+92% under *both* fields. (D61 recorded 68% for that rate under the pre-Stage-1.2 caps; the
+conditions differ, so the figures are not comparable and 92% is the post-fix number.)
+
+### Stage 3 — the value-base ablation
+
+Ten variants × 10 slots × 5 seasons = 500 real drafts, fair opponent, production's real caps.
+Every tier runs the *same* code path with the same risk/survival/roster-fit/feasibility terms;
+only the value base varies, so a difference is attributable to it and nothing else.
+
+| tier | value base | starter pts | stdev | margin vs N0 |
+|---|---|---|---|---|
+| N4x | msv + 1.0·vorp, no opp-cost | 2032.8 | 139.9 | +43.4 |
+| **N4** | **msv + 1.0·vorp** | **2029.2** | **131.7** | **+39.9** |
+| N0 | msv (shipped D60) — *control* | 1989.3 | 160.8 | — |
+| N0x | msv, no opp-cost | 1975.6 | 167.8 | −13.7 |
+| N2 | min(vorp, msv) | 1942.4 | 146.4 | −46.9 |
+| N3 | msv over replacement | 1940.7 | 149.9 | −48.6 |
+| N1 | vorp (D55) | 1926.8 | 164.7 | −62.6 |
+| N2x / N3x / N1x | the same, no opp-cost | 1867.1 / 1859.8 / 1832.8 | | −122 / −130 / −157 |
+
+**The decisive result: summing the two signals wins; choosing between them per-candidate
+loses.** Both clamping formulations were front-runners in the plan and both finished *below*
+the control. N3 was predicted to be "most likely to be right" — it reduces to VORP on an empty
+roster and to 0 at a saturated position, verified by construction — and it lost by 48.6. The
+hypothesis was right that the two bases fail in opposite regimes; it was wrong that the fix is
+to select between them pointwise.
+
+**N4 vs the control, paired:** +39.9, 95% CI [+9.1, +70.6], winning **37 of 50** drafts. All
+four pre-registered gates pass, and the margin survives leave-one-season-out on every season
+(+48.2 / +39.1 / +27.2 / +50.2 / +34.7).
+
+### The opportunity-cost term is kept, re-measured rather than assumed
+
+D60 left open a scale mismatch: the term is VORP-denominated and was added to an MSV base. Each
+base was therefore run with it on and off:
+
+| value base | effect of the opportunity-cost term |
+|---|---|
+| vorp (N1) | **+94.0**, CI [+64.2, +123.7] |
+| msv over replacement (N3) | **+81.0**, CI [+51.8, +110.2] |
+| min (N2) | **+75.3**, CI [+48.7, +102.0] |
+| msv (N0) | +13.7, CI [−12.4, +39.9] — not significant |
+| msv + vorp (N4) | −3.6, CI [−22.3, +15.2] — not significant |
+
+It is significantly *helpful* on three of five bases and indistinguishable on the winner. D55's
+finding stands. **Kept.**
+
+**A judgment call, recorded as one.** N4x (opportunity cost off) scored +3.6 above N4, and the
+pre-registered tie-break's first criterion is "fewer mechanisms", which favours N4x. N4 ships
+anyway, for reasons stated so the call is reviewable and reversible (`DRAFT_VORP_WEIGHT` and
+the tier spec are one-line changes): the +3.6 is not statistically distinguishable (CI contains
+zero, 14W/13L); N4 has the lower variance, which is the tie-break's *second* criterion; N4
+breaches the kicker cap in 32 of 50 drafts against N4x's 40; and removing a term that helps
+significantly on three other bases would make the engine brittle to any future value-base
+change — it is what protects against the positional-depletion pathology M17/M18 diagnosed.
+
+### Official benchmark, after shipping
+
+`reports/draft_simulation.md`, real 2021–2025, fair opponent. The forensic harness predicted
+2029.2 and production delivered **2029.2** — exact agreement.
+
+| | before (D62, msv) | after (D63, msv + vorp) |
+|---|---|---|
+| Alpha mean starter pts | 1989.3 | **2029.2** |
+| fair consensus | 2034.8 | 2034.8 |
+| margin | −45.4 | **−5.6** |
+| 95% CI | [−117.1, +26.2] | [−68.4, +57.2] |
+| win rate | 25/50 | 25/50 |
+
+**88% of the gap to a fair consensus opponent is closed.** Alpha still does not beat it: the
+margin is negative, the win rate is 25/50, and the interval contains zero. Per season: 2021
+−23.9, 2022 +141.8, 2023 −35.3, 2024 −161.7, 2025 +51.3. `IMPLEMENTATION_GAP_ANALYSIS.md`
+P1-0 stays **open**.
+
+Genuinely improved alongside the mean: the floor. Worst draft rises 1570.3 → 1765.3 and
+starter-points stdev falls 160.8 → 131.7, so the consistency advantage D61 identified as real
+is extended rather than spent.
+
+### Known regression, reported rather than buried
+
+The blend trades one hoarding mode for another. MSV-dominant bases over-draft quarterbacks;
+VORP-containing bases over-draft kickers, because VORP prices a bench K above replacement with
+no knowledge that the position has no flex eligibility — the exact blind spot D60 set out to
+fix.
+
+| tier | drafts breaching a positional cap (of 50) | mean K | mean QB |
+|---|---|---|---|
+| N0 (was shipped) | QB 25, WR 8 | 1.60 | 2.28 |
+| N4 (now shipped) | **K 32**, WR 2 | **2.74** (cap 2) | 1.60 |
+
+**No pre-registered gate catches over-drafting** — Gate 1 checks zeroing, Gate 2 infeasibility,
+Gate 4 timing. N4 passed the rule legitimately and still carries this defect. It is net
+positive on the objective (starter points rise, and a wasted late-round kicker is cheap), but
+it is a real defect and the leading next-phase item: the plausible fix is to apply lineup
+saturation to the VORP term as well, or to tighten `OVER_CAP_VALUE_MULTIPLIER`, measured the
+same way. Positional timing otherwise improved or held: QB-by-round-2 92% → 66%, first DST
+round 10.0 → 9.6, first K 8.5 → 8.0; first RB drifted slightly later, 5.24 → 5.50.
+
+### What did not change
+
+The projection model. The forensic work established the player model is not the bottleneck, and
+nothing here contradicts that: every tier used identical projections and the spread between
+best and worst was 200 starter points, produced entirely by the decision layer.
