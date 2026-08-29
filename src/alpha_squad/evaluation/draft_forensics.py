@@ -30,7 +30,11 @@ from typing import Literal
 import duckdb
 
 from alpha_squad.evaluation.draft_simulation import (
+    ALL_OPPONENT_STRATEGIES,
+    MARKET_CONSENSUS,
+    MARKET_CONSENSUS_ROSTER_AWARE,
     _market_consensus_pick,
+    _market_consensus_roster_aware_pick,
     _next_pick_overall,
     _snake_overall_pick,
 )
@@ -48,6 +52,7 @@ from alpha_squad.league.replacement import (
     marginal_value_over_replacement,
     positional_scarcity,
     replacement_level,
+    replacement_marginal_starter_values,
 )
 from alpha_squad.league.roster import (
     positional_feasibility_cap,
@@ -77,6 +82,16 @@ Tier = Literal[
     "M1",
     "M2",
     "M3",
+    "N0",
+    "N1",
+    "N2",
+    "N3",
+    "N4",
+    "N0x",
+    "N1x",
+    "N2x",
+    "N3x",
+    "N4x",
 ]
 ALL_TIERS: tuple[Tier, ...] = ("A", "B", "C", "D", "E", "F", "G", "H")
 
@@ -124,6 +139,74 @@ PREREGISTERED_M_CONTROL: Tier = "M0"
 # full value, 0.0 for one who would not start at all.
 MSV_MULT_FLOOR = 0.7
 MSV_MULT_RANGE = 0.6
+
+# --- N-tiers (D63 Stage 3): which VALUE BASE, holding everything else identical -----------
+# D61 established that D60 traded one blind spot for another. VORP encodes league-wide
+# positional scarcity (it correctly refuses an early QB in a 1-QB league) but prices a bench
+# K/DST above replacement, so the engine hoarded them. MSV encodes lineup saturation (a second
+# kicker is worth exactly zero) but on an empty roster equals the raw projection, i.e. pure
+# best-player-available by raw points -- which in a 1-QB league reaches for quarterbacks,
+# precisely what VORP existed to correct. D60 chose one and discarded the other; these tiers
+# test formulations that keep both.
+#
+# Every N-tier runs the SAME code path with the same risk/survival/roster-fit/feasibility
+# terms and the same D55 opportunity-cost replay. ONLY the value base differs, so any
+# difference between them is attributable to the value base and nothing else. `N0` is the
+# shipped D60 formula and is therefore identical to `M3` by construction -- a deliberate
+# redundancy that lets the harness self-check (see tests) rather than a duplicate mechanism.
+#
+# The `x` variants switch the opportunity-cost term OFF. That is not an afterthought: the term
+# is VORP-denominated and D60 added it to an MSV base, a scale mismatch open since D60. Rather
+# than assume it still helps, it is measured as an explicit arm.
+N_TIERS: tuple[Tier, ...] = ("N0", "N1", "N2", "N3", "N4")
+N_TIERS_NO_OPPORTUNITY_COST: tuple[Tier, ...] = ("N0x", "N1x", "N2x", "N3x", "N4x")
+ALL_N_TIERS: tuple[Tier, ...] = (*N_TIERS, *N_TIERS_NO_OPPORTUNITY_COST)
+
+# {tier: (value base, whether the opportunity-cost term is added)}.
+N_TIER_SPEC: dict[Tier, tuple[str, bool]] = {
+    "N0": ("msv", True),
+    "N1": ("vorp", True),
+    "N2": ("min_vorp_msv", True),
+    "N3": ("msv_over_replacement", True),
+    "N4": ("msv_plus_weighted_vorp", True),
+    "N0x": ("msv", False),
+    "N1x": ("vorp", False),
+    "N2x": ("min_vorp_msv", False),
+    "N3x": ("msv_over_replacement", False),
+    "N4x": ("msv_plus_weighted_vorp", False),
+}
+
+# Tier N4 is `msv + w * vorp`. w is PRE-REGISTERED at 1.0 -- fixed before any N-tier ran, and
+# not a fitted parameter. 1.0 is the Occam choice (equal weighting, no free dial to tune) and
+# it is also what the already-measured M1 tier used (`vorp + opp_cost + msv`, 1987.2), so it is
+# the one value with prior evidence behind it. Any other w would need its own pre-registration.
+N4_VORP_WEIGHT = 1.0
+
+# PRE-REGISTERED DECISION RULE for the N-tiers -- committed to source BEFORE any N-tier was
+# executed against real data, per the D39/D54/D55 discipline and the explicit instruction in
+# docs/DRAFT_STRATEGY_NEXT_PHASE_PLAN.md ("commit to source before any run").
+#
+#   Control        : N0, the shipped D60 formula, run under production's real feasibility caps
+#                    against the FAIR (roster-aware) opponent.
+#   Primary metric : mean realized starter points vs. the fair opponent.
+#   Gate 1         : no starting-requirement position zeroed at a higher rate than the control.
+#   Gate 2         : n_infeasible_rosters no higher than the control.
+#   Gate 3         : mean starter points must not be worse than the control in more than 1 of
+#                    the 5 seasons. Blocks a tier that wins the pooled mean on one big season --
+#                    the failure mode this evidence base (n=5 seasons) is most exposed to.
+#   Gate 4         : no position drafted at a mean round more than 2 rounds EARLIER than the
+#                    control without measured justification. This is the gate that would have
+#                    caught D60's K/DST timing regression, which no pre-D63 gate checked.
+#   Robustness     : leave-one-season-out -- the margin must survive removing ANY single season.
+#   Tie-break      : fewer mechanisms; then lower starter-points variance.
+#   Ship only if   : strictly beats the control on the primary metric AND all four gates pass
+#                    AND the margin survives leave-one-season-out.
+#
+# A tier that wins the pooled mean but fails a gate does NOT ship. Recording the rule here,
+# before the numbers exist, is what stops the rule from being reshaped around the result.
+PREREGISTERED_N_CONTROL: Tier = "N0"
+PREREGISTERED_MAX_WORSE_SEASONS = 1
+PREREGISTERED_MAX_ROUNDS_EARLIER = 2.0
 
 
 def marginal_starter_multiplier(msv: float, projection: float) -> float:
@@ -185,6 +268,20 @@ TIER_DESCRIPTIONS: dict[Tier, str] = {
     "(vorp + opp_cost) x msv_mult x risk x survival x [feasibility]",
     "M3": "marginal starter value replaces VORP as the value base: "
     "(msv + opp_cost) x fit x risk x survival x [feasibility]",
+    # N-tiers (D63): identical formula throughout, ONLY the value base varies.
+    "N0": "value base = msv (the shipped D60 formula; identical to M3) -- the control",
+    "N1": "value base = vorp (the D55 formula; identical to M0) -- second reference point",
+    "N2": "value base = min(vorp, msv) -- scarcity early (msv >= vorp on an empty roster, so "
+    "min = vorp), saturation late (msv -> 0, so min -> 0)",
+    "N3": "value base = marginal starter value OVER REPLACEMENT: "
+    "best_lineup(roster+candidate) - best_lineup(roster+replacement body at that position). "
+    "Reduces to vorp on an empty roster and to 0 at a saturated position, by construction",
+    "N4": "value base = msv + w*vorp, w pre-registered at 1.0 -- the additive blend",
+    "N0x": "N0 with the opportunity-cost term switched OFF",
+    "N1x": "N1 with the opportunity-cost term switched OFF",
+    "N2x": "N2 with the opportunity-cost term switched OFF",
+    "N3x": "N3 with the opportunity-cost term switched OFF",
+    "N4x": "N4 with the opportunity-cost term switched OFF",
 }
 
 
@@ -372,6 +469,7 @@ def score_candidate(
     opportunity_costs: dict[str, float] | None = None,
     roster_player_ids: list[str] | None = None,
     base_lineup_points: float | None = None,
+    replacement_msv: dict[str, float] | None = None,
 ) -> CandidateScore | None:
     position = static.positions.get(player_id)
     if position is None or player_id not in static.vorp:
@@ -393,6 +491,83 @@ def score_candidate(
     feasibility_mult = None
     opp_cost = None
     opponent_mult = None
+
+    if tier in ALL_N_TIERS:
+        # Every N-tier shares production's risk/survival/roster-fit/feasibility terms and the
+        # D55 opportunity-cost replay. ONLY the value base varies (and, for the `x` variants,
+        # whether the opportunity cost is added at all), so a difference between N-tiers is
+        # attributable to the value base and nothing else.
+        value_base_name, use_opportunity_cost = N_TIER_SPEC[tier]
+        risk_mult = confidence if confidence is not None else 0.7
+        survival_mult = 1.0 if survival is None else (1.0 + 0.3 * (1.0 - survival))
+        opp_cost = (
+            _opportunity_cost_for(
+                static,
+                position,
+                available,
+                current_pick_overall,
+                next_pick_overall,
+                opportunity_costs,
+            )
+            if use_opportunity_cost
+            else 0.0
+        )
+        msv = marginal_starter_value(
+            league,
+            roster_player_ids or [],
+            player_id,
+            static.projections,
+            static.positions,
+            base_points=base_lineup_points,
+        )
+
+        if value_base_name == "msv":
+            value_base = msv
+        elif value_base_name == "vorp":
+            value_base = vorp
+        elif value_base_name == "min_vorp_msv":
+            value_base = min(vorp, msv)
+        elif value_base_name == "msv_over_replacement":
+            # msv minus the msv a freely-available replacement-level body would add at the same
+            # position -- see league/replacement.py::replacement_marginal_starter_values for why
+            # that identity is the same thing as the lineup-difference definition.
+            value_base = msv - (replacement_msv or {}).get(position, 0.0)
+        else:  # msv_plus_weighted_vorp
+            value_base = msv + N4_VORP_WEIGHT * vorp
+
+        score = (value_base + opp_cost) * fit_mult * risk_mult * survival_mult
+
+        cap = positional_feasibility_cap(league, position)
+        have = sum(1 for p in roster_positions if p == position)
+        if have >= cap:
+            feasibility_mult = 0.1
+            score *= feasibility_mult
+            reasons.append(f"feasibility_mult=0.10 (already have {have} {position}, cap {cap})")
+
+        reasons.append(f"value_base={value_base_name} {value_base:+.1f} pts")
+        reasons.append(f"marginal_starter_value={msv:+.1f} pts")
+        if opp_cost:
+            reasons.append(f"opportunity_cost=+{opp_cost:.1f} pts for {position}")
+        return CandidateScore(
+            player_id=player_id,
+            position=position,
+            projection=projection,
+            vorp=vorp,
+            replacement_level=level,
+            scarcity_raw=scarcity_raw,
+            scarcity_norm=scarcity_norm,
+            roster_need=need_score,
+            fit_multiplier=fit_mult,
+            confidence=confidence,
+            survival_probability=survival,
+            future_scarcity_multiplier=None,
+            feasibility_multiplier=feasibility_mult,
+            opportunity_cost_pts=opp_cost if use_opportunity_cost else None,
+            opponent_depletion_multiplier=None,
+            marginal_starter_value=msv,
+            score=score,
+            reasons=reasons,
+        )
 
     if tier in M_TIERS:
         # Every M-tier shares production's risk/survival/feasibility terms and the D55
@@ -689,13 +864,36 @@ def _pick_by_tier(
     # not vary across candidates at one pick -- so it is computed once here rather than once
     # per candidate, the same optimization the opportunity-cost replay already uses below.
     base_lineup_points = None
-    if tier in M_TIERS:
+    if tier in M_TIERS or tier in ALL_N_TIERS:
         base_lineup_points = best_lineup_points(
             league, roster_player_ids or [], static.projections, static.positions
         )
 
+    # Tier N3's value base subtracts the marginal starter value a replacement-level body would
+    # add. That depends only on the POSITION, not the candidate, so like the opportunity-cost
+    # replay it is computed once per pick rather than once per candidate.
+    replacement_msv: dict[str, float] | None = None
+    if tier in ALL_N_TIERS and N_TIER_SPEC[tier][0] == "msv_over_replacement":
+        replacement_msv = replacement_marginal_starter_values(
+            league,
+            roster_player_ids or [],
+            static.projections,
+            static.positions,
+            static.replacement_levels,
+            base_points=base_lineup_points,
+        )
+
+    tiers_using_opportunity_cost = (
+        "P1",
+        "P1b",
+        "P1c",
+        "P3",
+        "F",
+        *M_TIERS,
+        *(t for t in ALL_N_TIERS if N_TIER_SPEC[t][1]),
+    )
     opportunity_costs: dict[str, float] | None = None
-    if tier in ("P1", "P1b", "P1c", "P3", "F", *M_TIERS):
+    if tier in tiers_using_opportunity_cost:
         candidate_positions = {
             pos for p in available if (pos := static.positions.get(p)) is not None
         }
@@ -722,6 +920,7 @@ def _pick_by_tier(
             opportunity_costs=opportunity_costs,
             roster_player_ids=roster_player_ids,
             base_lineup_points=base_lineup_points,
+            replacement_msv=replacement_msv,
         )
         if s is not None:
             scored.append(s)
@@ -740,6 +939,11 @@ class ForensicDraftResult:
     drafted_positions: list[str] = field(default_factory=list)
     total_roster_points: float = 0.0
     starter_points: float = 0.0
+    # D63 Stage 2: which opponent field this tier was measured against. Recorded on the
+    # result rather than left implicit because the pre-D61 opponent forfeits mandatory
+    # starting slots (D61), so a tier number is meaningless without knowing which opponent
+    # produced it -- the same "label, never silently restate" rule D56 and D61 established.
+    opponent_strategy: str = MARKET_CONSENSUS
 
 
 def simulate_forensic_draft(
@@ -751,11 +955,21 @@ def simulate_forensic_draft(
     static: SeasonStatic,
     *,
     trace: list[dict] | None = None,
+    opponent_strategy: str = MARKET_CONSENSUS,
 ) -> ForensicDraftResult:
-    """Same snake-draft loop, fixed 9-slot real-market-consensus opponent field, and outcome
-    scoring as evaluation/draft_simulation.py::simulate_draft -- the only thing that varies is
-    how the team-in-question's own pick is scored (`tier`). If `trace` is given, every pick's
-    full candidate ranking is appended to it (see `trace_draft` below for the JSON shape)."""
+    """Same snake-draft loop, fixed 9-slot opponent field, and outcome scoring as
+    evaluation/draft_simulation.py::simulate_draft -- the only thing that varies is how the
+    team-in-question's own pick is scored (`tier`). If `trace` is given, every pick's full
+    candidate ranking is appended to it (see `trace_draft` below for the JSON shape).
+
+    `opponent_strategy` selects the fixed field, exactly as `simulate_draft` does (D61 Stage
+    1.1): `market_consensus` reproduces every tier number published through D60, and
+    `market_consensus_roster_aware` is the fair opponent that actually fields a legal lineup.
+    It defaults to the former so a pre-D63 caller's numbers stay reproducible; every Stage 2+
+    run passes the latter explicitly. Which one produced a result is recorded on the returned
+    `ForensicDraftResult`, so a tier figure can never be read without its opponent."""
+    if opponent_strategy not in ALL_OPPONENT_STRATEGIES:
+        raise ValueError(f"unknown opponent strategy '{opponent_strategy}'")
     from alpha_squad.evaluation.draft_simulation import _actual_points_for
     from alpha_squad.league.replacement import compute_league_starters
 
@@ -766,9 +980,17 @@ def simulate_forensic_draft(
 
     drafted: list[str] = []
     my_roster_positions: list[str] = []
+    # Per-opponent-slot roster, for the roster-aware field: roster awareness is a property of
+    # each team, not of the league (D61 Stage 1.1).
+    opponent_roster_positions: dict[int, list[str]] = {
+        slot: [] for slot in range(1, league.teams + 1) if slot != draft_slot
+    }
 
     for round_no in range(1, total_rounds + 1):
         order = range(1, league.teams + 1) if round_no % 2 == 1 else range(league.teams, 0, -1)
+        # Every slot picks exactly once per round in a snake draft, so this is exact for
+        # every slot at this round.
+        picks_remaining = total_rounds - round_no + 1
         for slot in order:
             if not available:
                 break
@@ -810,7 +1032,18 @@ def simulate_forensic_draft(
                 drafted.append(pick)
                 my_roster_positions.append(static.positions.get(pick, "UNKNOWN"))
             else:
-                pick = _market_consensus_pick(available, static.market_rank)
+                if opponent_strategy == MARKET_CONSENSUS_ROSTER_AWARE:
+                    pick = _market_consensus_roster_aware_pick(
+                        available,
+                        static.market_rank,
+                        static.positions,
+                        league,
+                        opponent_roster_positions[slot],
+                        picks_remaining,
+                    )
+                else:
+                    pick = _market_consensus_pick(available, static.market_rank)
+                opponent_roster_positions[slot].append(static.positions.get(pick, "UNKNOWN"))
             available.discard(pick)
 
     actual_points = _actual_points_for(con, season, drafted)
@@ -830,6 +1063,7 @@ def simulate_forensic_draft(
         drafted_positions=my_roster_positions,
         total_roster_points=total_points,
         starter_points=starter_points,
+        opponent_strategy=opponent_strategy,
     )
 
 
@@ -947,34 +1181,67 @@ def roster_feasibility_metrics(
     }
 
 
+def first_round_by_position(drafted_positions: list[str]) -> dict[str, int]:
+    """{position: 1-indexed round this team FIRST took that position}, for the positional
+    -timing gate (Gate 4). The team in question picks exactly once per round, so a pick's
+    index in `drafted_positions` is its round - 1 by construction.
+
+    A position never drafted is simply absent rather than given a sentinel round: averaging a
+    made-up number in would misreport timing. Callers aggregate over the drafts where the
+    position actually appears and report that count alongside."""
+    first: dict[str, int] = {}
+    for i, pos in enumerate(drafted_positions):
+        if pos not in first:
+            first[pos] = i + 1
+    return first
+
+
 def run_tier_ablation(
     con: duckdb.DuckDBPyConnection,
     league: LeagueContext,
     seasons: list[int],
     tiers: tuple[Tier, ...],
     slots: list[int] | None = None,
+    *,
+    opponent_strategy: str = MARKET_CONSENSUS,
 ) -> list[dict]:
     """One row per (season, tier, slot): the full ceteris-paribus grid.
 
     `load_season_static` is called once per season and shared across every tier and slot, so
     the only thing that varies within a season is the scoring mechanism -- which is what
-    makes a difference between tiers attributable to the mechanism and nothing else."""
+    makes a difference between tiers attributable to the mechanism and nothing else.
+
+    `opponent_strategy` picks the fixed opponent field and is recorded on every row (D63
+    Stage 2), so an ablation table can never be read without knowing whether its opponent
+    could field a legal lineup."""
     slots = slots if slots is not None else list(range(1, league.teams + 1))
     rows: list[dict] = []
     for season in seasons:
         static = load_season_static(con, league, season)
         for tier in tiers:
             for slot in slots:
-                result = simulate_forensic_draft(con, league, season, tier, slot, static)
+                result = simulate_forensic_draft(
+                    con,
+                    league,
+                    season,
+                    tier,
+                    slot,
+                    static,
+                    opponent_strategy=opponent_strategy,
+                )
                 feasibility = roster_feasibility_metrics(league, result.drafted_positions)
                 rows.append(
                     {
                         "season": season,
                         "tier": tier,
                         "draft_slot": slot,
+                        "opponent_strategy": result.opponent_strategy,
                         "starter_points": result.starter_points,
                         "total_roster_points": result.total_roster_points,
                         "drafted_positions": list(result.drafted_positions),
+                        "first_round_by_position": first_round_by_position(
+                            result.drafted_positions
+                        ),
                         "position_counts": feasibility["position_counts"],
                         "zero_drafted_starting_positions": feasibility[
                             "zero_drafted_starting_positions"
@@ -989,9 +1256,21 @@ def run_tier_ablation(
 
 
 def summarize_tier_ablation(rows: list[dict], league: LeagueContext) -> list[dict]:
-    """Per-tier aggregates, including the gate metrics the pre-registered decision rule
-    names. `zero_rate_by_position` is what Gate 1 is judged on."""
+    """Per-tier aggregates, including every metric the pre-registered decision rules name.
+
+    `zero_rate_by_position` is what Gate 1 is judged on; `mean_starter_points_by_season` is
+    Gate 3's input; `mean_first_round_by_position` is Gate 4's (D63 Stage 2 -- both were
+    uncomputable from the pre-D63 summary, which is why the D60 K/DST timing regression
+    passed unnoticed). `late_round_position_counts` measures the failure mode the next-phase
+    plan names explicitly: in the last third of the draft every startable slot is full, so an
+    MSV-based value base collapses toward zero and picks fall to the opportunity-cost term
+    and tie-breaks."""
     dedicated = league.dedicated_slots()
+    total_rounds = int(league.roster.get("roster_size", 0))
+    # "Late" = final third of the draft, derived from the league's own roster size rather
+    # than a hardcoded round number, so it stays meaningful in a different format.
+    late_round_start = total_rounds - max(1, total_rounds // 3) + 1
+
     by_tier: dict[str, list[dict]] = {}
     for row in rows:
         by_tier.setdefault(row["tier"], []).append(row)
@@ -1004,14 +1283,47 @@ def summarize_tier_ablation(rows: list[dict], league: LeagueContext) -> list[dic
             pos: sum(1 for r in tier_rows if pos in r["zero_drafted_starting_positions"])
             for pos in dedicated
         }
+
+        by_season: dict[int, list[float]] = {}
+        for r in tier_rows:
+            by_season.setdefault(r["season"], []).append(r["starter_points"])
+        mean_by_season = {
+            season: sum(vals) / len(vals) for season, vals in sorted(by_season.items())
+        }
+
+        # Mean first round per position, averaged only over the drafts that actually took
+        # the position (see `first_round_by_position`), with that count reported alongside so
+        # a timing figure drawn from few drafts is visibly weak rather than silently equal.
+        first_rounds: dict[str, list[int]] = {}
+        for r in tier_rows:
+            for pos, rnd in r.get("first_round_by_position", {}).items():
+                first_rounds.setdefault(pos, []).append(rnd)
+        mean_first_round = {
+            pos: sum(vals) / len(vals) for pos, vals in sorted(first_rounds.items())
+        }
+        n_drafts_with_position = {pos: len(vals) for pos, vals in sorted(first_rounds.items())}
+
+        late_counts: dict[str, int] = {}
+        for r in tier_rows:
+            for i, pos in enumerate(r["drafted_positions"]):
+                if i + 1 >= late_round_start:
+                    late_counts[pos] = late_counts.get(pos, 0) + 1
+        late_counts_per_draft = {pos: c / n for pos, c in sorted(late_counts.items())} if n else {}
+
         summary.append(
             {
                 "tier": tier,
                 "n": n,
+                "opponent_strategy": tier_rows[0].get("opponent_strategy", MARKET_CONSENSUS),
                 "mean_starter_points": sum(starters) / n if n else 0.0,
+                "stdev_starter_points": _stdev(starters),
                 "mean_total_roster_points": (
                     sum(r["total_roster_points"] for r in tier_rows) / n if n else 0.0
                 ),
+                "mean_starter_points_by_season": mean_by_season,
+                "mean_first_round_by_position": mean_first_round,
+                "n_drafts_with_position": n_drafts_with_position,
+                "late_round_position_counts_per_draft": late_counts_per_draft,
                 "zero_rate_by_position": zero_rate,
                 "n_infeasible_rosters": sum(
                     1 for r in tier_rows if r["zero_drafted_starting_positions"]
@@ -1023,3 +1335,101 @@ def summarize_tier_ablation(rows: list[dict], league: LeagueContext) -> list[dic
         )
     summary.sort(key=lambda r: -r["mean_starter_points"])
     return summary
+
+
+def _stdev(xs: list[float]) -> float:
+    if len(xs) < 2:
+        return float("nan")
+    mean = sum(xs) / len(xs)
+    return (sum((x - mean) ** 2 for x in xs) / (len(xs) - 1)) ** 0.5
+
+
+def leave_one_season_out_margins(
+    rows: list[dict], tier: str, control_tier: str
+) -> dict[int, float]:
+    """{excluded_season: `tier`'s mean-starter-point margin over `control_tier` with that
+    season left out}.
+
+    The next-phase plan's robustness requirement: a mechanism whose advantage disappears when
+    any single season is removed is not shipped, regardless of the pooled mean. With only 5
+    real seasons available, one outlier season can carry a pooled result on its own, and this
+    is the check that makes that visible rather than assumed away."""
+    seasons = sorted({r["season"] for r in rows})
+    margins: dict[int, float] = {}
+    for excluded in seasons:
+        kept = [r for r in rows if r["season"] != excluded]
+        tier_pts = [r["starter_points"] for r in kept if r["tier"] == tier]
+        ctrl_pts = [r["starter_points"] for r in kept if r["tier"] == control_tier]
+        if not tier_pts or not ctrl_pts:
+            continue
+        margins[excluded] = sum(tier_pts) / len(tier_pts) - sum(ctrl_pts) / len(ctrl_pts)
+    return margins
+
+
+def evaluate_preregistered_gates(
+    summary: list[dict], rows: list[dict], control_tier: str
+) -> list[dict]:
+    """Apply the pre-registered decision rule to an ablation result, mechanically.
+
+    Returns one row per non-control tier with each gate's pass/fail and the numbers behind
+    it, so the ship/no-ship call is read off a table rather than argued after the fact. The
+    rule itself is the module-level PREREGISTERED_* constants, committed to source before any
+    run (D39/D54/D55 discipline)."""
+    by_tier = {r["tier"]: r for r in summary}
+    control = by_tier.get(control_tier)
+    if control is None:
+        raise ValueError(f"control tier {control_tier!r} not present in this ablation")
+
+    verdicts = []
+    for row in summary:
+        tier = row["tier"]
+        if tier == control_tier:
+            continue
+
+        beats_primary = row["mean_starter_points"] > control["mean_starter_points"]
+
+        gate1_failures = {
+            pos: (rate, control["zero_rate_by_position"].get(pos, 0))
+            for pos, rate in row["zero_rate_by_position"].items()
+            if rate > control["zero_rate_by_position"].get(pos, 0)
+        }
+        gate2_pass = row["n_infeasible_rosters"] <= control["n_infeasible_rosters"]
+
+        worse_seasons = [
+            season
+            for season, pts in row["mean_starter_points_by_season"].items()
+            if pts < control["mean_starter_points_by_season"].get(season, float("-inf"))
+        ]
+        gate3_pass = len(worse_seasons) <= PREREGISTERED_MAX_WORSE_SEASONS
+
+        gate4_failures = {
+            pos: (rnd, control["mean_first_round_by_position"][pos])
+            for pos, rnd in row["mean_first_round_by_position"].items()
+            if pos in control["mean_first_round_by_position"]
+            and control["mean_first_round_by_position"][pos] - rnd
+            > PREREGISTERED_MAX_ROUNDS_EARLIER
+        }
+
+        loso = leave_one_season_out_margins(rows, tier, control_tier)
+        loso_survives = bool(loso) and all(m > 0 for m in loso.values())
+
+        gates_pass = not gate1_failures and gate2_pass and gate3_pass and not gate4_failures
+        verdicts.append(
+            {
+                "tier": tier,
+                "margin_vs_control": row["mean_starter_points"] - control["mean_starter_points"],
+                "beats_primary_metric": beats_primary,
+                "gate1_pass": not gate1_failures,
+                "gate1_failures": gate1_failures,
+                "gate2_pass": gate2_pass,
+                "gate3_pass": gate3_pass,
+                "gate3_worse_seasons": worse_seasons,
+                "gate4_pass": not gate4_failures,
+                "gate4_failures": gate4_failures,
+                "leave_one_season_out_margins": loso,
+                "leave_one_season_out_survives": loso_survives,
+                "ships": beats_primary and gates_pass and loso_survives,
+            }
+        )
+    verdicts.sort(key=lambda v: -v["margin_vs_control"])
+    return verdicts

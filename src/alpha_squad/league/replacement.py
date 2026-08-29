@@ -181,6 +181,62 @@ def marginal_starter_value(
     return with_candidate - base_points
 
 
+# Sentinel id for the hypothetical freely-available, replacement-level body used by
+# `replacement_marginal_starter_values`. Never a real player id (real ids are `asq_`-prefixed,
+# see identity/canonical.py), so it cannot collide with a drafted player.
+_REPLACEMENT_SENTINEL = "__replacement_level_body__"
+
+
+def replacement_marginal_starter_values(
+    league: LeagueContext,
+    roster: list[str],
+    projections: dict[str, float],
+    positions: dict[str, str],
+    replacement_levels: dict[str, float],
+    *,
+    base_points: float | None = None,
+) -> dict[str, float]:
+    """{position: the marginal starter value a REPLACEMENT-LEVEL body at that position would
+    add to this roster} (D63 Stage 3, tier N3).
+
+    This is the subtrahend in "marginal starter value over replacement":
+
+        msv_over_replacement(candidate)
+            = best_lineup(roster + candidate) - best_lineup(roster + replacement body)
+            = marginal_starter_value(candidate) - this[candidate's position]
+
+    Why it is the principled unification of the two value bases the engine has used. On an
+    EMPTY roster both lineups gain their new player outright, so the difference is
+    `projection - replacement_level` -- exactly VORP, which is what correctly refuses an early
+    QB in a 1-QB league. At a SATURATED position neither the candidate nor the replacement body
+    can crack the lineup, so both terms are 0 and the difference is 0 -- exactly the lineup
+    saturation that stops a bench kicker from being priced above zero. It reduces to each of
+    VORP and MSV in the regime where that one is right, by construction rather than by
+    clamping between them (contrast tier N2's `min(vorp, msv)`).
+
+    Returned per POSITION, not per candidate, because the replacement body depends only on the
+    position -- so a caller computes this once per pick (a handful of positions) instead of
+    once per candidate (thousands). `best_lineup_points` only ever reads roster members, so the
+    augmented dicts here are O(roster), not O(all players)."""
+    if base_points is None:
+        base_points = best_lineup_points(league, roster, projections, positions)
+
+    roster_projections = {p: projections.get(p, 0.0) for p in roster}
+    roster_positions = {p: positions.get(p, "UNKNOWN") for p in roster}
+    augmented_roster = [*roster, _REPLACEMENT_SENTINEL]
+
+    values: dict[str, float] = {}
+    for position, level in replacement_levels.items():
+        with_replacement = best_lineup_points(
+            league,
+            augmented_roster,
+            {**roster_projections, _REPLACEMENT_SENTINEL: level},
+            {**roster_positions, _REPLACEMENT_SENTINEL: position},
+        )
+        values[position] = with_replacement - base_points
+    return values
+
+
 def load_season_projections(
     con: duckdb.DuckDBPyConnection, season: int
 ) -> tuple[dict[str, float], dict[str, str]]:
