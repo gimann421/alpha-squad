@@ -148,22 +148,35 @@ class TestAttributeDraftPicks:
 
 
 class TestValueBaseMatchesShippedEngine:
-    """D61 Stage 1.3 regression: `attribute_draft_picks` must measure the shipped D60
-    marginal-starter-value engine, not silently fall back to the D55 VORP-only engine by
-    omitting `roster_player_ids`. The two engines disagree in a specific, constructible
-    situation -- a second QB when the roster already holds one and the lineup has no QB-flex
-    -- and that disagreement is the regression signal.
+    """D61 Stage 1.3 regression: `attribute_draft_picks` must measure the SHIPPED engine, not
+    silently fall back to the roster-blind VORP-only path by omitting `roster_player_ids`.
 
-    `qb_a` (proj 1000) is Alpha's obvious first pick under either engine. By Alpha's second
-    turn the roster is `[qb_a]`: `qb_b` (proj 400) has high VORP but contributes ~0 marginal
-    starter value (the one QB slot is already filled and this lineup has no QB-flex), while
-    `rb_a` (proj 150) has lower VORP but fills the still-empty RB slot. The VORP-only engine
-    prefers `qb_b`; the shipped MSV engine prefers `rb_a`."""
+    The roster-aware and roster-blind paths disagree in a specific, constructible situation --
+    a second QB when the roster already holds one and the lineup has no QB-flex -- and that
+    disagreement is the regression signal. Retuned at D63, when the shipped value base became
+    `msv + w*VORP` rather than `msv` alone: a fixture whose only discriminator is a large VORP
+    gap no longer separates the paths, because the shipped base now contains VORP too. The
+    numbers below make marginal starter value, not VORP, the deciding term.
+
+    `qb_a` (proj 1000) is Alpha's obvious first pick under either path. By Alpha's second turn
+    the roster is `[qb_a]`:
+      * `qb_b`  proj 400, QB replacement 200 -> VORP +200, but marginal starter value 0
+                (the one QB slot is filled and this lineup has no QB-flex).
+      * `rb_a`  proj 250, RB replacement 235 -> VORP only +15, but marginal starter value
+                +250 (the RB slot is still empty).
+    Roster-blind sees 200 vs 15 and takes `qb_b`. The shipped roster-aware base sees
+    0 + 200 = 200 against 250 + 15 = 265 and takes `rb_a`."""
 
     def _seed_divergent_pool(self, con):
         _seed(con, "qb_a", "QB", projected=1000.0, realized=900.0, ecr_rank=10.0)
         _seed(con, "qb_b", "QB", projected=400.0, realized=350.0, ecr_rank=60.0)
-        _seed(con, "rb_a", "RB", projected=150.0, realized=140.0, ecr_rank=61.0)
+        _seed(con, "rb_a", "RB", projected=250.0, realized=240.0, ecr_rank=61.0)
+        # Depth that sets each position's replacement level, and so its VORP. Deliberately
+        # placed to give QB a LOW replacement (big VORP gap) and RB a HIGH one (small gap),
+        # which is what makes the roster-blind path prefer the useless second QB.
+        _seed(con, "qb_c", "QB", projected=200.0, realized=190.0, ecr_rank=70.0)
+        _seed(con, "rb_b", "RB", projected=240.0, realized=230.0, ecr_rank=71.0)
+        _seed(con, "rb_c", "RB", projected=235.0, realized=225.0, ecr_rank=72.0)
         # Attractive-by-ECR fillers so the market-consensus opponent (the other of the 2
         # teams) picks these at its two intervening turns instead of qb_b/rb_a.
         _seed(con, "filler1", "WR", projected=10.0, realized=10.0, ecr_rank=1.0)
@@ -182,17 +195,17 @@ class TestValueBaseMatchesShippedEngine:
         assert rows[1].alpha_player_id == "rb_a"
 
     def test_the_two_engines_actually_disagree_here(self, con):
-        """Documents *why* the fix matters: with the identical roster/pool, the VORP-only
-        call (roster_player_ids omitted, the pre-fix behavior) and the MSV call
-        (roster_player_ids supplied, the fix) recommend different players."""
+        """Documents *why* the fix matters: with the identical roster and pool, the
+        roster-blind call (roster_player_ids omitted, the pre-fix behavior) and the
+        roster-aware call (roster_player_ids supplied, the fix) recommend different players."""
         self._seed_divergent_pool(con)
         league = _league()
         available = {"qb_b", "rb_a", "filler3", "filler4"}
 
-        vorp_only = recommend_draft_pick(
+        roster_blind = recommend_draft_pick(
             con, league, SEASON, ["QB"], available, next_pick_overall=None, top_n=1
         )
-        msv_aware = recommend_draft_pick(
+        roster_aware = recommend_draft_pick(
             con,
             league,
             SEASON,
@@ -202,8 +215,8 @@ class TestValueBaseMatchesShippedEngine:
             top_n=1,
             roster_player_ids=["qb_a"],
         )
-        assert vorp_only.recommendation == "qb_b"
-        assert msv_aware.recommendation == "rb_a"
+        assert roster_blind.recommendation == "qb_b"
+        assert roster_aware.recommendation == "rb_a"
 
 
 class TestRunAndArtifacts:

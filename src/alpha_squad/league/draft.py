@@ -2,27 +2,40 @@
 probability, roster fit, alternatives with reasoning -- mirrors AGENT_CONTRACTS.md's Decision
 contract (recommendation/alternatives/expected_value/confidence/reasons).
 
-Score, when the caller can supply the roster's actual player ids (D60):
+Score, when the caller can supply the roster's actual player ids (D63):
 
-    score = (marginal_starter_value + positional_opportunity_cost)
+    score = (marginal_starter_value + w * VORP + positional_opportunity_cost)
             x roster_fit x confidence x survival x [0.1 if past this league's usable cap]
 
-Falls back to VORP as the value base (D55's formula) when only position counts are known:
+with `w` = DRAFT_VORP_WEIGHT = 1.0. Falls back to VORP alone as the value base (D55's formula)
+when only position counts are known, since marginal starter value is not computable without
+the roster's actual players:
 
     score = (VORP + positional_opportunity_cost) x roster_fit x confidence x survival
             x [0.1 if the position is past this league's usable cap]
 
-Both were measured, not assumed. The M-tier ablation (`evaluation/draft_forensics.py`,
-`docs/DECISIONS.md` D60) tested four placements of marginal starter value against the
-1-QB-format-corrected official benchmark; the version with VORP replaced outright won on
-every axis the pre-registered rule checked (mean starter points, win rate, per-season
-consistency) and was the ONLY one that fixed a real defect visible in the others: VORP prices
-a bench kicker or defense against positional replacement level with no knowledge that neither
-position has flex eligibility, so a "good" bench K/DST still scored positive VORP despite
-having zero chance of ever starting -- production was drafting ~3.8 kickers and ~2.3 defenses
-per 16-round draft as a result. Marginal starter value has no such blind spot by construction:
-once a position's startable slots are full, one more player there is worth exactly what he'd
-displace, never more.
+**Why the SUM rather than either term alone (D63).** The two value bases fail in opposite
+regimes, and the engine has now shipped each one alone and measured both failing:
+
+- **VORP** (D55) encodes league-wide positional scarcity -- it correctly refuses an early QB in
+  a 1-QB league -- but prices a bench K/DST against positional replacement level with no
+  knowledge that neither position has flex eligibility, so a "good" bench kicker scores
+  positive VORP despite having zero chance of ever starting. Production drafted ~3.8 K and
+  ~2.3 DST per 16-round draft as a result.
+- **Marginal starter value** (D60) encodes lineup saturation -- once a position's startable
+  slots are full, one more body there is worth exactly what he would displace, so the K/DST
+  hoarding disappears by construction -- but on an EMPTY roster it is mathematically identical
+  to the candidate's own projection, i.e. pure best-player-available by raw points. In a 1-QB
+  league raw points favour quarterbacks, which is precisely what VORP existed to correct: the
+  engine took a QB in round 2 in 68% of drafts and reached its first RB at mean round 5.24.
+
+Adding them keeps both signals. Measured over 500 real drafts (2021-2025 x 10 slots x 10
+value-base variants) against the fair, roster-aware benchmark opponent, under the pre-registered
+decision rule in `evaluation/draft_forensics.py` (tier N4): **+39.9 mean starter points over the
+D60 formula, 95% CI [+9.1, +70.6], winning 37 of 50 drafts**, passing all four pre-registered
+gates and surviving leave-one-season-out on every season. Alternatives that clamp between the
+two rather than summing them (`min(vorp, msv)`, and marginal starter value measured over
+replacement) were both measured and both LOST to the control -- see docs/DECISIONS.md D63.
 
 `roster_player_ids` is optional and additive, not a hard requirement, so this stays the exact
 D55 formula for any caller that only knows roster composition by position count (some
@@ -34,9 +47,12 @@ identified (docs/DRAFT_ENGINE_FORENSIC_AUDIT.md): the score previously had no re
 of *positional* opportunity cost, only a single-*player* survival probability, so a position
 could empty out between this team's turns without anything in the score ever noticing. See
 `league/opportunity_cost.py` for the mechanism and why `positional_scarcity()` is deliberately
-NOT used here (adding it made the pathology measurably worse). VORP is still computed
-unconditionally because the opportunity-cost replay is itself VORP-denominated regardless of
-which term is the score's value base."""
+NOT used here (adding it made the pathology measurably worse). D63 re-measured it rather than
+assuming it still helps under a changed value base: switching it off is significantly worse on
+three of the five value bases tested (VORP -94.0, min -75.3, msv-over-replacement -81.0, all
+95% CIs excluding zero) and statistically indistinguishable on this one (-3.6, CI [-22.3,
++15.2]). It is kept: the evidence for removing it is absent, and it is what protects against
+the positional-depletion pathology if the value base ever changes again."""
 
 from __future__ import annotations
 
@@ -64,6 +80,12 @@ from alpha_squad.league.roster import (
 )
 from alpha_squad.market.series import resolve_market_series, series_for_ecr_type
 from alpha_squad.models.uncertainty.run import MODEL_VERSION as UNCERTAINTY_MODEL_VERSION
+
+# Weight on the VORP term in the D63 value base `msv + w * VORP`. PRE-REGISTERED at 1.0
+# before the N-tier ablation ran -- equal weighting, the Occam choice with no free dial to
+# tune, and the value the already-measured M1 tier used. It is a named constant rather than a
+# literal so the ablation tier and production provably share one number.
+DRAFT_VORP_WEIGHT = 1.0
 
 
 @dataclass
@@ -233,8 +255,9 @@ def recommend_draft_pick(
         # position the roster is already saturated at is automatically damped by that
         # position's own fit multiplier.
         opportunity_cost = opportunity_costs.get(pos, 0.0)
+        msv_for_candidate = None
         if base_lineup_points is not None:
-            value_base = marginal_starter_value(
+            msv_for_candidate = marginal_starter_value(
                 league,
                 roster_player_ids,
                 player_id,
@@ -242,6 +265,9 @@ def recommend_draft_pick(
                 positions,
                 base_points=base_lineup_points,
             )
+            # D63: the value base is the SUM, not either term alone -- see the module
+            # docstring for the measurement that decided it.
+            value_base = msv_for_candidate + DRAFT_VORP_WEIGHT * vorp[player_id]
         else:
             value_base = vorp[player_id]
         score = (value_base + opportunity_cost) * fit_mult * risk_mult * survival_mult
@@ -254,7 +280,6 @@ def recommend_draft_pick(
             score *= OVER_CAP_VALUE_MULTIPLIER
 
         reasons = [f"VORP {vorp[player_id]:+.1f} pts above {pos} replacement"]
-        msv_for_candidate = value_base if base_lineup_points is not None else None
         if msv_for_candidate is not None:
             reasons.append(f"marginal starter value {msv_for_candidate:+.1f} pts to your roster")
         reasons.append(
