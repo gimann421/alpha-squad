@@ -33,9 +33,15 @@ def _target() -> LeagueContext:
     return load_league_context(TARGET)
 
 
-def _pool(n_per_pos: int = 60) -> tuple[dict[str, float], dict[str, str]]:
+def _pool(n_per_pos: int = 130) -> tuple[dict[str, float], dict[str, str]]:
     """A synthetic board with a strictly decreasing projection per position, so the identity of
-    the replacement-level player is unambiguous at every demand boundary."""
+    the replacement-level player is unambiguous at every demand boundary.
+
+    Deep enough (130/position) that the deepest target any tier here uses -- the sweep's 3.0x on
+    WR's 4 startable slots, i.e. 120 league-wide -- still lands INSIDE the pool. A shallower
+    fixture would trip `demand_boundary_replacement`'s unobservable-boundary guard (D67) and omit
+    the position, which is correct behavior but tests nothing about demand depth. The real boards
+    are deeper still (225 WRs, 137-151 RBs in 2021-2025).""" 
     projections: dict[str, float] = {}
     positions: dict[str, str] = {}
     for pos in ("QB", "RB", "WR", "TE", "K", "DST"):

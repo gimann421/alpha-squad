@@ -2,17 +2,34 @@
 probability, roster fit, alternatives with reasoning -- mirrors AGENT_CONTRACTS.md's Decision
 contract (recommendation/alternatives/expected_value/confidence/reasons).
 
-Score, when the caller can supply the roster's actual player ids (D63):
+Score, when the caller can supply the roster's actual player ids (D63, D67):
 
-    score = (marginal_starter_value + w * VORP + positional_opportunity_cost)
+    score = (marginal_starter_value + w * VORP_draft_aware + positional_opportunity_cost)
             x roster_fit x confidence x survival x [0.1 if past this league's usable cap]
 
-with `w` = DRAFT_VORP_WEIGHT = 1.0. Falls back to VORP alone as the value base (D55's formula)
-when only position counts are known, since marginal starter value is not computable without
-the roster's actual players:
+with `w` = DRAFT_VORP_WEIGHT = 1.0. Falls back to the value base alone (D55's formula) when only
+position counts are known, since marginal starter value is not computable without the roster's
+actual players:
 
-    score = (VORP + positional_opportunity_cost) x roster_fit x confidence x survival
+    score = (VORP_draft_aware + positional_opportunity_cost) x roster_fit x confidence x survival
             x [0.1 if the position is past this league's usable cap]
+
+**Why the surplus term is draft-aware (D67).** Through D66 the replacement level inside VORP was
+computed once from the full season pool, so it was numerically identical at pick 1 and pick 160 --
+measured on real 2022 data at round 13 it sat +178.2 too high for QB and +69.1 for WR but only
++2.2 for K, meaning the engine was not over-valuing kickers so much as under-valuing everyone
+else. It now moves with the board: replacement is the best player at a position who will still be
+undrafted when the draft ends, drawn at the demand one mock draft on the preseason consensus board
+says a full draft of this league consumes (`replacement.py::market_draft_demand`, which has no
+free parameter and sums to `roster_size` by construction). Measured +32.1 mean starter points over
+the D63 formula, 95% CI [+11.5, +52.7], passing every pre-registered gate, and +75.5 [+38.6,
++112.3] out-of-format on `legacy_2qb_dynasty` -- see docs/DECISIONS.md D67, including why the
+uniform demand-depth multiplier it replaced was a positional re-weighting in disguise.
+
+Only the VALUE BASE is draft-aware. Season-long `VORP` still drives the opportunity-cost replay,
+the reported `DraftCandidate.vorp` field and the candidate-universe filter: that term prices
+near-term availability against a season-level scale and was measured that way, so re-basing it
+would silently change a second mechanism.
 
 **Why the SUM rather than either term alone (D63).** The two value bases fail in opposite
 regimes, and the engine has now shipped each one alone and measured both failing:
@@ -68,9 +85,11 @@ from alpha_squad.league.opportunity_cost import (
 )
 from alpha_squad.league.replacement import (
     best_lineup_points,
+    demand_boundary_replacement,
     load_season_projections,
     marginal_starter_value,
     marginal_value_over_replacement,
+    market_draft_demand,
 )
 from alpha_squad.league.roster import (
     OVER_CAP_VALUE_MULTIPLIER,
@@ -197,6 +216,47 @@ def recommend_draft_pick(
     projections, positions = load_season_projections(con, season)
     vorp = marginal_value_over_replacement(league, projections, positions)
     needs = roster_need(league, roster_positions)
+
+    # Draft-aware replacement level (D67). Until D67, `vorp` above was the ONLY replacement
+    # measure the engine had, and it is computed from the full season pool -- `available_player_ids`
+    # never reached it, so the level a pick was scored against was numerically identical at pick
+    # 1 and pick 160. Measured on real 2022 data at round 13, that static level sat +178.2 too
+    # high for QB and +69.1 for WR but only +2.2 for K, so the engine was not over-valuing
+    # kickers so much as under-valuing everyone else.
+    #
+    # The demand target is derived, not tuned: one mock draft of this league on the preseason
+    # consensus board says how many players at each position a full draft consumes, and
+    # replacement is drawn at that boundary among the players still on the board -- the classic
+    # VBD definition ("the best player still freely available after the draft") made literal.
+    # See `market_draft_demand` for why the earlier depth targets were wrong in SHAPE and why a
+    # uniform multiplier on `startable_slots` could not fix them.
+    #
+    # `vorp` stays STATIC and is what the opportunity-cost replay, the reported candidate field
+    # and the candidate-universe filter all use: the D55 opportunity-cost term prices near-term
+    # availability against a season-level scale and was measured that way, so re-basing it here
+    # would silently change a second mechanism. Only the VALUE BASE moves to the draft-aware
+    # level, which is exactly the D67 tier that was measured.
+    #
+    # It applies only when `available_player_ids` plausibly IS the remaining board. That is not
+    # guaranteed: `POST /league/{id}/draft` lets a caller pass any set, and a four-player
+    # shortlist means "these are the players I am asking about", not "these are the only players
+    # left in the league". Read as a board, such a shortlist says ~all players are drafted, which
+    # would collapse every position's demand to zero and price the whole shortlist at no surplus.
+    # The bound is structural, not a threshold: a draft removes at most `teams * roster_size`
+    # players, so a pool implying more than that cannot be a draft in progress. At the real
+    # benchmark's last pick exactly `teams * roster_size` are gone, so this never fires there.
+    market_ranks = load_market_ranks(con, ecr_type, season)
+    max_drafted = league.teams * int(league.roster.get("roster_size", 0))
+    pool_is_a_board = max_drafted > 0 and len(projections) - len(available_player_ids) <= max_drafted
+    draft_aware_levels: dict[str, float] = {}
+    if pool_is_a_board:
+        draft_aware_levels = demand_boundary_replacement(
+            league,
+            set(available_player_ids),
+            projections,
+            positions,
+            market_draft_demand(league, market_ranks, projections, positions),
+        )
     have_at_position: dict[str, int] = {}
     for pos_on_roster in roster_positions:
         have_at_position[pos_on_roster] = have_at_position.get(pos_on_roster, 0) + 1
@@ -217,7 +277,7 @@ def recommend_draft_pick(
             set(available_player_ids),
             positions,
             vorp,
-            load_market_ranks(con, ecr_type, season),
+            market_ranks,
             n_opponent_picks,
             candidate_positions,
         )
@@ -255,6 +315,14 @@ def recommend_draft_pick(
         # position the roster is already saturated at is automatically damped by that
         # position's own fit multiplier.
         opportunity_cost = opportunity_costs.get(pos, 0.0)
+        # D67: the value base's surplus term is measured against the draft-aware level.
+        # `projections[player_id] - draft_aware_levels[pos]` rather than `vorp[player_id]`,
+        # falling back to the static VORP for a position the demand model does not cover.
+        draft_aware_vorp = (
+            projections[player_id] - draft_aware_levels[pos]
+            if pos in draft_aware_levels
+            else vorp[player_id]
+        )
         msv_for_candidate = None
         if base_lineup_points is not None:
             msv_for_candidate = marginal_starter_value(
@@ -267,9 +335,9 @@ def recommend_draft_pick(
             )
             # D63: the value base is the SUM, not either term alone -- see the module
             # docstring for the measurement that decided it.
-            value_base = msv_for_candidate + DRAFT_VORP_WEIGHT * vorp[player_id]
+            value_base = msv_for_candidate + DRAFT_VORP_WEIGHT * draft_aware_vorp
         else:
-            value_base = vorp[player_id]
+            value_base = draft_aware_vorp
         score = (value_base + opportunity_cost) * fit_mult * risk_mult * survival_mult
 
         # Hard feasibility floor, past which one more body at this position cannot start.
@@ -279,7 +347,11 @@ def recommend_draft_pick(
         if over_cap:
             score *= OVER_CAP_VALUE_MULTIPLIER
 
-        reasons = [f"VORP {vorp[player_id]:+.1f} pts above {pos} replacement"]
+        reasons = [
+            f"VORP {draft_aware_vorp:+.1f} pts above the {pos} still on the board "
+            f"(replacement {draft_aware_levels.get(pos, 0.0):.1f}; season-long VORP "
+            f"{vorp[player_id]:+.1f} vs a static {pos} replacement)"
+        ]
         if msv_for_candidate is not None:
             reasons.append(f"marginal starter value {msv_for_candidate:+.1f} pts to your roster")
         reasons.append(

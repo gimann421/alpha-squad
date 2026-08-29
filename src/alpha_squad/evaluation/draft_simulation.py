@@ -34,7 +34,7 @@ import duckdb
 from alpha_squad.evaluation.config import EVALUATION_FRAMEWORK_VERSION
 from alpha_squad.league.context import LeagueContext
 from alpha_squad.league.draft import recommend_draft_pick
-from alpha_squad.league.opportunity_cost import best_by_market_rank
+from alpha_squad.league.opportunity_cost import best_by_market_rank, roster_aware_market_pick
 from alpha_squad.league.replacement import compute_league_starters, load_season_projections
 from alpha_squad.league.roster import unfilled_dedicated_slots
 from alpha_squad.market.edge import _preseason_overall_market
@@ -160,14 +160,15 @@ def _market_consensus_roster_aware_pick(
 
     A league with no dedicated slots this format doesn't require (e.g. no `K`) has an empty
     deficit throughout, so this is byte-identical to `_market_consensus_pick` for it -- the
-    correctness test the plan names explicitly."""
-    deficits = unfilled_dedicated_slots(league, roster_positions)
-    total_deficit = sum(deficits.values())
-    if total_deficit > 0 and picks_remaining <= total_deficit:
-        restricted = {p for p in available if positions.get(p) in deficits}
-        if restricted:
-            return best_by_market_rank(restricted, market_rank)
-    return best_by_market_rank(available, market_rank)
+    correctness test the plan names explicitly.
+
+    Delegates to `league/opportunity_cost.py::roster_aware_market_pick`, the single canonical
+    implementation, which D67 also uses to measure how a draft consumes positions. If this
+    opponent and that demand model ever disagreed about a draft's positional allocation, the
+    shipped replacement level would be measured against a draft nobody plays."""
+    return roster_aware_market_pick(
+        available, market_rank, positions, league, roster_positions, picks_remaining
+    )
 
 
 def _generic_prior_year_pick(available: set[str], prior_year_points: dict[str, float]) -> str:

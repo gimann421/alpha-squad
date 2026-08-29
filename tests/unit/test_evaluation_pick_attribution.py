@@ -200,7 +200,12 @@ class TestValueBaseMatchesShippedEngine:
         roster-aware call (roster_player_ids supplied, the fix) recommend different players."""
         self._seed_divergent_pool(con)
         league = _league()
-        available = {"qb_b", "rb_a", "filler3", "filler4"}
+        # The whole remaining board, not a curated subset: since D67 the engine reads
+        # `available` as the players still undrafted and prices replacement at the boundary of
+        # what the league still needs, so omitting qb_c/rb_b/rb_c here would tell it every QB
+        # and RB slot in the league is already filled -- which correctly zeroes both positions'
+        # surplus and leaves nothing for this test to discriminate.
+        available = {"qb_b", "qb_c", "rb_a", "rb_b", "rb_c", "filler3", "filler4"}
 
         roster_blind = recommend_draft_pick(
             con, league, SEASON, ["QB"], available, next_pick_overall=None, top_n=1

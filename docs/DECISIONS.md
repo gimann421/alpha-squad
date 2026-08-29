@@ -3211,3 +3211,207 @@ A short, strictly pre-registered confirmation phase:
 
 Retained, unused by production and covered by tests: the C4/C5 definitions, the sweep factory,
 and the V/VS tiers.
+
+## D67 — Replacement depth has a structural answer: the demand a draft actually consumes. Shipped.
+
+Follow-up to D65/D66, and the **first production change to `league/draft.py` since D63**. D66 left
+`scale ×2.5`/`×3.0` passing every gate but selected post-hoc off a 6-point sweep, and recommended
+pre-registering "≈2.0–2.5" as the structural criterion. That recommendation was wrong, and this
+entry says why before saying what replaced it.
+
+### Phase 1 — what the depth multiplier actually does
+
+Deepening demand is arithmetically identical to **adding a fixed bonus to every player at a
+position**, and the size of that bonus is set by the shape of that position's projection tail —
+not by anything about scarcity. Start-of-draft replacement level and the resulting VORP bonus vs
+production's static level, mean over real 2021–2025 data:
+
+| variant | QB | RB | WR | TE | K | DST |
+|---|---|---|---|---|---|---|
+| static (production) | 273.7 | 146.6 | 154.5 | 132.6 | 132.9 | 97.7 |
+| ×1.5 | 230.6 | 65.8 | 108.2 | 43.5 | 123.8 | 94.2 |
+| ×2.5 | 164.8 | 26.2 | 62.5 | 26.2 | 102.5 | 87.0 |
+| ×3.0 | 122.1 | 12.7 | 47.3 | 14.8 | 75.1 | 80.2 |
+| **VORP bonus at ×2.5** | **+108.9** | **+120.4** | **+92.0** | **+106.4** | **+30.4** | **+10.7** |
+
+Kicker hoarding vanished at ×2.5 (D66: K 1.74 → 0.00 in late rounds) not because kickers were
+priced correctly but because **everyone else received ~100 points and kickers received 30**. The
+asymmetry comes from pool depth alone: ~225 WRs with a long tail, ~45 kickers whose tail collapses
+to a 2.0 floor past rank ~35, and exactly 32 team defenses. A knob whose effect size is governed
+by how many kickers exist in the database is a positional re-weighting in disguise, and **"×2.5"
+was never a structural criterion**.
+
+### Phase 1 — what a draft actually consumes, and why shape beats scale
+
+Ten teams drafting the fair roster-aware consensus, 160 picks, per season 2021–2025:
+
+| | QB | RB | WR | TE | K | DST | Σ |
+|---|---|---|---|---|---|---|---|
+| **consumed, per team** | **2.04** | **4.64** | **5.64** | **1.68** | **1.00** | **1.00** | **16** |
+| `startable_slots` | 1 | 4 | 4 | 3 | 1 | 1 | 14 |
+| `positional_capacity` | 2 | 6 | 6 | 4 | 2 | 2 | 22 |
+| lineup slots | 1 | 2 | 2 | 1 | 1 | 1 | 10 |
+
+`startable_slots` is wrong in **shape**, not merely in scale — it under-counts QB 2× and
+over-counts TE 1.8×. No uniform multiplier can repair a shape error; it can only trade one
+position's exhaustion against another's inflation.
+
+### Phase 1 — where the calculation goes degenerate
+
+Two degeneracies, audited over 800 real pick-states (160 picks × 5 seasons). **Exhaustion**
+(`remaining_demand → 0`, replacement becomes best-available, the position's surplus is identically
+zero) and **clamping** (`remaining_demand ≥ pool`, replacement drawn from players nobody will
+draft). First round of exhaustion, `–` = never:
+
+| target | QB | RB | WR | TE | K | DST |
+|---|---|---|---|---|---|---|
+| ×1.0 `startable` | **8.8** | 12.6 | **9.4** | – | 16.0 | 16.0 |
+| ×1.5 | 11.4 | – | – | – | – | – |
+| ×2.0 | 15.4 | – | – | – | – | – |
+| ×2.5 / ×3.0 | – | – | – | – | – | – |
+| consumption | 15.4 | 14.4 | 15.6 | 14.6 | 16.0 | 16.0 |
+
+**Clamping never occurred at any depth up to ×3.0**, at any position. Exhaustion is the only
+binding constraint — and QB is what forced the uniform scale above 2.5, purely because its
+`startable_slots` base is 1 in a format whose drafts take 2.04 QBs per team.
+
+### Phase 1 — roster legality is not enforced anywhere in the engine
+
+- `recommend_draft_pick` has **no hard constraint**; the only positional stops are soft
+  (`roster_fit_multiplier`'s [0.7, 1.3], `OVER_CAP_VALUE_MULTIPLIER = 0.1`).
+- `compute_league_starters(teams=1)` scores an unfilled slot as empty and worth 0 — no error.
+- Proof it is permitted: **`alpha_bpa` finishes 50/50 drafts with a mean 6.48 unfilled mandatory
+  starting slots**; `generic_prior_year` 5.60 in 50/50.
+- The *fair opponent* has had this rule since D61; the engine never has.
+- `alpha_league_aware`'s current 0.00 unfilled is bought **entirely by the static-replacement
+  defect**, which prices a kicker at +30 to +50 VORP all draft. Today's legality is a side effect
+  of the bug being removed.
+
+**Platform convention: UNKNOWN.** Nothing in the repo establishes whether the modelled platform
+requires every starting slot filled. What is certain is the scoring consequence — an unfilled K
+slot costs ~130 realized points, so it is never rational whatever the platform allows.
+
+### Phase 2 — the structural rule, pre-registered before measurement (commit `30a0683`)
+
+Replacement level is *the best player at a position who will still be undrafted when the draft
+ends* — the classic VBD definition, made literal against the live board:
+
+```
+demand[p]      = players at p a full draft of THIS league consumes, per team
+remaining[p]   = max(0, teams * demand[p] - drafted[p])
+replacement[p] = the remaining[p]-th best AVAILABLE player at p (0-indexed)
+```
+
+`demand[p]` is obtained by running **one mock draft of this league on the preseason consensus
+board alone** (`teams × roster_size` picks, best-available by ECR with the endgame mandatory-slot
+reservation) and counting each position. `Σ demand[p] = roster_size` by construction — the
+structural anchor, and the reason **there is no free parameter to tune**. Flex resolves itself
+(slots go to whoever the board says). It is format-adaptive from config: measured on
+`legacy_2qb_dynasty` it returns QB 3.5/team against the 1-QB league's 1.7. It is leakage-safe —
+`load_market_ranks` is already restricted to the drafted season's Jul/Aug snapshots (D54).
+
+Tiers, and the decision rule, both committed before any 50-draft run:
+
+| tier | definition |
+|---|---|
+| W0 | control — shipped N4, static replacement |
+| W1 | the structural rule alone |
+| W2 | W1 + endgame mandatory-slot reservation (legality as a hard constraint) |
+| W3 | legality **alone**, on static replacement — isolates it from any depth change |
+| W4 | reference — D66's uniform ×2.5, unchanged |
+
+Ship the **lowest-numbered** tier clearing every gate.
+
+### Phase 3 — results (2021–2025 × 10 slots = 50 drafts/tier, fair opponent)
+
+| tier | starter | vs W0 | 95% CI | W/L | seasons worse | infeasible | cap breaches | mean K | mean TE |
+|---|---|---|---|---|---|---|---|---|---|
+| W0 control | 2029.2 | — | — | — | — | 0/50 | 34 | 2.74 | 2.06 |
+| **W1** | **2061.3** | **+32.1** | **[+11.5, +52.7]** | 24/20 | **1** | **0/50** | **1** | 2.02 | 2.16 |
+| W2 | 2061.3 | +32.1 | [+11.5, +52.7] | 24/20 | 1 | 0/50 | 1 | 2.02 | 2.16 |
+| W3 | 2029.2 | +0.0 | — | 0/0 | 0 | 0/50 | 34 | 2.74 | 2.06 |
+| W4 (D66 ×2.5) | 2055.9 | +26.7 | [+7.1, +46.3] | 34/16 | 1 | 0/50 | 0 | 1.00 | 3.90 |
+
+**Two findings worth stating plainly.**
+
+**W3 is byte-identical to W0.** The legality constraint never fires — the static defect already
+overvalues kickers enough to fill every mandatory slot. So legality contributed **exactly 0.0**
+points, and W2 is byte-identical to W1 for the same reason. Legality is insurance, not a gain, and
+it is not what was measured here. Per the pre-registered rule (lowest-numbered clearing every
+gate) and the standing Occam tie-break, **W1 ships and the legality constraint does not.** It
+stays available in the harness.
+
+**W1 beats the D66 reference it was measured against.** +32.1 vs +26.7, on a rule with no
+parameter versus one selected off a sweep. W4 still wins more often (34/16 vs 24/20) and carries
+zero cap breaches to W1's one — W1 wins bigger, less consistently.
+
+Gates, all pre-registered: G1 zero-rate at a mandatory position **0** at every position; G2
+infeasible rosters **0/50**; G3 seasons worse **1** (limit 1); G4 positional timing, largest shift
+0.8 rounds (limit 2.0); G5 cap breaches **34 → 1**, decreased; G6 leave-one-season-out
+**+25.4 / +45.5 / +22.9 / +35.7 / +31.1**, positive on all five.
+
+**G7, out-of-format** — `legacy_2qb_dynasty`, different lineup, roster size 17, different consensus
+board, rule unchanged: W1 **+75.5, 95% CI [+38.6, +112.3], W/L 36/14**, against W4's +65.6. The
+mechanism transfers to a format it was never tuned on — which, for a rule with no parameter, is
+what it should do.
+
+### What shipped
+
+`league/draft.py`'s value base now measures its surplus term against the draft-aware level.
+`vorp` stays **static** and continues to drive the D55 opportunity-cost replay, the reported
+candidate field, and the candidate-universe filter — that term prices near-term availability
+against a season-level scale and was measured that way, so re-basing it would silently change a
+second mechanism. Only the value base moved, which is exactly the tier that was measured.
+
+Three implementations were promoted or unified rather than duplicated:
+`league/replacement.py::market_draft_demand` and `::demand_boundary_replacement` are now
+production, with `evaluation/replacement_diagnostics.py` delegating to them; and
+`league/opportunity_cost.py::roster_aware_market_pick` is the single canonical endgame rule, used
+by the fair benchmark opponent *and* by the demand model. If those two ever disagreed about how a
+draft consumes positions, the shipped replacement level would be measured against a draft nobody
+plays.
+
+Cost: ~11ms per recommendation for the mock draft, so it is computed per call rather than cached —
+a re-ingest can never serve a stale target.
+
+### A real bug this change introduced, found by the existing suite
+
+Making replacement depend on `available_player_ids` gave that argument a second meaning it does
+not always carry. `POST /league/{id}/draft` accepts an arbitrary set, and **a shortlist means
+"the players I am asking about", not "the only players left in the league"**. Read as a board, a
+three-player shortlist says almost everyone is drafted, so every position's remaining demand is 0,
+replacement collapses to the best player in the shortlist, and the whole shortlist prices at zero
+surplus — the engine stops discriminating entirely. Two pre-existing tests caught it
+(`test_over_cap_position_is_heavily_discounted`, `test_the_two_engines_actually_disagree_here`).
+
+Two structural guards, neither a tuned threshold, both verified to leave tier W1 **byte-identical
+on real 2021–2025 data**:
+
+1. **Boundary not on the board** (`demand_boundary_replacement`) — if `remaining_demand` exceeds
+   what is available at the position, the boundary player does not exist to be observed, so the
+   position is omitted and the caller uses the static level. Clamping to the worst available
+   instead would hand every other player there a large spurious surplus. Never fires in a real
+   draft: 0/800 real pick-states, every position, every depth up to ×3.0.
+2. **Pool is not a board** (`league/draft.py`) — a draft removes at most `teams × roster_size`
+   players, so a pool implying more than that cannot be a draft in progress and the whole
+   draft-aware path is skipped. At the benchmark's last pick exactly `teams × roster_size` are
+   gone, so this never fires there either.
+
+One test fixture also had to change rather than the assertion:
+`test_the_two_engines_actually_disagree_here` curated `available` down to four players in a 2-team,
+4-round league, which now correctly reads as "every QB and RB slot in the league is filled" and
+zeroes both positions' surplus. Restoring the omitted depth players to `available` restores the
+discrimination the test exists to document.
+
+### What remains UNKNOWN
+
+- **Whether W1's shape is right or merely better.** W4's crude ~+100-point skill-position bonus may
+  still be capturing something real that a correctly-shaped target does not. W1 beat it on both the
+  primary metric and out-of-format, but W4 won more individual drafts.
+- **Consumption when Alpha deviates.** `demand[p]` is measured from a 10-consensus mock, so it is
+  exogenous by construction; how well it describes a draft where one seat plays differently is not
+  measured.
+- **Whether K/DST replacement means anything at any depth** — D57 measured year-over-year K r=0.41,
+  DST r=0.29.
+- **Platform legality convention**, per Phase 1.
+- **Sample size** — five seasons, 50 drafts per tier.

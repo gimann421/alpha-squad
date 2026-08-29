@@ -29,7 +29,12 @@ draft state. None introduces a tuned constant.
 from __future__ import annotations
 
 from alpha_squad.league.context import LeagueContext
-from alpha_squad.league.replacement import compute_league_starters, replacement_level
+from alpha_squad.league.replacement import (
+    compute_league_starters,
+    demand_boundary_replacement,
+    market_draft_demand,
+    replacement_level,
+)
 from alpha_squad.league.roster import positional_capacity, startable_slots
 
 
@@ -69,40 +74,10 @@ def _remaining_demand_replacement(
     """Shared engine for Candidates B and C: replacement is the projection of the player who
     sits exactly at the boundary of what the league still needs at that position.
 
-        drafted[pos]           = (players at pos in the FULL pool) - (players at pos available)
-        remaining_demand[pos]  = max(0, teams * per_team_target[pos] - drafted[pos])
-        replacement[pos]       = projection of the remaining_demand-th best AVAILABLE player
-                                 (0-indexed), or the worst available if demand exceeds supply,
-                                 or 0.0 if the position is exhausted
-
-    `remaining_demand` counts how many more players at that position the league as a whole still
-    has to absorb before the position stops being contested. When it is 0 -- every team that
-    could use one already has one -- replacement collapses to the best available player, which
-    correctly prices a surplus body at zero surplus.
-    """
-    full_by_pos: dict[str, int] = {}
-    for player_id in projections:
-        pos = positions.get(player_id)
-        if pos is not None:
-            full_by_pos[pos] = full_by_pos.get(pos, 0) + 1
-
-    avail_by_pos: dict[str, list[str]] = {}
-    for player_id in available:
-        pos = positions.get(player_id)
-        if pos is not None and player_id in projections:
-            avail_by_pos.setdefault(pos, []).append(player_id)
-
-    levels: dict[str, float] = {}
-    for pos, target in per_team_target.items():
-        pool = sorted(avail_by_pos.get(pos, []), key=lambda p: -projections[p])
-        if not pool:
-            levels[pos] = 0.0
-            continue
-        drafted = full_by_pos.get(pos, 0) - len(pool)
-        remaining_demand = max(0, round(league.teams * target) - drafted)
-        index = min(remaining_demand, len(pool) - 1)
-        levels[pos] = projections[pool[index]]
-    return levels
+    Promoted to production at D67 as `league/replacement.py::demand_boundary_replacement` --
+    delegated to here rather than duplicated, so the diagnostic tiers and the shipped engine can
+    never disagree about what a demand target means."""
+    return demand_boundary_replacement(league, available, projections, positions, per_team_target)
 
 
 def remaining_demand_replacement(
@@ -264,39 +239,7 @@ def mock_draft_consumption_demand(
     takes gets 0.0 -- which `_remaining_demand_replacement` reads as "uncontested", the correct
     statement for a position this league's market does not draft.
     """
-    from alpha_squad.evaluation.draft_simulation import _market_consensus_roster_aware_pick
-
-    total_rounds = int(league.roster.get("roster_size", 0))
-    if total_rounds <= 0:
-        raise RuntimeError(f"league '{league.league_id}' has no positive roster_size to draft")
-
-    available = set(projections)
-    rosters: dict[int, list[str]] = {slot: [] for slot in range(1, league.teams + 1)}
-    counts: dict[str, int] = {}
-    for round_no in range(1, total_rounds + 1):
-        order = range(1, league.teams + 1) if round_no % 2 == 1 else range(league.teams, 0, -1)
-        picks_remaining = total_rounds - round_no + 1
-        for slot in order:
-            if not available:
-                break
-            pick = _market_consensus_roster_aware_pick(
-                available, market_rank, positions, league, rosters[slot], picks_remaining
-            )
-            pos = positions.get(pick, "UNKNOWN")
-            rosters[slot].append(pos)
-            counts[pos] = counts.get(pos, 0) + 1
-            available.discard(pick)
-
-    teams = league.teams or 1
-    targets = {pos: counts.get(pos, 0) / teams for pos in startable_slots(league)}
-    # A position the board never reaches but the lineup requires still has to be priced against
-    # something real, so it keeps its dedicated requirement as a floor rather than collapsing to
-    # zero demand on pick 1. In the target format the mock draft takes all 10 kickers and all 10
-    # defenses, so this floor is inert there -- it exists for a board that omits a position
-    # entirely (measured: the `ro` board carries 0 kickers in its top 160 in every season).
-    for pos, slots in league.dedicated_slots().items():
-        targets[pos] = max(targets.get(pos, 0.0), float(slots))
-    return targets
+    return market_draft_demand(league, market_rank, projections, positions)
 
 
 def consumption_replacement(per_team_target: dict[str, float]):
