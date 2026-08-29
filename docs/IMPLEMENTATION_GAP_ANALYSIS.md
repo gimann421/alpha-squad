@@ -65,6 +65,17 @@ items with no listed dependency can start immediately.
 > **Still not met:** the margin is negative, the win rate is 25/50, and the interval contains
 > zero. P1-0 stays OPEN. The leading remaining defect is that the new blend over-drafts kickers
 > (the K cap is breached in 32 of 50 drafts) — see D63.
+>
+> **Update (D64):** that kicker regression was investigated and **no change shipped**. Tracing a
+> real hoarding draft showed the cause is a *stale replacement level*, not flex-eligibility:
+> late in a draft MSV is 0 for everyone, so the base collapses to VORP, and VORP's static
+> preseason replacement level makes the stripped skill pools look below-replacement while the
+> untouched kicker pool stays above it. Tightening the over-cap multiplier is provably inert
+> (margin exactly +0.0, 0/0 W/L — the second kicker is taken while *under* the cap). Saturating
+> the VORP surplus fixed roster shape dramatically (cap breaches 34 → 4) but scored only +1.3
+> (CI [−32.0, +34.6]) while losing 27 of 50 drafts, failing two robustness gates. Alpha remains
+> **−5.6** vs fair consensus, 25/50. **P1-0 stays OPEN.** Highest-value next step: draft-aware
+> replacement levels (recompute replacement against the *currently available* pool).
 
 > **The benchmark below is invalid for the current target format and is preserved as-is,
 > labelled, not restated.** Everything through "Acceptance criteria — STILL UNMET" was

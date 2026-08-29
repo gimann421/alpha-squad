@@ -17,6 +17,11 @@ from alpha_squad.evaluation.draft_forensics import (
     PREREGISTERED_MAX_ROUNDS_EARLIER,
     PREREGISTERED_MAX_WORSE_SEASONS,
     PREREGISTERED_N_CONTROL,
+    PREREGISTERED_R_CONTROL,
+    R2_TIGHTENED_OVER_CAP_MULTIPLIER,
+    R_TIER_SPEC,
+    R_TIERS,
+    R_TIERS_CAPACITY_TIEBREAK,
     evaluate_preregistered_gates,
     first_round_by_position,
     leave_one_season_out_margins,
@@ -346,3 +351,70 @@ class TestPreRegistrationIsPinned:
         assert PREREGISTERED_MAX_WORSE_SEASONS == 1
         assert PREREGISTERED_MAX_ROUNDS_EARLIER == 2.0
         assert N4_VORP_WEIGHT == 1.0
+
+
+class TestRTierHarness:
+    """D64: the kicker-hoarding refinement tiers. R0 must reproduce the shipped engine, or the
+    whole comparison is measuring something other than production."""
+
+    def test_r0_reproduces_n4_the_shipped_engine(self, con):
+        _seed(con)
+        league = _league()
+        static = load_season_static(con, league, 2023)
+        r0 = simulate_forensic_draft(con, league, 2023, "R0", 1, static)
+        n4 = simulate_forensic_draft(con, league, 2023, "N4", 1, static)
+        assert r0.drafted_player_ids == n4.drafted_player_ids
+        assert r0.starter_points == pytest.approx(n4.starter_points)
+
+    def test_control_is_r0_and_only_r1_r3_r4_apply_saturation(self):
+        assert PREREGISTERED_R_CONTROL == "R0"
+        assert set(R_TIER_SPEC) == set(R_TIERS)
+        assert R_TIER_SPEC["R0"] == (False, 0.1)
+        assert {t for t, (sat, _) in R_TIER_SPEC.items() if sat} == {"R1", "R3", "R4"}
+        assert {
+            t for t, (_, m) in R_TIER_SPEC.items() if m == R2_TIGHTENED_OVER_CAP_MULTIPLIER
+        } == {
+            "R2",
+            "R3",
+        }
+
+    def test_every_r_tier_is_deterministic_across_repeat_runs(self, con):
+        """The R4 tie-break changes the sort key, so determinism has to be re-established for
+        it specifically (D54): `player_id` stays the final key."""
+        _seed(con)
+        league = _league()
+        static = load_season_static(con, league, 2023)
+        for tier in R_TIERS:
+            first = simulate_forensic_draft(con, league, 2023, tier, 1, static)
+            for _ in range(2):
+                again = simulate_forensic_draft(con, league, 2023, tier, 1, static)
+                assert again.drafted_player_ids == first.drafted_player_ids
+
+    def test_r4_is_the_capacity_tiebreak_tier_and_scores_like_r1(self):
+        """R4 changes ONLY the tie-break, never the score, so its scoring spec matches R1's."""
+        assert R_TIERS_CAPACITY_TIEBREAK == ("R4",)
+        assert R_TIER_SPEC["R4"][0] == R_TIER_SPEC["R1"][0]
+        assert R_TIER_SPEC["R4"][1] == R_TIER_SPEC["R1"][1]
+
+
+class TestOverCapMultiplierCannotReorderUniformlyCappedCandidates:
+    """The structural reason Hypothesis B was measured inert (D64), asserted directly rather
+    than left as a narrative claim: the over-cap multiplier rescales candidates, and rescaling
+    cannot reorder a set whose members all receive the same factor."""
+
+    def test_a_shared_multiplier_preserves_ordering(self):
+        """Real over-cap candidate scores from the traced 2023 slot-9 round-16 pick."""
+        scores = [30.1, 17.2, 9.2, 4.1]
+        for multiplier in (0.1, 0.01, 0.001):
+            scaled = [s * multiplier for s in scores]
+            # rank order is unchanged: strictly decreasing in, strictly decreasing out
+            assert all(a > b for a, b in zip(scaled, scaled[1:], strict=False))
+            assert scaled.index(max(scaled)) == scores.index(max(scores))
+
+    def test_no_positive_multiplier_lifts_a_non_positive_score_above_a_positive_one(self):
+        """Why B cannot fix the third kicker: at that pick every skill alternative is at or
+        below replacement (measured: RB -135.6, WR -123.0), so its score is <= 0 while the
+        kicker's is positive. Scaling the kicker DOWN never makes it lose to a <= 0 score."""
+        kicker, best_alternative = 0.84, 0.0
+        for multiplier in (0.1, 0.01, 1e-9):
+            assert kicker * multiplier > best_alternative

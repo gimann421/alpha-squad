@@ -2822,3 +2822,136 @@ round 10.0 → 9.6, first K 8.5 → 8.0; first RB drifted slightly later, 5.24 �
 The projection model. The forensic work established the player model is not the bottleneck, and
 nothing here contradicts that: every tier used identical projections and the spread between
 best and worst was 200 starter points, produced entirely by the decision layer.
+
+## D64 — N4's kicker hoarding: both hypotheses measured, neither ships; N4 is kept
+
+D63 shipped `msv + VORP` and recorded a known regression: the blend breaches the kicker cap in
+32 of 50 drafts (mean 2.74 K against a cap of 2), which no pre-registered gate checked. This
+entry is the follow-up experiment. **Outcome: no candidate ships. The production value base is
+unchanged.** `league/draft.py` is byte-identical to its D63 state.
+
+### The mechanism, traced rather than assumed
+
+D63 attributed the hoarding to "VORP prices a bench K above replacement with no knowledge that
+the position has no flex eligibility." Replaying a real hoarding draft (2023, slot 9 — kickers
+at rounds 8, 11 and 16) pick-by-pick through the production scoring path shows that is only
+partly right, and the missing part is what defeats one of the two proposed fixes.
+
+At round 11, the pick that actually matters, the top candidates were:
+
+| candidate | MSV | VORP | fit | over-cap | score |
+|---|---|---|---|---|---|
+| **K (taken)** | 0.0 | **+30.1** | 1.00 | **not applied** | **21.04** |
+| DST | 0.0 | +10.2 | 1.00 | not applied | 7.14 |
+| TE | 0.0 | +4.8 | 1.00 | not applied | 4.08 |
+| RB | 0.0 | +2.0 | 1.00 | not applied | 1.12 |
+
+The real chain is:
+
+1. By the late rounds every startable slot is full, so **MSV is 0.0 for every candidate** and
+   the value base collapses to VORP alone.
+2. VORP is measured against a **static, league-wide preseason replacement level**. Ten teams
+   strip the skill pools, so the best available skill player falls far *below* replacement
+   (measured at round 16: RB −135.6, WR −123.0, TE −126.9, QB −273.5). Almost nobody drafts
+   kickers, so the best available K is still far *above* it (+30.1 at round 11, +17.2 at 16).
+3. VORP therefore favours K/DST late. **Flex eligibility is the second-order cause, not the
+   first**: it is why K saturates at one startable slot while RB/WR have four.
+
+Two consequences followed directly, and both were confirmed by measurement:
+
+- **The second kicker is taken while still UNDER the feasibility cap** (1 < 2). At that pick
+  *all* of the top 20 candidates are under-cap, so the over-cap multiplier is not even engaged.
+- At the third kicker every alternative is at or below replacement, so no *positive* multiplier
+  can reorder a positive kicker above a non-positive skill player. The probe reported the
+  multiplier "would need to be < −0.0000 to flip".
+
+**Hypothesis B was therefore predicted inert before it was run.** It was run anyway.
+
+### Variants (control R0 = the shipped D63 engine; R0 reproduces it exactly)
+
+Pre-registered in source before any run: control R0, primary metric mean starter points vs. the
+fair opponent, Gates 1–4 reused verbatim from D63, plus a **new Gate 5** — cap breaches must not
+increase at any position, the gap that let D63's regression through. Explicitly *not* a goal:
+fewer kickers.
+
+| tier | mechanism | starter pts | margin | 95% CI | W/L | QB/RB/WR/TE/K/DST | breaches |
+|---|---|---|---|---|---|---|---|
+| **R0** | shipped `msv + VORP` — control | **2029.2** | — | — | — | 1.60/2.20/5.42/2.06/**2.74**/1.98 | K 32, WR 2 |
+| R2 | Hyp B: over-cap 0.1 → 0.01 | 2029.2 | **+0.0** | [+0.0, +0.0] | 0/0 | 1.60/2.20/5.62/2.06/2.54/1.98 | K 22, WR 2 |
+| R1 | Hyp A: saturate the VORP surplus | 1996.3 | **−32.9** | [−62.2, −3.6] | 18/28 | **2.60**/2.86/5.12/3.16/1.20/1.06 | **QB 14**, WR 1 |
+| R3 | Hyp A + B | 1996.3 | −32.9 | [−62.2, −3.6] | 18/28 | identical to R1 | QB 14, WR 1 |
+| R4 | Hyp A, zero-tie defect repaired | 2030.5 | **+1.3** | [−32.0, +34.6] | 19/27 | 1.62/**4.00**/5.02/3.18/**1.12**/1.06 | QB 4 |
+
+**Hypothesis A** scales a candidate's value *above* replacement by the fraction of his
+position's startable capacity still unfilled (`league/roster.py::startable_saturation` and
+`saturated_surplus`), leaving value *below* replacement untouched — the same `max(0, …)` clamp
+and the same reasoning `positional_opportunity_cost` already documents. Nothing is hardcoded per
+position: K keeps none of its surplus after one kicker because K has **1** startable slot, while
+a third RB keeps a quarter because RB has **4** (2 dedicated + 2 FLEX). The distinction emerges
+from the lineup config, as required.
+
+### Did either hypothesis help?
+
+**Hypothesis B: no — and it cannot.** R2's margin is exactly **+0.0**, with a 0/0 win/loss
+record: not one of the 50 drafts changed its starter points. It *does* change picks (K breaches
+32 → 22, total roster points 2670.4 → 2678.3), but only picks made when the roster is already
+over cap — i.e. bench bodies that can never start. Rescaling a set of candidates that all
+receive the same factor cannot reorder them, which is now asserted by test.
+
+**Hypothesis A: no, as implemented.** R1 loses **32.9** starter points (CI excludes zero,
+losing 28 of 50 drafts). It fixes kickers decisively (2.74 → 1.20) and then **creates a
+quarterback pathology in their place** (QB 1.60 → 2.60, QB cap breached in 14 of 50 drafts
+against the control's 0) — the "shifting the symptom elsewhere" failure the phase was warned
+about. Gate 3 fails (worse in 4 of 5 seasons) and leave-one-season-out fails on all five.
+
+**A diagnosed defect in R1, repaired as R4 (post-hoc, labelled as such).** Zeroing a saturated
+position's surplus collapses many late candidates to a score of *exactly* 0.0, and the generic
+`(-score, player_id)` sort then resolves those ties **alphabetically**. Measured over 144 real
+picks, R1 decides **19% of its picks that way** against R0's 0% — one pick in five effectively
+random. R4 changes only the tie-break, preferring the candidate with the most startable capacity
+remaining (justified because the benchmark scores the best legal lineup from *realized* points,
+so a bench WR who outperforms can still enter the lineup while a third kicker never can).
+
+R4 is the most interesting result and still does not ship. It produces by far the best roster
+structure — total cap breaches **34 → 4**, K 2.74 → 1.12, RB 2.20 → 4.00, TE 2.06 → 3.18 — for a
+starter-point margin of **+1.3, 95% CI [−32.0, +34.6]**. That is noise, and the shape of the
+noise is exactly what the gates exist to catch: R4 **loses 27 of 50 drafts** while its positive
+mean is carried by a handful of large outliers (+227.3, +193.4, +176.6). Per-slot means swing
+from +69.1 (slot 10) to −65.1 (slot 8). Gate 3 fails (worse in 3 of 5 seasons), LOSO fails, and
+Gate 5 fails (QB breaches 4 vs the control's 0).
+
+### Against the actual objective
+
+| candidate | vs fair consensus | 95% CI | win rate |
+|---|---|---|---|
+| R0 (= N4, shipped) | **−5.6** | [−68.4, +57.2] | 25/50 |
+| R2 | −5.6 | [−68.4, +57.2] | 25/50 |
+| R4 | −4.3 | [−67.5, +58.9] | 25/50 |
+| R1 | −38.4 | [−102.6, +25.7] | 21/50 |
+
+**Alpha still does not beat fair consensus under any candidate.** `IMPLEMENTATION_GAP_ANALYSIS.md`
+P1-0 stays **open**.
+
+### Decision
+
+**Keep N4.** Under the decision hierarchy — starter points, then robustness, then win rate, then
+roster feasibility — the only candidate that ties on starter points (R4, +1.3 ns) is decisively
+*worse* on robustness, which outranks the roster-feasibility axis where it excels. Shipping a
+change that loses 27 of 50 drafts and fails two robustness gates, to buy roster shape the
+objective does not reward, would be optimising for rosters that look sensible. The phase's own
+rule forbids exactly that: reducing kicker count was evidence, never the goal.
+
+### What this establishes for the next phase
+
+The kicker hoarding is **not** primarily a flex-eligibility bug, so no amount of
+capacity-shaping on the value base fixes it cheaply. It is a **stale-replacement-level** bug:
+VORP compares against a preseason league-wide pool that no longer resembles the board once ~150
+players are gone. The highest-value next step is therefore a **draft-aware replacement level**
+— recompute each position's replacement against the *currently available* pool rather than the
+preseason one — which would deflate the kicker's phantom surplus and inflate the genuinely
+scarce skill positions *without* touching the value base or its saturation. That is a
+substantive change to `league/replacement.py` and belongs in its own pre-registered phase.
+
+Retained regardless of the outcome: `startable_saturation`/`saturated_surplus` stay in
+`league/roster.py` with tests, unused by production. They are correct, measured, and the natural
+building blocks for the next attempt.

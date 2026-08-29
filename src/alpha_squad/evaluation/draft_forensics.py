@@ -55,9 +55,12 @@ from alpha_squad.league.replacement import (
     replacement_marginal_starter_values,
 )
 from alpha_squad.league.roster import (
+    OVER_CAP_VALUE_MULTIPLIER,
     positional_feasibility_cap,
     roster_fit_multiplier,
     roster_need,
+    saturated_surplus,
+    startable_saturation,
 )
 from alpha_squad.market.edge import _preseason_overall_market
 from alpha_squad.market.series import resolve_market_series
@@ -92,6 +95,11 @@ Tier = Literal[
     "N2x",
     "N3x",
     "N4x",
+    "R0",
+    "R1",
+    "R2",
+    "R3",
+    "R4",
 ]
 ALL_TIERS: tuple[Tier, ...] = ("A", "B", "C", "D", "E", "F", "G", "H")
 
@@ -139,6 +147,11 @@ PREREGISTERED_M_CONTROL: Tier = "M0"
 # full value, 0.0 for one who would not start at all.
 MSV_MULT_FLOOR = 0.7
 MSV_MULT_RANGE = 0.6
+
+# Hypothesis B's tightened over-cap multiplier: one order of magnitude below production's 0.1,
+# pre-registered before any run rather than searched over. A swept value would be tuning
+# against the benchmark, which this phase's rule forbids.
+R2_TIGHTENED_OVER_CAP_MULTIPLIER = 0.01
 
 # --- N-tiers (D63 Stage 3): which VALUE BASE, holding everything else identical -----------
 # D61 established that D60 traded one blind spot for another. VORP encodes league-wide
@@ -207,6 +220,74 @@ N4_VORP_WEIGHT = 1.0
 PREREGISTERED_N_CONTROL: Tier = "N0"
 PREREGISTERED_MAX_WORSE_SEASONS = 1
 PREREGISTERED_MAX_ROUNDS_EARLIER = 2.0
+
+# --- R-tiers (D64): correcting N4's kicker hoarding -----------------------------------------
+# D63 shipped `msv + VORP` and reported a known regression: the blend breaches the kicker cap in
+# 32 of 50 drafts (mean 2.74 K against a cap of 2). Tracing a real hoarding draft (2023, slot 9)
+# pick-by-pick through the production scoring path established the mechanism, and it is NOT
+# quite the one the documentation assumed:
+#
+#   * By the late rounds every startable slot is full, so MSV is 0.0 for EVERY candidate and
+#     the value base collapses to VORP alone.
+#   * VORP is measured against a STATIC, league-wide preseason replacement level. Ten teams
+#     strip the skill-position pools, so by round 11 the best available RB/WR/TE has fallen far
+#     BELOW its replacement level (measured: RB -135.6, WR -123.0, QB -273.5 at round 16).
+#     Almost nobody drafts kickers, so the best available K is still far ABOVE its replacement
+#     level (+30.1 at round 11, +17.2 at round 16).
+#   * So VORP systematically favours K/DST late. Flex-eligibility matters, but as the second-
+#     order cause: K saturates at ONE startable slot while RB/WR have four.
+#
+# Two consequences that shaped these tiers, both measured rather than assumed:
+#   1. The second kicker is taken while the roster is still UNDER the feasibility cap (1 < 2).
+#      At that pick every one of the top 20 candidates is under-cap, so the over-cap multiplier
+#      is not even engaged.
+#   2. At the third kicker every alternative is at or below replacement, so its score is <= 0.
+#      No POSITIVE over-cap multiplier can reorder a positive K above a non-positive skill
+#      player. The probe reported the multiplier would need to be < -0.0000 to flip the pick.
+# Hypothesis B is therefore predicted to be inert. It is still measured, not dismissed.
+R_TIERS: tuple[Tier, ...] = ("R0", "R1", "R2", "R3", "R4")
+
+# R4 is POST-HOC, and is labelled as such rather than presented as pre-registered. It exists
+# because measuring R1 exposed a defect in R1's own implementation, not because R1's number was
+# disliked: zeroing a saturated position's surplus collapses many late candidates to a score of
+# EXACTLY 0.0, and the generic `(-score, player_id)` sort then resolves those ties
+# alphabetically. Measured over 144 real picks, R1 decides **19%** of its picks that way against
+# R0's 0% -- i.e. one pick in five is effectively random. R4 keeps R1's scoring unchanged and
+# replaces only the tie-break, so it must still clear the same pre-registered gates as anything
+# else. Preferring, among exactly-tied candidates, the position with the most STARTABLE capacity
+# left is not a new value model: the benchmark scores the best legal lineup from REALIZED
+# points, so a bench WR who outperforms can still enter the lineup while a third kicker never
+# can -- at equal projected value the flex-eligible player strictly dominates on realized upside.
+R_TIERS_CAPACITY_TIEBREAK: tuple[Tier, ...] = ("R4",)
+
+# {tier: (apply startable-saturation to the VORP surplus, over-cap multiplier)}
+R_TIER_SPEC: dict[Tier, tuple[bool, float]] = {
+    "R0": (False, OVER_CAP_VALUE_MULTIPLIER),  # N4 exactly, as shipped at D63 -- the control
+    "R1": (True, OVER_CAP_VALUE_MULTIPLIER),  # Hypothesis A
+    "R2": (False, R2_TIGHTENED_OVER_CAP_MULTIPLIER),  # Hypothesis B
+    "R3": (True, R2_TIGHTENED_OVER_CAP_MULTIPLIER),  # A + B
+    "R4": (True, OVER_CAP_VALUE_MULTIPLIER),  # A, with R1's zero-tie degeneracy repaired
+}
+
+# PRE-REGISTERED DECISION RULE for the R-tiers -- committed to source BEFORE any R-tier was run
+# against real data, same discipline as the N-tiers above.
+#
+#   Control        : R0 (= the shipped D63 `msv + VORP`), fair opponent, production caps.
+#   Primary metric : mean realized starter points vs. the fair opponent.
+#   Gates 1-4      : unchanged from the N-tier rule (zero-rate, infeasibility, per-season
+#                    consistency, positional timing) -- reused verbatim via
+#                    `evaluate_preregistered_gates`.
+#   Gate 5 (new)   : the candidate must not INCREASE cap breaches at any position relative to
+#                    the control. This phase exists because a shipped tier passed the first
+#                    four gates while carrying a cap-breach regression none of them checked.
+#   Robustness     : leave-one-season-out -- the margin must survive removing any single season.
+#   Ship only if   : strictly beats the control on the primary metric AND all gates pass AND
+#                    the margin survives leave-one-season-out.
+#
+# Explicitly NOT a goal: fewer kickers. A tier that cuts kicker count while losing starter
+# points does NOT ship, and the decision hierarchy is starter points first, roster feasibility
+# fourth. Reducing K count is only evidence that the mechanism works, never the objective.
+PREREGISTERED_R_CONTROL: Tier = "R0"
 
 
 def marginal_starter_multiplier(msv: float, projection: float) -> float:
@@ -282,6 +363,17 @@ TIER_DESCRIPTIONS: dict[Tier, str] = {
     "N2x": "N2 with the opportunity-cost term switched OFF",
     "N3x": "N3 with the opportunity-cost term switched OFF",
     "N4x": "N4 with the opportunity-cost term switched OFF",
+    # R-tiers (D64): correcting N4's kicker hoarding. Control R0 == N4 == the shipped engine.
+    "R0": "the shipped D63 formula, unchanged: (msv + vorp + opp_cost) x fit x risk x survival "
+    "x [0.1 if over cap] -- the control",
+    "R1": "Hypothesis A: the VORP SURPLUS is scaled by the fraction of the position's startable "
+    "capacity still unfilled, so a position that can no longer start anyone contributes no "
+    "surplus. Below-replacement value is left untouched",
+    "R2": "Hypothesis B: R0 with the over-cap multiplier tightened 0.1 -> 0.01",
+    "R3": "Hypothesis A + B combined",
+    "R4": "Hypothesis A with the zero-score tie broken by remaining startable capacity, then "
+    "projection, instead of alphabetically by player_id (post-hoc; repairs a measured defect "
+    "in R1 that made 19% of its picks arbitrary)",
 }
 
 
@@ -407,6 +499,7 @@ class CandidateScore:
     opponent_depletion_multiplier: float | None
     score: float
     marginal_starter_value: float | None = None
+    startable_saturation: float | None = None
     reasons: list[str] = field(default_factory=list)
 
 
@@ -470,6 +563,7 @@ def score_candidate(
     roster_player_ids: list[str] | None = None,
     base_lineup_points: float | None = None,
     replacement_msv: dict[str, float] | None = None,
+    saturation_factors: dict[str, float] | None = None,
 ) -> CandidateScore | None:
     position = static.positions.get(player_id)
     if position is None or player_id not in static.vorp:
@@ -491,6 +585,75 @@ def score_candidate(
     feasibility_mult = None
     opp_cost = None
     opponent_mult = None
+
+    if tier in R_TIERS:
+        # R-tiers share EVERY term with the shipped D63 engine; only the VORP surplus scaling
+        # and the over-cap multiplier vary, so a difference is attributable to those two
+        # mechanisms and nothing else. R0 reproduces the shipped engine exactly.
+        apply_saturation, over_cap_multiplier = R_TIER_SPEC[tier]
+        risk_mult = confidence if confidence is not None else 0.7
+        survival_mult = 1.0 if survival is None else (1.0 + 0.3 * (1.0 - survival))
+        opp_cost = _opportunity_cost_for(
+            static,
+            position,
+            available,
+            current_pick_overall,
+            next_pick_overall,
+            opportunity_costs,
+        )
+        msv = marginal_starter_value(
+            league,
+            roster_player_ids or [],
+            player_id,
+            static.projections,
+            static.positions,
+            base_points=base_lineup_points,
+        )
+
+        if apply_saturation:
+            saturation = (saturation_factors or {}).get(position, 1.0)
+            vorp_term = saturated_surplus(vorp, saturation)
+            reasons.append(
+                f"vorp {vorp:+.1f} x startable-saturation {saturation:.2f} -> {vorp_term:+.1f}"
+            )
+        else:
+            vorp_term = vorp
+
+        score = (msv + N4_VORP_WEIGHT * vorp_term + opp_cost) * fit_mult * risk_mult * survival_mult
+
+        cap = positional_feasibility_cap(league, position)
+        have = sum(1 for p in roster_positions if p == position)
+        if have >= cap:
+            feasibility_mult = over_cap_multiplier
+            score *= feasibility_mult
+            reasons.append(
+                f"over_cap_mult={over_cap_multiplier:g} (have {have} {position}, cap {cap})"
+            )
+
+        reasons.append(f"marginal_starter_value={msv:+.1f} pts")
+        if opp_cost:
+            reasons.append(f"opportunity_cost=+{opp_cost:.1f} pts for {position}")
+        return CandidateScore(
+            player_id=player_id,
+            position=position,
+            projection=projection,
+            vorp=vorp,
+            replacement_level=level,
+            scarcity_raw=scarcity_raw,
+            scarcity_norm=scarcity_norm,
+            roster_need=need_score,
+            fit_multiplier=fit_mult,
+            confidence=confidence,
+            survival_probability=survival,
+            future_scarcity_multiplier=None,
+            feasibility_multiplier=feasibility_mult,
+            opportunity_cost_pts=opp_cost,
+            opponent_depletion_multiplier=None,
+            marginal_starter_value=msv,
+            startable_saturation=(saturation_factors or {}).get(position, 1.0),
+            score=score,
+            reasons=reasons,
+        )
 
     if tier in ALL_N_TIERS:
         # Every N-tier shares production's risk/survival/roster-fit/feasibility terms and the
@@ -863,8 +1026,14 @@ def _pick_by_tier(
     # Marginal starter value compares each candidate against the CURRENT lineup, which does
     # not vary across candidates at one pick -- so it is computed once here rather than once
     # per candidate, the same optimization the opportunity-cost replay already uses below.
+    # Startable saturation depends only on the CURRENT roster, not the candidate, so like the
+    # opportunity-cost replay it is computed once per pick rather than once per candidate.
+    saturation_factors: dict[str, float] | None = None
+    if tier in R_TIERS and R_TIER_SPEC[tier][0]:
+        saturation_factors = startable_saturation(league, roster_positions)
+
     base_lineup_points = None
-    if tier in M_TIERS or tier in ALL_N_TIERS:
+    if tier in M_TIERS or tier in ALL_N_TIERS or tier in R_TIERS:
         base_lineup_points = best_lineup_points(
             league, roster_player_ids or [], static.projections, static.positions
         )
@@ -891,6 +1060,7 @@ def _pick_by_tier(
         "F",
         *M_TIERS,
         *(t for t in ALL_N_TIERS if N_TIER_SPEC[t][1]),
+        *R_TIERS,
     )
     opportunity_costs: dict[str, float] | None = None
     if tier in tiers_using_opportunity_cost:
@@ -921,12 +1091,26 @@ def _pick_by_tier(
             roster_player_ids=roster_player_ids,
             base_lineup_points=base_lineup_points,
             replacement_msv=replacement_msv,
+            saturation_factors=saturation_factors,
         )
         if s is not None:
             scored.append(s)
     if not scored:
         raise RuntimeError(f"no evaluable candidates for tier {tier} at season {season}")
-    scored.sort(key=lambda s: (-s.score, s.player_id))
+    if tier in R_TIERS_CAPACITY_TIEBREAK:
+        # Exact 0.0 ties are genuinely exact here (0.0 * anything is 0.0), so this is a real
+        # ordering rule rather than float-fragile. `player_id` remains the final key, so the
+        # result stays deterministic across processes (D54).
+        scored.sort(
+            key=lambda s: (
+                -s.score,
+                -(s.startable_saturation if s.startable_saturation is not None else 0.0),
+                -s.projection,
+                s.player_id,
+            )
+        )
+    else:
+        scored.sort(key=lambda s: (-s.score, s.player_id))
     return scored[0].player_id, scored
 
 
