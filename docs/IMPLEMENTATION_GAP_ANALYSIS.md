@@ -88,6 +88,20 @@ items with no listed dependency can start immediately.
 > systematic TE-to-capacity loading whose payoff is season-dependent. Production remains N4 at
 > **−5.6**. **P1-0 stays OPEN**, but for the first time there is a concrete, measured path to
 > closing it — see D65's recommended next step.
+>
+> **Update (D66):** the TE-loading blocker is now explained and the governing parameter
+> identified. `startable_slots` counts each FLEX slot once per *eligible* position, so it sums
+> to 14/team against a 10-starter lineup; measured, WR wins all 20 flex slots every season and
+> TE wins none, making TE's true demand 1.00/team against Candidate C's 4. **The obvious repairs
+> failed**: shrinking the demand target to match the lineup scored −37.2 with the worst cap
+> breaches of any variant, because shallow demand *exhausts* (17% of picks) and collapses VORP
+> to zero — the flex over-count was acting as a depth buffer. A sweep on demand depth shows a
+> broad plateau with a structural threshold, and **scales ×2.5 and ×3.0 pass every
+> pre-registered gate** (+26.7/+28.2 over N4, CIs excluding zero, LOSO positive on all five
+> seasons, zero cap breaches, +21.1/+22.6 vs fair consensus). ×2.5 also generalizes to a
+> different league format (+65.6, CI [+31.8, +99.5]). Production remains N4 at **−5.6**;
+> **P1-0 stays OPEN** pending a pre-registered confirmation run, since the passing scale was
+> selected post-hoc from a 6-point sweep.
 
 > **The benchmark below is invalid for the current target format and is preserved as-is,
 > labelled, not restated.** Everything through "Acceptance criteria — STILL UNMET" was

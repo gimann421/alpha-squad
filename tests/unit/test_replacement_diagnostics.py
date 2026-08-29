@@ -12,12 +12,17 @@ import pytest
 
 from alpha_squad.evaluation.replacement_diagnostics import (
     REPLACEMENT_VARIANTS,
+    SWEEP_SCALES,
     available_pool_replacement,
+    dedicated_plus_one_bench_replacement,
+    earned_starter_replacement,
     hybrid_capacity_replacement,
     remaining_demand_replacement,
+    scaled_startable_replacement,
 )
 from alpha_squad.league.context import LeagueContext, load_league_context
-from alpha_squad.league.replacement import replacement_level
+from alpha_squad.league.replacement import compute_league_starters, replacement_level
+from alpha_squad.league.roster import startable_slots
 
 TARGET = "src/alpha_squad/config/league_configs/target_league.yaml"
 
@@ -47,11 +52,15 @@ class TestModuleIsDiagnosticOnly:
         assert "replacement_diagnostics" not in source
 
     def test_every_variant_is_registered(self):
-        assert set(REPLACEMENT_VARIANTS) == {
+        named = {
             "available_pool",
             "remaining_demand",
             "hybrid_capacity",
+            "dedicated_plus_one_bench",
+            "earned_starter",
         }
+        sweep = {f"scale_{sc}" for sc in SWEEP_SCALES}
+        assert set(REPLACEMENT_VARIANTS) == named | sweep
 
 
 class TestCandidateAAvailablePool:
@@ -159,3 +168,140 @@ class TestDeterminism:
             first = fn(league, available, projections, positions)
             for _ in range(3):
                 assert fn(league, set(available), projections, positions) == first
+
+
+class TestFlexOverCountIsTheTELoadingMechanism:
+    """D66: the defect behind D65's Gate 3 failure. `startable_slots` counts every FLEX slot
+    once per ELIGIBLE position, so the demand target it produces cannot match the lineup."""
+
+    def test_startable_slots_sums_to_more_than_the_lineup_actually_starts(self):
+        league = _target()
+        startable = startable_slots(league)
+        lineup_starters = sum(league.dedicated_slots().values()) + sum(league.flex_slots().values())
+        assert lineup_starters == 10
+        # 2 FLEX slots counted once each for RB, WR and TE => +4 over the true lineup
+        assert sum(startable.values()) == 14
+
+    def test_te_startable_assumes_it_wins_both_flex_slots(self):
+        league = _target()
+        assert startable_slots(league)["TE"] == 3  # 1 dedicated + 2 FLEX
+        assert league.dedicated_slots()["TE"] == 1
+
+    def test_earned_starter_target_sums_to_exactly_the_lineup(self):
+        """C5's defining property, and the one C2/C3 violate."""
+        league = _target()
+        projections, positions = _pool()
+        result = compute_league_starters(league, projections, positions)
+        earned = {}
+        for pos in startable_slots(league):
+            n_flex = sum(1 for p in result["flex_starters"] if positions[p] == pos)
+            earned[pos] = len(result["dedicated_starters"].get(pos, [])) + n_flex
+        assert sum(earned.values()) == league.teams * 10
+
+
+class TestCandidateC4DedicatedPlusOneBench:
+    def test_target_is_dedicated_plus_one_uniformly(self):
+        """QB 1+1, RB 2+1, WR 2+1, TE 1+1, K 1+1, DEF 1+1 -- flex ignored entirely."""
+        league = _target()
+        projections, positions = _pool()
+        levels = dedicated_plus_one_bench_replacement(
+            league, set(projections), projections, positions
+        )
+        # TE target 2 -> league demand 20 -> replacement is the 21st best TE (400-20 = 380)
+        assert levels["TE"] == pytest.approx(380.0)
+        # RB target 3 -> demand 30 -> 31st best RB
+        assert levels["RB"] == pytest.approx(370.0)
+
+    def test_it_demands_less_te_than_the_capacity_hybrid(self):
+        league = _target()
+        projections, positions = _pool()
+        c3 = hybrid_capacity_replacement(league, set(projections), projections, positions)
+        c4 = dedicated_plus_one_bench_replacement(league, set(projections), projections, positions)
+        # a HIGHER replacement level means the position is treated as LESS contested
+        assert c4["TE"] > c3["TE"]
+
+
+class TestCandidateC5EarnedStarter:
+    def test_te_demand_collapses_to_its_real_earned_share(self):
+        """With a synthetic board where every position has identical projections, TE wins no
+        flex slots, so its earned demand is exactly its dedicated count."""
+        league = _target()
+        projections, positions = _pool()
+        levels = earned_starter_replacement(league, set(projections), projections, positions)
+        result = compute_league_starters(league, projections, positions)
+        n_flex_te = sum(1 for p in result["flex_starters"] if positions[p] == "TE")
+        earned_te = len(result["dedicated_starters"].get("TE", [])) + n_flex_te
+        pool = sorted(
+            (p for p in projections if positions[p] == "TE"), key=lambda p: -projections[p]
+        )
+        assert levels["TE"] == pytest.approx(projections[pool[earned_te]])
+
+    def test_it_treats_te_as_less_contested_than_every_flex_inheriting_candidate(self):
+        league = _target()
+        projections, positions = _pool()
+        c2 = remaining_demand_replacement(league, set(projections), projections, positions)
+        c3 = hybrid_capacity_replacement(league, set(projections), projections, positions)
+        c5 = earned_starter_replacement(league, set(projections), projections, positions)
+        assert c5["TE"] > c2["TE"]
+        assert c5["TE"] > c3["TE"]
+
+    def test_it_adapts_to_a_format_where_te_would_win_flex(self):
+        """Not a TE rule: in a TE-only-flex league TE's earned demand rises automatically."""
+        te_flex = LeagueContext(
+            league_id="t",
+            format="redraft",
+            teams=10,
+            lineup={"QB": 1, "RB": 2, "WR": 2, "TE": 1, "FLEX": 2, "K": 1, "DEF": 1},
+            roster={"bench": 6, "roster_size": 16},
+        )
+        projections, positions = _pool()
+        # make TE the best flex option outright
+        for pid in list(projections):
+            if positions[pid] == "TE":
+                projections[pid] += 1000.0
+        result = compute_league_starters(te_flex, projections, positions)
+        n_flex_te = sum(1 for p in result["flex_starters"] if positions[p] == "TE")
+        assert n_flex_te > 0
+
+
+class TestDemandDepthSweep:
+    """D66: demand depth is the governing parameter. A target too shallow EXHAUSTS -- remaining
+    demand hits zero, the replacement level becomes the best available player, and that
+    position's surplus is identically zero. That is what sank Candidates C4 and C5."""
+
+    def test_a_shallow_target_exhausts_and_zeroes_the_surplus(self):
+        league = _target()
+        projections, positions = _pool()
+        # 15 kickers gone: a 0.75x target demands only round(10 x 0.75) = 8, long since met
+        available = {p for p in projections if not (p.startswith("K_") and int(p[2:]) < 15)}
+        shallow = scaled_startable_replacement(0.75)(league, available, projections, positions)
+        best_k = max(projections[p] for p in available if positions[p] == "K")
+        assert shallow["K"] == pytest.approx(best_k)  # exhausted -> zero surplus
+
+    def test_a_deep_target_still_discriminates(self):
+        league = _target()
+        projections, positions = _pool()
+        # same 15 gone, but a 2.5x target demands 25, so 10 units of demand remain
+        available = {p for p in projections if not (p.startswith("K_") and int(p[2:]) < 15)}
+        deep = scaled_startable_replacement(2.5)(league, available, projections, positions)
+        best_k = max(projections[p] for p in available if positions[p] == "K")
+        assert deep["K"] < best_k  # still below the best available -> surplus survives
+
+    def test_depth_is_monotone_in_scale(self):
+        league = _target()
+        projections, positions = _pool()
+        levels = [
+            scaled_startable_replacement(sc)(league, set(projections), projections, positions)["WR"]
+            for sc in (1.0, 1.5, 2.0, 2.5)
+        ]
+        assert all(a >= b for a, b in zip(levels, levels[1:], strict=False))
+
+    def test_the_structural_threshold_matches_the_draft_size(self):
+        """The plateau's explanation: league-wide demand must exceed the picks a draft actually
+        consumes, or exhaustion is reachable. 160 picks / 140 at scale 1.0 => scale > 1.14."""
+        league = _target()
+        per_team = sum(startable_slots(league).values())
+        picks = league.teams * int(league.roster["roster_size"])
+        assert picks == 160
+        assert league.teams * per_team == 140
+        assert picks / (league.teams * per_team) == pytest.approx(1.142857, abs=1e-5)

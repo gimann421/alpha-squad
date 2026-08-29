@@ -3093,3 +3093,121 @@ A dedicated pre-registered phase for Candidate C, addressing exactly the Gate 3 
 
 Retained for that work, unused by production and covered by tests:
 `evaluation/replacement_diagnostics.py` and the V-tiers.
+
+## D66 — Candidate C's TE loading explained; demand DEPTH is the real parameter, and a variant passes every gate
+
+Follow-up to D65, **no production change**. `league/draft.py` remains byte-identical to D63.
+D65's C3 was blocked by a Gate 3 failure attributed to systematic TE loading. This entry finds
+the cause, refutes the obvious fix, and identifies the mechanism that actually matters.
+
+### Phase 1 — why C3 loads tight ends
+
+`startable_slots` counts every FLEX slot **once per eligible position**. In the target format
+the 2 FLEX slots are counted three times (RB, WR, TE), so it sums to **14 per team while the
+lineup starts only 10**. The remaining-demand candidates inherit that error:
+
+| target | per team | league-wide demand | real starting slots |
+|---|---|---|---|
+| `startable_slots` (C2) | 14 | 140 | 100 |
+| `positional_capacity` (C3) | 22 | 220 | 100 |
+
+TE absorbs the worst of it. Its startable count of 3 assumes it wins both flex slots — but
+measured across **all five real seasons, WR wins all 20 league-wide flex slots and TE wins
+zero**. True TE starter demand is **1.00 per team**; C3 demands 4. That 3–4× overstatement is
+the loading mechanism.
+
+### Phase 2/3 — the obvious fix is WRONG
+
+Two repairs were pre-registered in git (`84b25ab`) before either ran: C4 `dedicated + 1 bench`
+(14/team) and C5 `earned-starter demand` (read off the flex allocation
+`compute_league_starters` already computes, summing to exactly the lineup size, 10/team).
+
+| candidate | per-team demand | starter | vs N4 | 95% CI | W/L | vs consensus | seasons worse | breaches |
+|---|---|---|---|---|---|---|---|---|
+| C3 capacity | 22 | 2052.4 | +23.2 | [+2.3, +44.1] | 30/20 | +17.6 | 2/5 | 0 |
+| C1 available-pool | — | 2042.6 | +13.4 | [−6.4, +33.2] | 32/18 | +7.8 | 2/5 | 0 |
+| **C0 = N4 (control)** | static | **2029.2** | — | — | — | **−5.6** | — | 34 |
+| C2 startable | 14 | 2017.9 | −11.3 | [−43.3, +20.6] | 21/29 | −16.9 | 3/5 | 47 |
+| **C5 earned** | **10** | **1992.0** | **−37.2** | **[−53.0, −21.4]** | 7/36 | −42.8 | 4/5 | **60** |
+| **C4 ded+1 bench** | **14** | **1976.8** | **−52.4** | **[−86.3, −18.5]** | 15/35 | −58.0 | 4/5 | 22 |
+
+**Both repairs made things significantly worse, and C5 — the one that is arithmetically
+"correct" — was the worst of all**, with the most cap breaches (60) and K back up to 4.32.
+
+**Why.** A lower demand target draws the replacement level from a *shallower* index. Once
+`remaining_demand` reaches 0 the replacement level becomes the *best available* player, so that
+position's surplus is identically zero. Measured over 144 real picks: C5 hits demand exhaustion
+in **17% of picks** and produces exact zero-score ties in 3%; C0 and C3 do so in **0%**. The
+flex "over-count" was not functioning as an error — it was acting as a **depth buffer** that
+keeps VORP discriminating late in the draft. This directly refutes this phase's own Phase 1
+hypothesis, and is recorded as such.
+
+### Phase 4 — demand depth is the real parameter, and the region is broad
+
+Sweeping a uniform multiplier on `startable_slots` (the only thing that varies is *depth*):
+
+| scale | league demand | can exhaust? | starter | vs N4 | 95% CI | seasons worse | breaches | TE | K |
+|---|---|---|---|---|---|---|---|---|---|
+| 0.75 | 106 | **yes** | 2025.8 | −3.4 | ns | 4/5 | 56 | 5.24 | 2.26 |
+| 1.00 | 140 | **yes** | 2017.9 | −11.3 | ns | 3/5 | 47 | 5.36 | 2.00 |
+| 1.50 | 210 | no | 2046.4 | +17.2 | ns | 3/5 | 0 | 4.00 | 1.40 |
+| 2.00 | 280 | no | **2060.7** | **+31.5** | [+10.1, +52.9] | 2/5 | 0 | 3.98 | 1.08 |
+| **2.50** | 350 | no | 2055.9 | **+26.7** | **[+7.1, +46.3]** | **1/5** | **0** | 3.90 | **1.00** |
+| **3.00** | 420 | no | 2057.4 | **+28.2** | **[+6.4, +50.0]** | **1/5** | **0** | 3.50 | 1.28 |
+
+**A broad plateau, not a spike** — every scale ≥ 1.5 beats N4 — and the plateau has a
+*structural* explanation rather than a fitted one: a draft consumes 160 picks, so league-wide
+demand must exceed 160 for exhaustion never to occur, i.e. **scale > 1.14**. The plateau begins
+at exactly the first tested scale above that threshold.
+
+**Two tiers pass every pre-registered gate**, with leave-one-season-out positive on all five:
+
+| tier | margin | g1 | g2 | g3 | g4 | LOSO | **ships** |
+|---|---|---|---|---|---|---|---|
+| scale ×3.0 | +28.2 | ✓ | ✓ | ✓ | ✓ | ✓ (+24.5/+43.8/+23.5/+30.8/+18.1) | **yes** |
+| scale ×2.5 | +26.7 | ✓ | ✓ | ✓ | ✓ | ✓ (+29.0/+38.3/+14.1/+31.7/+20.3) | **yes** |
+| scale ×2.0 | +31.5 | ✓ | ✓ | ✗ | ✓ | ✓ | no |
+| C3 capacity | +23.2 | ✓ | ✓ | ✗ | ✓ | ✓ | no |
+
+### Out-of-format generalization — the strongest evidence here
+
+The scale was chosen on 1-QB data. Re-run unchanged on the **`legacy_2qb_dynasty`** config
+(different lineup, roster size 17, different consensus board), scale ×2.5 gains **+65.6 starter
+points, 95% CI [+31.8, +99.5], W/L 34/16, significant** — while C3 manages only +23.6 (ns).
+The mechanism transfers to a format it was never tuned on, which is genuine out-of-sample
+support rather than a second look at the same five seasons.
+
+### Mechanism
+
+Late rounds (11–16) per draft, N4 → scale ×2.5: K **1.74 → 0.00**, DST 0.98 → 0.62,
+RB 0.22 → 1.28, WR 1.46 → 1.22. Kicker hoarding disappears entirely and skill players stay
+competitive late — without any positional rule. TE settles at 3.90 (cap 4, zero breaches) with
+first-TE round essentially unchanged (5.6 → 5.8), so this is depth, not an earlier reach.
+
+### Classification
+
+| candidate | verdict |
+|---|---|
+| C4 dedicated+1 bench, C5 earned-starter, C2 startable | **Reject** — significantly worse; demand too shallow, exhausts, collapses VORP |
+| C1 available-pool, C3 capacity | **Promising but not robust** — beat N4 but fail Gate 3 |
+| **scale ×2.5 / ×3.0** | **Ready for implementation, with the caveat below** |
+
+**The caveat, stated plainly.** The two passing scales were identified by looking at a 6-point
+sweep, so "passes Gate 3" is a **post-hoc selection**, not a pre-registered win — ×2.0 has the
+larger margin and fails the same gate, and ×2.0 vs ×2.5 is well inside noise. What is *not*
+post-hoc is the mechanism: the plateau is broad, has a structural threshold, and reproduces in a
+second league format. Production remains N4 and nothing is shipped on this evidence alone.
+
+### Recommended next step
+
+A short, strictly pre-registered confirmation phase:
+
+1. **Pre-register the scale on the structural criterion, not the argmax** — the smallest depth
+   that cannot exhaust with margin (league demand ≥ ~2× the 160 picks a draft consumes, i.e.
+   scale 2.0–2.5) — committed to git *before* the confirming run.
+2. Re-run the **official** `alpha-squad evaluate draft-simulation` benchmark end to end with
+   that scale wired into production, plus determinism across two processes.
+3. Ship only on a clean pass of the full gate set on that run.
+
+Retained, unused by production and covered by tests: the C4/C5 definitions, the sweep factory,
+and the V/VS tiers.

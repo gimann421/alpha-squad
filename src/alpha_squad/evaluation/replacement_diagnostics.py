@@ -210,6 +210,34 @@ def earned_starter_replacement(
     return _remaining_demand_replacement(league, available, projections, positions, targets)
 
 
+#: Demand-depth multipliers for the D66 Phase 4 sensitivity sweep. Each scales the
+#: `startable_slots` target uniformly, so the ONLY thing that varies across the sweep is how
+#: deep into each position's pool the replacement level is drawn. Reference points on this
+#: axis: 0.71 sums to the true lineup size (10/team), 1.00 is Candidate C2, and 1.57 is where
+#: Candidate C3's `positional_capacity` target (22/team) sits.
+SWEEP_SCALES = (0.75, 1.0, 1.5, 2.0, 2.5, 3.0)
+
+
+def scaled_startable_replacement(scale: float):
+    """Factory for the sensitivity sweep: `per_team_target[pos] = scale x startable_slots[pos]`.
+
+    Uniform by construction -- it cannot re-shape demand BETWEEN positions, only deepen or
+    shallow it everywhere at once. That is what makes the sweep a clean one-dimensional test of
+    demand depth rather than another candidate definition.
+    """
+
+    def variant(
+        league: LeagueContext,
+        available: set[str],
+        projections: dict[str, float],
+        positions: dict[str, str],
+    ) -> dict[str, float]:
+        targets = {pos: scale * n for pos, n in startable_slots(league).items()}
+        return _remaining_demand_replacement(league, available, projections, positions, targets)
+
+    return variant
+
+
 #: The diagnostic definitions, keyed by the ablation tier that uses each.
 REPLACEMENT_VARIANTS = {
     "available_pool": available_pool_replacement,
@@ -217,4 +245,5 @@ REPLACEMENT_VARIANTS = {
     "hybrid_capacity": hybrid_capacity_replacement,
     "dedicated_plus_one_bench": dedicated_plus_one_bench_replacement,
     "earned_starter": earned_starter_replacement,
+    **{f"scale_{sc}": scaled_startable_replacement(sc) for sc in SWEEP_SCALES},
 }

@@ -38,7 +38,7 @@ from alpha_squad.evaluation.draft_simulation import (
     _next_pick_overall,
     _snake_overall_pick,
 )
-from alpha_squad.evaluation.replacement_diagnostics import REPLACEMENT_VARIANTS
+from alpha_squad.evaluation.replacement_diagnostics import REPLACEMENT_VARIANTS, SWEEP_SCALES
 from alpha_squad.league.context import LeagueContext
 from alpha_squad.league.draft import recommend_draft_pick
 from alpha_squad.league.opportunity_cost import (
@@ -107,6 +107,12 @@ Tier = Literal[
     "VC",
     "VD",
     "VE",
+    "VS1",
+    "VS2",
+    "VS3",
+    "VS4",
+    "VS5",
+    "VS6",
 ]
 ALL_TIERS: tuple[Tier, ...] = ("A", "B", "C", "D", "E", "F", "G", "H")
 
@@ -278,6 +284,17 @@ R_TIERS_CAPACITY_TIEBREAK: tuple[Tier, ...] = ("R4",)
 # Definitions live in `evaluation/replacement_diagnostics.py`, deliberately outside production.
 V_TIERS: tuple[Tier, ...] = ("V0", "VA", "VB", "VC", "VD", "VE")
 
+# D66 Phase 4: one tier per demand-depth multiplier, for the sensitivity sweep. These are a
+# stress test of the winning mechanism, NOT additional candidates -- the question they answer
+# is whether performance sits on a broad stable plateau or a narrow spike (the latter would be
+# evidence of overfitting and grounds for rejection).
+SWEEP_TIERS: tuple[Tier, ...] = ("VS1", "VS2", "VS3", "VS4", "VS5", "VS6")
+
+#: Every tier that uses the draft-aware-replacement scoring path (candidates + sweep).
+ALL_V_TIERS: tuple[Tier, ...] = (*V_TIERS, *SWEEP_TIERS)
+
+SWEEP_TIERS_SCALES = (("VS1", "VS2", "VS3", "VS4", "VS5", "VS6"), SWEEP_SCALES)
+
 #: {tier: key into replacement_diagnostics.REPLACEMENT_VARIANTS, or None for the static control}
 V_TIER_SPEC: dict[Tier, str | None] = {
     "V0": None,  # shipped N4: static, full-season replacement -- the control
@@ -286,6 +303,9 @@ V_TIER_SPEC: dict[Tier, str | None] = {
     "VC": "hybrid_capacity",  # Candidate C
     "VD": "dedicated_plus_one_bench",  # Candidate C4 (D66)
     "VE": "earned_starter",  # Candidate C5 (D66)
+    **{
+        t: f"scale_{sc}" for t, sc in zip(SWEEP_TIERS_SCALES[0], SWEEP_TIERS_SCALES[1], strict=True)
+    },
 }
 
 # --- D66: why C3 loads tight ends, and what the demand target should be ---------------------
@@ -452,6 +472,10 @@ TIER_DESCRIPTIONS: dict[Tier, str] = {
     "VD": "Candidate C4: remaining demand from dedicated slots + one bench slot",
     "VE": "Candidate C5: remaining demand from the EARNED starter allocation (dedicated + flex "
     "slots the position actually wins), which sums to exactly the lineup size",
+    **{
+        t: f"D66 sensitivity sweep: demand = {sc}x startable_slots"
+        for t, sc in zip(SWEEP_TIERS_SCALES[0], SWEEP_TIERS_SCALES[1], strict=True)
+    },
 }
 
 
@@ -665,7 +689,7 @@ def score_candidate(
     opp_cost = None
     opponent_mult = None
 
-    if tier in V_TIERS:
+    if tier in ALL_V_TIERS:
         # N4 exactly, except that `vorp` is recomputed against a draft-aware replacement level.
         # V0 uses production's static level, so it reproduces N4 by construction.
         risk_mult = confidence if confidence is not None else 0.7
@@ -1173,13 +1197,13 @@ def _pick_by_tier(
     # Draft-aware replacement depends only on the AVAILABLE pool, not the candidate, so it is
     # computed once per pick rather than once per candidate (D65).
     dynamic_levels: dict[str, float] | None = None
-    if tier in V_TIERS and V_TIER_SPEC[tier] is not None:
+    if tier in ALL_V_TIERS and V_TIER_SPEC[tier] is not None:
         dynamic_levels = REPLACEMENT_VARIANTS[V_TIER_SPEC[tier]](
             league, available, static.projections, static.positions
         )
 
     base_lineup_points = None
-    if tier in M_TIERS or tier in ALL_N_TIERS or tier in R_TIERS or tier in V_TIERS:
+    if tier in M_TIERS or tier in ALL_N_TIERS or tier in R_TIERS or tier in ALL_V_TIERS:
         base_lineup_points = best_lineup_points(
             league, roster_player_ids or [], static.projections, static.positions
         )
@@ -1207,7 +1231,7 @@ def _pick_by_tier(
         *M_TIERS,
         *(t for t in ALL_N_TIERS if N_TIER_SPEC[t][1]),
         *R_TIERS,
-        *V_TIERS,
+        *ALL_V_TIERS,
     )
     opportunity_costs: dict[str, float] | None = None
     if tier in tiers_using_opportunity_cost:
