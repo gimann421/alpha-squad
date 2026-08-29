@@ -105,6 +105,8 @@ Tier = Literal[
     "VA",
     "VB",
     "VC",
+    "VD",
+    "VE",
 ]
 ALL_TIERS: tuple[Tier, ...] = ("A", "B", "C", "D", "E", "F", "G", "H")
 
@@ -274,7 +276,7 @@ R_TIERS_CAPACITY_TIEBREAK: tuple[Tier, ...] = ("R4",)
 # survival x [cap] -- and change ONLY where the replacement level inside `vorp` comes from, so
 # any difference is attributable to staleness and nothing else. V0 is N4 unchanged.
 # Definitions live in `evaluation/replacement_diagnostics.py`, deliberately outside production.
-V_TIERS: tuple[Tier, ...] = ("V0", "VA", "VB", "VC")
+V_TIERS: tuple[Tier, ...] = ("V0", "VA", "VB", "VC", "VD", "VE")
 
 #: {tier: key into replacement_diagnostics.REPLACEMENT_VARIANTS, or None for the static control}
 V_TIER_SPEC: dict[Tier, str | None] = {
@@ -282,7 +284,36 @@ V_TIER_SPEC: dict[Tier, str | None] = {
     "VA": "available_pool",  # Candidate A
     "VB": "remaining_demand",  # Candidate B
     "VC": "hybrid_capacity",  # Candidate C
+    "VD": "dedicated_plus_one_bench",  # Candidate C4 (D66)
+    "VE": "earned_starter",  # Candidate C5 (D66)
 }
+
+# --- D66: why C3 loads tight ends, and what the demand target should be ---------------------
+# D65 left C3 (`hybrid_capacity`) as the strongest candidate but blocked on a Gate 3 failure
+# traced to systematic TE loading (exactly 4.00 TEs every season). The cause is now measured,
+# and it is an arithmetic defect in the demand target rather than anything about tight ends:
+#
+#   `startable_slots` counts every FLEX slot once per ELIGIBLE position. In the 1-QB target
+#   format that is 2 flex slots counted 3x (RB, WR, TE), so it sums to 14 per team while the
+#   lineup starts only 10. Candidates B and C inherit the error and demand 140 and 220
+#   league-wide players for 100 real starting slots.
+#
+#   TE absorbs the worst of it. Its startable count of 3 assumes it wins both flex slots, but
+#   measured across ALL FIVE real seasons, WR wins all 20 league-wide flex slots and TE wins
+#   NONE. True TE starter demand is 1.00 per team -- C3 demands 4.
+#
+# C4 and C5 are the two pre-registered repairs, committed before either was run:
+#   VD / C4  dedicated + 1 bench    -- the documented D65 proposal; drops flex entirely, then
+#                                      restores one uniform unit of depth. Sums to 14/team.
+#   VE / C5  earned-starter demand  -- per-team target read off the flex allocation
+#                                      `compute_league_starters` ALREADY computes, so it sums
+#                                      to exactly the lineup size (10) by construction and is
+#                                      measured rather than assumed. No new constant.
+#
+# Decision rule is unchanged from D65: control V0 (= shipped N4), primary metric mean realized
+# starter points vs. the fair opponent, Gates 1-4 verbatim, leave-one-season-out robustness.
+# Ship only on a strict primary win with every gate passing. A candidate that merely reduces TE
+# count without improving starter points does NOT qualify -- TE count is evidence, not a goal.
 
 # PRE-REGISTERED DECISION RULE for the V-tiers -- committed before any V-tier ran, same
 # discipline as the N- and R-tiers. Control V0 (= shipped N4), primary metric mean realized
@@ -418,6 +449,9 @@ TIER_DESCRIPTIONS: dict[Tier, str] = {
     "VB": "Candidate B: replacement at the league's REMAINING DEMAND boundary, demand from "
     "startable slots",
     "VC": "Candidate C: as B, with demand from positional_capacity (startable + bench share)",
+    "VD": "Candidate C4: remaining demand from dedicated slots + one bench slot",
+    "VE": "Candidate C5: remaining demand from the EARNED starter allocation (dedicated + flex "
+    "slots the position actually wins), which sums to exactly the lineup size",
 }
 
 

@@ -29,7 +29,7 @@ draft state. None introduces a tuned constant.
 from __future__ import annotations
 
 from alpha_squad.league.context import LeagueContext
-from alpha_squad.league.replacement import replacement_level
+from alpha_squad.league.replacement import compute_league_starters, replacement_level
 from alpha_squad.league.roster import positional_capacity, startable_slots
 
 
@@ -64,7 +64,7 @@ def _remaining_demand_replacement(
     available: set[str],
     projections: dict[str, float],
     positions: dict[str, str],
-    per_team_target: dict[str, int],
+    per_team_target: dict[str, float],
 ) -> dict[str, float]:
     """Shared engine for Candidates B and C: replacement is the projection of the player who
     sits exactly at the boundary of what the league still needs at that position.
@@ -99,7 +99,7 @@ def _remaining_demand_replacement(
             levels[pos] = 0.0
             continue
         drafted = full_by_pos.get(pos, 0) - len(pool)
-        remaining_demand = max(0, league.teams * target - drafted)
+        remaining_demand = max(0, round(league.teams * target) - drafted)
         index = min(remaining_demand, len(pool) - 1)
         levels[pos] = projections[pool[index]]
     return levels
@@ -150,9 +150,71 @@ def hybrid_capacity_replacement(
     return _remaining_demand_replacement(league, available, projections, positions, targets)
 
 
-#: The three diagnostic definitions, keyed by the ablation tier that uses each.
+def dedicated_plus_one_bench_replacement(
+    league: LeagueContext,
+    available: set[str],
+    projections: dict[str, float],
+    positions: dict[str, str],
+) -> dict[str, float]:
+    """**Candidate C4 -- dedicated starters plus one bench slot** (D66).
+
+    `per_team_target[pos] = dedicated_slots[pos] + 1`. In the 1-QB target format: QB 2, RB 3,
+    WR 3, TE 2, K 2, DST 2.
+
+    The documented D65 proposal, kept exactly as proposed. It sidesteps the flex over-count
+    entirely by ignoring flex, then restores a uniform single unit of depth -- "every position
+    can carry one backup", which is the same floor `positional_capacity` already guarantees via
+    its `max(1, ...)`. Its known weakness is the mirror of C3's: by ignoring flex it *under*
+    -counts the positions that genuinely contest the flex slots.
+    """
+    dedicated = league.dedicated_slots()
+    targets = {pos: dedicated.get(pos, 0) + 1 for pos in startable_slots(league)}
+    return _remaining_demand_replacement(league, available, projections, positions, targets)
+
+
+def earned_starter_replacement(
+    league: LeagueContext,
+    available: set[str],
+    projections: dict[str, float],
+    positions: dict[str, str],
+) -> dict[str, float]:
+    """**Candidate C5 -- earned-starter demand** (D66).
+
+    `per_team_target[pos] = (dedicated starters at pos + flex slots pos actually WINS) / teams`,
+    read off `compute_league_starters` over the full season pool -- the same allocation the
+    replacement level itself is built on.
+
+    **Why this is the structurally correct target, and what it fixes.** `startable_slots` counts
+    every flex slot once per *eligible* position, so in this format it sums to 14 per team while
+    the lineup starts only 10 -- the 2 FLEX slots are counted 3x (RB, WR, TE) instead of once.
+    Candidates B and C inherit that error and then demand 140 and 220 league-wide players for
+    100 real starting slots. TE is hit hardest: its startable count of 3 assumes it wins both
+    flex slots, but measured over all five real seasons **WR wins all 20 flex slots and TE wins
+    none**, so TE's true starter demand is 1.00 per team, not 3 or 4. That 3-4x overstatement is
+    the TE-loading mechanism D65 could not explain.
+
+    This target sums to exactly the lineup size by construction, and it is measured from the
+    projections rather than assumed -- no new constant, and it adapts automatically to a format
+    where TE *does* win flex slots.
+    """
+    result = compute_league_starters(league, projections, positions)
+    flex_by_pos: dict[str, int] = {}
+    for player_id in result["flex_starters"]:
+        pos = positions.get(player_id)
+        if pos is not None:
+            flex_by_pos[pos] = flex_by_pos.get(pos, 0) + 1
+    targets: dict[str, float] = {}
+    for pos in startable_slots(league):
+        earned = len(result["dedicated_starters"].get(pos, [])) + flex_by_pos.get(pos, 0)
+        targets[pos] = earned / league.teams if league.teams else 0.0
+    return _remaining_demand_replacement(league, available, projections, positions, targets)
+
+
+#: The diagnostic definitions, keyed by the ablation tier that uses each.
 REPLACEMENT_VARIANTS = {
     "available_pool": available_pool_replacement,
     "remaining_demand": remaining_demand_replacement,
     "hybrid_capacity": hybrid_capacity_replacement,
+    "dedicated_plus_one_bench": dedicated_plus_one_bench_replacement,
+    "earned_starter": earned_starter_replacement,
 }
