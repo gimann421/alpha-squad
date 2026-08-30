@@ -247,7 +247,9 @@ def recommend_draft_pick(
     # benchmark's last pick exactly `teams * roster_size` are gone, so this never fires there.
     market_ranks = load_market_ranks(con, ecr_type, season)
     max_drafted = league.teams * int(league.roster.get("roster_size", 0))
-    pool_is_a_board = max_drafted > 0 and len(projections) - len(available_player_ids) <= max_drafted
+    pool_is_a_board = (
+        max_drafted > 0 and len(projections) - len(available_player_ids) <= max_drafted
+    )
     draft_aware_levels: dict[str, float] = {}
     if pool_is_a_board:
         draft_aware_levels = demand_boundary_replacement(

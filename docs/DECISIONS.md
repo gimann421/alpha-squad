@@ -3415,3 +3415,103 @@ discrimination the test exists to document.
   DST r=0.29.
 - **Platform legality convention**, per Phase 1.
 - **Sample size** — five seasons, 50 drafts per tier.
+
+### Official benchmark — Alpha leads fair consensus for the first time on this format, inside noise
+
+`uv run alpha-squad evaluate draft-simulation`, 2021–2025 × 10 slots, `ro`/`redraft-overall`
+board, headline vs the fair `market_consensus_roster_aware` opponent. Primary metric is the
+established one: **mean realized starter points**.
+
+| | Alpha `alpha_league_aware` | `market_consensus_roster_aware` | delta |
+|---|---|---|---|
+| Mean starter pts | **2061.3** | 2034.8 | **+26.5** |
+| Mean total roster pts | 2720.9 | 2802.6 | −81.7 |
+| Stdev (starter) | **128.2** | 202.7 | — |
+| Unfilled mandatory slots | 0/50 | 0/50 | — |
+
+Against the previous production engine measured in the **same** harness and configuration
+(D63/N4: Alpha 2029.2, consensus 2034.8, −5.6) the swing is **+32.1**, which reproduces the
+forensic tier-W1 margin exactly.
+
+**The lead is not statistically significant.** Paired over the 50 (season, slot) trials:
+mean +26.5, **95% CI [−38.0, +91.0]**, win/loss **28/22**, 5 of 10 draft slots. The W1-vs-N4
+comparison *is* significant (CI [+11.5, +52.7]) because both arms share most of their variance;
+Alpha-vs-consensus does not, and 50 trials cannot resolve a 26-point edge against a 200-point
+spread. **"Alpha beats consensus" is now the point estimate, not an established result.**
+
+| Season | Alpha | Consensus | delta | slots won |
+|---|---|---|---|---|
+| 2021 | 2081.6 | 2046.5 | +35.1 | 5/10 |
+| 2022 | 2162.8 | 2042.4 | +120.4 | 7/10 |
+| 2023 | 2050.7 | 2016.9 | +33.8 | 7/10 |
+| **2024** | **1884.0** | **2028.1** | **−144.1** | 3/10 |
+| 2025 | 2127.4 | 2040.0 | +87.5 | 6/10 |
+
+Alpha wins 4 of 5 seasons. The *gain* is not concentrated in one season, but the margin's
+robustness is thin: leave-one-season-out pooled deltas are +24.4 / **+3.1** / +24.7 / +69.2 /
++11.3 — **removing 2022 leaves +3.1, an effective tie.**
+
+**Roster construction is sound and the target format is confirmed.** Lineup
+`QB1/RB2/WR2/TE1/FLEX2/K1/DEF1`, `DEF`→`DST`, every roster exactly 16 players.
+
+| | QB | RB | WR | TE | K | DST | zero at a mandatory pos | cap breaches |
+|---|---|---|---|---|---|---|---|---|
+| Alpha | 1.82 | 3.26 | 5.50 | 2.16 | 2.02 | 1.24 | **0/50 at every position** | 1 (one 3-K draft) |
+| Consensus | 2.04 | 4.64 | 5.64 | 1.68 | 1.00 | 1.00 | 0/50 | **38** (QB 14, WR 15, RB 8, TE 1) |
+
+No zero-K, zero-DEF, or otherwise structurally invalid roster on either side. Alpha's roster
+construction is markedly tighter than the opponent's, which still reaches 6 QBs and 10 WRs.
+
+**Determinism**: two full runs in separate processes with `PYTHONHASHSEED` unset produced
+byte-identical reports (`md5 d4a1250c064a687a766dc87cbd231037` for both
+`reports/draft_simulation.md` and `reports/dsim_run2.md`).
+
+### Mechanism of the residual gap: RB, and it is a projection problem, not a draft-rule problem
+
+Scoring each realized starting lineup slot by slot, Alpha vs consensus, mean over 10 slots:
+
+| season | QB | RB | WR | TE | K | DST | total |
+|---|---|---|---|---|---|---|---|
+| 2021 | +40.1 | −179.0 | +31.9 | +80.7 | +49.0 | +12.4 | +35.1 |
+| 2022 | −16.4 | −98.5 | +234.4 | −66.5 | +42.7 | +24.7 | +120.4 |
+| 2023 | +37.4 | −157.2 | +217.1 | −45.9 | +6.8 | −24.3 | +33.8 |
+| 2024 | +102.7 | **−498.4** | +174.3 | +15.1 | +55.5 | +6.6 | −144.1 |
+| 2025 | +71.8 | −305.2 | +258.3 | −12.5 | +41.5 | +33.5 | +87.5 |
+| **mean** | **+47.1** | **−247.7** | **+183.2** | **−5.8** | **+39.1** | **+10.6** | **+26.5** |
+
+**Alpha loses RB in all five seasons and wins WR in all five.** It is +183 at WR while drafting
+*fewer* WRs than consensus (5.50 vs 5.64) — its WR selection is genuinely better — and −248 at RB
+while drafting 1.4 fewer RBs (3.26 vs 4.64). 2024 is the same failure, four times larger.
+
+The cause is measurable and sits upstream of the draft engine. Projection bias (mean realized −
+mean projected) over each position's top-N, where N is the league-wide demand the engine uses:
+
+| season | QB | RB | WR | TE |
+|---|---|---|---|---|
+| 2021 | +2.6 | +7.1 | −9.6 | +23.5 |
+| 2022 | −36.2 | −4.9 | −3.0 | −4.6 |
+| 2023 | −64.4 | +14.6 | +2.8 | −2.7 |
+| **2024** | −30.3 | **+38.0** | −11.6 | +7.9 |
+| 2025 | −30.3 | **+27.1** | −21.6 | +3.9 |
+
+**M6 under-projects RBs (positive bias in 4 of 5 seasons) and over-projects WRs and QBs
+(negative in 4 of 5).** RB's under-projection is largest in exactly 2024 (+38.0), the season
+Alpha loses. The draft engine is faithfully maximizing expected starter points against inputs
+that are positionally miscalibrated, so it drafts accordingly: first RB at round **4.7** vs
+consensus's **2.7**, RB3 at 13.7 vs 7.6, and a 4th RB in only 18 of 50 drafts vs 37.
+
+This is the first evidence in this project that specifically implicates the projection layer
+rather than the draft decision layer, and it is why no further draft-rule change is proposed
+here. The next experiment is a **walk-forward positional calibration**: estimate each position's
+bias from seasons strictly earlier than the target season, apply it, re-run this benchmark
+unchanged. Stated honestly, the bias magnitudes are not fully predictable that way (a
+2021–2023-only estimate gives RB +5.6 against 2024's actual +38.0), but the *sign* is stable for
+RB, WR and QB, so a leakage-safe correction has real signal to work with. Correcting by the
+in-sample bias would be hindsight and is not the experiment.
+
+### P1-0 status
+
+**Not closed.** Alpha leads on the point estimate for the first time on this format, roster
+construction is sound and the run is deterministic — but the interval contains zero, the margin
+collapses to +3.1 without 2022, and 2024 remains a 144-point loss with a diagnosed upstream
+cause. P1-0 stays **OPEN** pending the positional-calibration experiment above.

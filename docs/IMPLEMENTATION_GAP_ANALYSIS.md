@@ -103,6 +103,24 @@ items with no listed dependency can start immediately.
 > **P1-0 stays OPEN** pending a pre-registered confirmation run, since the passing scale was
 > selected post-hoc from a 6-point sweep.
 
+> **D67 update — Alpha leads consensus for the first time, but the result is not significant, and
+> P1-0 stays OPEN.** D66's own recommendation (pre-register a ~2.0-2.5 depth multiplier) was
+> refuted by its own diagnostics: deepening demand is arithmetically identical to a fixed
+> per-position bonus whose size is set by projection-tail shape, so a "uniform" multiplier is a
+> positional re-weighting in disguise (at x2.5: RB +120.4, QB +108.9, TE +106.4, WR +92.0, but
+> K +30.4 and DST +10.7). It was replaced by a target with **no free parameter** — the demand a
+> full mock draft of this league on the preseason consensus board actually consumes, which sums
+> to `roster_size` by construction. Shipped after clearing every pre-registered gate.
+> **Official benchmark: Alpha 2061.3 vs fair consensus 2034.8, +26.5** (previous production
+> −5.6, so a +32.1 swing), 4 of 5 seasons won, deterministic across two processes, 0/50 unfilled
+> mandatory slots and no structurally invalid roster. **Why it is not closed:** the paired 95% CI
+> is **[−38.0, +91.0]**, win/loss is 28/22 and 5/10 slots, and removing 2022 leaves +3.1. The
+> residual gap is diagnosed and lies **upstream of the draft engine** — Alpha loses RB starter
+> points in all five seasons (mean −247.7) while winning WR in all five (+183.2), because M6
+> under-projects RB in 4 of 5 seasons (+38.0 in 2024, the only season Alpha loses) and
+> over-projects WR/QB. The next experiment is a walk-forward positional calibration of the
+> projection layer, not another draft-rule change.
+
 > **The benchmark below is invalid for the current target format and is preserved as-is,
 > labelled, not restated.** Everything through "Acceptance criteria — STILL UNMET" was
 > measured against `ecr_type='rsf'` — FantasyPros' *superflex* board — because the target
