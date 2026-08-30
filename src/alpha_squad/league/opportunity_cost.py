@@ -44,6 +44,8 @@ from collections.abc import Iterable
 
 import duckdb
 
+from alpha_squad.league.context import LeagueContext
+from alpha_squad.league.roster import unfilled_dedicated_slots
 from alpha_squad.market.edge import _preseason_overall_market
 
 
@@ -65,6 +67,41 @@ def best_by_market_rank(available: set[str], market_rank: dict[str, tuple[str, f
         available,
         key=lambda p: (market_rank[p][1] if p in market_rank else float("inf"), p),
     )
+
+
+def roster_aware_market_pick(
+    available: set[str],
+    market_rank: dict[str, tuple[str, float]],
+    positions: dict[str, str],
+    league: LeagueContext,
+    roster_positions: list[str],
+    picks_remaining: int,
+) -> str:
+    """`best_by_market_rank`, except once this drafter has exactly as many picks left
+    (`picks_remaining`, counting this one) as it has still-unfilled *mandatory* dedicated
+    starting slots, the pick is restricted to filling one of them -- a real drafter does not let
+    its final picks pass without being able to field a legal lineup. Still best-available by ECR
+    *within* that restricted pool: no hindsight, no projection access, nothing else changes.
+
+    The restriction, once triggered, stays triggered for every remaining pick: filling one slot
+    reduces both `picks_remaining` and the deficit by exactly 1, so the equality that triggered
+    it holds again next turn -- which is what guarantees every mandatory slot is filled by the
+    last pick, not just the first one after the trigger. A league with no dedicated slot this
+    format doesn't require has an empty deficit throughout, so it is byte-identical to
+    `best_by_market_rank` there.
+
+    The single canonical implementation of the rule, like `best_by_market_rank` above: it is the
+    fair benchmark opponent (`evaluation/draft_simulation.py`, D61 Stage 1.1) *and* the drafter
+    whose positional allocation defines `replacement.py::market_draft_demand` (D67). Those two
+    must not drift apart -- if the opponent and the demand model disagree about how a draft
+    consumes positions, the replacement level is measured against a draft nobody plays."""
+    deficits = unfilled_dedicated_slots(league, roster_positions)
+    total_deficit = sum(deficits.values())
+    if total_deficit > 0 and picks_remaining <= total_deficit:
+        restricted = {p for p in available if positions.get(p) in deficits}
+        if restricted:
+            return best_by_market_rank(restricted, market_rank)
+    return best_by_market_rank(available, market_rank)
 
 
 def replay_opponent_picks(

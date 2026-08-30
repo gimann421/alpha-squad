@@ -13,6 +13,7 @@ from alpha_squad.evaluation.pick_attribution import (
     write_pick_attribution_artifacts,
 )
 from alpha_squad.league.context import LeagueContext
+from alpha_squad.league.draft import recommend_draft_pick
 from alpha_squad.models.uncertainty.run import MODEL_VERSION as UNCERTAINTY_MODEL_VERSION
 from alpha_squad.storage.db import init_db
 
@@ -144,6 +145,83 @@ class TestAttributeDraftPicks:
         _seed_pool(con)
         with pytest.raises(RuntimeError, match="roster_size"):
             attribute_draft_picks(con, _league(roster={"bench": 1}), SEASON, draft_slot=1)
+
+
+class TestValueBaseMatchesShippedEngine:
+    """D61 Stage 1.3 regression: `attribute_draft_picks` must measure the SHIPPED engine, not
+    silently fall back to the roster-blind VORP-only path by omitting `roster_player_ids`.
+
+    The roster-aware and roster-blind paths disagree in a specific, constructible situation --
+    a second QB when the roster already holds one and the lineup has no QB-flex -- and that
+    disagreement is the regression signal. Retuned at D63, when the shipped value base became
+    `msv + w*VORP` rather than `msv` alone: a fixture whose only discriminator is a large VORP
+    gap no longer separates the paths, because the shipped base now contains VORP too. The
+    numbers below make marginal starter value, not VORP, the deciding term.
+
+    `qb_a` (proj 1000) is Alpha's obvious first pick under either path. By Alpha's second turn
+    the roster is `[qb_a]`:
+      * `qb_b`  proj 400, QB replacement 200 -> VORP +200, but marginal starter value 0
+                (the one QB slot is filled and this lineup has no QB-flex).
+      * `rb_a`  proj 250, RB replacement 235 -> VORP only +15, but marginal starter value
+                +250 (the RB slot is still empty).
+    Roster-blind sees 200 vs 15 and takes `qb_b`. The shipped roster-aware base sees
+    0 + 200 = 200 against 250 + 15 = 265 and takes `rb_a`."""
+
+    def _seed_divergent_pool(self, con):
+        _seed(con, "qb_a", "QB", projected=1000.0, realized=900.0, ecr_rank=10.0)
+        _seed(con, "qb_b", "QB", projected=400.0, realized=350.0, ecr_rank=60.0)
+        _seed(con, "rb_a", "RB", projected=250.0, realized=240.0, ecr_rank=61.0)
+        # Depth that sets each position's replacement level, and so its VORP. Deliberately
+        # placed to give QB a LOW replacement (big VORP gap) and RB a HIGH one (small gap),
+        # which is what makes the roster-blind path prefer the useless second QB.
+        _seed(con, "qb_c", "QB", projected=200.0, realized=190.0, ecr_rank=70.0)
+        _seed(con, "rb_b", "RB", projected=240.0, realized=230.0, ecr_rank=71.0)
+        _seed(con, "rb_c", "RB", projected=235.0, realized=225.0, ecr_rank=72.0)
+        # Attractive-by-ECR fillers so the market-consensus opponent (the other of the 2
+        # teams) picks these at its two intervening turns instead of qb_b/rb_a.
+        _seed(con, "filler1", "WR", projected=10.0, realized=10.0, ecr_rank=1.0)
+        _seed(con, "filler2", "WR", projected=10.0, realized=10.0, ecr_rank=2.0)
+        # Low-value fillers left in the pool at Alpha's second turn, so they can't confound
+        # the qb_b-vs-rb_a comparison.
+        _seed(con, "filler3", "WR", projected=5.0, realized=5.0, ecr_rank=3.0)
+        _seed(con, "filler4", "WR", projected=5.0, realized=5.0, ecr_rank=4.0)
+
+    def test_second_pick_uses_marginal_starter_value_not_vorp_fallback(self, con):
+        self._seed_divergent_pool(con)
+        league = _league()
+        rows = attribute_draft_picks(con, league, SEASON, draft_slot=1)
+        assert rows[0].alpha_player_id == "qb_a"
+        # The regression: pre-fix (roster_player_ids never passed), this pick was "qb_b".
+        assert rows[1].alpha_player_id == "rb_a"
+
+    def test_the_two_engines_actually_disagree_here(self, con):
+        """Documents *why* the fix matters: with the identical roster and pool, the
+        roster-blind call (roster_player_ids omitted, the pre-fix behavior) and the
+        roster-aware call (roster_player_ids supplied, the fix) recommend different players."""
+        self._seed_divergent_pool(con)
+        league = _league()
+        # The whole remaining board, not a curated subset: since D67 the engine reads
+        # `available` as the players still undrafted and prices replacement at the boundary of
+        # what the league still needs, so omitting qb_c/rb_b/rb_c here would tell it every QB
+        # and RB slot in the league is already filled -- which correctly zeroes both positions'
+        # surplus and leaves nothing for this test to discriminate.
+        available = {"qb_b", "qb_c", "rb_a", "rb_b", "rb_c", "filler3", "filler4"}
+
+        roster_blind = recommend_draft_pick(
+            con, league, SEASON, ["QB"], available, next_pick_overall=None, top_n=1
+        )
+        roster_aware = recommend_draft_pick(
+            con,
+            league,
+            SEASON,
+            ["QB"],
+            available,
+            next_pick_overall=None,
+            top_n=1,
+            roster_player_ids=["qb_a"],
+        )
+        assert roster_blind.recommendation == "qb_b"
+        assert roster_aware.recommendation == "rb_a"
 
 
 class TestRunAndArtifacts:

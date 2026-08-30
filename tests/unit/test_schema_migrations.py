@@ -184,3 +184,81 @@ def test_migrated_market_snapshot_keeps_both_pages_of_one_ecr_type(pre_d56_con):
         )
     rows = dict(pre_d56_con.execute("SELECT page_type, ecr_rank FROM market_snapshot").fetchall())
     assert rows == {"redraft-overall": 12.0, "redraft-idp": 3.0}
+
+
+PRE_D61_DRAFT_SIMULATION_RESULTS = """
+CREATE TABLE draft_simulation_results (
+    season INTEGER NOT NULL,
+    strategy VARCHAR NOT NULL,
+    draft_slot INTEGER NOT NULL,
+    drafted_player_ids_json VARCHAR NOT NULL,
+    total_roster_points DOUBLE NOT NULL,
+    starter_points DOUBLE NOT NULL,
+    framework_version VARCHAR NOT NULL,
+    evaluated_at TIMESTAMP NOT NULL,
+    PRIMARY KEY (season, strategy, draft_slot, framework_version)
+)
+"""
+
+
+@pytest.fixture
+def pre_d61_con():
+    """A database at the D60 schema: `draft_simulation_results` has no `opponent_strategy` or
+    `n_unfilled_mandatory_slots` column, and its primary key has no room for opponent_strategy."""
+    con = duckdb.connect(":memory:")
+    con.execute(PRE_D61_DRAFT_SIMULATION_RESULTS)
+    yield con
+    con.close()
+
+
+def test_init_db_adds_opponent_strategy_to_a_d60_era_draft_simulation_results(pre_d61_con):
+    init_db(pre_d61_con)
+    cols = {r[0] for r in pre_d61_con.execute("DESCRIBE draft_simulation_results").fetchall()}
+    assert "opponent_strategy" in cols
+    assert "n_unfilled_mandatory_slots" in cols
+
+
+def test_draft_simulation_results_rebuild_drops_pre_d61_rows_without_inventing_data(pre_d61_con):
+    """Unlike market_snapshot, this table is a pure evaluation-result cache the CLI fully
+    repopulates on every `alpha-squad evaluate draft-simulation` run. A pre-D61 row has no
+    real `opponent_strategy` distinct from 'market_consensus' (that was the only opponent
+    field that ever existed) but genuinely has no measured `n_unfilled_mandatory_slots` --
+    carrying it forward with an invented 0 would fabricate data no version of the code ever
+    computed, so the migration drops the table outright rather than rebuild-and-carry."""
+    pre_d61_con.execute(
+        "INSERT INTO draft_simulation_results "
+        "(season, strategy, draft_slot, drafted_player_ids_json, total_roster_points, "
+        "starter_points, framework_version, evaluated_at) "
+        "VALUES (2023, 'market_consensus', 1, '[]', 100.0, 90.0, 'v1', current_timestamp)"
+    )
+    init_db(pre_d61_con)
+    n = pre_d61_con.execute("SELECT count(*) FROM draft_simulation_results").fetchone()[0]
+    assert n == 0
+
+
+def test_migrated_draft_simulation_results_accepts_both_opponent_strategies_for_one_trial(
+    pre_d61_con,
+):
+    """The regression D61 Stage 1.1 needs: the same (season, strategy, draft_slot) measured
+    against both opponent fields must coexist, not collide under the old primary key."""
+    init_db(pre_d61_con)
+    for opponent_strategy in ("market_consensus", "market_consensus_roster_aware"):
+        pre_d61_con.execute(
+            "INSERT INTO draft_simulation_results "
+            "(season, strategy, draft_slot, drafted_player_ids_json, total_roster_points, "
+            "starter_points, framework_version, evaluated_at, opponent_strategy, "
+            "n_unfilled_mandatory_slots) "
+            "VALUES (2023, 'alpha_bpa', 1, '[]', 100.0, 90.0, 'v1', current_timestamp, ?, 0)",
+            [opponent_strategy],
+        )
+    rows = pre_d61_con.execute(
+        "SELECT opponent_strategy FROM draft_simulation_results ORDER BY opponent_strategy"
+    ).fetchall()
+    assert [r[0] for r in rows] == ["market_consensus", "market_consensus_roster_aware"]
+
+
+def test_init_db_is_idempotent_on_an_already_migrated_draft_simulation_results(pre_d61_con):
+    init_db(pre_d61_con)
+    init_db(pre_d61_con)  # must not raise on the second pass
+    cols = {r[0] for r in pre_d61_con.execute("DESCRIBE draft_simulation_results").fetchall()}
+    assert "opponent_strategy" in cols

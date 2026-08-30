@@ -772,7 +772,17 @@ M16_EVALUATION_DDL = [
         starter_points DOUBLE NOT NULL,
         framework_version VARCHAR NOT NULL,
         evaluated_at TIMESTAMP NOT NULL,
-        PRIMARY KEY (season, strategy, draft_slot, framework_version)
+        -- D61 Stage 1.1/1.4: which opponent field this trial was measured against (the
+        -- original 'market_consensus', which forfeits mandatory dedicated slots it hasn't
+        -- reached in ECR order, or the fair 'market_consensus_roster_aware'), and how many
+        -- of the team-in-question's OWN mandatory slots were unfilled at the end of the
+        -- draft -- so a forfeited slot is a visible reported number, never a silent zero.
+        -- Part of the primary key (not just a label column) because the same
+        -- (season, strategy, draft_slot) is now measured against two different opponent
+        -- fields and both results must coexist.
+        opponent_strategy VARCHAR NOT NULL DEFAULT 'market_consensus',
+        n_unfilled_mandatory_slots INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (season, strategy, opponent_strategy, draft_slot, framework_version)
     )
     """,
 ]

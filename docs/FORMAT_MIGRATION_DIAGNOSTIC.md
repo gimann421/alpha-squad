@@ -1,5 +1,21 @@
 # Format migration diagnostic: 2QB dynasty → 1-QB redraft
 
+> **SUPERSEDED IN PART — read `docs/DRAFT_STRATEGY_FORENSIC_ANALYSIS.md` first.**
+>
+> §1–§5 (market series, K/DST data, format retarget, flex-aware capacity, the lineup-blindness
+> finding) were re-verified in the post-D60 forensic phase and **stand unchanged**.
+>
+> §6–§9 rest on a benchmark whose `market_consensus` opponent drafts **0.00 kickers and 0.30
+> defenses per draft**, leaving two of its ten starting slots empty. That artifact is worth
+> **+245.3 starter points** — more than the entire +165.7 margin reported below. Against an
+> opponent that merely fills those slots, Alpha scores **−48.3 with a 25/50 win rate**.
+> §7's pick attribution additionally measured the D55 VORP engine, not the shipped D60 engine
+> (`evaluation/pick_attribution.py` never passed `roster_player_ids`), and §8's M-tier ablation
+> used a feasibility cap that differs from production's for RB/WR/TE.
+>
+> Those sections are preserved as the record of what was measured and believed at D59/D60.
+> Do not cite their conclusions as current. See D61.
+
 What the audit of the format change found, what the re-baselined benchmark measures, and what
 is actually costing Alpha starter points against consensus in the new format.
 
@@ -329,7 +345,7 @@ through the *official* benchmark (not the fast forensic harness) after shipping:
 
 | Strategy | Mean starter pts | Mean total roster pts |
 |---|---|---|
-| **alpha_league_aware (M3/D60)** | **1990.9** | 2775.9 |
+| **alpha_league_aware (M3/D60)** | **1990.9** | 2455.0 |
 | market_consensus | 1825.2 | 2806.7 |
 
 **+165.7 mean starter points (+9.1%) over consensus, 37/50 (74%) win rate at the (season, slot)

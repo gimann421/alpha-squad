@@ -6,6 +6,17 @@ Companion to `docs/EVALUATION_PLAN.md` (methodology) and `docs/EVALUATION_LIMITA
 are in `docs/EVALUATION_PLAN.md`. Full source reports are under `reports/*.md`. See
 `docs/DECISIONS.md` D54 for the methodology commitments made before any of these numbers existed.
 
+> **Every draft-simulation number in this document was measured against a SUPERFLEX benchmark and
+> does not describe the current product.** Sections 3-4 and the D55 update below ran on
+> `ecr_type='rsf'` (FantasyPros' superflex board) against a 2QB lineup and the pre-D61 opponent
+> field that could forfeit mandatory K/DEF slots. The target format is now a 10-team 1-QB redraft
+> league on the `ro` board (`docs/TARGET_FORMAT_1QB.md`, D56/D58) with a roster-aware opponent
+> (D61). Figures such as "consensus 2020.7 vs alpha_league_aware 1801.1" and "Alpha never wins a
+> season" describe a different game and **must not be compared against current numbers**. The
+> current official result is in `docs/DECISIONS.md` D67: Alpha 2061.3 vs fair consensus 2034.8.
+> Preserved unchanged rather than restated, per D56's label-and-supersede rule. The non-draft
+> sections (projection accuracy, EDGE, rookie, uncertainty) are unaffected.
+
 **This document reports results as found, favorable or not.** Two of the headline findings
 below are unfavorable to Alpha's current implementation. They are reported in full, per the
 phase's explicit instruction not to design the evaluation to make Alpha look good.

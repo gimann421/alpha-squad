@@ -6,22 +6,27 @@ import duckdb
 import pytest
 
 from alpha_squad.evaluation.draft_simulation import (
+    ALL_OPPONENT_STRATEGIES,
     ALL_STRATEGIES,
     ALPHA_BPA,
     ALPHA_LEAGUE_AWARE,
     GENERIC_PRIOR_YEAR,
     MARKET_CONSENSUS,
+    MARKET_CONSENSUS_ROSTER_AWARE,
     _alpha_bpa_pick,
     _generic_prior_year_pick,
     _market_consensus_pick,
+    _market_consensus_roster_aware_pick,
     _next_pick_overall,
     _snake_overall_pick,
     persist_draft_sim_results,
     run_draft_simulation,
     simulate_draft,
     summarize_draft_sim,
+    write_draft_simulation_report,
 )
 from alpha_squad.league.context import LeagueContext
+from alpha_squad.models.baselines.kicking_defense import MODEL_NAME as KDST_MODEL_NAME
 from alpha_squad.models.uncertainty.run import MODEL_VERSION as UNCERTAINTY_MODEL_VERSION
 from alpha_squad.storage.db import init_db
 
@@ -83,6 +88,96 @@ class TestPureStrategyPicks:
             assert _alpha_bpa_pick(set(proj), proj) == "zeta"
 
 
+class TestMarketConsensusRosterAwarePick:
+    """D61 Stage 1.1: the fair consensus opponent. `_market_consensus_pick` never fills a
+    mandatory dedicated slot it hasn't reached in real ECR order; this is the fix."""
+
+    def _league(self, **overrides) -> LeagueContext:
+        base = dict(
+            league_id="t",
+            format="redraft",
+            teams=2,
+            lineup={"QB": 1, "RB": 1, "WR": 1, "K": 1},
+            roster={"bench": 2, "roster_size": 6},
+        )
+        base.update(overrides)
+        return LeagueContext(**base)
+
+    def test_matches_plain_consensus_when_not_yet_forced(self):
+        """Early in the draft (more picks left than unfilled slots), the two must agree."""
+        league = self._league()
+        market_rank = {"qb1": ("QB", 1.0), "rb1": ("RB", 2.0), "k1": ("K", 50.0)}
+        positions = {"qb1": "QB", "rb1": "RB", "k1": "K"}
+        available = {"qb1", "rb1", "k1"}
+        assert _market_consensus_roster_aware_pick(
+            available, market_rank, positions, league, [], picks_remaining=6
+        ) == _market_consensus_pick(available, market_rank)
+
+    def test_forces_a_still_unfilled_mandatory_slot_once_picks_are_tight(self):
+        """Roster already has QB+RB (both dedicated slots filled); 2 picks remain and WR+K
+        are both still unfilled (deficit 2) -- this pick MUST go to WR or K, even though a
+        much-better-ranked QB is on the board (QB is no longer deficient)."""
+        league = self._league()
+        market_rank = {
+            "qb_extra": ("QB", 1.0),  # best rank on the board, but QB already filled
+            "wr1": ("WR", 10.0),
+            "k1": ("K", 50.0),
+        }
+        positions = {"qb_extra": "QB", "wr1": "WR", "k1": "K"}
+        pick = _market_consensus_roster_aware_pick(
+            {"qb_extra", "wr1", "k1"},
+            market_rank,
+            positions,
+            league,
+            ["QB", "RB"],
+            picks_remaining=2,
+        )
+        assert pick == "wr1"  # best-by-ECR WITHIN {wr1, k1}, not qb_extra
+
+    def test_the_restriction_stays_active_every_remaining_pick(self):
+        """Filling one deficient slot must not un-trigger the restriction for the next pick:
+        deficit and picks_remaining both drop by 1 together, so the equality holds again."""
+        league = self._league()
+        market_rank = {"rb_extra": ("RB", 1.0), "k1": ("K", 50.0)}
+        positions = {"rb_extra": "RB", "k1": "K"}
+        # Roster has QB, WR, and one of the two required slots already filled by a prior
+        # forced pick; only K remains, with exactly 1 pick left.
+        pick = _market_consensus_roster_aware_pick(
+            {"rb_extra", "k1"},
+            market_rank,
+            positions,
+            league,
+            ["QB", "WR", "RB"],
+            picks_remaining=1,
+        )
+        assert pick == "k1"
+
+    def test_a_league_with_no_kicker_slot_is_unaffected_by_the_mechanism(self):
+        """The correctness test the plan names explicitly. Fix the exact scenario that WOULD
+        force a pick if a K slot existed (a much-better-ranked non-deficient QB on the board,
+        one pick left, one deficient K slot) and show it stops forcing anything the instant
+        the league's lineup simply has no K slot -- the mechanism has nothing to force."""
+        market_rank = {"qb_extra": ("QB", 1.0), "k1": ("K", 50.0)}
+        positions = {"qb_extra": "QB", "k1": "K"}
+        available = {"qb_extra", "k1"}
+        roster_positions = ["QB"]  # the one QB slot is already filled
+
+        with_k = self._league(lineup={"QB": 1, "K": 1})
+        assert (
+            _market_consensus_roster_aware_pick(
+                available, market_rank, positions, with_k, roster_positions, picks_remaining=1
+            )
+            == "k1"  # forced: K is the only still-unfilled mandatory slot
+        )
+
+        without_k = self._league(lineup={"QB": 1})
+        assert _market_consensus_roster_aware_pick(
+            available, market_rank, positions, without_k, roster_positions, picks_remaining=1
+        ) == _market_consensus_pick(
+            available, market_rank
+        )  # unaffected: no K slot means nothing to force -- picks qb_extra like plain consensus
+
+
 @pytest.fixture
 def con():
     connection = duckdb.connect(":memory:")
@@ -141,6 +236,104 @@ def _small_league() -> LeagueContext:
         lineup={"QB": 1, "RB": 1, "WR": 1, "TE": 1, "FLEX": 1},
         roster={"bench": 1, "roster_size": 5},
     )
+
+
+def _seed_k_worst_rank(con, season, n=6):
+    """K players with real-shaped baseline data (`projection_snapshot`, D57 -- K comes from
+    the baseline model, not `uncertainty_predictions`) but deliberately the worst real ECR
+    ranks on the board (1000+, vs. 1-24 for `_seed_league_season`'s QB/RB/WR/TE) -- the shape
+    that let `market_consensus` finish a real draft with its K slot unfilled (D61)."""
+    for i in range(n):
+        player_id = f"K_{i}"
+        points = 100.0 - i * 5
+        con.execute(
+            "INSERT INTO projection_snapshot (model_name, player_id, season, position, "
+            "predicted_points, built_at) VALUES (?, ?, ?, 'K', ?, current_timestamp)",
+            [KDST_MODEL_NAME, player_id, season, points],
+        )
+        con.execute(
+            "INSERT INTO player_season_stats (player_id, season, position, games_played, "
+            "total_fantasy_points_ppr, ppr_points_per_game) VALUES (?, ?, 'K', 15, ?, ?)",
+            [player_id, season, points, points / 15],
+        )
+        con.execute(
+            "INSERT INTO market_snapshot (player_id, scrape_date, ecr_type, position, "
+            "ecr_rank, page_type) VALUES (?, ?, 'do', 'K', ?, 'dynasty-overall')",
+            [player_id, f"{season}-08-01", 1000.0 + i],
+        )
+
+
+def _league_with_kicker() -> LeagueContext:
+    return LeagueContext(
+        league_id="test_small_k",
+        format="dynasty",
+        teams=4,
+        scoring={"ppr": True, "ppr_value": 1.0},
+        lineup={"QB": 1, "RB": 1, "WR": 1, "TE": 1, "FLEX": 1, "K": 1},
+        roster={"bench": 1, "roster_size": 7},
+    )
+
+
+class TestRosterAwareOpponentEndToEnd:
+    """D61 Stage 1.1/1.4: the artifact and its fix, exercised through the real
+    `simulate_draft` end-to-end path rather than the pick function in isolation. A large
+    surplus of skill players (80, `n_per_position=20`) relative to the league-wide pick count
+    (4 teams x 7 rounds = 28) mirrors the real finding: kickers ranked far worse than the
+    total number of picks made are never REACHED under an unaware consensus, not merely
+    disfavored -- this is what let a real 160-pick benchmark draft finish with its K slot
+    unfilled (docs/DECISIONS.md D61)."""
+
+    def test_plain_consensus_can_finish_with_the_kicker_slot_unfilled(self, con):
+        _seed_league_season(con, 2023, n_per_position=20)
+        _seed_k_worst_rank(con, 2023)
+        league = _league_with_kicker()
+        result = simulate_draft(con, league, 2023, MARKET_CONSENSUS, draft_slot=1)
+        assert result.opponent_strategy == MARKET_CONSENSUS
+        assert result.n_unfilled_mandatory_slots > 0
+        assert not any(pid.startswith("K_") for pid in result.drafted_player_ids)
+
+    def test_roster_aware_consensus_fills_the_kicker_slot(self, con):
+        _seed_league_season(con, 2023, n_per_position=20)
+        _seed_k_worst_rank(con, 2023)
+        league = _league_with_kicker()
+        result = simulate_draft(
+            con,
+            league,
+            2023,
+            MARKET_CONSENSUS_ROSTER_AWARE,
+            draft_slot=1,
+            opponent_strategy=MARKET_CONSENSUS_ROSTER_AWARE,
+        )
+        assert result.opponent_strategy == MARKET_CONSENSUS_ROSTER_AWARE
+        assert result.n_unfilled_mandatory_slots == 0
+        assert any(pid.startswith("K_") for pid in result.drafted_player_ids)
+
+    def test_opponent_strategy_changes_which_players_reach_the_team_in_question(self, con):
+        """The plan's actual target is the FIXED OPPONENT FIELD, not just the
+        team-in-question's own strategy. `alpha_bpa` (never wants a kicker itself; K's
+        baseline points are dwarfed by every skill projection) never changes its OWN
+        decision rule between the two opponent fields -- but if the opponent field's real
+        behavior differs (one of the 3 opponents takes a kicker instead of hoarding another
+        skill player), a different player is left on the board for alpha_bpa's own later
+        picks. A different result here is the observable proof the opponent field itself
+        changed, not just the team-in-question's strategy."""
+        _seed_league_season(con, 2023, n_per_position=20)
+        _seed_k_worst_rank(con, 2023)
+        league = _league_with_kicker()
+        under_plain = simulate_draft(
+            con, league, 2023, ALPHA_BPA, draft_slot=1, opponent_strategy=MARKET_CONSENSUS
+        )
+        under_fair = simulate_draft(
+            con,
+            league,
+            2023,
+            ALPHA_BPA,
+            draft_slot=1,
+            opponent_strategy=MARKET_CONSENSUS_ROSTER_AWARE,
+        )
+        assert not any(pid.startswith("K_") for pid in under_plain.drafted_player_ids)
+        assert not any(pid.startswith("K_") for pid in under_fair.drafted_player_ids)
+        assert under_plain.drafted_player_ids != under_fair.drafted_player_ids
 
 
 class TestSimulateDraft:
@@ -227,6 +420,28 @@ class TestSimulateDraft:
         with pytest.raises(ValueError, match="strategy"):
             simulate_draft(con, league, 2023, "not_a_real_strategy", draft_slot=1)
 
+    def test_rejects_unknown_opponent_strategy(self, con):
+        _seed_league_season(con, 2023)
+        league = _small_league()
+        with pytest.raises(ValueError, match="opponent"):
+            simulate_draft(
+                con, league, 2023, MARKET_CONSENSUS, draft_slot=1, opponent_strategy="not_real"
+            )
+
+    def test_default_opponent_strategy_is_market_consensus_unchanged(self, con):
+        """D61 Stage 1.1 backward-compatibility requirement: an existing caller that never
+        passes `opponent_strategy` must keep getting exactly the pre-D61 opponent field, so
+        every number published through D60 stays reproducible under its original label."""
+        _seed_league_season(con, 2023)
+        league = _small_league()
+        default = simulate_draft(con, league, 2023, ALPHA_BPA, draft_slot=1)
+        explicit = simulate_draft(
+            con, league, 2023, ALPHA_BPA, draft_slot=1, opponent_strategy=MARKET_CONSENSUS
+        )
+        assert default.opponent_strategy == MARKET_CONSENSUS
+        assert default.drafted_player_ids == explicit.drafted_player_ids
+        assert default.total_roster_points == explicit.total_roster_points
+
 
 class TestRunAndPersist:
     def test_run_draft_simulation_covers_every_strategy_and_slot(self, con):
@@ -234,6 +449,20 @@ class TestRunAndPersist:
         league = _small_league()
         results = run_draft_simulation(con, league, [2023])
         assert len(results) == len(ALL_STRATEGIES) * league.teams
+        assert all(r.opponent_strategy == MARKET_CONSENSUS for r in results)
+
+    def test_opponent_strategies_param_covers_both_fields(self, con):
+        _seed_league_season(con, 2023)
+        league = _small_league()
+        results = run_draft_simulation(
+            con,
+            league,
+            [2023],
+            strategies=[MARKET_CONSENSUS],
+            opponent_strategies=list(ALL_OPPONENT_STRATEGIES),
+        )
+        assert len(results) == len(ALL_OPPONENT_STRATEGIES) * league.teams
+        assert {r.opponent_strategy for r in results} == set(ALL_OPPONENT_STRATEGIES)
 
     def test_persist_and_summarize_round_trip(self, con):
         _seed_league_season(con, 2023)
@@ -248,6 +477,24 @@ class TestRunAndPersist:
         assert strategies_seen == {MARKET_CONSENSUS, ALPHA_BPA}
         for row in summary:
             assert row["n"] == league.teams
+            assert row["opponent_strategy"] == MARKET_CONSENSUS
+
+    def test_persist_keeps_both_opponent_fields_for_the_same_strategy_and_slot(self, con):
+        """The regression this guards: `opponent_strategy` must be part of the persistence
+        key, or persisting the fair-opponent run would silently overwrite the D60-comparable
+        market_consensus-opponent run for the same (season, strategy, draft_slot)."""
+        _seed_league_season(con, 2023)
+        league = _small_league()
+        results = run_draft_simulation(
+            con,
+            league,
+            [2023],
+            strategies=[MARKET_CONSENSUS],
+            opponent_strategies=list(ALL_OPPONENT_STRATEGIES),
+        )
+        persist_draft_sim_results(con, results)
+        n = con.execute("SELECT count(*) FROM draft_simulation_results").fetchone()[0]
+        assert n == len(ALL_OPPONENT_STRATEGIES) * league.teams
 
     def test_persist_is_idempotent_on_rerun(self, con):
         _seed_league_season(con, 2023)
@@ -257,3 +504,57 @@ class TestRunAndPersist:
         persist_draft_sim_results(con, results)  # rerun must not duplicate rows
         n = con.execute("SELECT count(*) FROM draft_simulation_results").fetchone()[0]
         assert n == league.teams
+
+
+class TestWriteDraftSimulationReport:
+    """D61 Stage 1.4: a forfeited mandatory slot must be visible in the report, and the two
+    opponent fields must never be silently blended into one restated number."""
+
+    def test_market_consensus_only_run_banners_that_it_only_measured_one_opponent(
+        self, con, tmp_path
+    ):
+        _seed_league_season(con, 2023)
+        league = _small_league()
+        results = run_draft_simulation(con, league, [2023], strategies=[MARKET_CONSENSUS])
+        persist_draft_sim_results(con, results)
+        write_draft_simulation_report(con, tmp_path / "r.md", [2023])
+        report = (tmp_path / "r.md").read_text()
+        assert "only measured `market_consensus`" in report
+        # No DATA table for the opponent field that was never run, even though the
+        # methodology section still documents what the mechanism is.
+        assert f"## Overall vs `{MARKET_CONSENSUS_ROSTER_AWARE}` opponent field" not in report
+
+    def test_both_opponents_run_reports_both_headlined_correctly(self, con, tmp_path):
+        _seed_league_season(con, 2023)
+        league = _small_league()
+        results = run_draft_simulation(
+            con,
+            league,
+            [2023],
+            strategies=[MARKET_CONSENSUS],
+            opponent_strategies=list(ALL_OPPONENT_STRATEGIES),
+        )
+        persist_draft_sim_results(con, results)
+        write_draft_simulation_report(con, tmp_path / "r.md", [2023])
+        report = (tmp_path / "r.md").read_text()
+        assert f"Headline claim uses `{MARKET_CONSENSUS_ROSTER_AWARE}`" in report
+        assert f"## Overall vs `{MARKET_CONSENSUS}` opponent field" in report
+        assert f"## Overall vs `{MARKET_CONSENSUS_ROSTER_AWARE}` opponent field" in report
+        assert "unfilled mandatory slots" in report.lower()
+
+    def test_summary_rows_carry_opponent_strategy_and_unfilled_slot_stats(self, con, tmp_path):
+        _seed_league_season(con, 2023)
+        league = _small_league()
+        results = run_draft_simulation(
+            con,
+            league,
+            [2023],
+            strategies=[MARKET_CONSENSUS],
+            opponent_strategies=list(ALL_OPPONENT_STRATEGIES),
+        )
+        persist_draft_sim_results(con, results)
+        summary = write_draft_simulation_report(con, tmp_path / "r.md", [2023])
+        for row in summary:
+            assert row["opponent_strategy"] in ALL_OPPONENT_STRATEGIES
+            assert "mean_unfilled_mandatory_slots" in row
+            assert "n_trials_with_unfilled_slots" in row

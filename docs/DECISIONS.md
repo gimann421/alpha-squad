@@ -2494,7 +2494,7 @@ harness's tier H, so it keeps mirroring real production.
 
 | Strategy | Mean starter pts | Mean total roster pts |
 |---|---|---|
-| **alpha_league_aware (M3/D60)** | **1990.9** | 2775.9 |
+| **alpha_league_aware (M3/D60)** | **1990.9** | 2455.0 |
 | `market_consensus` | 1825.2 | 2806.7 |
 
 **+165.7 mean starter points (+9.1%) over consensus, 37/50 (74%) win rate** — up from D59's
@@ -2508,3 +2508,1010 @@ overperformed their own projections by a mean +45.2 points, n=206, 2021–2025) 
 projection-layer question, not a draft-engine one; D55's opportunity-cost term was held fixed
 across every M-tier and was not independently re-ablated against an opportunity-cost-off
 control under the 1-QB format specifically.
+
+**SUPERSEDED BY D61.** The benchmark this entry reports against has a `market_consensus`
+opponent that forfeits two of its ten starting slots. D60's shipping decision was correctly
+reasoned on the evidence available at the time; the evidence itself was contaminated. The
+mechanism change (MSV replacing VORP) is retained pending re-measurement, not endorsed.
+
+## D61 — The 1-QB benchmark's consensus opponent forfeits two starting slots; D59/D60's margin is an artifact
+
+Forensic re-examination of the shipped D60 engine (full analysis:
+`docs/DRAFT_STRATEGY_FORENSIC_ANALYSIS.md`) found that the headline result — Alpha beating
+market consensus by +165.7 starter points (+9.1%), 37/50 win rate — is produced by the
+benchmark opponent rather than by Alpha's decisions.
+
+**The mechanism.** `market_consensus` picks best-available by preseason overall ECR with no
+roster awareness. On the real `ro`/`redraft-overall` board the best DST ranks **155th** overall
+and the best K ranks **186th**. A 16-round 10-team draft is **160 picks**. So the consensus bot
+drafts a mean of **0.00 kickers and 0.30 defenses** across 50 drafts and leaves its K and DEF
+starting slots empty, scoring ~0 there. This is a real property of the FantasyPros overall
+board — it ranks K/DST by overall value while every human applies a last-two-rounds positional
+override — not a data defect. `docs/FORMAT_MIGRATION_DIAGNOSTIC.md` §2 and
+`docs/EVALUATION_LIMITATIONS.md` both named the missing roster awareness as a limitation; what
+was never quantified is that it exceeds the entire measured margin.
+
+**Decomposing the 50 benchmark drafts by slot type:**
+
+| | K + DEF slots | the 8 skill slots | total |
+|---|---|---|---|
+| `alpha_league_aware` | **275.1** | 1715.8 | 1990.9 |
+| `market_consensus` | **29.8** | 1795.4 | 1825.2 |
+| Alpha − consensus | **+245.3** | **−79.6** | +165.7 |
+
+148% of the edge comes from two forfeited slots; on the eight skill slots Alpha is **behind by
+79.6**.
+
+**The fair comparison.** Re-simulating consensus with one change — fill K and DEF in the last
+two rounds if still empty, best-available by ECR within the position, no hindsight:
+
+| opponent | mean starter pts |
+|---|---|
+| consensus as-implemented | 1825.2 |
+| consensus, roster-aware | **2039.2** (+214.0) |
+| `alpha_league_aware` (shipped) | 1990.9 |
+
+**Alpha vs a fair opponent: −48.3 mean starter points, win rate 25/50 (50%), 95% CI
+[−122.2, +25.6] — the interval contains zero.** Per season: 2021 −25.9, 2022 +69.5,
+2023 −145.3, 2024 −155.7, 2025 +15.9. The fair opponent's K+DEF slots score 270.2 against
+Alpha's 275.1 — the advantage vanishes entirely, exactly as the mechanism predicts.
+
+**Why Alpha trails on the skill slots.** D60 made `marginal_starter_value` the value base,
+replacing VORP. On an empty roster MSV is mathematically identical to the candidate's own
+projection, i.e. pure best-player-available by raw points — and in a 1-QB league raw points
+favour quarterbacks, which is precisely what VORP existed to correct. Measured top-5 by each
+value base: MSV yields 4–5 QBs in 2021/2023/2025; VORP yields **zero** in all three. The
+behavioural consequence in real drafts: Alpha takes a QB in round 2 in **68%** of drafts, takes
+WR almost exclusively through round 5, reaches its first RB at mean round **5.24** (consensus:
+2.72), and finishes with **2.74** RBs (consensus: 5.12). This is the same pathology that
+collapses `alpha_bpa` to 463.5, mitigated only by the bounded roster-fit multiplier.
+
+MSV's benefit was real and is retained as a finding: it fixed genuine K/DST *hoarding*
+(M0 drafted 3.78 K and 2.26 DST per draft, breaching the cap in 50/50 drafts; M3 drafts
+1.60/1.26, breaching 0/50). It over-corrected on *timing* — Alpha now takes DST in round 10 in
+**100%** of drafts and K at median round 9, against a measured cost of waiting of only 20–50
+realized points. The `opportunity_cost` term cannot counteract this because it is
+VORP-denominated while the value base is MSV: a scale mismatch introduced by D60.
+
+**Two measurement defects found in the same pass.**
+1. `evaluation/draft_forensics.py::_feasibility_cap` is the pre-D58 flex-blind formula while
+   production calls the D58 flex-aware `positional_feasibility_cap`. Measured caps diverge:
+   RB 3 vs 6, WR 3 vs 6, TE 2 vs 4. So tier M0, documented as "the shipped production formula,
+   unchanged — the control", is not, and M3's winning WR count of 5.54 exceeded the harness cap
+   it was measured under. This also explains the previously unreconciled gap between harness
+   numbers (M0 1894.2, M3 2003.8) and official-benchmark numbers (1927.8, 1990.9).
+2. `evaluation/pick_attribution.py` never passed `roster_player_ids`, so the 800-pick
+   attribution in `docs/FORMAT_MIGRATION_DIAGNOSTIC.md` §7 measured the D55 VORP engine, not
+   the shipped D60 MSV engine. The RB-residual finding must be re-derived before being cited
+   about the shipped engine.
+
+**Also corrected:** D60 and the diagnostic reported `alpha_league_aware` mean total roster
+points as 2775.9; the real value in `reports/draft_simulation.md` is **2455.0**. The starter
+figure (1990.9) was correct. The genuine 2785.4 → 2455.0 drop from D59 to D60 is itself a
+finding — MSV concentrates value into starters and gives up bench depth.
+
+**Decision.** No engine change is made on this evidence. The measurement is fixed first: the
+benchmark opponent becomes roster-aware (derived from `dedicated_slots()`, never hardcoded),
+both opponents are reported side by side so no published number is silently restated, the
+forensic cap is reconciled with production, and attribution is pointed at the shipped engine.
+Only then is a value-base ablation run — testing formulations that retain **both** league-wide
+scarcity and lineup saturation rather than trading one for the other. Sequencing, candidate
+tiers, the pre-registered decision rule (now including a per-season consistency gate and a
+positional-timing gate that would have caught this regression), and the explicit
+do-not-pursue list are in `docs/DRAFT_STRATEGY_NEXT_PHASE_PLAN.md`.
+
+`docs/IMPLEMENTATION_GAP_ANALYSIS.md` P1-0 is **reopened**: its acceptance criterion was
+declared met against the contaminated benchmark.
+
+**What still stands from D56–D60, re-verified in this pass:** the market-series correction
+(D56), the computed K/DST scoring and measured baselines (D57), the 1-QB format retarget and
+flex-aware capacity (D58). None of the findings above impugn them. Also genuinely real and
+worth preserving: Alpha's consistency advantage — starter-points stdev **158.9** vs consensus's
+**214.5**, and a higher floor (worst draft 1570.3 vs 1392.7).
+
+## D62 — Stage 1 measurement fixes land; D61's fair-opponent estimate confirmed by direct re-run
+
+`docs/DRAFT_STRATEGY_NEXT_PHASE_PLAN.md` Stage 1 (measurement only, no engine change) is
+implemented and the official benchmark re-run against real 2021–2025 data. This section records
+what shipped and the true current baseline; it supersedes D61's *simulated* fair-opponent
+estimate with a *measured* one from the actual shipped code.
+
+**What shipped, all in this pass:**
+1. **Roster-aware consensus opponent** (`evaluation/draft_simulation.py`). A new
+   `market_consensus_roster_aware` strategy/opponent: once a drafter has exactly as many picks
+   left as still-unfilled mandatory dedicated slots (`league/roster.py::unfilled_dedicated_slots`,
+   new — derived from `dedicated_slots()`, never hardcoded), it is restricted to filling one,
+   still best-available by ECR within that pool. `market_consensus` is kept byte-identical so
+   every number published through D60 stays reproducible under its original label (the D56
+   precedent). `simulate_draft`/`run_draft_simulation` gain an `opponent_strategy`/
+   `opponent_strategies` parameter; `draft_simulation_results` gains `opponent_strategy` (now
+   part of the persistence key) and `n_unfilled_mandatory_slots` columns, with a migration for
+   pre-D61 databases (`storage/db.py::_migrate` — caught by running the CLI against the real
+   local database, not just fresh in-memory test fixtures; see the migration commit for why the
+   table is dropped rather than carried forward: it is a pure evaluation-result cache, and
+   inventing an `n_unfilled_mandatory_slots` value for rows that predate the column would
+   fabricate data no version of the code ever measured).
+2. **Feasibility cap reconciled.** `evaluation/draft_forensics.py`'s pre-D58 flex-blind
+   `_feasibility_cap` is deleted; the harness now calls production's
+   `league/roster.py::positional_feasibility_cap` directly, with a test asserting no
+   forensic-local copy can reappear.
+3. **Attribution measures the shipped engine.** `pick_attribution.py` now passes
+   `roster_player_ids=my_roster` to `recommend_draft_pick`, activating D60 marginal starter
+   value instead of silently falling back to D55 VORP.
+4. **Unfilled slots are reported, not silently zeroed.** `write_draft_simulation_report` shows
+   both opponent fields side by side with a banner naming the headline claim, plus mean/count of
+   unfilled mandatory slots per strategy.
+5. **`next_pick_survival_probability` scoped by `page_type`** (`league/draft.py`), closing the
+   last market consumer that filtered on `ecr_type` alone.
+
+**The re-run, against real 2021–2025 data, 10 slots, both opponent fields (500 total simulated
+drafts):**
+
+| opponent field | strategy | mean starter pts | stdev | unfilled slots |
+|---|---|---|---|---|
+| `market_consensus_roster_aware` | `market_consensus_roster_aware` | 2034.8 | 202.7 | 0.00 |
+| `market_consensus_roster_aware` | `alpha_league_aware` | 1989.3 | 160.8 | 0.00 |
+| `market_consensus` (as published through D60) | `market_consensus` | 1825.2 | 214.5 | 1.88 |
+| `market_consensus` (as published through D60) | `alpha_league_aware` | 1990.9 | 158.9 | 0.00 |
+
+**Alpha vs the fair opponent, measured (not simulated): −45.4 mean starter points, win rate
+25/50 (50%), 95% CI [−117.1, +26.2] — the interval contains zero.** Per season: 2021 −30.5,
+2022 +99.0, 2023 −125.9, 2024 −160.3, 2025 −9.4. This confirms D61's simulated estimate
+(−48.3, 25/50) to within 3 points and the same sign pattern per season — the two independent
+computations (D61's targeted re-simulation vs this pass's full shipped-code re-run) agree, which
+is itself evidence the mechanism is understood correctly rather than an artifact of either
+measurement's specific implementation.
+
+**Determinism.** The new roster-aware opponent path was run twice as separate `uv run python3`
+processes (`PYTHONHASHSEED` unset) against 2021 data, both opponent fields,
+`market_consensus_roster_aware` and `alpha_league_aware` strategies: byte-identical JSON output,
+confirming the fix introduced no new non-determinism (`available`/`unfilled_dedicated_slots`
+build ordinary Python sets/dicts, but the final selection is still resolved through
+`best_by_market_rank`'s existing `(rank, player_id)` tie-break).
+
+**Status.** `docs/IMPLEMENTATION_GAP_ANALYSIS.md` P1-0 stays **reopened**: Alpha does not beat a
+fair consensus opponent (−45.4, 95% CI includes zero). Stage 1 is closed; Stage 2 (re-run the
+M-tier ablation honestly under the fair opponent and production's real caps) and Stage 3 (the
+pre-registered N0–N4 value-base ablation) remain, per
+`docs/DRAFT_STRATEGY_NEXT_PHASE_PLAN.md`, not started in this pass.
+
+## D63 — The draft value base becomes `msv + VORP`, chosen by a pre-registered N-tier ablation
+
+Stages 2 and 3 of `docs/DRAFT_STRATEGY_NEXT_PHASE_PLAN.md`. The pre-registered decision rule
+was committed to `evaluation/draft_forensics.py` (commit `622c468`) **before any N-tier was
+run**, per the D39/D54/D55 discipline and the plan's explicit instruction.
+
+### A measurement defect found first (Stage 2)
+
+`evaluation/draft_forensics.py` still ran its 9-slot opponent field on the pre-D61 *unaware*
+consensus. An M-tier re-run would therefore have re-measured the very artifact D61 identified.
+Fixed before measuring anything: `simulate_forensic_draft`/`run_tier_ablation` take an
+`opponent_strategy`, and it is recorded on every result row so a tier figure can never be read
+without knowing which opponent produced it.
+
+**Harness validation.** With the Stage 1.2 cap fix and the fair opponent in place, the forensic
+harness reproduces the official benchmark **exactly** for the shipped formula — max|difference|
+= 0.000000 over 50 paired drafts. Forensic tier numbers are therefore directly comparable to
+benchmark numbers, which is what makes the rest of this entry load-bearing rather than merely
+indicative.
+
+### Stage 2 — does MSV actually beat VORP once undistorted?
+
+M-tiers, 2021–2025 × 10 slots, against both opponent fields:
+
+| tier | value base | vs unaware opponent | vs FAIR opponent |
+|---|---|---|---|
+| M1 | vorp + msv | 2028.8 | **2029.2** |
+| M3 | msv (shipped D60) | 1990.9 | 1989.3 |
+| M0 | vorp (D55) | 1927.8 | 1926.8 |
+| M2 | msv as a bounded multiplier | 1929.0 | 1924.4 |
+
+**Yes** — MSV beats VORP by +62.6 against the fair opponent, essentially unchanged from +63.1
+against the unaware one. The opponent artifact invalidated D59/D60's *claim of beating
+consensus*; it did not distort the internal M-tier ranking.
+
+**But D60 still selected the wrong tier.** M1 now leads M3 by +39.9; the pre-D63 harness had M3
+ahead (2003.8 vs 1987.2). The cause is the Stage 1.2 cap reconciliation, not the opponent: the
+old forensic `_feasibility_cap` capped RB/WR at 3 where production allows 6. The opponent is
+ruled out directly — M3 − M0 is +63.1 unaware and +62.6 fair, and M3's QB-by-round-2 rate is
+92% under *both* fields. (D61 recorded 68% for that rate under the pre-Stage-1.2 caps; the
+conditions differ, so the figures are not comparable and 92% is the post-fix number.)
+
+### Stage 3 — the value-base ablation
+
+Ten variants × 10 slots × 5 seasons = 500 real drafts, fair opponent, production's real caps.
+Every tier runs the *same* code path with the same risk/survival/roster-fit/feasibility terms;
+only the value base varies, so a difference is attributable to it and nothing else.
+
+| tier | value base | starter pts | stdev | margin vs N0 |
+|---|---|---|---|---|
+| N4x | msv + 1.0·vorp, no opp-cost | 2032.8 | 139.9 | +43.4 |
+| **N4** | **msv + 1.0·vorp** | **2029.2** | **131.7** | **+39.9** |
+| N0 | msv (shipped D60) — *control* | 1989.3 | 160.8 | — |
+| N0x | msv, no opp-cost | 1975.6 | 167.8 | −13.7 |
+| N2 | min(vorp, msv) | 1942.4 | 146.4 | −46.9 |
+| N3 | msv over replacement | 1940.7 | 149.9 | −48.6 |
+| N1 | vorp (D55) | 1926.8 | 164.7 | −62.6 |
+| N2x / N3x / N1x | the same, no opp-cost | 1867.1 / 1859.8 / 1832.8 | | −122 / −130 / −157 |
+
+**The decisive result: summing the two signals wins; choosing between them per-candidate
+loses.** Both clamping formulations were front-runners in the plan and both finished *below*
+the control. N3 was predicted to be "most likely to be right" — it reduces to VORP on an empty
+roster and to 0 at a saturated position, verified by construction — and it lost by 48.6. The
+hypothesis was right that the two bases fail in opposite regimes; it was wrong that the fix is
+to select between them pointwise.
+
+**N4 vs the control, paired:** +39.9, 95% CI [+9.1, +70.6], winning **37 of 50** drafts. All
+four pre-registered gates pass, and the margin survives leave-one-season-out on every season
+(+48.2 / +39.1 / +27.2 / +50.2 / +34.7).
+
+### The opportunity-cost term is kept, re-measured rather than assumed
+
+D60 left open a scale mismatch: the term is VORP-denominated and was added to an MSV base. Each
+base was therefore run with it on and off:
+
+| value base | effect of the opportunity-cost term |
+|---|---|
+| vorp (N1) | **+94.0**, CI [+64.2, +123.7] |
+| msv over replacement (N3) | **+81.0**, CI [+51.8, +110.2] |
+| min (N2) | **+75.3**, CI [+48.7, +102.0] |
+| msv (N0) | +13.7, CI [−12.4, +39.9] — not significant |
+| msv + vorp (N4) | −3.6, CI [−22.3, +15.2] — not significant |
+
+It is significantly *helpful* on three of five bases and indistinguishable on the winner. D55's
+finding stands. **Kept.**
+
+**A judgment call, recorded as one.** N4x (opportunity cost off) scored +3.6 above N4, and the
+pre-registered tie-break's first criterion is "fewer mechanisms", which favours N4x. N4 ships
+anyway, for reasons stated so the call is reviewable and reversible (`DRAFT_VORP_WEIGHT` and
+the tier spec are one-line changes): the +3.6 is not statistically distinguishable (CI contains
+zero, 14W/13L); N4 has the lower variance, which is the tie-break's *second* criterion; N4
+breaches the kicker cap in 32 of 50 drafts against N4x's 40; and removing a term that helps
+significantly on three other bases would make the engine brittle to any future value-base
+change — it is what protects against the positional-depletion pathology M17/M18 diagnosed.
+
+### Official benchmark, after shipping
+
+`reports/draft_simulation.md`, real 2021–2025, fair opponent. The forensic harness predicted
+2029.2 and production delivered **2029.2** — exact agreement.
+
+| | before (D62, msv) | after (D63, msv + vorp) |
+|---|---|---|
+| Alpha mean starter pts | 1989.3 | **2029.2** |
+| fair consensus | 2034.8 | 2034.8 |
+| margin | −45.4 | **−5.6** |
+| 95% CI | [−117.1, +26.2] | [−68.4, +57.2] |
+| win rate | 25/50 | 25/50 |
+
+**88% of the gap to a fair consensus opponent is closed.** Alpha still does not beat it: the
+margin is negative, the win rate is 25/50, and the interval contains zero. Per season: 2021
+−23.9, 2022 +141.8, 2023 −35.3, 2024 −161.7, 2025 +51.3. `IMPLEMENTATION_GAP_ANALYSIS.md`
+P1-0 stays **open**.
+
+Genuinely improved alongside the mean: the floor. Worst draft rises 1570.3 → 1765.3 and
+starter-points stdev falls 160.8 → 131.7, so the consistency advantage D61 identified as real
+is extended rather than spent.
+
+**Determinism verified.** The new value base was run twice as separate `uv run python3`
+processes (`PYTHONHASHSEED` unset), 2021, both opponent fields, `alpha_league_aware`:
+byte-identical JSON (md5 `51fa3dd4…` both runs). Summing two float terms introduced no new
+ordering sensitivity — the score's tie-break is still `(-score, player_id)`.
+
+### Known regression, reported rather than buried
+
+The blend trades one hoarding mode for another. MSV-dominant bases over-draft quarterbacks;
+VORP-containing bases over-draft kickers, because VORP prices a bench K above replacement with
+no knowledge that the position has no flex eligibility — the exact blind spot D60 set out to
+fix.
+
+| tier | drafts breaching a positional cap (of 50) | mean K | mean QB |
+|---|---|---|---|
+| N0 (was shipped) | QB 25, WR 8 | 1.60 | 2.28 |
+| N4 (now shipped) | **K 32**, WR 2 | **2.74** (cap 2) | 1.60 |
+
+**No pre-registered gate catches over-drafting** — Gate 1 checks zeroing, Gate 2 infeasibility,
+Gate 4 timing. N4 passed the rule legitimately and still carries this defect. It is net
+positive on the objective (starter points rise, and a wasted late-round kicker is cheap), but
+it is a real defect and the leading next-phase item: the plausible fix is to apply lineup
+saturation to the VORP term as well, or to tighten `OVER_CAP_VALUE_MULTIPLIER`, measured the
+same way. Positional timing otherwise improved or held: QB-by-round-2 92% → 66%, first DST
+round 10.0 → 9.6, first K 8.5 → 8.0; first RB drifted slightly later, 5.24 → 5.50.
+
+### What did not change
+
+The projection model. The forensic work established the player model is not the bottleneck, and
+nothing here contradicts that: every tier used identical projections and the spread between
+best and worst was 200 starter points, produced entirely by the decision layer.
+
+## D64 — N4's kicker hoarding: both hypotheses measured, neither ships; N4 is kept
+
+D63 shipped `msv + VORP` and recorded a known regression: the blend breaches the kicker cap in
+32 of 50 drafts (mean 2.74 K against a cap of 2), which no pre-registered gate checked. This
+entry is the follow-up experiment. **Outcome: no candidate ships. The production value base is
+unchanged.** `league/draft.py` is byte-identical to its D63 state.
+
+### The mechanism, traced rather than assumed
+
+D63 attributed the hoarding to "VORP prices a bench K above replacement with no knowledge that
+the position has no flex eligibility." Replaying a real hoarding draft (2023, slot 9 — kickers
+at rounds 8, 11 and 16) pick-by-pick through the production scoring path shows that is only
+partly right, and the missing part is what defeats one of the two proposed fixes.
+
+At round 11, the pick that actually matters, the top candidates were:
+
+| candidate | MSV | VORP | fit | over-cap | score |
+|---|---|---|---|---|---|
+| **K (taken)** | 0.0 | **+30.1** | 1.00 | **not applied** | **21.04** |
+| DST | 0.0 | +10.2 | 1.00 | not applied | 7.14 |
+| TE | 0.0 | +4.8 | 1.00 | not applied | 4.08 |
+| RB | 0.0 | +2.0 | 1.00 | not applied | 1.12 |
+
+The real chain is:
+
+1. By the late rounds every startable slot is full, so **MSV is 0.0 for every candidate** and
+   the value base collapses to VORP alone.
+2. VORP is measured against a **static, league-wide preseason replacement level**. Ten teams
+   strip the skill pools, so the best available skill player falls far *below* replacement
+   (measured at round 16: RB −135.6, WR −123.0, TE −126.9, QB −273.5). Almost nobody drafts
+   kickers, so the best available K is still far *above* it (+30.1 at round 11, +17.2 at 16).
+3. VORP therefore favours K/DST late. **Flex eligibility is the second-order cause, not the
+   first**: it is why K saturates at one startable slot while RB/WR have four.
+
+Two consequences followed directly, and both were confirmed by measurement:
+
+- **The second kicker is taken while still UNDER the feasibility cap** (1 < 2). At that pick
+  *all* of the top 20 candidates are under-cap, so the over-cap multiplier is not even engaged.
+- At the third kicker every alternative is at or below replacement, so no *positive* multiplier
+  can reorder a positive kicker above a non-positive skill player. The probe reported the
+  multiplier "would need to be < −0.0000 to flip".
+
+**Hypothesis B was therefore predicted inert before it was run.** It was run anyway.
+
+### Variants (control R0 = the shipped D63 engine; R0 reproduces it exactly)
+
+Pre-registered in source before any run: control R0, primary metric mean starter points vs. the
+fair opponent, Gates 1–4 reused verbatim from D63, plus a **new Gate 5** — cap breaches must not
+increase at any position, the gap that let D63's regression through. Explicitly *not* a goal:
+fewer kickers.
+
+| tier | mechanism | starter pts | margin | 95% CI | W/L | QB/RB/WR/TE/K/DST | breaches |
+|---|---|---|---|---|---|---|---|
+| **R0** | shipped `msv + VORP` — control | **2029.2** | — | — | — | 1.60/2.20/5.42/2.06/**2.74**/1.98 | K 32, WR 2 |
+| R2 | Hyp B: over-cap 0.1 → 0.01 | 2029.2 | **+0.0** | [+0.0, +0.0] | 0/0 | 1.60/2.20/5.62/2.06/2.54/1.98 | K 22, WR 2 |
+| R1 | Hyp A: saturate the VORP surplus | 1996.3 | **−32.9** | [−62.2, −3.6] | 18/28 | **2.60**/2.86/5.12/3.16/1.20/1.06 | **QB 14**, WR 1 |
+| R3 | Hyp A + B | 1996.3 | −32.9 | [−62.2, −3.6] | 18/28 | identical to R1 | QB 14, WR 1 |
+| R4 | Hyp A, zero-tie defect repaired | 2030.5 | **+1.3** | [−32.0, +34.6] | 19/27 | 1.62/**4.00**/5.02/3.18/**1.12**/1.06 | QB 4 |
+
+**Hypothesis A** scales a candidate's value *above* replacement by the fraction of his
+position's startable capacity still unfilled (`league/roster.py::startable_saturation` and
+`saturated_surplus`), leaving value *below* replacement untouched — the same `max(0, …)` clamp
+and the same reasoning `positional_opportunity_cost` already documents. Nothing is hardcoded per
+position: K keeps none of its surplus after one kicker because K has **1** startable slot, while
+a third RB keeps a quarter because RB has **4** (2 dedicated + 2 FLEX). The distinction emerges
+from the lineup config, as required.
+
+### Did either hypothesis help?
+
+**Hypothesis B: no — and it cannot.** R2's margin is exactly **+0.0**, with a 0/0 win/loss
+record: not one of the 50 drafts changed its starter points. It *does* change picks (K breaches
+32 → 22, total roster points 2670.4 → 2678.3), but only picks made when the roster is already
+over cap — i.e. bench bodies that can never start. Rescaling a set of candidates that all
+receive the same factor cannot reorder them, which is now asserted by test.
+
+**Hypothesis A: no, as implemented.** R1 loses **32.9** starter points (CI excludes zero,
+losing 28 of 50 drafts). It fixes kickers decisively (2.74 → 1.20) and then **creates a
+quarterback pathology in their place** (QB 1.60 → 2.60, QB cap breached in 14 of 50 drafts
+against the control's 0) — the "shifting the symptom elsewhere" failure the phase was warned
+about. Gate 3 fails (worse in 4 of 5 seasons) and leave-one-season-out fails on all five.
+
+**A diagnosed defect in R1, repaired as R4 (post-hoc, labelled as such).** Zeroing a saturated
+position's surplus collapses many late candidates to a score of *exactly* 0.0, and the generic
+`(-score, player_id)` sort then resolves those ties **alphabetically**. Measured over 144 real
+picks, R1 decides **19% of its picks that way** against R0's 0% — one pick in five effectively
+random. R4 changes only the tie-break, preferring the candidate with the most startable capacity
+remaining (justified because the benchmark scores the best legal lineup from *realized* points,
+so a bench WR who outperforms can still enter the lineup while a third kicker never can).
+
+R4 is the most interesting result and still does not ship. It produces by far the best roster
+structure — total cap breaches **34 → 4**, K 2.74 → 1.12, RB 2.20 → 4.00, TE 2.06 → 3.18 — for a
+starter-point margin of **+1.3, 95% CI [−32.0, +34.6]**. That is noise, and the shape of the
+noise is exactly what the gates exist to catch: R4 **loses 27 of 50 drafts** while its positive
+mean is carried by a handful of large outliers (+227.3, +193.4, +176.6). Per-slot means swing
+from +69.1 (slot 10) to −65.1 (slot 8). Gate 3 fails (worse in 3 of 5 seasons), LOSO fails, and
+Gate 5 fails (QB breaches 4 vs the control's 0).
+
+### Against the actual objective
+
+| candidate | vs fair consensus | 95% CI | win rate |
+|---|---|---|---|
+| R0 (= N4, shipped) | **−5.6** | [−68.4, +57.2] | 25/50 |
+| R2 | −5.6 | [−68.4, +57.2] | 25/50 |
+| R4 | −4.3 | [−67.5, +58.9] | 25/50 |
+| R1 | −38.4 | [−102.6, +25.7] | 21/50 |
+
+**Alpha still does not beat fair consensus under any candidate.** `IMPLEMENTATION_GAP_ANALYSIS.md`
+P1-0 stays **open**.
+
+### Decision
+
+**Keep N4.** Under the decision hierarchy — starter points, then robustness, then win rate, then
+roster feasibility — the only candidate that ties on starter points (R4, +1.3 ns) is decisively
+*worse* on robustness, which outranks the roster-feasibility axis where it excels. Shipping a
+change that loses 27 of 50 drafts and fails two robustness gates, to buy roster shape the
+objective does not reward, would be optimising for rosters that look sensible. The phase's own
+rule forbids exactly that: reducing kicker count was evidence, never the goal.
+
+### What this establishes for the next phase
+
+The kicker hoarding is **not** primarily a flex-eligibility bug, so no amount of
+capacity-shaping on the value base fixes it cheaply. It is a **stale-replacement-level** bug:
+VORP compares against a preseason league-wide pool that no longer resembles the board once ~150
+players are gone. The highest-value next step is therefore a **draft-aware replacement level**
+— recompute each position's replacement against the *currently available* pool rather than the
+preseason one — which would deflate the kicker's phantom surplus and inflate the genuinely
+scarce skill positions *without* touching the value base or its saturation. That is a
+substantive change to `league/replacement.py` and belongs in its own pre-registered phase.
+
+Retained regardless of the outcome: `startable_saturation`/`saturated_surplus` stay in
+`league/roster.py` with tests, unused by production. They are correct, measured, and the natural
+building blocks for the next attempt.
+
+## D65 — Static replacement level is a real causal defect; draft-aware replacement is promising but not yet shippable
+
+Forensic study, **no production change**. `league/draft.py` is byte-identical to its D63 state.
+This entry answers the question D64 left open: is the stale, static replacement level actually
+causing N4's late-draft behaviour, and what is the principled way to make it draft-aware?
+
+**Verdict: hypothesis SUPPORTED on mechanism, and the correction produces the first measured
+result that beats fair consensus — but it fails a pre-registered robustness gate, so it does
+not ship in this phase.**
+
+### Phase 1 — how replacement level actually works (traced in code, not assumed)
+
+| question | answer |
+|---|---|
+| How is it calculated? | `league/replacement.py::replacement_level` → `compute_league_starters`: fill `teams × dedicated` slots by within-position rank, then flex slots by best-remaining across eligible positions; replacement = projection of the **best non-starter** at that position |
+| What pool? | `load_season_projections(con, season)` — the **entire preseason universe** |
+| Based on what? | Full preseason pool + league starter demand + real flex allocation. No bench component |
+| Position-specific? | Yes |
+| Once per season or dynamic? | Recomputed **every pick**, but always from the identical full pool, so it is **numerically constant across the draft**. Confirmed structurally: `available_player_ids` never reaches the VORP calculation (`draft.py:198` vs its only uses at 214/217/235) |
+| Includes K/DEF? | Yes |
+
+**The measured staleness (2022, round 13, real data).** Static level vs. the level implied by
+the players actually still on the board:
+
+| position | static | available-pool | error |
+|---|---|---|---|
+| QB | 289.2 | 111.0 | **+178.2** |
+| WR | 149.0 | 79.9 | **+69.1** |
+| RB | 146.7 | 84.4 | +62.3 |
+| TE | 133.7 | 88.1 | +45.6 |
+| **K** | 132.2 | 130.0 | **+2.2** |
+| **DST** | 98.7 | 92.4 | +6.3 |
+
+So the engine is **not over-valuing kickers — it is under-valuing everyone else.** Ten teams
+strip the skill pools while barely touching K/DST, so the static level stays almost exactly
+right for kickers and becomes wildly wrong for skill positions. A late WR is scored against a
+replacement level 69 points too high, crushing its VORP toward zero.
+
+**MSV's role, measured across four traced drafts** (2021 slot 1, 2025 slot 1, the best N4 draft
+2022 slot 8, and the worst K-hoarder 2022 slot 4): MSV hits exactly 0.0 at **round 11 in all
+four**, and stays there. From that point the value base *is* VORP, so the stale level governs
+the last 6 of 16 rounds — which carry **16.1% of realized starter points** (327.4 of 2029.2),
+with 36% of those picks entering the realized lineup.
+
+### The premise of D64's kicker concern was itself wrong
+
+Before testing fixes, the target was quantified by a drop-one counterfactual on real rosters:
+
+| | value of that kicker | changed the lineup |
+|---|---|---|
+| 2nd kicker | **+27.4** starter pts | 17/18 drafts |
+| 3rd kicker | **0.0** | **0/27** |
+| 4th kicker | **0.0** | **0/5** |
+
+The 2nd kicker is genuinely valuable — the benchmark scores the best legal lineup from
+*realized* points, so holding two kickers is a max-of-2 draw on a high-variance slot. The 3rd
+and 4th are worth **exactly nothing** and never start. Since a marginal late skill pick is worth
++7.3, perfectly reallocating those wasted picks is worth about **+4.7 starter points** — far
+inside the ±33 confidence half-width. **A kicker-driven win was never detectable**, which
+explains D64's R4 (+1.3) precisely. This ceiling was recorded in source *before* the variants
+ran, so the result could not be reinterpreted afterwards.
+
+### Phase 2 — three draft-aware definitions (`evaluation/replacement_diagnostics.py`)
+
+Diagnostic-only, asserted by test to stay out of production. No tuned constants.
+
+- **Candidate A — available-pool.** Run the *existing, unmodified* VBD allocation over only the
+  players still on the board. Changes the pool and nothing else.
+- **Candidate B — remaining-demand.** `remaining_demand[pos] = max(0, teams × startable_slots[pos] − drafted[pos])`;
+  replacement = the `remaining_demand`-th best available player. Demand comes from the lineup:
+  the league needs 10 kickers total but 40 WRs.
+- **Candidate C — hybrid.** As B, with demand from the existing `positional_capacity`
+  (startable + proportional bench share, the same function `positional_feasibility_cap` uses).
+
+### Phase 3 — results (control V0 = shipped N4; V0 reproduces it exactly)
+
+| tier | starter | margin vs N4 | 95% CI | W/L | vs fair consensus | QB/RB/WR/TE/K/DST | cap breaches |
+|---|---|---|---|---|---|---|---|
+| **VC** (hybrid) | **2052.4** | **+23.2** | **[+2.3, +44.1]** | 30/20 | **+17.6** | 1.48/3.06/4.74/4.00/1.72/1.00 | **0** |
+| VA (available-pool) | 2042.6 | +13.4 | [−6.4, +33.2] | 32/18 | +7.8 | 2.00/2.88/5.76/3.36/1.00/1.00 | **0** |
+| V0 (= N4) | 2029.2 | — | — | — | −5.6 | 1.60/2.20/5.42/2.06/2.74/1.98 | 34 |
+| VB (starters-only demand) | 2017.9 | −11.3 | [−43.3, +20.6] | 21/29 | −16.9 | 1.06/2.00/3.74/5.36/2.00/1.84 | 47 (TE) |
+
+**VC's margin over N4 is statistically significant** (CI excludes zero) and **survives
+leave-one-season-out on all five seasons** (+28.5 / +32.5 / +2.3 / +38.0 / +14.7). It eliminates
+*every* cap breach (34 → 0), lowers positional concentration (0.339 → 0.301), and is the first
+configuration ever measured that **beats fair consensus (+17.6)** — though that interval still
+contains zero.
+
+**VB is rejected outright**: forcing demand to starters-only makes TE look permanently scarce,
+producing 5.36 TEs and 47/50 TE cap breaches — the mechanism turned too blunt.
+
+### Phase 4 — stress tests, including one that materially weakens the case
+
+- **The gain is NOT the kicker fix.** Splitting the 50 drafts: where VC drafted *the same*
+  number of kickers as the control it still gained **+13.3** (n=8); where it drafted fewer,
+  +25.1 (n=42). Consistent with the pre-registered +4.7 kicker ceiling — most of the benefit is
+  skill re-ranking, exactly as the mechanism predicts.
+- **The late-round regime genuinely changes.** Rounds 11–16 composition moves from
+  K 1.74 / DST 0.98 / RB 0.22 to K 0.72 / DST 0.38 / RB 1.06 / TE 2.82. Skill positions become
+  competitive again.
+- **Per-slot:** VC is worse on average in only 2 of 10 draft slots.
+- **Per-season — the real weakness.** VC is worse in **2 of 5 seasons**, and in 2024 it loses
+  **0/10 drafts** (−36.1). Against that, 2023 is +106.9 (9/10) and 2025 is +57.4 (10/10).
+  **Gate 3 (at most 1 worse season) therefore FAILS**, for both VC and VA.
+- **Diagnosed cause of the season dependence:** VC loads TE to exactly its capacity of 4.0 in
+  *every* season (up from ~2.06). The 2024 pools are not structurally unusual, so this is a
+  systematic strategy shift whose payoff is genuinely season-dependent, not a data artifact.
+  Five seasons cannot distinguish a real edge from TE-outcome variance here.
+
+Determinism verified for all four V-tiers across repeated runs.
+
+### Decision
+
+**Hypothesis supported; nothing shipped.** Under the pre-registered rule VC does not ship
+(Gate 3 fails), and this phase was scoped as forensic regardless. N4 remains production.
+
+That said, VC is the **strongest candidate this project has produced**: significant paired
+margin, LOSO-robust, zero cap breaches, better concentration, and the first positive number
+against fair consensus. The blocker is concentrated and understood — a TE-loading behaviour
+whose payoff varies by season.
+
+### Recommended next step
+
+A dedicated pre-registered phase for Candidate C, addressing exactly the Gate 3 failure:
+
+1. **Investigate the TE loading.** VC hits the TE capacity of 4 in every season. Establish
+   whether that is genuinely optimal or an artifact of `positional_capacity` giving TE a bench
+   share that the remaining-demand formula then treats as real league-wide demand.
+2. **Test a C-variant with the demand target between B's and C's** — e.g. startable slots plus
+   *one* bench slot rather than the proportional share — measured, not assumed.
+3. **Widen the evidence base if possible.** The blocker is a 5-season sample against a
+   season-dependent effect. Additional seasons would do more than any further tuning.
+4. Only then re-run the full gate set, and ship only on a clean pass.
+
+Retained for that work, unused by production and covered by tests:
+`evaluation/replacement_diagnostics.py` and the V-tiers.
+
+## D66 — Candidate C's TE loading explained; demand DEPTH is the real parameter, and a variant passes every gate
+
+Follow-up to D65, **no production change**. `league/draft.py` remains byte-identical to D63.
+D65's C3 was blocked by a Gate 3 failure attributed to systematic TE loading. This entry finds
+the cause, refutes the obvious fix, and identifies the mechanism that actually matters.
+
+### Phase 1 — why C3 loads tight ends
+
+`startable_slots` counts every FLEX slot **once per eligible position**. In the target format
+the 2 FLEX slots are counted three times (RB, WR, TE), so it sums to **14 per team while the
+lineup starts only 10**. The remaining-demand candidates inherit that error:
+
+| target | per team | league-wide demand | real starting slots |
+|---|---|---|---|
+| `startable_slots` (C2) | 14 | 140 | 100 |
+| `positional_capacity` (C3) | 22 | 220 | 100 |
+
+TE absorbs the worst of it. Its startable count of 3 assumes it wins both flex slots — but
+measured across **all five real seasons, WR wins all 20 league-wide flex slots and TE wins
+zero**. True TE starter demand is **1.00 per team**; C3 demands 4. That 3–4× overstatement is
+the loading mechanism.
+
+### Phase 2/3 — the obvious fix is WRONG
+
+Two repairs were pre-registered in git (`84b25ab`) before either ran: C4 `dedicated + 1 bench`
+(14/team) and C5 `earned-starter demand` (read off the flex allocation
+`compute_league_starters` already computes, summing to exactly the lineup size, 10/team).
+
+| candidate | per-team demand | starter | vs N4 | 95% CI | W/L | vs consensus | seasons worse | breaches |
+|---|---|---|---|---|---|---|---|---|
+| C3 capacity | 22 | 2052.4 | +23.2 | [+2.3, +44.1] | 30/20 | +17.6 | 2/5 | 0 |
+| C1 available-pool | — | 2042.6 | +13.4 | [−6.4, +33.2] | 32/18 | +7.8 | 2/5 | 0 |
+| **C0 = N4 (control)** | static | **2029.2** | — | — | — | **−5.6** | — | 34 |
+| C2 startable | 14 | 2017.9 | −11.3 | [−43.3, +20.6] | 21/29 | −16.9 | 3/5 | 47 |
+| **C5 earned** | **10** | **1992.0** | **−37.2** | **[−53.0, −21.4]** | 7/36 | −42.8 | 4/5 | **60** |
+| **C4 ded+1 bench** | **14** | **1976.8** | **−52.4** | **[−86.3, −18.5]** | 15/35 | −58.0 | 4/5 | 22 |
+
+**Both repairs made things significantly worse, and C5 — the one that is arithmetically
+"correct" — was the worst of all**, with the most cap breaches (60) and K back up to 4.32.
+
+**Why.** A lower demand target draws the replacement level from a *shallower* index. Once
+`remaining_demand` reaches 0 the replacement level becomes the *best available* player, so that
+position's surplus is identically zero. Measured over 144 real picks: C5 hits demand exhaustion
+in **17% of picks** and produces exact zero-score ties in 3%; C0 and C3 do so in **0%**. The
+flex "over-count" was not functioning as an error — it was acting as a **depth buffer** that
+keeps VORP discriminating late in the draft. This directly refutes this phase's own Phase 1
+hypothesis, and is recorded as such.
+
+### Phase 4 — demand depth is the real parameter, and the region is broad
+
+Sweeping a uniform multiplier on `startable_slots` (the only thing that varies is *depth*):
+
+| scale | league demand | can exhaust? | starter | vs N4 | 95% CI | seasons worse | breaches | TE | K |
+|---|---|---|---|---|---|---|---|---|---|
+| 0.75 | 106 | **yes** | 2025.8 | −3.4 | ns | 4/5 | 56 | 5.24 | 2.26 |
+| 1.00 | 140 | **yes** | 2017.9 | −11.3 | ns | 3/5 | 47 | 5.36 | 2.00 |
+| 1.50 | 210 | no | 2046.4 | +17.2 | ns | 3/5 | 0 | 4.00 | 1.40 |
+| 2.00 | 280 | no | **2060.7** | **+31.5** | [+10.1, +52.9] | 2/5 | 0 | 3.98 | 1.08 |
+| **2.50** | 350 | no | 2055.9 | **+26.7** | **[+7.1, +46.3]** | **1/5** | **0** | 3.90 | **1.00** |
+| **3.00** | 420 | no | 2057.4 | **+28.2** | **[+6.4, +50.0]** | **1/5** | **0** | 3.50 | 1.28 |
+
+**A broad plateau, not a spike** — every scale ≥ 1.5 beats N4 — and the plateau has a
+*structural* explanation rather than a fitted one: a draft consumes 160 picks, so league-wide
+demand must exceed 160 for exhaustion never to occur, i.e. **scale > 1.14**. The plateau begins
+at exactly the first tested scale above that threshold.
+
+**Two tiers pass every pre-registered gate**, with leave-one-season-out positive on all five:
+
+| tier | margin | g1 | g2 | g3 | g4 | LOSO | **ships** |
+|---|---|---|---|---|---|---|---|
+| scale ×3.0 | +28.2 | ✓ | ✓ | ✓ | ✓ | ✓ (+24.5/+43.8/+23.5/+30.8/+18.1) | **yes** |
+| scale ×2.5 | +26.7 | ✓ | ✓ | ✓ | ✓ | ✓ (+29.0/+38.3/+14.1/+31.7/+20.3) | **yes** |
+| scale ×2.0 | +31.5 | ✓ | ✓ | ✗ | ✓ | ✓ | no |
+| C3 capacity | +23.2 | ✓ | ✓ | ✗ | ✓ | ✓ | no |
+
+### Out-of-format generalization — the strongest evidence here
+
+The scale was chosen on 1-QB data. Re-run unchanged on the **`legacy_2qb_dynasty`** config
+(different lineup, roster size 17, different consensus board), scale ×2.5 gains **+65.6 starter
+points, 95% CI [+31.8, +99.5], W/L 34/16, significant** — while C3 manages only +23.6 (ns).
+The mechanism transfers to a format it was never tuned on, which is genuine out-of-sample
+support rather than a second look at the same five seasons.
+
+### Mechanism
+
+Late rounds (11–16) per draft, N4 → scale ×2.5: K **1.74 → 0.00**, DST 0.98 → 0.62,
+RB 0.22 → 1.28, WR 1.46 → 1.22. Kicker hoarding disappears entirely and skill players stay
+competitive late — without any positional rule. TE settles at 3.90 (cap 4, zero breaches) with
+first-TE round essentially unchanged (5.6 → 5.8), so this is depth, not an earlier reach.
+
+### Classification
+
+| candidate | verdict |
+|---|---|
+| C4 dedicated+1 bench, C5 earned-starter, C2 startable | **Reject** — significantly worse; demand too shallow, exhausts, collapses VORP |
+| C1 available-pool, C3 capacity | **Promising but not robust** — beat N4 but fail Gate 3 |
+| **scale ×2.5 / ×3.0** | **Ready for implementation, with the caveat below** |
+
+**The caveat, stated plainly.** The two passing scales were identified by looking at a 6-point
+sweep, so "passes Gate 3" is a **post-hoc selection**, not a pre-registered win — ×2.0 has the
+larger margin and fails the same gate, and ×2.0 vs ×2.5 is well inside noise. What is *not*
+post-hoc is the mechanism: the plateau is broad, has a structural threshold, and reproduces in a
+second league format. Production remains N4 and nothing is shipped on this evidence alone.
+
+### Recommended next step
+
+A short, strictly pre-registered confirmation phase:
+
+1. **Pre-register the scale on the structural criterion, not the argmax** — the smallest depth
+   that cannot exhaust with margin (league demand ≥ ~2× the 160 picks a draft consumes, i.e.
+   scale 2.0–2.5) — committed to git *before* the confirming run.
+2. Re-run the **official** `alpha-squad evaluate draft-simulation` benchmark end to end with
+   that scale wired into production, plus determinism across two processes.
+3. Ship only on a clean pass of the full gate set on that run.
+
+Retained, unused by production and covered by tests: the C4/C5 definitions, the sweep factory,
+and the V/VS tiers.
+
+## D67 — Replacement depth has a structural answer: the demand a draft actually consumes. Shipped.
+
+Follow-up to D65/D66, and the **first production change to `league/draft.py` since D63**. D66 left
+`scale ×2.5`/`×3.0` passing every gate but selected post-hoc off a 6-point sweep, and recommended
+pre-registering "≈2.0–2.5" as the structural criterion. That recommendation was wrong, and this
+entry says why before saying what replaced it.
+
+### Phase 1 — what the depth multiplier actually does
+
+Deepening demand is arithmetically identical to **adding a fixed bonus to every player at a
+position**, and the size of that bonus is set by the shape of that position's projection tail —
+not by anything about scarcity. Start-of-draft replacement level and the resulting VORP bonus vs
+production's static level, mean over real 2021–2025 data:
+
+| variant | QB | RB | WR | TE | K | DST |
+|---|---|---|---|---|---|---|
+| static (production) | 273.7 | 146.6 | 154.5 | 132.6 | 132.9 | 97.7 |
+| ×1.5 | 230.6 | 65.8 | 108.2 | 43.5 | 123.8 | 94.2 |
+| ×2.5 | 164.8 | 26.2 | 62.5 | 26.2 | 102.5 | 87.0 |
+| ×3.0 | 122.1 | 12.7 | 47.3 | 14.8 | 75.1 | 80.2 |
+| **VORP bonus at ×2.5** | **+108.9** | **+120.4** | **+92.0** | **+106.4** | **+30.4** | **+10.7** |
+
+Kicker hoarding vanished at ×2.5 (D66: K 1.74 → 0.00 in late rounds) not because kickers were
+priced correctly but because **everyone else received ~100 points and kickers received 30**. The
+asymmetry comes from pool depth alone: ~225 WRs with a long tail, ~45 kickers whose tail collapses
+to a 2.0 floor past rank ~35, and exactly 32 team defenses. A knob whose effect size is governed
+by how many kickers exist in the database is a positional re-weighting in disguise, and **"×2.5"
+was never a structural criterion**.
+
+### Phase 1 — what a draft actually consumes, and why shape beats scale
+
+Ten teams drafting the fair roster-aware consensus, 160 picks, per season 2021–2025:
+
+| | QB | RB | WR | TE | K | DST | Σ |
+|---|---|---|---|---|---|---|---|
+| **consumed, per team** | **2.04** | **4.64** | **5.64** | **1.68** | **1.00** | **1.00** | **16** |
+| `startable_slots` | 1 | 4 | 4 | 3 | 1 | 1 | 14 |
+| `positional_capacity` | 2 | 6 | 6 | 4 | 2 | 2 | 22 |
+| lineup slots | 1 | 2 | 2 | 1 | 1 | 1 | 10 |
+
+`startable_slots` is wrong in **shape**, not merely in scale — it under-counts QB 2× and
+over-counts TE 1.8×. No uniform multiplier can repair a shape error; it can only trade one
+position's exhaustion against another's inflation.
+
+### Phase 1 — where the calculation goes degenerate
+
+Two degeneracies, audited over 800 real pick-states (160 picks × 5 seasons). **Exhaustion**
+(`remaining_demand → 0`, replacement becomes best-available, the position's surplus is identically
+zero) and **clamping** (`remaining_demand ≥ pool`, replacement drawn from players nobody will
+draft). First round of exhaustion, `–` = never:
+
+| target | QB | RB | WR | TE | K | DST |
+|---|---|---|---|---|---|---|
+| ×1.0 `startable` | **8.8** | 12.6 | **9.4** | – | 16.0 | 16.0 |
+| ×1.5 | 11.4 | – | – | – | – | – |
+| ×2.0 | 15.4 | – | – | – | – | – |
+| ×2.5 / ×3.0 | – | – | – | – | – | – |
+| consumption | 15.4 | 14.4 | 15.6 | 14.6 | 16.0 | 16.0 |
+
+**Clamping never occurred at any depth up to ×3.0**, at any position. Exhaustion is the only
+binding constraint — and QB is what forced the uniform scale above 2.5, purely because its
+`startable_slots` base is 1 in a format whose drafts take 2.04 QBs per team.
+
+### Phase 1 — roster legality is not enforced anywhere in the engine
+
+- `recommend_draft_pick` has **no hard constraint**; the only positional stops are soft
+  (`roster_fit_multiplier`'s [0.7, 1.3], `OVER_CAP_VALUE_MULTIPLIER = 0.1`).
+- `compute_league_starters(teams=1)` scores an unfilled slot as empty and worth 0 — no error.
+- Proof it is permitted: **`alpha_bpa` finishes 50/50 drafts with a mean 6.48 unfilled mandatory
+  starting slots**; `generic_prior_year` 5.60 in 50/50.
+- The *fair opponent* has had this rule since D61; the engine never has.
+- `alpha_league_aware`'s current 0.00 unfilled is bought **entirely by the static-replacement
+  defect**, which prices a kicker at +30 to +50 VORP all draft. Today's legality is a side effect
+  of the bug being removed.
+
+**Platform convention: UNKNOWN.** Nothing in the repo establishes whether the modelled platform
+requires every starting slot filled. What is certain is the scoring consequence — an unfilled K
+slot costs ~130 realized points, so it is never rational whatever the platform allows.
+
+### Phase 2 — the structural rule, pre-registered before measurement (commit `30a0683`)
+
+Replacement level is *the best player at a position who will still be undrafted when the draft
+ends* — the classic VBD definition, made literal against the live board:
+
+```
+demand[p]      = players at p a full draft of THIS league consumes, per team
+remaining[p]   = max(0, teams * demand[p] - drafted[p])
+replacement[p] = the remaining[p]-th best AVAILABLE player at p (0-indexed)
+```
+
+`demand[p]` is obtained by running **one mock draft of this league on the preseason consensus
+board alone** (`teams × roster_size` picks, best-available by ECR with the endgame mandatory-slot
+reservation) and counting each position. `Σ demand[p] = roster_size` by construction — the
+structural anchor, and the reason **there is no free parameter to tune**. Flex resolves itself
+(slots go to whoever the board says). It is format-adaptive from config: measured on
+`legacy_2qb_dynasty` it returns QB 3.5/team against the 1-QB league's 1.7. It is leakage-safe —
+`load_market_ranks` is already restricted to the drafted season's Jul/Aug snapshots (D54).
+
+Tiers, and the decision rule, both committed before any 50-draft run:
+
+| tier | definition |
+|---|---|
+| W0 | control — shipped N4, static replacement |
+| W1 | the structural rule alone |
+| W2 | W1 + endgame mandatory-slot reservation (legality as a hard constraint) |
+| W3 | legality **alone**, on static replacement — isolates it from any depth change |
+| W4 | reference — D66's uniform ×2.5, unchanged |
+
+Ship the **lowest-numbered** tier clearing every gate.
+
+### Phase 3 — results (2021–2025 × 10 slots = 50 drafts/tier, fair opponent)
+
+| tier | starter | vs W0 | 95% CI | W/L | seasons worse | infeasible | cap breaches | mean K | mean TE |
+|---|---|---|---|---|---|---|---|---|---|
+| W0 control | 2029.2 | — | — | — | — | 0/50 | 34 | 2.74 | 2.06 |
+| **W1** | **2061.3** | **+32.1** | **[+11.5, +52.7]** | 24/20 | **1** | **0/50** | **1** | 2.02 | 2.16 |
+| W2 | 2061.3 | +32.1 | [+11.5, +52.7] | 24/20 | 1 | 0/50 | 1 | 2.02 | 2.16 |
+| W3 | 2029.2 | +0.0 | — | 0/0 | 0 | 0/50 | 34 | 2.74 | 2.06 |
+| W4 (D66 ×2.5) | 2055.9 | +26.7 | [+7.1, +46.3] | 34/16 | 1 | 0/50 | 0 | 1.00 | 3.90 |
+
+**Two findings worth stating plainly.**
+
+**W3 is byte-identical to W0.** The legality constraint never fires — the static defect already
+overvalues kickers enough to fill every mandatory slot. So legality contributed **exactly 0.0**
+points, and W2 is byte-identical to W1 for the same reason. Legality is insurance, not a gain, and
+it is not what was measured here. Per the pre-registered rule (lowest-numbered clearing every
+gate) and the standing Occam tie-break, **W1 ships and the legality constraint does not.** It
+stays available in the harness.
+
+**W1 beats the D66 reference it was measured against.** +32.1 vs +26.7, on a rule with no
+parameter versus one selected off a sweep. W4 still wins more often (34/16 vs 24/20) and carries
+zero cap breaches to W1's one — W1 wins bigger, less consistently.
+
+Gates, all pre-registered: G1 zero-rate at a mandatory position **0** at every position; G2
+infeasible rosters **0/50**; G3 seasons worse **1** (limit 1); G4 positional timing, largest shift
+0.8 rounds (limit 2.0); G5 cap breaches **34 → 1**, decreased; G6 leave-one-season-out
+**+25.4 / +45.5 / +22.9 / +35.7 / +31.1**, positive on all five.
+
+**G7, out-of-format** — `legacy_2qb_dynasty`, different lineup, roster size 17, different consensus
+board, rule unchanged: W1 **+75.5, 95% CI [+38.6, +112.3], W/L 36/14**, against W4's +65.6. The
+mechanism transfers to a format it was never tuned on — which, for a rule with no parameter, is
+what it should do.
+
+### What shipped
+
+`league/draft.py`'s value base now measures its surplus term against the draft-aware level.
+`vorp` stays **static** and continues to drive the D55 opportunity-cost replay, the reported
+candidate field, and the candidate-universe filter — that term prices near-term availability
+against a season-level scale and was measured that way, so re-basing it would silently change a
+second mechanism. Only the value base moved, which is exactly the tier that was measured.
+
+Three implementations were promoted or unified rather than duplicated:
+`league/replacement.py::market_draft_demand` and `::demand_boundary_replacement` are now
+production, with `evaluation/replacement_diagnostics.py` delegating to them; and
+`league/opportunity_cost.py::roster_aware_market_pick` is the single canonical endgame rule, used
+by the fair benchmark opponent *and* by the demand model. If those two ever disagreed about how a
+draft consumes positions, the shipped replacement level would be measured against a draft nobody
+plays.
+
+Cost: ~11ms per recommendation for the mock draft, so it is computed per call rather than cached —
+a re-ingest can never serve a stale target.
+
+### A real bug this change introduced, found by the existing suite
+
+Making replacement depend on `available_player_ids` gave that argument a second meaning it does
+not always carry. `POST /league/{id}/draft` accepts an arbitrary set, and **a shortlist means
+"the players I am asking about", not "the only players left in the league"**. Read as a board, a
+three-player shortlist says almost everyone is drafted, so every position's remaining demand is 0,
+replacement collapses to the best player in the shortlist, and the whole shortlist prices at zero
+surplus — the engine stops discriminating entirely. Two pre-existing tests caught it
+(`test_over_cap_position_is_heavily_discounted`, `test_the_two_engines_actually_disagree_here`).
+
+Two structural guards, neither a tuned threshold, both verified to leave tier W1 **byte-identical
+on real 2021–2025 data**:
+
+1. **Boundary not on the board** (`demand_boundary_replacement`) — if `remaining_demand` exceeds
+   what is available at the position, the boundary player does not exist to be observed, so the
+   position is omitted and the caller uses the static level. Clamping to the worst available
+   instead would hand every other player there a large spurious surplus. Never fires in a real
+   draft: 0/800 real pick-states, every position, every depth up to ×3.0.
+2. **Pool is not a board** (`league/draft.py`) — a draft removes at most `teams × roster_size`
+   players, so a pool implying more than that cannot be a draft in progress and the whole
+   draft-aware path is skipped. At the benchmark's last pick exactly `teams × roster_size` are
+   gone, so this never fires there either.
+
+One test fixture also had to change rather than the assertion:
+`test_the_two_engines_actually_disagree_here` curated `available` down to four players in a 2-team,
+4-round league, which now correctly reads as "every QB and RB slot in the league is filled" and
+zeroes both positions' surplus. Restoring the omitted depth players to `available` restores the
+discrimination the test exists to document.
+
+### What remains UNKNOWN
+
+- **Whether W1's shape is right or merely better.** W4's crude ~+100-point skill-position bonus may
+  still be capturing something real that a correctly-shaped target does not. W1 beat it on both the
+  primary metric and out-of-format, but W4 won more individual drafts.
+- **Consumption when Alpha deviates.** `demand[p]` is measured from a 10-consensus mock, so it is
+  exogenous by construction; how well it describes a draft where one seat plays differently is not
+  measured.
+- **Whether K/DST replacement means anything at any depth** — D57 measured year-over-year K r=0.41,
+  DST r=0.29.
+- **Platform legality convention**, per Phase 1.
+- **Sample size** — five seasons, 50 drafts per tier.
+
+### Official benchmark — Alpha leads fair consensus for the first time on this format, inside noise
+
+`uv run alpha-squad evaluate draft-simulation`, 2021–2025 × 10 slots, `ro`/`redraft-overall`
+board, headline vs the fair `market_consensus_roster_aware` opponent. Primary metric is the
+established one: **mean realized starter points**.
+
+| | Alpha `alpha_league_aware` | `market_consensus_roster_aware` | delta |
+|---|---|---|---|
+| Mean starter pts | **2061.3** | 2034.8 | **+26.5** |
+| Mean total roster pts | 2720.9 | 2802.6 | −81.7 |
+| Stdev (starter) | **128.2** | 202.7 | — |
+| Unfilled mandatory slots | 0/50 | 0/50 | — |
+
+Against the previous production engine measured in the **same** harness and configuration
+(D63/N4: Alpha 2029.2, consensus 2034.8, −5.6) the swing is **+32.1**, which reproduces the
+forensic tier-W1 margin exactly.
+
+**The lead is not statistically significant.** Paired over the 50 (season, slot) trials:
+mean +26.5, **95% CI [−38.0, +91.0]**, win/loss **28/22**, 5 of 10 draft slots. The W1-vs-N4
+comparison *is* significant (CI [+11.5, +52.7]) because both arms share most of their variance;
+Alpha-vs-consensus does not, and 50 trials cannot resolve a 26-point edge against a 200-point
+spread. **"Alpha beats consensus" is now the point estimate, not an established result.**
+
+| Season | Alpha | Consensus | delta | slots won |
+|---|---|---|---|---|
+| 2021 | 2081.6 | 2046.5 | +35.1 | 5/10 |
+| 2022 | 2162.8 | 2042.4 | +120.4 | 7/10 |
+| 2023 | 2050.7 | 2016.9 | +33.8 | 7/10 |
+| **2024** | **1884.0** | **2028.1** | **−144.1** | 3/10 |
+| 2025 | 2127.4 | 2040.0 | +87.5 | 6/10 |
+
+Alpha wins 4 of 5 seasons. The *gain* is not concentrated in one season, but the margin's
+robustness is thin: leave-one-season-out pooled deltas are +24.4 / **+3.1** / +24.7 / +69.2 /
++11.3 — **removing 2022 leaves +3.1, an effective tie.**
+
+**Roster construction is sound and the target format is confirmed.** Lineup
+`QB1/RB2/WR2/TE1/FLEX2/K1/DEF1`, `DEF`→`DST`, every roster exactly 16 players.
+
+| | QB | RB | WR | TE | K | DST | zero at a mandatory pos | cap breaches |
+|---|---|---|---|---|---|---|---|---|
+| Alpha | 1.82 | 3.26 | 5.50 | 2.16 | 2.02 | 1.24 | **0/50 at every position** | 1 (one 3-K draft) |
+| Consensus | 2.04 | 4.64 | 5.64 | 1.68 | 1.00 | 1.00 | 0/50 | **38** (QB 14, WR 15, RB 8, TE 1) |
+
+No zero-K, zero-DEF, or otherwise structurally invalid roster on either side. Alpha's roster
+construction is markedly tighter than the opponent's, which still reaches 6 QBs and 10 WRs.
+
+**Determinism**: two full runs in separate processes with `PYTHONHASHSEED` unset produced
+byte-identical reports (`md5 d4a1250c064a687a766dc87cbd231037` for both
+`reports/draft_simulation.md` and `reports/dsim_run2.md`).
+
+### Mechanism of the residual gap: RB, and it is a projection problem, not a draft-rule problem
+
+Scoring each realized starting lineup slot by slot, Alpha vs consensus, mean over 10 slots:
+
+| season | QB | RB | WR | TE | K | DST | total |
+|---|---|---|---|---|---|---|---|
+| 2021 | +40.1 | −179.0 | +31.9 | +80.7 | +49.0 | +12.4 | +35.1 |
+| 2022 | −16.4 | −98.5 | +234.4 | −66.5 | +42.7 | +24.7 | +120.4 |
+| 2023 | +37.4 | −157.2 | +217.1 | −45.9 | +6.8 | −24.3 | +33.8 |
+| 2024 | +102.7 | **−498.4** | +174.3 | +15.1 | +55.5 | +6.6 | −144.1 |
+| 2025 | +71.8 | −305.2 | +258.3 | −12.5 | +41.5 | +33.5 | +87.5 |
+| **mean** | **+47.1** | **−247.7** | **+183.2** | **−5.8** | **+39.1** | **+10.6** | **+26.5** |
+
+**Alpha loses RB in all five seasons and wins WR in all five.** It is +183 at WR while drafting
+*fewer* WRs than consensus (5.50 vs 5.64) — its WR selection is genuinely better — and −248 at RB
+while drafting 1.4 fewer RBs (3.26 vs 4.64). 2024 is the same failure, four times larger.
+
+The cause is measurable and sits upstream of the draft engine. Projection bias (mean realized −
+mean projected) over each position's top-N, where N is the league-wide demand the engine uses:
+
+| season | QB | RB | WR | TE |
+|---|---|---|---|---|
+| 2021 | +2.6 | +7.1 | −9.6 | +23.5 |
+| 2022 | −36.2 | −4.9 | −3.0 | −4.6 |
+| 2023 | −64.4 | +14.6 | +2.8 | −2.7 |
+| **2024** | −30.3 | **+38.0** | −11.6 | +7.9 |
+| 2025 | −30.3 | **+27.1** | −21.6 | +3.9 |
+
+**M6 under-projects RBs (positive bias in 4 of 5 seasons) and over-projects WRs and QBs
+(negative in 4 of 5).** RB's under-projection is largest in exactly 2024 (+38.0), the season
+Alpha loses. The draft engine is faithfully maximizing expected starter points against inputs
+that are positionally miscalibrated, so it drafts accordingly: first RB at round **4.7** vs
+consensus's **2.7**, RB3 at 13.7 vs 7.6, and a 4th RB in only 18 of 50 drafts vs 37.
+
+This is the first evidence in this project that specifically implicates the projection layer
+rather than the draft decision layer, and it is why no further draft-rule change is proposed
+here. The next experiment is a **walk-forward positional calibration**: estimate each position's
+bias from seasons strictly earlier than the target season, apply it, re-run this benchmark
+unchanged. Stated honestly, the bias magnitudes are not fully predictable that way (a
+2021–2023-only estimate gives RB +5.6 against 2024's actual +38.0), but the *sign* is stable for
+RB, WR and QB, so a leakage-safe correction has real signal to work with. Correcting by the
+in-sample bias would be hindsight and is not the experiment.
+
+### P1-0 status
+
+**Not closed.** Alpha leads on the point estimate for the first time on this format, roster
+construction is sound and the run is deterministic — but the interval contains zero, the margin
+collapses to +3.1 without 2022, and 2024 remains a 144-point loss with a diagnosed upstream
+cause. P1-0 stays **OPEN** pending the positional-calibration experiment above.

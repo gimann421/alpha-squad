@@ -3,21 +3,70 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import duckdb
 import pytest
 
 from alpha_squad.evaluation.draft_forensics import (
     ALL_TIERS,
-    _feasibility_cap,
+    DRAFT_AWARE_REPLACEMENT_TIERS,
+    PREREGISTERED_W_CONTROL,
+    TIER_DESCRIPTIONS,
+    W_TIER_SPEC,
+    W_TIERS,
+    W_TIERS_ENFORCING_LEGALITY,
     homogeneous_league_draft,
     load_season_static,
     roster_feasibility_metrics,
     score_candidate,
     simulate_forensic_draft,
 )
-from alpha_squad.league.context import LeagueContext
+from alpha_squad.league.context import LeagueContext, load_league_context
+from alpha_squad.league.roster import positional_feasibility_cap, unfilled_dedicated_slots
+from alpha_squad.models.baselines.kicking_defense import MODEL_NAME as KDST_MODEL_NAME
 from alpha_squad.models.uncertainty.run import MODEL_VERSION as UNCERTAINTY_MODEL_VERSION
 from alpha_squad.storage.db import init_db
+
+_LEAGUE_CONFIGS_DIR = (
+    Path(__file__).parents[2] / "src" / "alpha_squad" / "config" / "league_configs"
+)
+TARGET_LEAGUE = _LEAGUE_CONFIGS_DIR / "target_league.yaml"
+
+
+def _seed_single_position_season(con, season, position, n_players=1):
+    """Minimal real-shaped data for one position, enough for `load_season_static` to produce
+    a usable `projections`/`vorp` entry -- QB/RB/WR/TE via `uncertainty_predictions` (M6),
+    K/DST via `projection_snapshot` (D57's baseline), matching `load_season_projections`'s
+    two real data paths so this seeds through the same code every other caller reads."""
+    for i in range(n_players):
+        player_id = f"{position}_{i}"
+        points = 200.0 - i * 10
+        if position in ("K", "DST"):
+            con.execute(
+                "INSERT INTO projection_snapshot "
+                "(model_name, player_id, season, position, predicted_points, built_at) "
+                "VALUES (?, ?, ?, ?, ?, current_timestamp)",
+                [KDST_MODEL_NAME, player_id, season, position, points],
+            )
+        else:
+            con.execute(
+                """
+                INSERT INTO uncertainty_predictions
+                    (prediction_id, player_id, season, position, model_version, feature_version,
+                     point_prediction, top12_prob, top24_prob, confidence, calibration_season, predicted_at)
+                VALUES (?, ?, ?, ?, ?, 'test_v1', ?, 0.2, 0.4, 0.8, ?, current_timestamp)
+                """,
+                [
+                    f"pred_{player_id}",
+                    player_id,
+                    season,
+                    position,
+                    UNCERTAINTY_MODEL_VERSION,
+                    points,
+                    season - 1,
+                ],
+            )
 
 
 @pytest.fixture
@@ -103,9 +152,15 @@ class TestLoadSeasonStatic:
 
 
 class TestFeasibilityCap:
+    """The forensic harness has no cap logic of its own (D61 Stage 1.2): it calls the same
+    `league/roster.py::positional_feasibility_cap` production uses, so these are really
+    characterization tests of that shared function, kept here so a forensic-tier test still
+    exercises the exact cap the harness applies."""
+
     def test_derived_from_league_bench_not_hardcoded(self):
         """Regression: unlike roster_need's hardcoded depth_target = slots + 2,
-        _feasibility_cap must actually change when the league's configured bench changes."""
+        positional_feasibility_cap must actually change when the league's configured bench
+        changes."""
         league_small_bench = LeagueContext(
             league_id="x",
             format="redraft",
@@ -120,7 +175,9 @@ class TestFeasibilityCap:
             lineup={"QB": 1, "RB": 1, "WR": 1, "TE": 1},
             roster={"bench": 20},
         )
-        assert _feasibility_cap(league_big_bench, "QB") > _feasibility_cap(league_small_bench, "QB")
+        assert positional_feasibility_cap(league_big_bench, "QB") > positional_feasibility_cap(
+            league_small_bench, "QB"
+        )
 
     def test_cap_is_at_least_the_starting_requirement(self):
         league = LeagueContext(
@@ -130,7 +187,61 @@ class TestFeasibilityCap:
             lineup={"QB": 2, "RB": 1},
             roster={"bench": 0},
         )
-        assert _feasibility_cap(league, "QB") >= 2
+        assert positional_feasibility_cap(league, "QB") >= 2
+
+
+class TestFeasibilityCapParityWithProduction:
+    """D61 Stage 1.2 acceptance criterion 3: the forensic harness must use the SAME feasibility
+    cap production uses, for every position in every shipped league config, so the two cannot
+    silently drift apart the way the pre-D61 forensic-local `_feasibility_cap` copy did (it
+    diverged from production's flex-aware `positional_feasibility_cap` on RB/WR/TE)."""
+
+    def test_forensics_module_imports_the_shared_cap_function_rather_than_reimplementing_it(self):
+        import alpha_squad.evaluation.draft_forensics as forensics_mod
+        import alpha_squad.league.roster as roster_mod
+
+        assert not hasattr(forensics_mod, "_feasibility_cap"), (
+            "a forensic-local feasibility cap reappeared -- delegate to "
+            "league.roster.positional_feasibility_cap instead (D61 Stage 1.2)"
+        )
+        assert forensics_mod.positional_feasibility_cap is roster_mod.positional_feasibility_cap
+
+    @pytest.mark.parametrize("config_name", ["target_league.yaml", "legacy_2qb_dynasty.yaml"])
+    def test_score_candidates_feasibility_penalty_threshold_matches_production_cap(
+        self, con, config_name
+    ):
+        """Drive the real forensic scoring path (score_candidate, tier E) and confirm the
+        feasibility penalty engages exactly at production's cap boundary -- not one before,
+        not one after -- for every dedicated position in a real shipped league config."""
+        league = load_league_context(_LEAGUE_CONFIGS_DIR / config_name)
+        season = 2023
+        for position in league.dedicated_slots():
+            _seed_single_position_season(con, season, position, n_players=1)
+        static = load_season_static(con, league, season)
+
+        for position in league.dedicated_slots():
+            player_id = f"{position}_0"
+            if player_id not in static.projections:
+                continue
+            cap = positional_feasibility_cap(league, position)
+
+            # `have >= cap` triggers the penalty, so a roster one short of the cap must NOT
+            # be penalized, and a roster already AT the cap must be.
+            below_cap_roster = [position] * max(0, cap - 1)
+            below = score_candidate(
+                static, player_id, league, below_cap_roster, "E", available={player_id}
+            )
+            assert below.feasibility_multiplier is None, (
+                f"{position}: penalty applied one below production's cap ({cap})"
+            )
+
+            at_cap_roster = [position] * cap
+            at_cap = score_candidate(
+                static, player_id, league, at_cap_roster, "E", available={player_id}
+            )
+            assert at_cap.feasibility_multiplier == pytest.approx(0.1), (
+                f"{position}: no penalty applied at production's cap ({cap})"
+            )
 
 
 class TestScoreCandidateTiers:
@@ -157,7 +268,7 @@ class TestScoreCandidateTiers:
         _seed_league_season(con, 2023)
         league = _small_league()
         static = load_season_static(con, league, 2023)
-        cap = _feasibility_cap(league, "QB")
+        cap = positional_feasibility_cap(league, "QB")
         over_cap_roster = ["QB"] * (cap + 1)
         s = score_candidate(
             static,
@@ -271,3 +382,48 @@ class TestRosterFeasibilityMetrics:
         league = _small_league()
         metrics = roster_feasibility_metrics(league, ["QB", "RB", "WR", "TE"])
         assert metrics["concentration_index"] < 1.0
+
+
+class TestD67WTiers:
+    """D67: a structural demand target with no free parameter, plus roster legality as a
+    constraint kept separate from valuation."""
+
+    def test_the_control_reproduces_the_shipped_engine(self):
+        """W0 must be N4 exactly -- static replacement, no legality constraint. If the control
+        drifts from production, every W margin is measuring the wrong thing."""
+        assert W_TIER_SPEC["W0"] == (None, False)
+        assert PREREGISTERED_W_CONTROL == "W0"
+
+    def test_legality_tiers_are_derived_from_the_spec_not_listed_twice(self):
+        assert W_TIERS_ENFORCING_LEGALITY == ("W2", "W3")
+
+    def test_w3_isolates_legality_from_depth(self):
+        """The phase can only attribute a W2 win to depth if a tier exists that changes ONLY
+        legality. W3 is that tier: static replacement, constraint on."""
+        target, legality = W_TIER_SPEC["W3"]
+        assert target is None and legality is True
+
+    def test_every_w_tier_scores_through_the_draft_aware_branch(self):
+        for tier in W_TIERS:
+            assert tier in DRAFT_AWARE_REPLACEMENT_TIERS
+
+    def test_every_w_tier_is_described(self):
+        for tier in W_TIERS:
+            assert TIER_DESCRIPTIONS[tier]
+
+    def test_legality_restricts_to_a_mandatory_slot_at_the_deadline(self):
+        """The mechanism, at the level that matters: with exactly as many picks left as unfilled
+        mandatory slots, the pick must fill one -- and it must be the best of those by the
+        tier's own score, not a fixed position or a fixed round."""
+        league = load_league_context(TARGET_LEAGUE)
+        # A roster missing only K, with one pick left.
+        roster = ["QB", "RB", "RB", "WR", "WR", "TE", "DST"]
+        deficits = unfilled_dedicated_slots(league, roster)
+        assert deficits == {"K": 1}
+        assert sum(deficits.values()) == 1
+
+    def test_legality_does_nothing_while_picks_remain(self):
+        league = load_league_context(TARGET_LEAGUE)
+        roster = ["QB", "RB", "RB", "WR", "WR", "TE", "DST"]
+        # 5 picks left vs 1 unfilled slot -> the reservation must not trigger yet.
+        assert sum(unfilled_dedicated_slots(league, roster).values()) < 5

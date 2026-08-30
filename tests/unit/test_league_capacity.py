@@ -17,6 +17,7 @@ from alpha_squad.league.roster import (
     roster_fit_multiplier,
     roster_need,
     startable_slots,
+    unfilled_dedicated_slots,
 )
 
 TARGET_LINEUP = {"QB": 1, "RB": 2, "WR": 2, "TE": 1, "FLEX": 2, "K": 1, "DEF": 1}
@@ -148,3 +149,37 @@ class TestRosterNeed:
 
     def test_need_is_reported_for_every_dedicated_position_including_k_and_def(self):
         assert set(roster_need(_league(), [])) == {"QB", "RB", "WR", "TE", "K", "DST"}
+
+
+class TestUnfilledDedicatedSlots:
+    """D61 Stage 1.1: what a roster-aware consensus opponent needs to know it still owes a
+    legal lineup -- e.g. a K/DEF slot it has not yet drafted for."""
+
+    def test_empty_roster_owes_every_dedicated_slot(self):
+        assert unfilled_dedicated_slots(_league(), []) == {
+            "QB": 1,
+            "RB": 2,
+            "WR": 2,
+            "TE": 1,
+            "K": 1,
+            "DST": 1,
+        }
+
+    def test_filling_a_slot_removes_it_from_the_deficit(self):
+        deficits = unfilled_dedicated_slots(_league(), ["K"])
+        assert "K" not in deficits
+        assert deficits["RB"] == 2
+
+    def test_a_fully_filled_roster_owes_nothing(self):
+        full = ["QB", "RB", "RB", "WR", "WR", "TE", "K", "DST"]
+        assert unfilled_dedicated_slots(_league(), full) == {}
+
+    def test_over_filling_a_position_does_not_produce_a_negative_deficit(self):
+        deficits = unfilled_dedicated_slots(_league(), ["K", "K", "K"])
+        assert "K" not in deficits
+
+    def test_a_league_with_no_kicker_slot_reports_no_kicker_deficit(self):
+        """The correctness test the plan names explicitly: a league with no K slot must be
+        completely unaffected by this mechanism."""
+        no_kicker = _league(lineup={"QB": 1, "RB": 2, "WR": 2, "TE": 1, "FLEX": 2})
+        assert "K" not in unfilled_dedicated_slots(no_kicker, [])

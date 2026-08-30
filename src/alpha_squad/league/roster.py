@@ -47,6 +47,69 @@ def positional_capacity(league: LeagueContext, position: str) -> int:
     return slots + bench_share
 
 
+def startable_saturation(league: LeagueContext, roster_positions: list[str]) -> dict[str, float]:
+    """{position: the fraction of that position's STARTABLE capacity this roster has not yet
+    filled}, in [0, 1] (D64).
+
+    `1.0` means none of the slots this position could start in are taken; `0.0` means the
+    roster already holds as many as it could ever start, so one more body there cannot reach
+    the starting lineup no matter how good he is.
+
+    Derived entirely from `startable_slots` -- dedicated slots plus every flex slot the
+    position is eligible for -- so the league's own lineup drives it and nothing is hardcoded
+    per position. That is what makes K structurally different from RB here without any rule
+    naming either: in the 1-QB target format K has **1** startable slot (no flex eligibility),
+    so a second kicker sits at 0.0 saturation, while RB has **4** (2 dedicated + 2 FLEX), so a
+    third running back is still at 0.25 and retains a quarter of its surplus value.
+
+    A position with no startable slot at all returns 0.0 rather than dividing by zero."""
+    startable = startable_slots(league)
+    counts: dict[str, int] = {}
+    for pos in roster_positions:
+        counts[pos] = counts.get(pos, 0) + 1
+    factors: dict[str, float] = {}
+    for pos, slots in startable.items():
+        if slots <= 0:
+            factors[pos] = 0.0
+            continue
+        factors[pos] = max(0, slots - counts.get(pos, 0)) / slots
+    return factors
+
+
+def saturated_surplus(vorp: float, saturation: float) -> float:
+    """Scale a player's value ABOVE replacement by how much startable room his position has
+    left, leaving value BELOW replacement untouched (D64).
+
+    Only the surplus is scaled. A negative VORP means the player is worse than a freely
+    available waiver-wire body, and that is true regardless of roster shape -- the same
+    reasoning, and the same `max(0, ...)` clamp, that
+    `league/opportunity_cost.py::positional_opportunity_cost` already applies and documents.
+    Scaling the negative part instead would make a saturated position look BETTER than an
+    unsaturated one whenever both are below replacement, which is precisely backwards."""
+    return saturation * max(0.0, vorp) + min(0.0, vorp)
+
+
+def unfilled_dedicated_slots(league: LeagueContext, roster_positions: list[str]) -> dict[str, int]:
+    """{position: deficit} for every dedicated (non-flex) starting slot this roster has not
+    yet filled to its minimum -- e.g. a league with `K: 1` and no kicker drafted yet reports
+    `{"K": 1, ...}`. Positions already at or past their dedicated count are omitted entirely,
+    so an empty dict means every mandatory slot is covered.
+
+    Derived from `league.dedicated_slots()`, never hardcoded (D61 Stage 1.1) -- this is what
+    lets a roster-aware consensus drafter (`evaluation/draft_simulation.py`) know it must fill
+    a K/DEF slot in a league that has one, and correctly does nothing in a league that
+    doesn't."""
+    dedicated = league.dedicated_slots()
+    counts: dict[str, int] = {}
+    for pos in roster_positions:
+        counts[pos] = counts.get(pos, 0) + 1
+    return {
+        pos: slots - counts.get(pos, 0)
+        for pos, slots in dedicated.items()
+        if counts.get(pos, 0) < slots
+    }
+
+
 def roster_need(league: LeagueContext, roster_positions: list[str]) -> dict[str, float]:
     """{position: need_score} for every position with a dedicated slot. need_score > 0 means
     the roster cannot yet fill that position's starting slots at all (urgent); a small

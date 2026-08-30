@@ -139,6 +139,11 @@ def attribute_draft_picks(
                 ecr_type=ecr_type,
                 top_n=1,
                 current_pick_overall=overall,
+                # D61 Stage 1.3: without this, recommend_draft_pick falls back to VORP (the
+                # D55 engine) instead of marginal starter value (the shipped D60 engine), so
+                # this attribution measured the wrong engine. `my_roster` IS this team's own
+                # roster at this point in the draft -- see the append below.
+                roster_player_ids=my_roster,
             )
             alpha_pick = rec.recommendation
             consensus_pick = _market_consensus_pick(available, market_rank)
