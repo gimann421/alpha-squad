@@ -161,6 +161,25 @@ items with no listed dependency can start immediately.
 > VORP rather than be absorbed by the replacement level. Full account: `docs/DECISIONS.md` D69 and
 > `docs/RB_AVAILABILITY_PREREGISTRATION.md`.
 
+> **D70 update — D69's own recommended follow-up was implemented and run. It also failed. P1-0
+> unchanged, still OPEN.** Four preseason-knowable availability features (prior-3-season games
+> history, age, position-cohort games baseline, prior-season workload), appended to M6 for RB
+> only, committed before fitting. **B1 (accuracy) and B2 (targeted bias falls) both FAIL** — pooled
+> RMSE marginally worse (88.60 vs control 88.08) and, decisively, **the RB signed bias grew larger
+> under treatment in all three treated seasons** rather than shrinking (2023 +22.1 vs +16.9, 2024
+> +44.7 vs +44.4, 2025 +26.9 vs +23.5). B3 (the availability feature predicts realized games,
+> out-of-fold) passed but only weakly and declining across the three seasons (+0.226 → +0.176 →
+> +0.051) — a materially harder and more honest test than D69's own within-season correlation
+> (+0.70–0.80), and the gap between the two numbers is itself informative: what a backward-looking
+> 3-season average predicts about next season is real but weak, and was weakening across exactly
+> the window measured. Per the pre-registered protocol, since B1 and B2 both failed, **the draft
+> layer (B4–B9) was never run.** A real population bug (RB universe collapsed to n=3 by ranking
+> across all four positions at once) was found and fixed *before* any valid gate result existed,
+> the same category of fix as D68's shrinkage-estimator correction. Nothing shipped:
+> `league/draft.py`, `league/replacement.py`, `models/uncertainty/run.py` remain byte-identical to
+> D67. Both of D69's proposed RB paths — calibration and availability features — are now closed;
+> no further RB-specific mechanism is currently proposed. Full account: `docs/DECISIONS.md` D70.
+
 > **The benchmark below is invalid for the current target format and is preserved as-is,
 > labelled, not restated.** Everything through "Acceptance criteria — STILL UNMET" was
 > measured against `ecr_type='rsf'` — FantasyPros' *superflex* board — because the target

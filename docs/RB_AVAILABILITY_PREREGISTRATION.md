@@ -1,14 +1,18 @@
-# RB availability modelling — pre-registration (DESIGN ONLY, NOT IMPLEMENTED)
+# RB availability modelling — pre-registration (EXECUTED — D70. Gates failed; nothing shipped.)
 
-> **Status: design document. Nothing here is implemented, no model has been fitted, no feature has
-> been added, and no benchmark has been run.** This file exists so the next phase's question,
-> estimator, boundaries and gates are fixed in git *before* any of it is measured — the same
-> discipline used at D63, D66, D67 and D68. It is not itself a pre-registration commit for a
-> running experiment; promoting it to one is the first step of that phase, and the gates below may
-> be *narrowed* at that point but not loosened after any result is seen.
+> **Status: this pre-registration has been executed.** It was implemented exactly as specified
+> below (`src/alpha_squad/features/availability.py`,
+> `src/alpha_squad/evaluation/rb_availability_experiment.py`), committed *before* being fitted
+> against real outcomes, then run. **Gates B1 (accuracy) and B2 (targeted bias falls) both
+> failed** — B2 decisively: the treatment made the RB signed bias larger, not smaller, in every
+> treated season. Per the ordering below, the draft layer (B4–B9) was never run. Nothing shipped;
+> production remains the **D67/W1** engine, byte-identical. Full results: `docs/DECISIONS.md` D70.
+> This file is kept as the historical record of what was pre-registered and is no longer a live
+> specification — a future RB-specific phase needs its own pre-registration, not a reopening of
+> this one, per the "loosened after a result" prohibition its own original text stated.
 
-Written as part of **D69** (`docs/DECISIONS.md`), which abandoned RB-only projection calibration.
-Production remains the **D67/W1** engine, byte-identical. **P1-0 remains OPEN.**
+Originally written as part of **D69** (`docs/DECISIONS.md`), which abandoned RB-only projection
+calibration. **P1-0 remains OPEN.**
 
 ---
 

@@ -3902,3 +3902,122 @@ capture.
 
 **Still OPEN, unchanged.** D69 changed no production behavior, fitted no estimator and produced no
 benchmark number. D67's official result stands as recorded: +26.5, 95% CI [−38.0, +91.0].
+
+## D70 — RB availability features tested and rejected. B1 and B2 both fail: the treatment does not improve accuracy and makes the targeted bias larger, not smaller. Nothing shipped.
+
+Follow-up to D69's abandoned RB-only calibration, which recommended asking a model question
+instead of a calibration question: does giving M6 preseason-knowable availability information
+reduce RB projection error, where a positional constant could not? A separate rank-conditioning
+diagnostic (outside this repo's tracked history) authorized the phase to proceed by finding the RB
+residual does not behave like a winner's-curse artifact. This entry reports the pre-registered
+result. **Nothing shipped. `league/draft.py`, `league/replacement.py`, `models/uncertainty/run.py`
+and `models/established/season_level.py` are byte-identical to D67.** Production remains W1.
+
+### What was implemented, exactly as pre-registered
+
+Four preseason-knowable features (`features/availability.py`), appended to M6's existing set for
+**RB only** — QB/WR/TE/K/DST stayed the untouched control:
+
+| | feature | source |
+|---|---|---|
+| F1 | mean games played, up to 3 prior seasons | `player_season_stats.games_played` |
+| F2 | age at target season's Sept 1 | `players.birth_date` (existing convention, `dynasty_validation.py`) |
+| F3 | position-cohort mean games played, season S−1 (a population statistic) | `player_season_stats` |
+| F4 | (carries + receptions) / games played, season S−1 | `player_season_stats` |
+
+Same CatBoost hyperparameters and walk-forward split as `models/uncertainty/run.py` (imported, not
+redeclared); same `MIN_TRAIN_ROWS`/`MIN_CALIB_ROWS` thresholds. `TREATED_SEASONS = (2023, 2024,
+2025)` only — `fit_rb_availability_model` raises for any other season, so abandonment condition 6
+("do not treat 2021–2022 for power") is structural rather than a rule to remember. Leakage guard
+(`validate_no_leakage`) mirrors `projection_calibration.py::fit_arm`'s raise-on-target-season
+pattern; unit tested directly, including the required "requesting a target-season feature raises"
+case. Registered as forensic tier `Y1`, reusing the X-tier scoring branch verbatim rather than
+adding a new mechanism, and deliberately a separate letter from D68's closed `X0`–`X4` set (a model
+refit is a different kind of treatment than a residual calibration, not a violation of "no sixth
+arm"). All committed (`eee911f`) before any model was fitted against real outcomes.
+
+### A real bug, found and fixed before any valid result existed
+
+The first run produced **n = 3** per treated season instead of the ~43–48 the D68/D69 RB
+draftable universe actually has — self-evidently wrong. Cause: `_control_rb_predictions` read
+`uncertainty_predictions` without filtering by position, so ranking "top-N" ran across all four
+positions at once and the RB cut landed almost entirely on QBs. Fixed to filter on
+`uncertainty_predictions.position` directly, the same column `load_season_projections` uses, so
+the population now matches D68/D69 exactly. This is a correctness fix to the measurement, not a
+change to the treatment, a feature, a hyperparameter, or a gate threshold — the same category as
+D68's shrinkage-estimator fix, made before any valid gate result was produced (`e7478b6`). The one
+number seen before the fix (B1/B2 FAIL on n=3) was discarded as an artifact, not a measurement.
+
+### Results — projection layer, `uv run alpha-squad evaluate rb-availability`
+
+| gate | verdict | detail |
+|---|---|---|
+| **B1 — accuracy** | **FAIL** | pooled MAE 71.09 vs control 72.49 (treatment *better*); pooled RMSE **88.60 vs control 88.08** (treatment worse); 1 season worse on MAE (within the 1-season tolerance) |
+| **B2 — bias falls** | **FAIL** | pooled \|bias\| **31.22 vs control 28.25** (treatment worse); **not worse in any season: False** — worse in *all three* |
+| **B3 — availability predicts games** | **PASS** | correlation positive in every treated season: 2023 +0.226, 2024 +0.176, 2025 +0.051 |
+
+Per-season detail (n = the D68/D69 draftable universe, 47/43/46):
+
+| season | n | treat MAE | ctrl MAE | treat RMSE | ctrl RMSE | treat bias | ctrl bias |
+|---|---|---|---|---|---|---|---|
+| 2023 | 47 | 63.40 | 63.27 | 81.97 | 80.86 | **+22.06** | +16.87 |
+| 2024 | 43 | 76.78 | 78.85 | 92.74 | 92.23 | **+44.70** | +44.39 |
+| 2025 | 46 | 73.09 | 75.35 | 91.10 | 91.16 | **+26.89** | +23.49 |
+
+**The decisive failure is B2, not B1.** MAE actually improved in 2 of 3 seasons (2024, 2025) and
+RMSE is only marginally worse (88.60 vs 88.08, a 0.6% difference, driven by 2 of 3 seasons). But
+the metric the whole treatment exists to move — the RB signed bias itself — got **larger, not
+smaller, in every single treated season**: +22.06 vs +16.87 in 2023, +44.70 vs +44.39 in 2024,
++26.89 vs +23.49 in 2025. The treatment did not fail by being noisy or inert; it failed by moving
+the targeted quantity in the wrong direction, consistently, across the whole treated sample.
+
+### B3 passing is worth reading carefully — it is a different, weaker claim than D69's own numbers
+
+D69 measured a **within-season** correlation of the *realized* RB residual against *realized*
+games played in the *same* season: +0.70 to +0.80. B3 measures something structurally harder and
+more honest: F1 (a **backward-looking** average of prior-season games) predicting **next**
+season's realized games, **out of fold**. That correlation is positive in all three treated seasons
+— technically clearing the gate — but is markedly weaker and trending toward zero: **+0.226 →
++0.176 → +0.051**. The gate is binary and B3 passes, but the number behind it is telling its own
+story: whatever a player's recent games-played history predicts about their next season is real
+but weak, and was getting weaker across exactly the seasons this experiment measured. This is
+consistent with, though does not prove, D69's own hedge that the underlying movement may be more
+of a league-level trend than a stable player-level signal — a trend a 3-season backward average
+is a poor instrument for.
+
+**Association, not causation, throughout.** Nothing in this result establishes *why* F1's out-
+of-fold predictive power is weak and declining, or why adding it made bias worse rather than
+better. Plausible, unranked candidates: the RB-specific movement D69 documented (draftable-RB mean
+games 11.67 → 14.19 → 13.83) may be a genuine league-level shift that a per-player backward-looking
+feature cannot track (D69's own abandonment condition 2); CatBoost with `depth=3` may not have
+enough capacity to exploit four additional weakly-informative features without adding variance that
+shows up as worse RMSE; or the treated-season sample (n ≤ 47 per season, 3 seasons) may simply be
+too thin to fit four new features reliably. This entry does not adjudicate between them — it
+reports that the pre-registered gates were not met, on the pre-registered metrics, without
+inferring a mechanism the data here cannot support.
+
+### Verdict
+
+**B1 and B2 both fail. Per the pre-registered protocol, the draft layer (B4–B9) was NOT run.**
+Nothing shipped. `Y1` exists in the forensic harness as tested, dead code — never invoked from the
+draft layer, and never will be under this pre-registration.
+
+This closes D69's H1 for the specific instrument tested here: RB availability features, as
+specified, do not improve M6's RB projections in the way the pre-registration required. It does not
+close the broader question D69 raised (whether *some* representation of RB availability could help)
+— only this closed, four-feature, RB-only, CatBoost-refit instrument, measured exactly as committed
+before it was fitted.
+
+### What was NOT done, deliberately
+
+No fifth feature was added, no hyperparameter was swept, no gate was relaxed, no season outside
+2023–2025 was treated, and the draft layer was not peeked at before B1/B2 failed. The honest
+reading is D69's own permitted outcome: "the effect is league-level, not player-level" (abandonment
+condition 2) is the best-supported explanation available, though not the only one, and this entry
+does not claim more than the gates measured.
+
+### P1-0 status
+
+**Still OPEN, unchanged.** D70 changed no production behavior, shipped no calibration, and produced
+no new draft-simulation benchmark number. D67's official result stands as recorded: +26.5, 95% CI
+[−38.0, +91.0].
