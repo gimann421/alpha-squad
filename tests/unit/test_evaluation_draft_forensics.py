@@ -18,6 +18,7 @@ from alpha_squad.evaluation.draft_forensics import (
     W_TIERS_ENFORCING_LEGALITY,
     X_TIER_SPEC,
     X_TIERS,
+    Y_TIERS,
     homogeneous_league_draft,
     load_season_static,
     roster_feasibility_metrics,
@@ -465,3 +466,23 @@ class TestD68XTiers:
 
     def test_x_tiers_do_not_collide_with_the_w_tiers(self):
         assert not set(X_TIERS) & set(W_TIERS)
+
+
+class TestD70Y1Tier:
+    """D70: Y1 must reuse the X-tier scoring branch verbatim and stay a separate letter from
+    the closed X0-X4 calibration-arm set."""
+
+    def test_y1_is_registered(self):
+        assert Y_TIERS == ("Y1",)
+
+    def test_y1_scores_through_the_draft_aware_branch(self):
+        assert "Y1" in DRAFT_AWARE_REPLACEMENT_TIERS
+
+    def test_y1_is_described(self):
+        assert TIER_DESCRIPTIONS["Y1"]
+
+    def test_y1_does_not_collide_with_the_x_tiers(self):
+        """D68 pre-registered X0-X4 as a closed set ('no sixth arm'). Y1 is a different kind
+        of treatment (a model refit, not a residual-calibration arm) and must stay a distinct
+        letter rather than extending that closed set."""
+        assert not set(Y_TIERS) & set(X_TIERS)

@@ -44,6 +44,15 @@ from alpha_squad.evaluation.projection_calibration import (
     render_report,
     sign_stability,
 )
+from alpha_squad.evaluation.rb_availability_experiment import (
+    PRACTICAL_SIGNIFICANCE_FLOOR,
+)
+from alpha_squad.evaluation.rb_availability_experiment import (
+    TREATED_SEASONS as RB_AVAILABILITY_TREATED_SEASONS,
+)
+from alpha_squad.evaluation.rb_availability_experiment import (
+    evaluate_projection_layer as evaluate_rb_availability_projection_layer,
+)
 from alpha_squad.evaluation.rookie_benchmark import (
     run_rookie_baselines,
     write_rookie_benchmark_report,
@@ -701,6 +710,74 @@ def evaluate_projection_benchmark(
     init_db(con)
     result = write_projection_benchmark_report(con, Path(report_path), season_start, season_end)
     console.print(f"common seasons: {result['common_seasons']}")
+    console.print(f"report written to [green]{report_path}[/green]")
+    con.close()
+
+
+@evaluate_app.command("rb-availability")
+def evaluate_rb_availability(
+    league_id: str = typer.Option("target_league", help="League the bands are derived from"),
+    report_path: str = typer.Option(
+        "reports/rb_availability_projection_layer.md", help="Markdown report output path"
+    ),
+) -> None:
+    """D70 projection layer: fit the RB-only availability-feature refit walk-forward for
+    2023-2025 and evaluate gates B1-B3 (docs/RB_AVAILABILITY_PREREGISTRATION.md).
+
+    Measurement only -- makes no draft picks and changes no production behavior. QB/WR/TE/K/DST
+    are untouched (control). Per the pre-registration, the draft layer (B4-B9) must not run
+    unless B1-B3 all pass here first."""
+    settings = get_settings()
+    con = get_connection(settings)
+    init_db(con)
+    league = resolve_league(league_id, con=con, settings=settings)
+
+    result = evaluate_rb_availability_projection_layer(con, league)
+
+    table = Table(title=f"D70 RB availability projection layer ({RB_AVAILABILITY_TREATED_SEASONS})")
+    for col in ("gate", "passes", "detail"):
+        table.add_column(col)
+    for name, gate in result.gates.items():
+        detail = ", ".join(f"{k}={v}" for k, v in gate.items() if k != "passes")
+        table.add_row(name, "PASS" if gate["passes"] else "FAIL", detail[:80])
+    console.print(table)
+    console.print(f"treated seasons: {list(RB_AVAILABILITY_TREATED_SEASONS)}")
+    console.print(f"B1-B3 all pass: [green]{result.passes}[/green]")
+    if not result.passes:
+        console.print("[yellow]Per the pre-registration, the draft layer must NOT run.[/yellow]")
+
+    lines = [
+        "# D70 -- RB availability: projection layer (B1-B3)",
+        "",
+        f"Treated seasons: {list(RB_AVAILABILITY_TREATED_SEASONS)}. "
+        f"Practical-significance floor for the draft layer (B9, not evaluated here): "
+        f"+{PRACTICAL_SIGNIFICANCE_FLOOR} mean starter points.",
+        "",
+        f"**Gates B1-B3 all pass: {result.passes}**",
+        "",
+    ]
+    for name, gate in result.gates.items():
+        lines.append(f"## {name}: {'PASS' if gate['passes'] else 'FAIL'}")
+        for k, v in gate.items():
+            if k != "passes":
+                lines.append(f"- {k}: {v}")
+        lines.append("")
+    lines.append("## Per-season detail")
+    lines.append("")
+    lines.append(
+        "| season | n | treat MAE | ctrl MAE | treat RMSE | ctrl RMSE | "
+        "treat bias | ctrl bias | B3 corr |"
+    )
+    lines.append("|---|---|---|---|---|---|---|---|---|")
+    for row in result.per_season:
+        lines.append(
+            f"| {row['season']} | {row['n']} | {row['treatment_mae']:.2f} | "
+            f"{row['control_mae']:.2f} | {row['treatment_rmse']:.2f} | "
+            f"{row['control_rmse']:.2f} | {row['treatment_mean_signed_residual']:+.2f} | "
+            f"{row['control_mean_signed_residual']:+.2f} | {row['b3_correlation']:.3f} |"
+        )
+    Path(report_path).parent.mkdir(parents=True, exist_ok=True)
+    Path(report_path).write_text("\n".join(lines) + "\n")
     console.print(f"report written to [green]{report_path}[/green]")
     con.close()
 
