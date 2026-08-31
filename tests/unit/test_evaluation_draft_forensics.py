@@ -16,6 +16,8 @@ from alpha_squad.evaluation.draft_forensics import (
     W_TIER_SPEC,
     W_TIERS,
     W_TIERS_ENFORCING_LEGALITY,
+    X_TIER_SPEC,
+    X_TIERS,
     homogeneous_league_draft,
     load_season_static,
     roster_feasibility_metrics,
@@ -427,3 +429,39 @@ class TestD67WTiers:
         roster = ["QB", "RB", "RB", "WR", "WR", "TE", "DST"]
         # 5 picks left vs 1 unfilled slot -> the reservation must not trigger yet.
         assert sum(unfilled_dedicated_slots(league, roster).values()) < 5
+
+
+class TestD68XTiers:
+    """D68: the draft engine is a CONSTANT across the X-tiers. Only the projection input moves.
+
+    These tests exist to keep that true. A calibration experiment whose tiers quietly differ in
+    a second way measures the second way."""
+
+    def test_the_control_is_the_shipped_engine_on_uncalibrated_projections(self):
+        assert X_TIER_SPEC["X0"] == "X0"
+        assert X_TIERS[0] == "X0"
+
+    def test_every_x_tier_maps_to_exactly_one_arm(self):
+        from alpha_squad.evaluation.projection_calibration import X_ARMS
+
+        assert tuple(X_TIER_SPEC.values()) == X_ARMS
+        assert len(set(X_TIER_SPEC.values())) == len(X_TIERS)
+
+    def test_every_x_tier_scores_through_the_draft_aware_branch(self):
+        """The X-tiers must reach the SAME scoring code W1 uses. If one ever routed through a
+        different branch, its margin would be attributable to the branch, not the calibration."""
+        for tier in X_TIERS:
+            assert tier in DRAFT_AWARE_REPLACEMENT_TIERS
+
+    def test_no_x_tier_enforces_legality(self):
+        """D67 measured legality as contributing exactly 0.0 (W3 was byte-identical to W0) and
+        shipped without it. Turning it on here would be a second treatment."""
+        for tier in X_TIERS:
+            assert tier not in W_TIERS_ENFORCING_LEGALITY
+
+    def test_every_x_tier_is_described(self):
+        for tier in X_TIERS:
+            assert TIER_DESCRIPTIONS[tier]
+
+    def test_x_tiers_do_not_collide_with_the_w_tiers(self):
+        assert not set(X_TIERS) & set(W_TIERS)

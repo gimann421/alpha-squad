@@ -37,6 +37,13 @@ from alpha_squad.evaluation.pick_attribution import (
     write_pick_attribution_artifacts,
 )
 from alpha_squad.evaluation.projection_benchmark import write_projection_benchmark_report
+from alpha_squad.evaluation.projection_calibration import (
+    X_ARMS,
+    evaluate_projection_layer,
+    load_residual_rows,
+    render_report,
+    sign_stability,
+)
 from alpha_squad.evaluation.rookie_benchmark import (
     run_rookie_baselines,
     write_rookie_benchmark_report,
@@ -694,6 +701,57 @@ def evaluate_projection_benchmark(
     init_db(con)
     result = write_projection_benchmark_report(con, Path(report_path), season_start, season_end)
     console.print(f"common seasons: {result['common_seasons']}")
+    console.print(f"report written to [green]{report_path}[/green]")
+    con.close()
+
+
+@evaluate_app.command("projection-calibration")
+def evaluate_projection_calibration(
+    arms: str = typer.Option(",".join(X_ARMS), help="Comma-separated calibration arms"),
+    season_start: int = typer.Option(2021, help="First season with M6 predictions"),
+    season_end: int = typer.Option(2025, help="Last season with realized outcomes"),
+    league_id: str = typer.Option("target_league", help="League the bands are derived from"),
+    report_path: str = typer.Option(
+        "reports/projection_calibration.md", help="Markdown report output path"
+    ),
+    json_path: str = typer.Option(
+        "reports/projection_calibration.json", help="Raw per-arm per-season measurements"
+    ),
+) -> None:
+    """D68 projection layer: fit each pre-registered calibration arm walk-forward and apply
+    gates G1-G4.
+
+    Measurement only -- this command makes no draft picks and changes no production behavior.
+    An arm that fails a gate here never reaches the draft layer, which is what stops any
+    calibration parameter from being chosen by draft outcome."""
+    settings = get_settings()
+    con = get_connection(settings)
+    init_db(con)
+    league = resolve_league(league_id, con=con, settings=settings)
+    seasons = list(range(season_start, season_end + 1))
+    arm_list = tuple(a.strip() for a in arms.split(",") if a.strip())
+
+    result = evaluate_projection_layer(con, league, seasons, arm_list)
+    residual_rows = load_residual_rows(con, league, seasons)
+    stability = {s: sign_stability(residual_rows, s) for s in result["treated_seasons"]}
+
+    out = Path(json_path)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(result, indent=2, sort_keys=True, default=str))
+    Path(report_path).write_text(render_report(result, stability))
+
+    table = Table(title=f"D68 projection layer ({season_start}-{season_end})")
+    for col in ("arm", "G1", "G2", "G3", "G4", "verdict"):
+        table.add_column(col)
+    for arm, verdict in result["gates"].items():
+        if not verdict["gates"]:
+            table.add_row(arm, "-", "-", "-", "-", verdict["detail"])
+            continue
+        marks = ["PASS" if e["passes"] else "FAIL" for e in verdict["gates"].values()]
+        table.add_row(arm, *marks, "PASSES" if verdict["passes"] else "rejected")
+    console.print(table)
+    console.print(f"treated seasons: {result['treated_seasons']}")
+    console.print(f"arms clearing G1-G4: [green]{result['survivors'] or 'none'}[/green]")
     console.print(f"report written to [green]{report_path}[/green]")
     con.close()
 
