@@ -4021,3 +4021,164 @@ does not claim more than the gates measured.
 **Still OPEN, unchanged.** D70 changed no production behavior, shipped no calibration, and produced
 no new draft-simulation benchmark number. D67's official result stands as recorded: +26.5, 95% CI
 [−38.0, +91.0].
+
+## D71 — P1-0's exit criterion is re-specified: the 50-trial benchmark measures ~5 independent seasons, not 50, and cannot resolve an effect the size of D67's +26.5 at any data scale that will exist within this project's lifetime. The item is split.
+
+A read-only audit of P1-0's own measurement instrument, prompted by nine consecutive decision
+cycles (D61–D70) failing to move the same CI-excludes-zero gate. **No code, model, feature, or
+production behavior changes. No new draft simulation was run** — every number below is
+recomputed from the already-stored 50 `draft_simulation_results` rows
+(`alpha_league_aware`/`market_consensus_roster_aware` vs `market_consensus_roster_aware`/
+`market_consensus_roster_aware`, the same pair D67 measured) plus one read-only query against
+`market_snapshot`. `league/draft.py`, `league/replacement.py`, and `models/uncertainty/run.py`
+remain byte-identical to D67.
+
+### The 50 trials are not 50 independent observations
+
+`evaluation/draft_simulation.py::run_draft_simulation` is a deterministic cross-product over
+`(season × strategy × opponent × slot)` — confirmed by grep: no `random`/`shuffle`/`seed` call
+exists anywhere in the draft path, consistent with the B8 byte-identical-across-two-processes
+gate every prior phase has used. Within one season, all 10 slots share one call to
+`load_season_projections` and one call to `_preseason_overall_market` (`simulate_draft`, lines
+213–215) — one projection set, one market board, one set of realized outcomes.
+
+Measured consequence: Alpha's 10 per-season rosters share **53–73% of their players** (mean
+pairwise Jaccard by season: 2021 0.526, 2022 0.653, 2023 0.644, 2024 0.594, 2025 0.727), with
+**6–9 of 16** roster spots identical across *all ten* slots in every season. Formally: ICC =
+0.0995, design effect (cluster size 10) = 1.90, effective n ≈ 26 under a random-effects
+correction — or, read the honest way, **the true experimental unit is the season, giving n = 5.**
+A slot effect does not exist as a separate factor: pooled across seasons, F(9,36) = 0.54 for
+slot vs F(4,36) = 1.91 for season — the −66.7…+154.8 apparent spread across slots (D-diagnostic,
+this session) is sampling noise, not 10 independent replicates.
+
+### D67's published interval is the naive-iid one, and is anticonservative
+
+Reproduced exactly: mean +26.53, SD 232.62, n=50 → SE 32.90 → **95% CI [−38.0, +91.0]**, matching
+D67's quoted figure. The season-clustered interval (5 season means, t-distribution, df=4):
+**mean +26.53, SD-of-season-means 102.20, SE 45.71, t = 0.580, 95% CI [−100.4, +153.4].**
+
+**This is a correction, not a relaxation — the honest interval is wider, making P1-0 harder to
+clear, not easier.** D67's number is not wrong as a description of what was measured; it is
+wrong as an inferential statement, because it assumes 50 independent draws that the
+data-generating process does not produce.
+
+### The "~603 trials for 80% power" figure means ~115 seasons, not more trials
+
+The arithmetic behind the figure is correct: ((1.96+0.842) × 232.62 / 26.53)² = 603.5 (12.1× the
+current n=50, achieved power ≈13% at n=50). But every route to that many *rows* is closed:
+
+| route to more rows | information content |
+|---|---|
+| more draft slots | **none** — 10 slots is the entire population of a 10-team league; already exhaustive, and F(9,36)=0.54 confirms slot carries no signal |
+| repeated simulation of the same season | **none** — the engine is deterministic; reruns reproduce identical rows |
+| additional historical seasons before 2021 | **unavailable** — `market_snapshot` has no `ecr_type='ro', page_type='redraft-overall'` rows in July/August before 2021 (earliest preseason capture: 2021-07-02), so `_preseason_overall_market` cannot construct an earlier board |
+| the 2026 season | **not yet available** — a market board exists, but `player_season_stats` has no 2026 realized outcomes to score a draft against until the season is played |
+| **new NFL seasons going forward** | the only genuinely new information, arriving at 1/year |
+
+Correcting for the true cluster structure (design effect 1.90): **603 × 1.90 ≈ 1,144 nominal
+trials ≈ 114 seasons** — matching the season-as-unit calculation directly: **116.5 seasons** for
+80% power at the observed effect and precision.
+
+### Variance decomposition: within-season noise dominates, but has an irreducible floor
+
+The prior finding that within-season/slot variance (SD 222.79, ANOVA dof n−k=45) exceeds
+between-season variance (SD 102.20, dof k−1=4) is confirmed exactly. What that decomposition
+does not by itself show: how much of the 102.20 is real season-to-season variation versus noise
+in estimating each season's mean from only 10 correlated slots. Decomposing further — the
+within-season SD of a season's *mean* over 10 slots is 222.79/√10 = 70.5 — the observed 102.20
+splits into **70.5 of within-season measurement noise + 74.0 of true season-to-season SD**
+(√(102.2² − 70.5²)).
+
+That 74.0 is the floor. Even a *hypothetically perfect* within-season measurement (infinite
+slots, or an infinite opponent field averaging out all within-season noise) still requires
+**~61 seasons** for 80% power at the observed effect — current precision requires 116.5. Minimum
+detectable effect at 80% power:
+
+| seasons | MDE, current precision | MDE, perfect within-season measurement |
+|---|---|---|
+| 5 (today) | 128.1 | 92.8 |
+| 10 | 90.5 | 65.6 |
+| 20 | 64.0 | 46.4 |
+
+D67's +26.5 is roughly a quarter of what 5 seasons can detect, and every draft-layer gain this
+project has shipped (D63 +39.8, D65 Candidate C +23.2, D66 +26.7/+28.2, D67 +32.1 swing) sits
+below the detectable range at any season count this project will see within a normal planning
+horizon.
+
+### What would actually constitute evidence
+
+| candidate | new information? |
+|---|---|
+| more draft slots | no — exhaustive, and not a real factor (F=0.54) |
+| repeated stochastic simulation | no — deterministic engine |
+| additional historical seasons | no — blocked by market board coverage (pre-2021) |
+| **future NFL seasons** | yes, but 1/year against a ~61-season floor |
+| randomized/mixed opponent fields | partial — sharpens the within-season component toward 0, floor stays ~61 seasons |
+| a second league format (`legacy_2qb_dynasty`) | partial — robustness evidence on a different decision problem, not independent confirmation on the same one |
+| **corrected statistical treatment** | no new data, but removes a real error in the current reporting |
+| **an effect roughly 4× larger (~+100/season)** | **yes — detectable today, with data already in hand** |
+
+No available or constructible evidence can establish absolute superiority at the D67 scale. Only
+a substantially larger effect is within this benchmark's reach.
+
+### The exit criterion is re-specified
+
+"95% CI excludes zero" on the raw Alpha-vs-consensus contrast is **inappropriate for this
+benchmark's structure** — not merely inconvenient. It is computed on a variance model the data
+violate (correcting it *widens* the interval), and even correctly computed it demands a
+precision (~61–116 seasons) the data-generating process cannot supply within any realistic
+horizon. Going forward:
+
+1. **Future engine-change evaluation uses a variant-vs-control contrast on identical (season,
+   slot) trials**, not an absolute Alpha-vs-consensus contrast — the instrument that has
+   actually produced CIs excluding zero at the current n=50 (D65's Candidate C: +23.2 over N4,
+   95% CI [+2.3, +44.1], LOSO-robust on all five seasons) precisely because near-identical
+   rosters cancel each season's outcome shocks. This is the same gate structure D65–D67 already
+   used successfully — codified here as the standard, not a new invention.
+2. **Any quoted Alpha-vs-consensus number uses season-clustered inference** (t-distribution,
+   df = k−1 = 4 with the current data), never the iid CI. D67's own number is annotated in place
+   in `docs/IMPLEMENTATION_GAP_ANALYSIS.md` rather than restated, per this repo's existing
+   convention for superseded benchmark numbers.
+3. **A future phase proposing a new mechanism must project an effect size** large enough to be
+   detectable given the table above, before being pre-registered — not to guarantee significance,
+   but so a phase whose own honest power calculation shows it cannot resolve anything is caught
+   before it is run, not after.
+
+**Required check, and it holds:** this re-specification does not retroactively pass any
+previously failed phase. D68, D69, and D70 all failed at the *projection* layer (B1–B3-style
+gates) and their protocols correctly never reached a draft-layer contrast; none of their
+verdicts change under either the old or the new criterion.
+
+### P1-0 is split
+
+`docs/IMPLEMENTATION_GAP_ANALYSIS.md`'s P1-0 conflated two claims that have different evidentiary
+status. Stored data settle the first outright: `alpha_league_aware` has **0 unfilled mandatory
+slots across all 50 trials**, every roster exactly `roster_size`=16, against 327/50 for
+`alpha_bpa`, 270/50 for `generic_prior_year`, and 109/50 for plain `market_consensus`. That is a
+direct measurement of the defect the item's own title names ("Fix `recommend_draft_pick`'s
+roster-balance failure"). The second claim — absolute superiority over fair consensus — is the
+one this entry addresses above.
+
+- **P1-0a (roster-balance defect): CLOSED.**
+- **P1-0b (absolute superiority vs. fair consensus): stays OPEN**, reclassified from "the next
+  experiment should close it" to "not resolvable at current or near-future data scale" — a
+  standing limitation of the evidence base, not a blocking gate on further engine work.
+
+Full detail and the item text: `docs/IMPLEMENTATION_GAP_ANALYSIS.md` P1-0a/P1-0b.
+
+### What this entry does not do
+
+No RB work (D68–D70 remain closed; nothing here reopens them — RB's residual and the
+availability hypothesis are unrelated to this benchmark-structure finding). No WR or QB work. No
+new feature, model fit, or projection tuning. No new pre-registration — none is warranted until a
+candidate mechanism with a plausibly large (~+100/season) effect is identified. No new draft
+simulation — reruns of a deterministic engine are provably zero-information, demonstrated above
+rather than asserted. No change to `league/draft.py`, `league/replacement.py`, or any production
+scoring path.
+
+### P1-0 status
+
+**P1-0a CLOSED (roster-balance defect fixed, evidenced by 0/50 unfilled mandatory slots). P1-0b
+OPEN, reclassified as a standing measurement limitation rather than a blocking gate** — see
+`docs/IMPLEMENTATION_GAP_ANALYSIS.md` for the split item text and the re-specified criterion
+above for what future engine work is now evaluated against.

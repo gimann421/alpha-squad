@@ -36,7 +36,7 @@ items with no listed dependency can start immediately.
 
 ## P1 — High value, ready to build
 
-### P1-0: Fix `recommend_draft_pick`'s roster-balance failure — **REOPENED (D61)**
+### P1-0: Fix `recommend_draft_pick`'s roster-balance failure — **SPLIT (D71): P1-0a CLOSED, P1-0b OPEN as a standing measurement limitation**
 
 > **REOPENED.** This item was closed at D60 on a benchmark whose `market_consensus` opponent
 > drafts 0.00 kickers and 0.30 defenses per draft, leaving two of its ten starting slots empty
@@ -114,7 +114,11 @@ items with no listed dependency can start immediately.
 > **Official benchmark: Alpha 2061.3 vs fair consensus 2034.8, +26.5** (previous production
 > −5.6, so a +32.1 swing), 4 of 5 seasons won, deterministic across two processes, 0/50 unfilled
 > mandatory slots and no structurally invalid roster. **Why it is not closed:** the paired 95% CI
-> is **[−38.0, +91.0]**, win/loss is 28/22 and 5/10 slots, and removing 2022 leaves +3.1. The
+> is **[−38.0, +91.0]** *(D71: this is the naive-iid interval treating all 50 trials as
+> independent; the 10 slots within a season share 53–73% of their roster and are not independent
+> replicates — the season-clustered interval is the wider [−100.4, +153.4], df=4. Preserved as
+> originally measured, not restated.)*, win/loss is 28/22 and 5/10 slots, and removing 2022 leaves
+> +3.1. The
 > residual gap is diagnosed and lies **upstream of the draft engine** — Alpha loses RB starter
 > points in all five seasons (mean −247.7) while winning WR in all five (+183.2), because M6
 > under-projects RB in 4 of 5 seasons (+38.0 in 2024, the only season Alpha loses) and
@@ -179,6 +183,26 @@ items with no listed dependency can start immediately.
 > `league/draft.py`, `league/replacement.py`, `models/uncertainty/run.py` remain byte-identical to
 > D67. Both of D69's proposed RB paths — calibration and availability features — are now closed;
 > no further RB-specific mechanism is currently proposed. Full account: `docs/DECISIONS.md` D70.
+
+> **D71 update — the benchmark's own inferential structure was audited (read-only, no new
+> simulation). The item is split.** The 50 trials are a deterministic `(season × slot)`
+> cross-product, not 50 independent draws: within a season all 10 slots share one projection set
+> and one market board, and Alpha's 10 per-season rosters overlap 53–73% (ICC 0.0995, effective
+> n ≈ 26; the honest unit is the season, n=5). The published CI above is the naive-iid one; the
+> season-clustered CI is **[−100.4, +153.4]** — wider, not narrower. Resolving an effect the size
+> of +26.5 would need **~116 seasons** at current precision, or **~61 seasons even with a
+> hypothetically perfect within-season measurement** (design ceiling); no additional slots,
+> reruns, or pre-2021 seasons can supply that — `market_snapshot` has no `ro`/`redraft-overall`
+> Jul/Aug rows before 2021, and 2026 has no realized outcomes yet. **P1-0 is therefore split:**
+> the item's own original defect (roster-balance) is **CLOSED** — `alpha_league_aware` has 0
+> unfilled mandatory slots across all 50 stored trials, vs 327/50 for `alpha_bpa`, 270/50 for
+> `generic_prior_year`, 109/50 for plain `market_consensus` — as **P1-0a** below. The absolute-
+> superiority claim continues as **P1-0b**, reclassified from "the next experiment should close
+> it" to "not resolvable at current or near-future data scale" — a standing limitation, not a
+> blocking gate. Future engine-change evaluation uses a variant-vs-control contrast on identical
+> trials instead (the instrument D65's Candidate C already used successfully: +23.2, CI
+> [+2.3, +44.1]). No RB/WR/QB work reopened; no code, model, or production change. Full account:
+> `docs/DECISIONS.md` D71.
 
 > **The benchmark below is invalid for the current target format and is preserved as-is,
 > labelled, not restated.** Everything through "Acceptance criteria — STILL UNMET" was
