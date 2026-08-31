@@ -12,20 +12,31 @@ D67's official benchmark left Alpha ahead of the fair consensus opponent on the 
 slot-by-slot decomposition put the residual gap **upstream of the draft engine**: Alpha loses RB
 in all five seasons (mean -247.7) and wins WR in all five (+183.2) while drafting fewer of both,
 and M6 under-projects RB in 4 of 5 seasons. The obvious next move was a positional bias
-correction -- and the read-only diagnostics that preceded this module argue against it:
+correction, and this module was built to be *capable of concluding that nothing should ship*.
 
-    RB residual, all M6-projected RBs      mean +10.3 but MEDIAN -0.7
-    RB residual by projection-rank band    top 24 median ~ +26; below that ~ 0 to -2.8
-    top-24 RB residual by season           2021 -8.8, 2022 +8.5, 2023 +19.0, 2024 +64.8, 2025 +39.5
-    walk-forward prediction of 2024        +6.3 against an actual +64.8
-    empirical-Bayes lambda, walk-forward   RB 0.00 in 2022/2023/2024; WR 0.00 every year
-    the one stable finding                 QB OLS slope ~ 0.444, below 1 in all five seasons
+It concluded exactly that. **No arm cleared the pre-registered gates and nothing shipped.**
 
-So "RBs are systematically under-projected" is false as a statement about RBs -- the typical RB
-is projected essentially correctly and the effect lives in the top of the board, where it is not
-sign-stable and where a leakage-safe estimator declines to correct it at all. This module is
-therefore built to be *capable of concluding that nothing should ship*, which on the evidence
-above is its most likely outcome. That is a result, not a failure.
+What the arms actually measured, on the pre-registered universe (bands 1+2), signed residual
+per season -- these supersede the exploratory figures this docstring quoted before the run, which
+were computed on a different population and are recorded in D68's "Two of this phase's own earlier
+claims are corrected here" section rather than repeated here:
+
+    QB   +5.4  -24.7  -76.1  -27.7  -18.1     sign NOT stable
+    RB   +2.5   +8.0  +16.9  +44.4  +23.5     sign stable on the MEAN (see caveat below)
+    WR  -10.5   +2.0   -0.7  -18.2  -21.1     sign NOT stable
+    TE  +20.3   -4.6   -3.5   +7.9   -0.2     sign NOT stable
+
+Every arm improved raw accuracy (control MAE 63.29 -> 61.83-62.88). All four failed G3 or G4, and
+every G3 failure was at TE or WR. RB was the only position no gate ever failed on.
+
+**Caveat added by D69** (`docs/DECISIONS.md`): RB's sign stability is a property of the mean only.
+The 2021 median is -12.3 in this universe and the 2021 10%-trimmed mean is -1.5, so the 2021
+positive mean rests on a right tail rather than on a shift in the typical draftable RB. D69
+assessed an RB-only arm on that basis and **abandoned it before implementation** -- the residual's
+leading (not demonstrated) explanation is an association with a trending availability measure that
+a backward-looking estimator lags, and a uniform additive RB shift leaves `draft_aware_vorp`
+invariant by construction, so the engine is largely inert to the one form the evidence supports.
+No RB arm exists in this module and none should be added without its own pre-registration.
 
 What varies, and what does not
 ------------------------------

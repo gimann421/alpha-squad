@@ -140,6 +140,27 @@ items with no listed dependency can start immediately.
 > existed to avoid. Full account: `docs/DECISIONS.md` D68 and
 > `reports/projection_calibration.md`.
 
+> **D69 update — the deferred RB-only arm was assessed and abandoned before implementation. P1-0
+> unchanged, still OPEN.** No estimator was fitted and no draft-layer or benchmark experiment was
+> run. Four independent grounds: RB's sign stability is a **mean-only** property (2021 median
+> −12.3, 10%-trimmed −1.5, and the mean itself flips to −0.5 in 2022 at a top-40 cut); magnitude
+> is not usefully forecastable walk-forward (best predictor MAE **16.3** against a **14.4** SD of
+> the three truths and **~11.2** for an unavailable oracle constant — every predictor beats zero,
+> none approaches the ceiling, and a fixed level beats every adaptive form); the residual's
+> **leading but not demonstrated** explanation is an association with an RB-specific availability
+> measure that has been trending (within-season corr with games played **+0.70 to +0.80** in all
+> five seasons; draftable-RB mean games 11.67 → 14.19 → 13.83, a 2021→2024 move of **+2.52**
+> against WR +0.35 and QB −0.04), which a backward-looking estimator structurally lags and which
+> already reversed in 2025; and the W1 engine is **near-inert to the only supported form** — a
+> uniform additive RB shift moves the RB replacement level by the identical amount, so
+> `draft_aware_vorp` changes by exactly **0.00** and only **0–2 of the top-20** pick-1 board slots
+> move, against a −247.7/season RB starter deficit. Winner's-curse / projection-rank conditioning,
+> a market-varying universe (RB n = 48/48/47/43/46), and league-environment regime change remain
+> **unresolved** alternatives. Replaced by a design-only pre-registration for RB availability
+> modelling — a feature/model question rather than a positional bonus, and one that would move
+> VORP rather than be absorbed by the replacement level. Full account: `docs/DECISIONS.md` D69 and
+> `docs/RB_AVAILABILITY_PREREGISTRATION.md`.
+
 > **The benchmark below is invalid for the current target format and is preserved as-is,
 > labelled, not restated.** Everything through "Acceptance criteria — STILL UNMET" was
 > measured against `ecr_type='rsf'` — FantasyPros' *superflex* board — because the target

@@ -3641,6 +3641,13 @@ stability fails, always at QB, WR or TE.
   +3.3. So "the top tail is under-projected while the middle is not" is true in some seasons and not
   others, which is a different problem from the one a rank-band arm can solve.
 
+  > **Partially corrected by D69 — original text preserved above.** "Positive in every season at
+  > every cut" holds for the **mean** but not for other estimators of location on the same data:
+  > the 2021 median is **−12.3** in the fitted universe and **−21.1** at top-24, the 2021
+  > 10%-trimmed mean is **−1.5**, and the mean itself flips to **−0.5** in 2022 at a top-40 cut.
+  > D68's band figures and its conclusion (no arm ships) are unaffected; the over-broad
+  > "every cut" generalization is what D69 narrows. See D69 for the full table.
+
 ### Verdict
 
 **No arm clears the pre-registered gates. Nothing ships.** Pre-registered abandonment condition 1
@@ -3683,3 +3690,215 @@ strength of a result that was allowed to suggest it.
 
 **Still OPEN, unchanged.** This phase changed no production behavior and produced no new benchmark
 number. D67's official result stands as recorded: +26.5 with 95% CI [−38.0, +91.0].
+
+## D69 — RB-only calibration abandoned before implementation. The residual is real; a calibration is not the right instrument for it.
+
+Follow-up to D68, which rejected all five broad positional-calibration arms and recorded an
+RB-only arm as a *future* hypothesis rather than adopting it after seeing results. This entry is
+that future phase, and its answer is no. **Nothing was implemented, no arm was fitted, no
+draft-layer or benchmark experiment was run.** `league/draft.py` and `league/replacement.py`
+remain byte-identical to D67; production is still the W1 engine.
+
+The question D69 set out to answer: *does the stable positive RB projection residual contain
+enough walk-forward information to justify a principled RB-only calibration, and could such a
+calibration improve W1 without becoming an arbitrary RB bonus?*
+
+### The D68 implementation was re-read before anything else, and it holds up
+
+Verified against source rather than against D68's own summary:
+
+| element | as implemented |
+|---|---|
+| residual source | `uncertainty_predictions.point_prediction` at `uncertainty_catboost_v1` (M6 path only) |
+| realized source | `player_season_stats.total_fantasy_points_ppr`, INNER JOIN on `(player_id, season)` |
+| estimation universe | within-position projection rank ≤ `round(teams × market_draft_demand[pos])`; RB **n = 48 / 48 / 47 / 43 / 46** |
+| leakage guard | `fit_arm` **raises** on any training row with `season >= target_season` — structural, not conventional |
+| evidence prior | ≥2 training seasons and ≥30 rows, else identity |
+
+Three things worth recording that D68's write-up did not state:
+
+- **The residual join drops nothing.** Projected vs joined rows are 468/468, 472/472, 439/439,
+  439/439, 453/453. There is no join-level survivorship. The prediction *set* is still conditioned
+  on the target season's `player_season_stats` row existing, because M6 assembles its target frame
+  by INNER JOIN (`models/established/season_level.py::load_season_level_data`, used by `models/uncertainty/run.py`) — so a player projected but never appearing in a
+  game log is absent from both sides. That is a narrow class: `player_season_stats` does carry
+  ≤0-point seasons, so ordinary busts are represented.
+- **The measurement path and the draft path rank on different boards.** `measure_arm_season` ranks
+  within the played-only residual population; `_calibrated_static` applies to the full
+  `load_season_projections` board. The draft path is clean; only the projection-layer ranking
+  carries the conditioning.
+- **The D68 module docstring was stale**, still quoting the exploratory figures D68's own results
+  section overturned. Corrected as part of this entry.
+
+### The RB evidence reproduces — with one qualification that matters
+
+Reproduced exactly from the current implementation (fitted universe, bands 1+2): **+2.5 / +8.0 /
++16.9 / +44.4 / +23.5**.
+
+**But "positive at every cut" is a property of the mean alone.**
+
+| cut | 2021 | 2022 | 2023 | 2024 | 2025 | sign stable? |
+|---|---|---|---|---|---|---|
+| mean, top 20 | +2.4 | +10.1 | +8.6 | +49.4 | +49.7 | yes |
+| mean, top 40 | +2.4 | **−0.5** | +18.1 | +42.4 | +29.9 | **no** |
+| median, top 24 | **−21.1** | +8.1 | +19.0 | +64.8 | +39.5 | **no** |
+| median, fitted universe | **−12.3** | +8.1 | +18.5 | +40.0 | +27.9 | **no** |
+| 10%-trimmed mean | **−1.5** | +5.5 | +17.1 | +48.1 | +20.9 | **no** |
+
+In 2021 the *typical* draftable RB was over-projected by ~12 points and a right tail carried the
+mean positive (skew +0.48). In 2024 the effect was broad and slightly left-skewed (−0.35). **The
+residual's distributional character is not the same phenomenon from season to season**, which is a
+sharper objection than magnitude instability alone.
+
+Per-season standard errors are 10.7 / 11.1 / 11.7 / 12.5 / 13.1 against an inverse-variance pooled
+estimate of **+17.3**, and the five season means are **not** significantly heterogeneous —
+**Q = 7.6 on 4 df, p = 0.109, I² = 0.47**. That is a statement that five noisy seasons cannot
+resolve the differences, not a demonstration that a constant is correct.
+
+### Magnitude is weakly forecastable at best
+
+Walk-forward, each predictor seeing only seasons strictly earlier than the target:
+
+| predictor | 2023 (true +16.9) | 2024 (true +44.4) | 2025 (true +23.5) | MAE | RMSE |
+|---|---|---|---|---|---|
+| zero | +0.0 | +0.0 | +0.0 | 28.3 | 30.6 |
+| prior season | +8.0 | +16.9 | +44.4 | 19.1 | 20.6 |
+| all-prior mean | +5.2 | +9.1 | +17.9 | 17.5 | 21.7 |
+| EWMA(0.5) | +6.1 | +12.3 | +29.4 | **16.3** | **19.9** |
+| linear trend | +13.5 | +23.5 | +51.6 | 17.5 | 20.3 |
+
+Two reference points make this readable: the SD of the three truths is **14.4**, and an oracle
+constant of +17.3 (not available walk-forward) scores **MAE ≈ 11.2**. Every predictor beats zero;
+none approaches the achievable ceiling; **a fixed level beats every adaptive form.** What is
+forecastable is that the bias is positive, not how large it will be. Season-to-season persistence
+of the mean is r = +0.328 on four pairs — descriptive only, not evidence.
+
+### Leading mechanism: an association with availability, not a demonstrated cause
+
+**This is the strongest association found, and it is stated as an association.** The diagnostics
+below are observational; nothing here establishes causation, and the alternatives in the next
+section remain open.
+
+Residual correlates with games played within every season: **+0.711 / +0.797 / +0.696 / +0.724 /
++0.718**, i.e. 48–64% of within-season residual variance, and remarkably stable across seasons.
+
+| | 2021 | 2022 | 2023 | 2024 | 2025 |
+|---|---|---|---|---|---|
+| mean games, draftable RBs | 11.67 | 12.71 | 13.77 | **14.19** | 13.83 |
+| mean projection | 140.0 | 141.9 | 139.3 | 139.8 | 143.1 |
+| mean realized | 142.5 | 149.8 | 156.2 | **184.2** | 166.6 |
+
+Across the five season means, corr(mean games, mean residual) = **+0.851**.
+
+The pattern is **RB-specific rather than league-wide**. Change in draftable-universe mean games
+2021→2024: **RB +2.52**, TE +0.80, WR +0.35, QB −0.04. The all-position `player_season_stats`
+control is far flatter (RB 9.22→10.38, WR 9.70→10.34, QB 8.09→8.51), so this is not an nflverse
+coverage change; and it is not a schedule artifact, since the NFL played 17 games in all five
+seasons.
+
+An approximate decomposition of the +41.7 rise in mean realized RB points from 2021 to 2024
+(means of products, so indicative rather than exact):
+
+    availability channel (rate held at 2021, games move)   +28.8   (~69%)
+    rate channel         (games held at 2021, rate moves)  +12.9   (~31%)
+
+And per game, M6 under-projects RB in every season: scaling realized to a full 17 games gives
++54.2 / +39.0 / +47.5 / +73.1 / +46.5.
+
+**Why this matters for calibration regardless of whether it is causal.** If the residual moves
+with a quantity that trends, a backward-looking estimator lags it — which is what the walk-forward
+table shows: prior-mean games under-predicts realized games in all three targets (+1.58, +1.47,
++0.74). And the series already turned down in 2025 (14.19 → 13.83). A correction fitted on this is
+a forecast of a trend, not a correction of a stationary bias.
+
+### Alternatives that remain live and were NOT ruled out
+
+The availability association is the leading explanation, not the established one. These stay open:
+
+- **Winner's curse / projection-rank conditioning.** The universe is defined by projection rank, and
+  conditioning on rank produces a positive expected residual at the top of any noisy ranking
+  independent of bias. D69 did not separate this from a genuine bias, and it could account for part
+  or all of the effect.
+- **A moving universe.** RB n is 48/48/47/43/46 because `market_draft_demand` varies with the
+  consensus board, so 2024's +44.4 is measured on a smaller, more elite universe than 2021's +2.5.
+  Fixed-N cuts reduce but do not eliminate this.
+- **Model misspecification** at RB in a form unrelated to availability.
+- **Scoring or usage regime change** (a league-environment effect rather than a player-level one).
+- **Preseason projection-uncertainty differences** between positions.
+- **The narrow survivorship channel** noted above (projected-but-never-appeared players).
+
+Direction of causality between availability and the residual is likewise unestablished: games
+played is realized in-season, so it is a downstream measurement, not a preseason instrument.
+
+### Independent finding: the W1 engine is largely inert to a uniform additive RB shift
+
+Measured directly on the real 2024 board with +17 added to every RB:
+
+| term | control → shifted |
+|---|---|
+| static replacement level, RB | 138.3 → 155.3 (**+17.00**) |
+| draft-aware replacement level, RB | 87.7 → 104.7 (**+17.00**) |
+| **ΔVORP, top-5 RBs, both variants** | **+0.00, exactly** |
+| ΔMSV, top-5 RBs (empty roster) | +17.00 |
+| top WR, ΔVORP / ΔMSV | +0.00 / +0.00 |
+
+A uniform additive shift moves the replacement RB by exactly the amount it moves every RB, so
+`draft_aware_vorp` is **invariant by construction**. In `value_base = msv + 1.0 × draft_aware_vorp`
+the correction reaches the decision only through MSV — and MSV decays toward zero for an RB who no
+longer improves the best lineup, i.e. precisely the bench RBs.
+
+Pick-1 board effect, control vs +17:
+
+| season | RBs in top 20 | top-20 slots whose occupant changed | top pick |
+|---|---|---|---|
+| 2023 | 0 → 0 | 0/20 | unchanged |
+| 2024 | 1 → 1 | 2/20 | unchanged |
+| 2025 | 0 → 1 | 2/20 | unchanged |
+
+Against a **−247.7 point/season** RB starter deficit. A change that moves two of the top twenty
+board slots is not a plausible instrument for closing it.
+
+**And the mismatch between evidence and instrument is exact:**
+
+| form | engine sensitive? | evidence supports? |
+|---|---|---|
+| additive level | **no** (ΔVORP ≡ 0) | weakly — sign stable on the mean only |
+| multiplicative / affine | yes (changes RB spread, so moves VORP) | **no** — D68's walk-forward RB slopes are 1.040 / 0.996 / 1.037; there is no dispersion error at RB |
+| depth / rank-aware | yes | **no** — band shape is unstable (2023 bottom-heavy +8.6 vs +23.0; 2025 top-heavy +49.7 vs +3.3), and this is the winner's-curse arm |
+
+The one form the evidence supports is the one the engine ignores; the forms the engine responds to
+are the ones the evidence rejects.
+
+### Verdict
+
+**RB-only calibration is abandoned before implementation.** Four independent grounds, any one
+sufficient:
+
+1. The residual's leading explanation is an association with a trending quantity, which a
+   backward-looking estimator structurally lags — and the trend already reversed in 2025.
+2. The supported functional form is one the engine is near-invariant to, with a measured board
+   effect of 0–2 top-20 slots.
+3. Magnitude is not usefully forecastable; adaptivity adds nothing over a level, and the
+   walk-forward level itself lags.
+4. The premise fails under the median and the trimmed mean in 2021, and the residual's skew changes
+   sign between seasons.
+
+Running it anyway would produce a near-null treatment on 30 drafts — a result unable to distinguish
+"no effect" from "underpowered," whose most likely use would be as an argument for a larger
+coefficient. That is the tuning failure mode avoided at D66, D67 and D68, and it is the reason the
+RB-only arm was deferred rather than adopted in the first place.
+
+### What replaces it
+
+`docs/RB_AVAILABILITY_PREREGISTRATION.md` — a design-only pre-registration for the next phase,
+asking whether availability-aware *features* reduce RB projection error where a positional constant
+cannot. It is deliberately a model/feature question rather than a calibration one, and because such
+features move each RB differently, they would move VORP rather than being absorbed by the
+replacement level. **No part of it is implemented.** It carries its own abandonment conditions,
+including the case where the effect is a league-environment shift that per-player features cannot
+capture.
+
+### P1-0 status
+
+**Still OPEN, unchanged.** D69 changed no production behavior, fitted no estimator and produced no
+benchmark number. D67's official result stands as recorded: +26.5, 95% CI [−38.0, +91.0].
