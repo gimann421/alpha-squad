@@ -7,6 +7,10 @@ import json
 import duckdb
 import pytest
 
+from alpha_squad.evaluation.draft_simulation import (
+    _market_consensus_pick,
+    _market_consensus_roster_aware_pick,
+)
 from alpha_squad.evaluation.pick_attribution import (
     attribute_draft_picks,
     run_pick_attribution,
@@ -14,6 +18,7 @@ from alpha_squad.evaluation.pick_attribution import (
 )
 from alpha_squad.league.context import LeagueContext
 from alpha_squad.league.draft import recommend_draft_pick
+from alpha_squad.market.edge import _preseason_overall_market
 from alpha_squad.models.uncertainty.run import MODEL_VERSION as UNCERTAINTY_MODEL_VERSION
 from alpha_squad.storage.db import init_db
 
@@ -222,6 +227,98 @@ class TestValueBaseMatchesShippedEngine:
         )
         assert roster_blind.recommendation == "qb_b"
         assert roster_aware.recommendation == "rb_a"
+
+
+class TestConsensusCounterfactualIsRosterAware:
+    """The opponent-mismatch fix: `attribute_draft_picks`'s consensus counterfactual must be
+    the same fair, roster-aware opponent every official benchmark since D61 measures against
+    (`market_consensus_roster_aware`), not the plain best-by-ECR rule -- for both the
+    counterfactual pick at the question team's own turn and every background slot's picks.
+    Before the fix this module used the plain rule throughout, which does not match the
+    opponent that produced D67's official +26.5 / +183.2 numbers."""
+
+    def _seed_forced_k(self, con):
+        # Best-by-ECR is a WR; a kicker exists but ranks worse. A 1-round, K-only-lineup
+        # league makes the K deficit bind on pick 1, so plain and roster-aware consensus
+        # disagree immediately rather than only in an endgame this fixture would otherwise
+        # need many rounds to reach.
+        _seed(con, "best_wr", "WR", projected=300.0, realized=250.0, ecr_rank=1.0)
+        _seed(con, "the_k", "K", projected=80.0, realized=90.0, ecr_rank=5.0)
+
+    def _k_only_league(self) -> LeagueContext:
+        return _league(lineup={"K": 1}, roster={"bench": 0, "roster_size": 1})
+
+    def test_the_fix_actually_changes_behavior(self, con):
+        """Proves this is not a no-op: the plain rule and the roster-aware rule disagree on
+        this fixture, so the swap has a real, testable effect."""
+        self._seed_forced_k(con)
+        league = self._k_only_league()
+        market_rank = _preseason_overall_market(con, "ro", SEASON)
+        available = {"best_wr", "the_k"}
+
+        plain = _market_consensus_pick(available, market_rank)
+        roster_aware = _market_consensus_roster_aware_pick(
+            available, market_rank, {"best_wr": "WR", "the_k": "K"}, league, [], 1
+        )
+        assert plain == "best_wr"
+        assert roster_aware == "the_k"
+
+    def test_attribute_draft_picks_uses_the_roster_aware_counterfactual(self, con):
+        """The actual regression signal: the module's own consensus_player_id must match the
+        roster-aware pick, not the plain one, on the same fixture."""
+        self._seed_forced_k(con)
+        league = self._k_only_league()
+        rows = attribute_draft_picks(con, league, SEASON, draft_slot=1)
+        assert rows[0].consensus_player_id == "the_k"
+
+    def test_matches_a_direct_call_with_equivalent_state(self, con):
+        """No divergence between the two call sites: `attribute_draft_picks` reuses
+        `_market_consensus_roster_aware_pick` directly rather than a re-implementation, so its
+        output must be byte-identical to calling that function directly with the same state --
+        the same discipline D67 used to verify the demand model and the fair opponent never
+        disagree about how a draft consumes positions."""
+        self._seed_forced_k(con)
+        league = self._k_only_league()
+        market_rank = _preseason_overall_market(con, "ro", SEASON)
+
+        rows = attribute_draft_picks(con, league, SEASON, draft_slot=1)
+        direct = _market_consensus_roster_aware_pick(
+            {"best_wr", "the_k"}, market_rank, {"best_wr": "WR", "the_k": "K"}, league, [], 1
+        )
+        assert rows[0].consensus_player_id == direct
+
+    def test_background_slots_are_also_roster_aware(self, con):
+        """The other half of the fix: background (non-question) slots must ALSO draft via the
+        roster-aware rule, or the player pool the question team sees would not match what the
+        official benchmark's opponent field actually produces.
+
+        A 2-team, 2-round league with TWO dedicated slots (K:1, WR:1, no bench) and three WR
+        fillers plus one K -- 4 players for 4 total picks, so every player is drafted and the K
+        cannot simply be left over uncontested. (An earlier version of this fixture used a
+        K-only lineup with WR fillers on the bench; the production engine correctly refuses to
+        evaluate a position with no legal roster slot at all, so WR needs its own dedicated
+        slot here for the fixture to be well-formed, independent of this fix.)
+
+        Deficit sums to 2 = picks_remaining in round 1 for both teams, so round 1 is trivially
+        unrestricted (every remaining player fills some deficit) and both teams' K-vs-WR
+        deficits split 1/1 by round 2 regardless of which filler each team took first. By round
+        2 (picks_remaining=1), whichever team still needs K is forced into it if a K remains.
+        Background (slot 2) picks BEFORE the question team in this snake order -- under the OLD
+        plain rule it would ignore its own K deficit and take the better-ECR filler instead
+        (whichever is left), stranding the_k as the question team's only remaining option. Under
+        the fix, slot 2's own deficit correctly forces it into the_k first, so the question
+        team's final pick is a filler."""
+        _seed(con, "best_wr", "WR", projected=300.0, realized=250.0, ecr_rank=1.0)
+        _seed(con, "second_wr", "WR", projected=290.0, realized=240.0, ecr_rank=2.0)
+        _seed(con, "third_wr", "WR", projected=280.0, realized=230.0, ecr_rank=3.0)
+        _seed(con, "the_k", "K", projected=80.0, realized=90.0, ecr_rank=5.0)
+        league = _league(lineup={"K": 1, "WR": 1}, roster={"bench": 0, "roster_size": 2})
+
+        rows = attribute_draft_picks(con, league, SEASON, draft_slot=1)
+        assert rows[1].alpha_player_id != "the_k", (
+            "the question team's final pick must be a filler, not the_k -- if this fails, "
+            "the background slot failed to respect its own K deficit and left the_k stranded"
+        )
 
 
 class TestRunAndArtifacts:

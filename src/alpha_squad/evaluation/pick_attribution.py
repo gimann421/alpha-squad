@@ -12,6 +12,18 @@ pools and attributes nothing. Instead this replays **Alpha's** draft once and, a
 Alpha's turns, asks what the consensus *rule* would have taken **from the same pool at the
 same moment**. That is a real counterfactual at a real decision point, with no divergence.
 
+The consensus rule is `_market_consensus_roster_aware_pick` -- the same fair, roster-aware
+opponent every official benchmark since D61 measures against (`market_consensus_roster_aware`),
+used both for the counterfactual pick at the team-in-question's own turn and for every
+background (non-question) slot's picks. Both are necessary: using it only for the
+counterfactual while background slots still drafted by the plain rule would leave a different
+sequence of players removed from the board than the official benchmark actually produced, so
+Alpha's own replayed picks (which depend on `available`) would not match the official run's
+picks either. Before this fix this module used the plain, non-roster-aware rule throughout --
+a real mismatch with the benchmark it was meant to explain, found and corrected read-only,
+without touching the rule itself (`league/opportunity_cost.py::roster_aware_market_pick`,
+already the single canonical implementation D67-D70 all reuse).
+
 `starter_points_delta` then swaps that one pick into Alpha's final roster, holding all other
 picks fixed, and recomputes the best legal lineup. Positive means the consensus alternative
 would have produced more starter points, i.e. Alpha's pick cost the team.
@@ -35,7 +47,7 @@ import duckdb
 from alpha_squad.evaluation.config import EVALUATION_FRAMEWORK_VERSION
 from alpha_squad.evaluation.draft_simulation import (
     _actual_points_for,
-    _market_consensus_pick,
+    _market_consensus_roster_aware_pick,
     _next_pick_overall,
     _snake_overall_pick,
 )
@@ -116,15 +128,33 @@ def attribute_draft_picks(
     available = set(projections)
     my_roster: list[str] = []
     my_roster_positions: list[str] = []
+    # Mirrors `draft_simulation.py::simulate_draft`'s own tracking for
+    # `MARKET_CONSENSUS_ROSTER_AWARE`: roster-awareness is per-team, so every background slot
+    # needs its own accumulated roster, not the question team's.
+    opponent_roster_positions: dict[int, list[str]] = {
+        slot: [] for slot in range(1, league.teams + 1) if slot != draft_slot
+    }
     records: list[tuple] = []
 
     for round_no in range(1, total_rounds + 1):
         order = range(1, league.teams + 1) if round_no % 2 == 1 else range(league.teams, 0, -1)
+        # Every slot picks exactly once per round in a standard snake draft, so this is exact
+        # for every slot, question or background, at this round (same as `simulate_draft`).
+        picks_remaining_this_round_on = total_rounds - round_no + 1
         for slot in order:
             if not available:
                 break
             if slot != draft_slot:
-                available.discard(_market_consensus_pick(available, market_rank))
+                pick = _market_consensus_roster_aware_pick(
+                    available,
+                    market_rank,
+                    positions,
+                    league,
+                    opponent_roster_positions[slot],
+                    picks_remaining_this_round_on,
+                )
+                opponent_roster_positions[slot].append(positions.get(pick, "UNKNOWN"))
+                available.discard(pick)
                 continue
 
             overall = _snake_overall_pick(round_no, slot, league.teams)
@@ -146,7 +176,14 @@ def attribute_draft_picks(
                 roster_player_ids=my_roster,
             )
             alpha_pick = rec.recommendation
-            consensus_pick = _market_consensus_pick(available, market_rank)
+            consensus_pick = _market_consensus_roster_aware_pick(
+                available,
+                market_rank,
+                positions,
+                league,
+                my_roster_positions,
+                picks_remaining_this_round_on,
+            )
 
             # Opportunity costs as of this exact decision point, for both positions in play.
             n_opponent_picks = picks_until_next_turn(overall, next_pick)

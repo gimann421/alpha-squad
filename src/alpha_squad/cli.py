@@ -37,6 +37,22 @@ from alpha_squad.evaluation.pick_attribution import (
     write_pick_attribution_artifacts,
 )
 from alpha_squad.evaluation.projection_benchmark import write_projection_benchmark_report
+from alpha_squad.evaluation.projection_calibration import (
+    X_ARMS,
+    evaluate_projection_layer,
+    load_residual_rows,
+    render_report,
+    sign_stability,
+)
+from alpha_squad.evaluation.rb_availability_experiment import (
+    PRACTICAL_SIGNIFICANCE_FLOOR,
+)
+from alpha_squad.evaluation.rb_availability_experiment import (
+    TREATED_SEASONS as RB_AVAILABILITY_TREATED_SEASONS,
+)
+from alpha_squad.evaluation.rb_availability_experiment import (
+    evaluate_projection_layer as evaluate_rb_availability_projection_layer,
+)
 from alpha_squad.evaluation.rookie_benchmark import (
     run_rookie_baselines,
     write_rookie_benchmark_report,
@@ -694,6 +710,125 @@ def evaluate_projection_benchmark(
     init_db(con)
     result = write_projection_benchmark_report(con, Path(report_path), season_start, season_end)
     console.print(f"common seasons: {result['common_seasons']}")
+    console.print(f"report written to [green]{report_path}[/green]")
+    con.close()
+
+
+@evaluate_app.command("rb-availability")
+def evaluate_rb_availability(
+    league_id: str = typer.Option("target_league", help="League the bands are derived from"),
+    report_path: str = typer.Option(
+        "reports/rb_availability_projection_layer.md", help="Markdown report output path"
+    ),
+) -> None:
+    """D70 projection layer: fit the RB-only availability-feature refit walk-forward for
+    2023-2025 and evaluate gates B1-B3 (docs/RB_AVAILABILITY_PREREGISTRATION.md).
+
+    Measurement only -- makes no draft picks and changes no production behavior. QB/WR/TE/K/DST
+    are untouched (control). Per the pre-registration, the draft layer (B4-B9) must not run
+    unless B1-B3 all pass here first."""
+    settings = get_settings()
+    con = get_connection(settings)
+    init_db(con)
+    league = resolve_league(league_id, con=con, settings=settings)
+
+    result = evaluate_rb_availability_projection_layer(con, league)
+
+    table = Table(title=f"D70 RB availability projection layer ({RB_AVAILABILITY_TREATED_SEASONS})")
+    for col in ("gate", "passes", "detail"):
+        table.add_column(col)
+    for name, gate in result.gates.items():
+        detail = ", ".join(f"{k}={v}" for k, v in gate.items() if k != "passes")
+        table.add_row(name, "PASS" if gate["passes"] else "FAIL", detail[:80])
+    console.print(table)
+    console.print(f"treated seasons: {list(RB_AVAILABILITY_TREATED_SEASONS)}")
+    console.print(f"B1-B3 all pass: [green]{result.passes}[/green]")
+    if not result.passes:
+        console.print("[yellow]Per the pre-registration, the draft layer must NOT run.[/yellow]")
+
+    lines = [
+        "# D70 -- RB availability: projection layer (B1-B3)",
+        "",
+        f"Treated seasons: {list(RB_AVAILABILITY_TREATED_SEASONS)}. "
+        f"Practical-significance floor for the draft layer (B9, not evaluated here): "
+        f"+{PRACTICAL_SIGNIFICANCE_FLOOR} mean starter points.",
+        "",
+        f"**Gates B1-B3 all pass: {result.passes}**",
+        "",
+    ]
+    for name, gate in result.gates.items():
+        lines.append(f"## {name}: {'PASS' if gate['passes'] else 'FAIL'}")
+        for k, v in gate.items():
+            if k != "passes":
+                lines.append(f"- {k}: {v}")
+        lines.append("")
+    lines.append("## Per-season detail")
+    lines.append("")
+    lines.append(
+        "| season | n | treat MAE | ctrl MAE | treat RMSE | ctrl RMSE | "
+        "treat bias | ctrl bias | B3 corr |"
+    )
+    lines.append("|---|---|---|---|---|---|---|---|---|")
+    for row in result.per_season:
+        lines.append(
+            f"| {row['season']} | {row['n']} | {row['treatment_mae']:.2f} | "
+            f"{row['control_mae']:.2f} | {row['treatment_rmse']:.2f} | "
+            f"{row['control_rmse']:.2f} | {row['treatment_mean_signed_residual']:+.2f} | "
+            f"{row['control_mean_signed_residual']:+.2f} | {row['b3_correlation']:.3f} |"
+        )
+    Path(report_path).parent.mkdir(parents=True, exist_ok=True)
+    Path(report_path).write_text("\n".join(lines) + "\n")
+    console.print(f"report written to [green]{report_path}[/green]")
+    con.close()
+
+
+@evaluate_app.command("projection-calibration")
+def evaluate_projection_calibration(
+    arms: str = typer.Option(",".join(X_ARMS), help="Comma-separated calibration arms"),
+    season_start: int = typer.Option(2021, help="First season with M6 predictions"),
+    season_end: int = typer.Option(2025, help="Last season with realized outcomes"),
+    league_id: str = typer.Option("target_league", help="League the bands are derived from"),
+    report_path: str = typer.Option(
+        "reports/projection_calibration.md", help="Markdown report output path"
+    ),
+    json_path: str = typer.Option(
+        "reports/projection_calibration.json", help="Raw per-arm per-season measurements"
+    ),
+) -> None:
+    """D68 projection layer: fit each pre-registered calibration arm walk-forward and apply
+    gates G1-G4.
+
+    Measurement only -- this command makes no draft picks and changes no production behavior.
+    An arm that fails a gate here never reaches the draft layer, which is what stops any
+    calibration parameter from being chosen by draft outcome."""
+    settings = get_settings()
+    con = get_connection(settings)
+    init_db(con)
+    league = resolve_league(league_id, con=con, settings=settings)
+    seasons = list(range(season_start, season_end + 1))
+    arm_list = tuple(a.strip() for a in arms.split(",") if a.strip())
+
+    result = evaluate_projection_layer(con, league, seasons, arm_list)
+    residual_rows = load_residual_rows(con, league, seasons)
+    stability = {s: sign_stability(residual_rows, s) for s in result["treated_seasons"]}
+
+    out = Path(json_path)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(result, indent=2, sort_keys=True, default=str))
+    Path(report_path).write_text(render_report(result, stability))
+
+    table = Table(title=f"D68 projection layer ({season_start}-{season_end})")
+    for col in ("arm", "G1", "G2", "G3", "G4", "verdict"):
+        table.add_column(col)
+    for arm, verdict in result["gates"].items():
+        if not verdict["gates"]:
+            table.add_row(arm, "-", "-", "-", "-", verdict["detail"])
+            continue
+        marks = ["PASS" if e["passes"] else "FAIL" for e in verdict["gates"].values()]
+        table.add_row(arm, *marks, "PASSES" if verdict["passes"] else "rejected")
+    console.print(table)
+    console.print(f"treated seasons: {result['treated_seasons']}")
+    console.print(f"arms clearing G1-G4: [green]{result['survivors'] or 'none'}[/green]")
     console.print(f"report written to [green]{report_path}[/green]")
     con.close()
 

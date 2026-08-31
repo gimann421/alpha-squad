@@ -38,6 +38,16 @@ from alpha_squad.evaluation.draft_simulation import (
     _next_pick_overall,
     _snake_overall_pick,
 )
+from alpha_squad.evaluation.projection_calibration import (
+    X_ARMS,
+    Arm,
+    ResidualRow,
+    apply_calibration,
+    band_edges,
+    fit_arm,
+    load_residual_rows,
+    season_demand,
+)
 from alpha_squad.evaluation.replacement_diagnostics import (
     REPLACEMENT_VARIANTS,
     SWEEP_SCALES,
@@ -124,6 +134,12 @@ Tier = Literal[
     "W2",
     "W3",
     "W4",
+    "X0",
+    "X1",
+    "X2",
+    "X3",
+    "X4",
+    "Y1",
 ]
 ALL_TIERS: tuple[Tier, ...] = ("A", "B", "C", "D", "E", "F", "G", "H")
 
@@ -429,16 +445,59 @@ W_TIER_SPEC: dict[Tier, tuple[str | None, bool]] = {
 # gate, never the objective.
 PREREGISTERED_W_CONTROL: Tier = "W0"
 
+# --------------------------------------------------------------------------------------------
+# D68 -- projection calibration. The DRAFT ENGINE IS A CONSTANT HERE.
+#
+# Every X-tier scores exactly as W1 does -- the engine shipped at D67, `msv + 1.0 x
+# draft-aware VORP` at the mock-draft consumption boundary. No X-tier adds a scoring term, a
+# scarcity term, a depth or replacement multiplier, a positional cap, a round-specific rule or
+# an RB bonus. The ONLY thing that differs between X-tiers is the projection input, applied at
+# a single point in `load_season_static` before any value is derived from it, so that MSV,
+# static VORP, replacement levels, scarcity and the D67 demand boundary all see one consistent
+# set of numbers.
+#
+# X0 is therefore byte-identical to W1 by construction, and a test asserts it. If it ever
+# diverges, the comparison is measuring the harness rather than the calibration.
+#
+# The arms, estimators, evidence prior and gates live in `evaluation/projection_calibration.py`
+# and were committed before any of them were fitted against real data.
+X_TIERS: tuple[Tier, ...] = ("X0", "X1", "X2", "X3", "X4")
+
+#: {tier: calibration arm}. One-to-one; the indirection exists so the arm definitions stay in
+#: the calibration module and the harness only has to know which arm a tier draws its
+#: projections from.
+X_TIER_SPEC: dict[Tier, Arm] = {tier: arm for tier, arm in zip(X_TIERS, X_ARMS, strict=True)}
+
+PREREGISTERED_X_CONTROL: Tier = "X0"
+
+# --------------------------------------------------------------------------------------------
+# D70 -- RB availability (docs/RB_AVAILABILITY_PREREGISTRATION.md). Same reused scoring branch
+# as the X-tiers (below): Y1 differs from the X0 control ONLY in `static.projections`, which
+# `evaluation/rb_availability_experiment.py::rb_availability_static` builds by replacing RB
+# entries in the control board with a walk-forward availability-feature refit -- QB/WR/TE/K/DST
+# are untouched. Y1 is a SEPARATE letter from the X-tiers deliberately: D68 pre-registered X0-X4
+# as a closed set of residual-calibration arms ("no sixth arm"), and this is a different kind of
+# treatment (a model refit, not a residual correction), not a violation of that closure.
+#
+# Per the pre-registration, Y1 must not be measured at the draft layer unless the projection
+# layer (`rb_availability_experiment.py::evaluate_projection_layer`, gates B1-B3) has already
+# passed -- that ordering lives in which functions a caller invokes, the same way it did for D68.
+Y_TIERS: tuple[Tier, ...] = ("Y1",)
+
+PREREGISTERED_Y_CONTROL: Tier = "X0"
+
+
 #: Every tier scored as "N4, except VORP may use a draft-aware replacement level". V- and
 #: W-tiers share the scoring branch verbatim so a difference between them is attributable to the
 #: demand target (and, for W2/W3, the legality constraint) and nothing else.
-DRAFT_AWARE_REPLACEMENT_TIERS: tuple[Tier, ...] = (*ALL_V_TIERS, *W_TIERS)
+DRAFT_AWARE_REPLACEMENT_TIERS: tuple[Tier, ...] = (*ALL_V_TIERS, *W_TIERS, *X_TIERS, *Y_TIERS)
 
 #: W-tiers that enforce the endgame mandatory-slot reservation, as a hard restriction on the
 #: candidate pool rather than a score adjustment -- roster legality is a constraint, not a value.
 W_TIERS_ENFORCING_LEGALITY: tuple[Tier, ...] = tuple(
     t for t, (_, legality) in W_TIER_SPEC.items() if legality
 )
+
 
 # {tier: (apply startable-saturation to the VORP surplus, over-cap multiplier)}
 R_TIER_SPEC: dict[Tier, tuple[bool, float]] = {
@@ -575,6 +634,15 @@ TIER_DESCRIPTIONS: dict[Tier, str] = {
     "W3": "D67: the endgame mandatory-slot reservation ALONE, on static replacement -- isolates "
     "legality from any depth change",
     "W4": "D67 reference: D66's uniform 2.5x startable_slots demand, unchanged",
+    "X0": "D68 control: the shipped W1 engine on uncalibrated projections",
+    "X1": "D68: W1 on projections with a walk-forward position-specific ADDITIVE correction",
+    "X2": "D68: W1 on projections with a walk-forward position-specific AFFINE (slope) correction",
+    "X3": "D68: W1 on projections with a walk-forward RANK-BAND additive correction, bands "
+    "derived from the league's own draft consumption",
+    "X4": "D68: W1 on projections with the additive correction SHRUNK toward zero by empirical "
+    "Bayes when the evidence is weak",
+    "Y1": "D70: W1 with RB projections from a walk-forward refit adding preseason-knowable "
+    "availability features (F1-F4); QB/WR/TE/K/DST unchanged from control",
 }
 
 
@@ -619,11 +687,21 @@ def load_season_static(
     league: LeagueContext,
     season: int,
     ecr_type: str | None = None,
+    projections_override: dict[str, float] | None = None,
 ) -> SeasonStatic:
+    """`projections_override` is D68's single insertion point.
+
+    It replaces the projection universe BEFORE anything is derived from it, so MSV, static
+    VORP, replacement levels, scarcity and the D67 demand boundary are all computed from one
+    consistent set of numbers. Substituting calibrated projections any later would produce an
+    engine whose value terms disagreed with each other, and a tier difference would then be
+    measuring the inconsistency rather than the calibration."""
     # D56: the board has to match the league format the experiment is run against.
     if ecr_type is None:
         ecr_type = resolve_market_series(league).ecr_type
     projections, positions = load_season_projections(con, season)
+    if projections_override is not None:
+        projections = projections_override
     vorp = marginal_value_over_replacement(league, projections, positions)
     levels = replacement_level(league, projections, positions)
     scarcity_raw = positional_scarcity(league, projections, positions)
@@ -1322,6 +1400,12 @@ def _pick_by_tier(
             else REPLACEMENT_VARIANTS[target]
         )
         dynamic_levels = variant(league, available, static.projections, static.positions)
+    elif tier in X_TIERS or tier in Y_TIERS:
+        # D68/D70: identical to W1. The projections `static` carries are the treatment; the
+        # replacement rule they are measured against is the shipped one, unchanged.
+        dynamic_levels = consumption_replacement(static.consumption_demand)(
+            league, available, static.projections, static.positions
+        )
 
     base_lineup_points = None
     if (
@@ -1696,6 +1780,32 @@ def first_round_by_position(drafted_positions: list[str]) -> dict[str, int]:
     return first
 
 
+def _calibrated_static(
+    con: duckdb.DuckDBPyConnection,
+    league: LeagueContext,
+    season: int,
+    arm: Arm,
+    residual_rows: list[ResidualRow],
+    control: SeasonStatic,
+) -> SeasonStatic:
+    """`control`, rebuilt from `arm`'s walk-forward calibrated projections (D68).
+
+    Returns the control object itself when the arm is the identity -- which it is for X0
+    always, and for any arm the evidence prior or shrinkage zeroed. That is not an
+    optimization: it guarantees such a tier is byte-identical to W1 rather than merely equal to
+    it up to floating-point reconstruction, so a zero difference in the results table means
+    exactly what it says."""
+    training = [row for row in residual_rows if row.season < season]
+    params = fit_arm(arm, training, season)
+    if params.is_identity:
+        return control
+    edges = band_edges(league, season_demand(con, league, season))
+    calibrated = apply_calibration(params, control.projections, control.positions, edges)
+    return load_season_static(
+        con, league, season, ecr_type=control.ecr_type, projections_override=calibrated
+    )
+
+
 def run_tier_ablation(
     con: duckdb.DuckDBPyConnection,
     league: LeagueContext,
@@ -1716,9 +1826,45 @@ def run_tier_ablation(
     could field a legal lineup."""
     slots = slots if slots is not None else list(range(1, league.teams + 1))
     rows: list[dict] = []
+
+    # D68: the residual history is loaded ONCE for the whole grid rather than per (season, arm).
+    # It spans every season in the run, including the target ones -- which is safe only because
+    # `fit_arm` raises if it is ever handed a row at or after the season being fitted, and
+    # `calibrated_static` filters to strictly earlier seasons before calling it. The guard is
+    # structural, so a future caller that forgets to filter gets an exception rather than a
+    # quietly leaked benchmark.
+    residual_rows: list[ResidualRow] = (
+        load_residual_rows(con, league, seasons) if any(t in X_TIERS for t in tiers) else []
+    )
+
+    # D70: lazy import -- `rb_availability_experiment` imports `SeasonStatic`/`load_season_static`
+    # FROM this module, so importing it back at module scope here would be circular. Only
+    # imported when a Y-tier is actually requested.
+    rb_availability_static = None
+    if any(t in Y_TIERS for t in tiers):
+        from alpha_squad.evaluation.rb_availability_experiment import (
+            rb_availability_static as _rb_availability_static,
+        )
+
+        rb_availability_static = _rb_availability_static
+
     for season in seasons:
         static = load_season_static(con, league, season)
+        calibrated_statics: dict[Arm, SeasonStatic] = {}
+        y1_static: SeasonStatic | None = None
         for tier in tiers:
+            season_static = static
+            if tier in X_TIERS:
+                arm = X_TIER_SPEC[tier]
+                if arm not in calibrated_statics:
+                    calibrated_statics[arm] = _calibrated_static(
+                        con, league, season, arm, residual_rows, static
+                    )
+                season_static = calibrated_statics[arm]
+            elif tier in Y_TIERS:
+                if y1_static is None:
+                    y1_static = rb_availability_static(con, league, season, static)
+                season_static = y1_static
             for slot in slots:
                 result = simulate_forensic_draft(
                     con,
@@ -1726,7 +1872,7 @@ def run_tier_ablation(
                     season,
                     tier,
                     slot,
-                    static,
+                    season_static,
                     opponent_strategy=opponent_strategy,
                 )
                 feasibility = roster_feasibility_metrics(league, result.drafted_positions)

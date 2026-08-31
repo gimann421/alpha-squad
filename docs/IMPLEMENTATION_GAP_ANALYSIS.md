@@ -36,7 +36,7 @@ items with no listed dependency can start immediately.
 
 ## P1 — High value, ready to build
 
-### P1-0: Fix `recommend_draft_pick`'s roster-balance failure — **REOPENED (D61)**
+### P1-0: Fix `recommend_draft_pick`'s roster-balance failure — **SPLIT (D71): P1-0a CLOSED, P1-0b OPEN as a standing measurement limitation**
 
 > **REOPENED.** This item was closed at D60 on a benchmark whose `market_consensus` opponent
 > drafts 0.00 kickers and 0.30 defenses per draft, leaving two of its ten starting slots empty
@@ -114,12 +114,95 @@ items with no listed dependency can start immediately.
 > **Official benchmark: Alpha 2061.3 vs fair consensus 2034.8, +26.5** (previous production
 > −5.6, so a +32.1 swing), 4 of 5 seasons won, deterministic across two processes, 0/50 unfilled
 > mandatory slots and no structurally invalid roster. **Why it is not closed:** the paired 95% CI
-> is **[−38.0, +91.0]**, win/loss is 28/22 and 5/10 slots, and removing 2022 leaves +3.1. The
+> is **[−38.0, +91.0]** *(D71: this is the naive-iid interval treating all 50 trials as
+> independent; the 10 slots within a season share 53–73% of their roster and are not independent
+> replicates — the season-clustered interval is the wider [−100.4, +153.4], df=4. Preserved as
+> originally measured, not restated.)*, win/loss is 28/22 and 5/10 slots, and removing 2022 leaves
+> +3.1. The
 > residual gap is diagnosed and lies **upstream of the draft engine** — Alpha loses RB starter
 > points in all five seasons (mean −247.7) while winning WR in all five (+183.2), because M6
 > under-projects RB in 4 of 5 seasons (+38.0 in 2024, the only season Alpha loses) and
 > over-projects WR/QB. The next experiment is a walk-forward positional calibration of the
 > projection layer, not another draft-rule change.
+
+> **D68 update — the calibration experiment ran and rejected every arm. P1-0 unchanged, still
+> OPEN.** Five pre-registered walk-forward forms (none / position additive / position affine /
+> rank-band / empirical-Bayes shrunk), committed to source before any was fitted. Every arm
+> improves raw accuracy on the held-out target seasons (control MAE 63.29 → 61.83-62.88, RMSE
+> 80.23 → 77.82-79.67), and **none clears the pre-registered gates.** The reason is specific
+> rather than general: **RB is the only position whose walk-forward bias estimate is sign-stable**
+> (+2.5 / +8.0 / +16.9 / +44.4 over 2021-2024, and positive at every depth cut), and RB's bias
+> falls under every arm — but QB, WR and TE all change sign between seasons, so the same arms
+> correct them in the wrong direction. Every G3 failure is at TE or WR; none is at RB or QB.
+> Two of the exploratory numbers that motivated the phase are corrected by it: the QB slope is
+> not stable (walk-forward 0.007 / 0.196 / 0.453, always below 1 but ranging over a factor of
+> 60), and RB's residual does not flip sign in 2021 under the pre-registered population.
+> **Nothing shipped** — `league/draft.py` is byte-identical to D67 — and the draft layer was not
+> run, per the committed rule that an arm failing the projection layer never reaches it. An
+> RB-only correction is the obvious reading and was deliberately NOT adopted: it is a sixth arm
+> selected after seeing results, which is precisely the unprincipled positional bonus this phase
+> existed to avoid. Full account: `docs/DECISIONS.md` D68 and
+> `reports/projection_calibration.md`.
+
+> **D69 update — the deferred RB-only arm was assessed and abandoned before implementation. P1-0
+> unchanged, still OPEN.** No estimator was fitted and no draft-layer or benchmark experiment was
+> run. Four independent grounds: RB's sign stability is a **mean-only** property (2021 median
+> −12.3, 10%-trimmed −1.5, and the mean itself flips to −0.5 in 2022 at a top-40 cut); magnitude
+> is not usefully forecastable walk-forward (best predictor MAE **16.3** against a **14.4** SD of
+> the three truths and **~11.2** for an unavailable oracle constant — every predictor beats zero,
+> none approaches the ceiling, and a fixed level beats every adaptive form); the residual's
+> **leading but not demonstrated** explanation is an association with an RB-specific availability
+> measure that has been trending (within-season corr with games played **+0.70 to +0.80** in all
+> five seasons; draftable-RB mean games 11.67 → 14.19 → 13.83, a 2021→2024 move of **+2.52**
+> against WR +0.35 and QB −0.04), which a backward-looking estimator structurally lags and which
+> already reversed in 2025; and the W1 engine is **near-inert to the only supported form** — a
+> uniform additive RB shift moves the RB replacement level by the identical amount, so
+> `draft_aware_vorp` changes by exactly **0.00** and only **0–2 of the top-20** pick-1 board slots
+> move, against a −247.7/season RB starter deficit. Winner's-curse / projection-rank conditioning,
+> a market-varying universe (RB n = 48/48/47/43/46), and league-environment regime change remain
+> **unresolved** alternatives. Replaced by a design-only pre-registration for RB availability
+> modelling — a feature/model question rather than a positional bonus, and one that would move
+> VORP rather than be absorbed by the replacement level. Full account: `docs/DECISIONS.md` D69 and
+> `docs/RB_AVAILABILITY_PREREGISTRATION.md`.
+
+> **D70 update — D69's own recommended follow-up was implemented and run. It also failed. P1-0
+> unchanged, still OPEN.** Four preseason-knowable availability features (prior-3-season games
+> history, age, position-cohort games baseline, prior-season workload), appended to M6 for RB
+> only, committed before fitting. **B1 (accuracy) and B2 (targeted bias falls) both FAIL** — pooled
+> RMSE marginally worse (88.60 vs control 88.08) and, decisively, **the RB signed bias grew larger
+> under treatment in all three treated seasons** rather than shrinking (2023 +22.1 vs +16.9, 2024
+> +44.7 vs +44.4, 2025 +26.9 vs +23.5). B3 (the availability feature predicts realized games,
+> out-of-fold) passed but only weakly and declining across the three seasons (+0.226 → +0.176 →
+> +0.051) — a materially harder and more honest test than D69's own within-season correlation
+> (+0.70–0.80), and the gap between the two numbers is itself informative: what a backward-looking
+> 3-season average predicts about next season is real but weak, and was weakening across exactly
+> the window measured. Per the pre-registered protocol, since B1 and B2 both failed, **the draft
+> layer (B4–B9) was never run.** A real population bug (RB universe collapsed to n=3 by ranking
+> across all four positions at once) was found and fixed *before* any valid gate result existed,
+> the same category of fix as D68's shrinkage-estimator correction. Nothing shipped:
+> `league/draft.py`, `league/replacement.py`, `models/uncertainty/run.py` remain byte-identical to
+> D67. Both of D69's proposed RB paths — calibration and availability features — are now closed;
+> no further RB-specific mechanism is currently proposed. Full account: `docs/DECISIONS.md` D70.
+
+> **D71 update — the benchmark's own inferential structure was audited (read-only, no new
+> simulation). The item is split.** The 50 trials are a deterministic `(season × slot)`
+> cross-product, not 50 independent draws: within a season all 10 slots share one projection set
+> and one market board, and Alpha's 10 per-season rosters overlap 53–73% (ICC 0.0995, effective
+> n ≈ 26; the honest unit is the season, n=5). The published CI above is the naive-iid one; the
+> season-clustered CI is **[−100.4, +153.4]** — wider, not narrower. Resolving an effect the size
+> of +26.5 would need **~116 seasons** at current precision, or **~61 seasons even with a
+> hypothetically perfect within-season measurement** (design ceiling); no additional slots,
+> reruns, or pre-2021 seasons can supply that — `market_snapshot` has no `ro`/`redraft-overall`
+> Jul/Aug rows before 2021, and 2026 has no realized outcomes yet. **P1-0 is therefore split:**
+> the item's own original defect (roster-balance) is **CLOSED** — `alpha_league_aware` has 0
+> unfilled mandatory slots across all 50 stored trials, vs 327/50 for `alpha_bpa`, 270/50 for
+> `generic_prior_year`, 109/50 for plain `market_consensus` — as **P1-0a** below. The absolute-
+> superiority claim continues as **P1-0b**, reclassified from "the next experiment should close
+> it" to "not resolvable at current or near-future data scale" — a standing limitation, not a
+> blocking gate. Future engine-change evaluation uses a variant-vs-control contrast on identical
+> trials instead (the instrument D65's Candidate C already used successfully: +23.2, CI
+> [+2.3, +44.1]). No RB/WR/QB work reopened; no code, model, or production change. Full account:
+> `docs/DECISIONS.md` D71.
 
 > **The benchmark below is invalid for the current target format and is preserved as-is,
 > labelled, not restated.** Everything through "Acceptance criteria — STILL UNMET" was

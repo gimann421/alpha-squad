@@ -3515,3 +3515,670 @@ in-sample bias would be hindsight and is not the experiment.
 construction is sound and the run is deterministic — but the interval contains zero, the margin
 collapses to +3.1 without 2022, and 2024 remains a 144-point loss with a diagnosed upstream
 cause. P1-0 stays **OPEN** pending the positional-calibration experiment above.
+
+## D68 — The RB gap is real but only RB is calibratable, and the arms that would fix it also break three positions that are not. Nothing shipped.
+
+Follow-up to D67's official benchmark, which put the residual gap upstream of the draft engine and
+proposed a walk-forward positional calibration as the next experiment. This entry reports that
+experiment. **No production code changed.** `league/draft.py` and `league/replacement.py` are
+byte-identical to D67; production remains the W1 engine.
+
+### The hypothesis was refined before it was tested
+
+D67 closed with "M6 under-projects RBs". The read-only diagnostics that opened this phase found
+that statement is false as a statement about RBs:
+
+| measurement, all M6-projected RBs 2021–2025 | value |
+|---|---|
+| mean residual (realized − projected) | **+10.3** |
+| **median residual** | **−0.7** |
+
+The mean is a right-tail artifact. The typical RB is projected essentially correctly, and the effect
+lives in the top of the board. The rookie-model confound was ruled out — the bias is *larger* in the
+M6 path (mean +11.4, n=571) than in the rookie fallback (+5.7, n=143) — so it is M6's.
+
+### What the pipeline trace established
+
+`load_season_projections` reads `uncertainty_predictions.point_prediction` and hands it to the draft
+engine **untransformed**. Conformal calibration (`models/uncertainty/conformal.py`) fits quantiles on
+the calibration season's signed residuals and adds them as *interval* offsets only; the `median` it
+computes is read by no decision path in the repo. So the signed residual measured at the benchmark
+is exactly M6's raw residual, and **no downstream transformation creates or masks the apparent
+bias.** M6's split is already train ≤ S−2 / calibrate S−1 / predict S per position, which is why a
+residual from season T is out-of-sample by construction and safe to calibrate on at all.
+
+### Pre-registered before any arm was fitted (commit `f467e73`)
+
+Five arms, no sixth, no sweep. `p` = M6 point prediction; K and DST excluded throughout (D57 measured
+K r=0.41, DST r=0.29 year-over-year, and ships baselines for them deliberately).
+
+| arm | form |
+|---|---|
+| X0 | control, none |
+| X1 | position additive, `p' = p + b_pos` |
+| X2 | position affine, `p' = a_pos + b_pos·p` (the OLS calibration regression; nests both a level shift and a pure rescale) |
+| X3 | rank-band additive, bands from the league's dedicated slots then D67's `market_draft_demand` |
+| X4 | X1 shrunk toward zero by empirical Bayes |
+
+Evidence prior: **zero adjustment** below 2 training seasons or 30 rows at a position (the row
+threshold matches `MIN_TRAIN_ROWS` in the uncertainty model). Eight gates in two ordered layers —
+G1 accuracy, G2 ordering, G3 the targeted bias falls, G4 estimator stability, then G5–G8 at the draft
+layer. Ship the lowest-numbered arm clearing all eight; if none does, nothing ships.
+
+The estimation universe is players a full draft consumes (`teams × market_draft_demand`), because
+adjusting players nobody drafts cannot change a draft and pooling them is precisely what made the
+RB mean and median disagree.
+
+**A consequence fixed in advance, not after.** M6 predictions exist only for 2021–2025 and cannot be
+extended backwards — `preseason_ecr_rank` is one of M6's four features and the `ro` board begins in
+2020 — so under the prior only **2023–2025 are treatable**. 20 of the 50 benchmark drafts would be
+identical to control by construction, so the primary draft-layer comparison was pre-registered on the
+30-draft treated subset. Thirty drafts across three seasons is a mechanism sample and is not
+sufficient on its own to place Alpha above or below consensus.
+
+Writing the tests caught a real defect in the shrinkage estimator *before it ran*: shrinking toward
+zero using the variance of the season means about their own mean makes five seasons that all agree on
++20 shrink to nothing — the strongest possible evidence of a stable bias, discarded. The committed
+form uses the second moment about zero. The exploratory λ values that motivated this phase used the
+defective form and are superseded by the table below.
+
+### Results — projection layer
+
+`uv run alpha-squad evaluate projection-calibration`, treated seasons 2023–2025.
+
+| arm | G1 accuracy | G2 ordering | G3 bias falls | G4 estimator stable | verdict |
+|---|---|---|---|---|---|
+| X1 | PASS | **FAIL** | **FAIL** | **FAIL** | rejected |
+| X2 | PASS | **FAIL** | **FAIL** | **FAIL** | rejected |
+| X3 | PASS | PASS | **FAIL** | **FAIL** | rejected |
+| X4 | PASS | **FAIL** | **FAIL** | **FAIL** | rejected |
+
+**Every arm improves raw accuracy.** Mean over treated seasons, against a control MAE of 63.29 and
+RMSE of 80.23: X1 61.83/78.33, X2 61.97/77.82, X3 61.98/78.13, X4 62.88/79.67. G1 was never the
+problem.
+
+**The walk-forward estimate, and the reason everything else fails:**
+
+| target | QB | RB | WR | TE |
+|---|---|---|---|---|
+| training means, cumulative | 2021 +5.4, 2022 −24.7, 2023 −76.1, 2024 −27.7 | +2.5, +8.0, +16.9, +44.4 | −10.5, +2.0, −0.7, −18.2 | +20.3, −4.6, −3.5, +7.9 |
+| **sign stable** | **NO** | **YES, every season** | **NO** | **NO** |
+| λ at target 2025 | 0.473 | 0.509 | 0.136 | 0.000 |
+
+**RB is the only position whose walk-forward estimate is sign-stable, and it is the only position no
+gate ever fails on.** Every G3 failure is at TE or WR; none is at RB or QB:
+
+    X1 2023 TE |−11.3| > |−3.5|   X1 2023 WR |+3.5| > |−0.7|   X1 2025 TE |−5.2| > |−0.2|
+    X2 2023 TE |−10.1| > |−3.5|   X2 2023 WR |+3.3| > |−0.7|   X2 2025 TE |−5.0| > |−0.2|
+    X3 2023 WR |+3.7| > |−0.7|    X3 2025 TE |−2.9| > |−0.2|   X4 2023 TE |−4.4| > |−3.5|
+
+RB's bias falls in every treated season under every arm (2023 16.9→11.7, 2024 44.4→35.3, 2025
+23.5→5.6 under X1). The arms fail because they *also* correct three positions whose bias is not
+stationary, and on those the correction lands with the wrong sign.
+
+**G2 behaved the opposite way to its stated purpose.** It was written to catch X3's rank inversions;
+within-position Spearman never degraded for any arm, X3 included. What it caught instead was marginal
+cross-position degradation elsewhere — X1 2025 (0.4607 vs 0.4707), X2 2023 (0.5394 vs 0.5456), X4
+2024 and 2025 (0.4783/0.4697 vs 0.4790/0.4707). Small, and pre-registered as disqualifying, so
+disqualifying is what they are.
+
+**G4's two halves split.** Out-of-fold correlation between predicted and realized bias is strongly
+positive for every arm (X1 0.605, X2 0.898, X3 0.784, X4 0.837) — that half passes decisively. Sign
+stability fails, always at QB, WR or TE.
+
+### Two of this phase's own earlier claims are corrected here
+
+- **"QB slope ≈ 0.444, stable below 1 in all five seasons"** was an in-sample per-season
+  characterization and does not survive as an estimator. The walk-forward affine fits give QB
+  **b = 0.007 (2023), 0.196 (2024), 0.453 (2025)** — always below 1, but ranging over a factor of 60.
+  The 2023 fit says pooled 2021–2022 QB projections carried essentially no information about realized
+  QB points. RB by contrast fits b ≈ 1.0 every year (1.040 / 0.996 / 1.037): RB's problem is a level,
+  not a dispersion.
+- **"the top-24 RB residual is sign-unstable (2021 −8.8)"** does not reproduce under the
+  pre-registered population. RB's signed residual is positive in every season at every cut: band 1
+  (top 20) +2.4/+10.1/+8.6/+49.4/+49.7, band 2 +2.6/+6.4/+23.0/+40.0/+3.3. The *sign* is stable; the
+  *magnitude and its distribution across the board* are not — band 1 is +49.7 in 2025 against band 2's
+  +3.3. So "the top tail is under-projected while the middle is not" is true in some seasons and not
+  others, which is a different problem from the one a rank-band arm can solve.
+
+  > **Partially corrected by D69 — original text preserved above.** "Positive in every season at
+  > every cut" holds for the **mean** but not for other estimators of location on the same data:
+  > the 2021 median is **−12.3** in the fitted universe and **−21.1** at top-24, the 2021
+  > 10%-trimmed mean is **−1.5**, and the mean itself flips to **−0.5** in 2022 at a top-40 cut.
+  > D68's band figures and its conclusion (no arm ships) are unaffected; the over-broad
+  > "every cut" generalization is what D69 narrows. See D69 for the full table.
+
+### Verdict
+
+**No arm clears the pre-registered gates. Nothing ships.** Pre-registered abandonment condition 1
+("no arm passes G4") is met, and condition 2 is partly met — X4 zeroes RB at target 2023 and 2024,
+the second of which is the season Alpha loses by 144 points.
+
+Per the committed protocol, **the draft layer (G5–G8) was not run.** An arm that fails the projection
+layer never reaches it; that ordering is the mechanism that stops a calibration parameter from being
+chosen by draft outcome, and running a rejected arm's drafts anyway would defeat it.
+
+The directive's permitted conclusion applies, with one refinement worth stating precisely: it is not
+that positional bias is uniformly uncalibratable. **RB's bias is sign-stable, is the single largest
+positional effect in the system, and is the diagnosed cause of Alpha's benchmark gap. What is not
+supported is correcting the whole position vector, because three of the four positions carry a bias
+that changes sign between seasons and a walk-forward estimator cannot tell which sign is next.**
+
+### What was NOT done, deliberately
+
+An RB-only arm is the obvious reading of the table above, and it is exactly what the pre-registration
+forbids: it is a sixth arm, selected after seeing results, and shipping it would be the unprincipled
+positional bonus this phase existed to avoid. If it is worth testing it is worth pre-registering
+first, in a phase with its own committed gates and its own fresh evidence — not adopted here on the
+strength of a result that was allowed to suggest it.
+
+### What remains UNKNOWN
+
+- **Whether RB's bias is bias or the winner's curse.** Conditioning on projection rank guarantees a
+  positive expected residual at the top of any noisy ranking. This phase did not separate the two,
+  and five seasons may not be able to.
+- **Whether the draft layer would have moved at all.** Not run, by protocol. Improving RB's mean
+  residual by ~10–18 points is not the same as drafting better, and nothing here measures the latter.
+- **Whether M6 can express the effect at all.** Four features (`prior_ppg`, `prior_games`,
+  `prior_weighted_total`, `preseason_ecr_rank`) may simply lack what distinguishes an elite RB season.
+  If so the fix is a feature, not a calibration — a different phase with a different method.
+- **Whether QB projections are usable at the top of the board.** A walk-forward slope of 0.007 is not
+  a calibration problem, it is a signal problem, and it went unexamined here.
+- **Sample size**, again: five residual seasons, three treatable.
+
+### P1-0 status
+
+**Still OPEN, unchanged.** This phase changed no production behavior and produced no new benchmark
+number. D67's official result stands as recorded: +26.5 with 95% CI [−38.0, +91.0].
+
+## D69 — RB-only calibration abandoned before implementation. The residual is real; a calibration is not the right instrument for it.
+
+Follow-up to D68, which rejected all five broad positional-calibration arms and recorded an
+RB-only arm as a *future* hypothesis rather than adopting it after seeing results. This entry is
+that future phase, and its answer is no. **Nothing was implemented, no arm was fitted, no
+draft-layer or benchmark experiment was run.** `league/draft.py` and `league/replacement.py`
+remain byte-identical to D67; production is still the W1 engine.
+
+The question D69 set out to answer: *does the stable positive RB projection residual contain
+enough walk-forward information to justify a principled RB-only calibration, and could such a
+calibration improve W1 without becoming an arbitrary RB bonus?*
+
+### The D68 implementation was re-read before anything else, and it holds up
+
+Verified against source rather than against D68's own summary:
+
+| element | as implemented |
+|---|---|
+| residual source | `uncertainty_predictions.point_prediction` at `uncertainty_catboost_v1` (M6 path only) |
+| realized source | `player_season_stats.total_fantasy_points_ppr`, INNER JOIN on `(player_id, season)` |
+| estimation universe | within-position projection rank ≤ `round(teams × market_draft_demand[pos])`; RB **n = 48 / 48 / 47 / 43 / 46** |
+| leakage guard | `fit_arm` **raises** on any training row with `season >= target_season` — structural, not conventional |
+| evidence prior | ≥2 training seasons and ≥30 rows, else identity |
+
+Three things worth recording that D68's write-up did not state:
+
+- **The residual join drops nothing.** Projected vs joined rows are 468/468, 472/472, 439/439,
+  439/439, 453/453. There is no join-level survivorship. The prediction *set* is still conditioned
+  on the target season's `player_season_stats` row existing, because M6 assembles its target frame
+  by INNER JOIN (`models/established/season_level.py::load_season_level_data`, used by `models/uncertainty/run.py`) — so a player projected but never appearing in a
+  game log is absent from both sides. That is a narrow class: `player_season_stats` does carry
+  ≤0-point seasons, so ordinary busts are represented.
+- **The measurement path and the draft path rank on different boards.** `measure_arm_season` ranks
+  within the played-only residual population; `_calibrated_static` applies to the full
+  `load_season_projections` board. The draft path is clean; only the projection-layer ranking
+  carries the conditioning.
+- **The D68 module docstring was stale**, still quoting the exploratory figures D68's own results
+  section overturned. Corrected as part of this entry.
+
+### The RB evidence reproduces — with one qualification that matters
+
+Reproduced exactly from the current implementation (fitted universe, bands 1+2): **+2.5 / +8.0 /
++16.9 / +44.4 / +23.5**.
+
+**But "positive at every cut" is a property of the mean alone.**
+
+| cut | 2021 | 2022 | 2023 | 2024 | 2025 | sign stable? |
+|---|---|---|---|---|---|---|
+| mean, top 20 | +2.4 | +10.1 | +8.6 | +49.4 | +49.7 | yes |
+| mean, top 40 | +2.4 | **−0.5** | +18.1 | +42.4 | +29.9 | **no** |
+| median, top 24 | **−21.1** | +8.1 | +19.0 | +64.8 | +39.5 | **no** |
+| median, fitted universe | **−12.3** | +8.1 | +18.5 | +40.0 | +27.9 | **no** |
+| 10%-trimmed mean | **−1.5** | +5.5 | +17.1 | +48.1 | +20.9 | **no** |
+
+In 2021 the *typical* draftable RB was over-projected by ~12 points and a right tail carried the
+mean positive (skew +0.48). In 2024 the effect was broad and slightly left-skewed (−0.35). **The
+residual's distributional character is not the same phenomenon from season to season**, which is a
+sharper objection than magnitude instability alone.
+
+Per-season standard errors are 10.7 / 11.1 / 11.7 / 12.5 / 13.1 against an inverse-variance pooled
+estimate of **+17.3**, and the five season means are **not** significantly heterogeneous —
+**Q = 7.6 on 4 df, p = 0.109, I² = 0.47**. That is a statement that five noisy seasons cannot
+resolve the differences, not a demonstration that a constant is correct.
+
+### Magnitude is weakly forecastable at best
+
+Walk-forward, each predictor seeing only seasons strictly earlier than the target:
+
+| predictor | 2023 (true +16.9) | 2024 (true +44.4) | 2025 (true +23.5) | MAE | RMSE |
+|---|---|---|---|---|---|
+| zero | +0.0 | +0.0 | +0.0 | 28.3 | 30.6 |
+| prior season | +8.0 | +16.9 | +44.4 | 19.1 | 20.6 |
+| all-prior mean | +5.2 | +9.1 | +17.9 | 17.5 | 21.7 |
+| EWMA(0.5) | +6.1 | +12.3 | +29.4 | **16.3** | **19.9** |
+| linear trend | +13.5 | +23.5 | +51.6 | 17.5 | 20.3 |
+
+Two reference points make this readable: the SD of the three truths is **14.4**, and an oracle
+constant of +17.3 (not available walk-forward) scores **MAE ≈ 11.2**. Every predictor beats zero;
+none approaches the achievable ceiling; **a fixed level beats every adaptive form.** What is
+forecastable is that the bias is positive, not how large it will be. Season-to-season persistence
+of the mean is r = +0.328 on four pairs — descriptive only, not evidence.
+
+### Leading mechanism: an association with availability, not a demonstrated cause
+
+**This is the strongest association found, and it is stated as an association.** The diagnostics
+below are observational; nothing here establishes causation, and the alternatives in the next
+section remain open.
+
+Residual correlates with games played within every season: **+0.711 / +0.797 / +0.696 / +0.724 /
++0.718**, i.e. 48–64% of within-season residual variance, and remarkably stable across seasons.
+
+| | 2021 | 2022 | 2023 | 2024 | 2025 |
+|---|---|---|---|---|---|
+| mean games, draftable RBs | 11.67 | 12.71 | 13.77 | **14.19** | 13.83 |
+| mean projection | 140.0 | 141.9 | 139.3 | 139.8 | 143.1 |
+| mean realized | 142.5 | 149.8 | 156.2 | **184.2** | 166.6 |
+
+Across the five season means, corr(mean games, mean residual) = **+0.851**.
+
+The pattern is **RB-specific rather than league-wide**. Change in draftable-universe mean games
+2021→2024: **RB +2.52**, TE +0.80, WR +0.35, QB −0.04. The all-position `player_season_stats`
+control is far flatter (RB 9.22→10.38, WR 9.70→10.34, QB 8.09→8.51), so this is not an nflverse
+coverage change; and it is not a schedule artifact, since the NFL played 17 games in all five
+seasons.
+
+An approximate decomposition of the +41.7 rise in mean realized RB points from 2021 to 2024
+(means of products, so indicative rather than exact):
+
+    availability channel (rate held at 2021, games move)   +28.8   (~69%)
+    rate channel         (games held at 2021, rate moves)  +12.9   (~31%)
+
+And per game, M6 under-projects RB in every season: scaling realized to a full 17 games gives
++54.2 / +39.0 / +47.5 / +73.1 / +46.5.
+
+**Why this matters for calibration regardless of whether it is causal.** If the residual moves
+with a quantity that trends, a backward-looking estimator lags it — which is what the walk-forward
+table shows: prior-mean games under-predicts realized games in all three targets (+1.58, +1.47,
++0.74). And the series already turned down in 2025 (14.19 → 13.83). A correction fitted on this is
+a forecast of a trend, not a correction of a stationary bias.
+
+### Alternatives that remain live and were NOT ruled out
+
+The availability association is the leading explanation, not the established one. These stay open:
+
+- **Winner's curse / projection-rank conditioning.** The universe is defined by projection rank, and
+  conditioning on rank produces a positive expected residual at the top of any noisy ranking
+  independent of bias. D69 did not separate this from a genuine bias, and it could account for part
+  or all of the effect.
+- **A moving universe.** RB n is 48/48/47/43/46 because `market_draft_demand` varies with the
+  consensus board, so 2024's +44.4 is measured on a smaller, more elite universe than 2021's +2.5.
+  Fixed-N cuts reduce but do not eliminate this.
+- **Model misspecification** at RB in a form unrelated to availability.
+- **Scoring or usage regime change** (a league-environment effect rather than a player-level one).
+- **Preseason projection-uncertainty differences** between positions.
+- **The narrow survivorship channel** noted above (projected-but-never-appeared players).
+
+Direction of causality between availability and the residual is likewise unestablished: games
+played is realized in-season, so it is a downstream measurement, not a preseason instrument.
+
+### Independent finding: the W1 engine is largely inert to a uniform additive RB shift
+
+Measured directly on the real 2024 board with +17 added to every RB:
+
+| term | control → shifted |
+|---|---|
+| static replacement level, RB | 138.3 → 155.3 (**+17.00**) |
+| draft-aware replacement level, RB | 87.7 → 104.7 (**+17.00**) |
+| **ΔVORP, top-5 RBs, both variants** | **+0.00, exactly** |
+| ΔMSV, top-5 RBs (empty roster) | +17.00 |
+| top WR, ΔVORP / ΔMSV | +0.00 / +0.00 |
+
+A uniform additive shift moves the replacement RB by exactly the amount it moves every RB, so
+`draft_aware_vorp` is **invariant by construction**. In `value_base = msv + 1.0 × draft_aware_vorp`
+the correction reaches the decision only through MSV — and MSV decays toward zero for an RB who no
+longer improves the best lineup, i.e. precisely the bench RBs.
+
+Pick-1 board effect, control vs +17:
+
+| season | RBs in top 20 | top-20 slots whose occupant changed | top pick |
+|---|---|---|---|
+| 2023 | 0 → 0 | 0/20 | unchanged |
+| 2024 | 1 → 1 | 2/20 | unchanged |
+| 2025 | 0 → 1 | 2/20 | unchanged |
+
+Against a **−247.7 point/season** RB starter deficit. A change that moves two of the top twenty
+board slots is not a plausible instrument for closing it.
+
+**And the mismatch between evidence and instrument is exact:**
+
+| form | engine sensitive? | evidence supports? |
+|---|---|---|
+| additive level | **no** (ΔVORP ≡ 0) | weakly — sign stable on the mean only |
+| multiplicative / affine | yes (changes RB spread, so moves VORP) | **no** — D68's walk-forward RB slopes are 1.040 / 0.996 / 1.037; there is no dispersion error at RB |
+| depth / rank-aware | yes | **no** — band shape is unstable (2023 bottom-heavy +8.6 vs +23.0; 2025 top-heavy +49.7 vs +3.3), and this is the winner's-curse arm |
+
+The one form the evidence supports is the one the engine ignores; the forms the engine responds to
+are the ones the evidence rejects.
+
+### Verdict
+
+**RB-only calibration is abandoned before implementation.** Four independent grounds, any one
+sufficient:
+
+1. The residual's leading explanation is an association with a trending quantity, which a
+   backward-looking estimator structurally lags — and the trend already reversed in 2025.
+2. The supported functional form is one the engine is near-invariant to, with a measured board
+   effect of 0–2 top-20 slots.
+3. Magnitude is not usefully forecastable; adaptivity adds nothing over a level, and the
+   walk-forward level itself lags.
+4. The premise fails under the median and the trimmed mean in 2021, and the residual's skew changes
+   sign between seasons.
+
+Running it anyway would produce a near-null treatment on 30 drafts — a result unable to distinguish
+"no effect" from "underpowered," whose most likely use would be as an argument for a larger
+coefficient. That is the tuning failure mode avoided at D66, D67 and D68, and it is the reason the
+RB-only arm was deferred rather than adopted in the first place.
+
+### What replaces it
+
+`docs/RB_AVAILABILITY_PREREGISTRATION.md` — a design-only pre-registration for the next phase,
+asking whether availability-aware *features* reduce RB projection error where a positional constant
+cannot. It is deliberately a model/feature question rather than a calibration one, and because such
+features move each RB differently, they would move VORP rather than being absorbed by the
+replacement level. **No part of it is implemented.** It carries its own abandonment conditions,
+including the case where the effect is a league-environment shift that per-player features cannot
+capture.
+
+### P1-0 status
+
+**Still OPEN, unchanged.** D69 changed no production behavior, fitted no estimator and produced no
+benchmark number. D67's official result stands as recorded: +26.5, 95% CI [−38.0, +91.0].
+
+## D70 — RB availability features tested and rejected. B1 and B2 both fail: the treatment does not improve accuracy and makes the targeted bias larger, not smaller. Nothing shipped.
+
+Follow-up to D69's abandoned RB-only calibration, which recommended asking a model question
+instead of a calibration question: does giving M6 preseason-knowable availability information
+reduce RB projection error, where a positional constant could not? A separate rank-conditioning
+diagnostic (outside this repo's tracked history) authorized the phase to proceed by finding the RB
+residual does not behave like a winner's-curse artifact. This entry reports the pre-registered
+result. **Nothing shipped. `league/draft.py`, `league/replacement.py`, `models/uncertainty/run.py`
+and `models/established/season_level.py` are byte-identical to D67.** Production remains W1.
+
+### What was implemented, exactly as pre-registered
+
+Four preseason-knowable features (`features/availability.py`), appended to M6's existing set for
+**RB only** — QB/WR/TE/K/DST stayed the untouched control:
+
+| | feature | source |
+|---|---|---|
+| F1 | mean games played, up to 3 prior seasons | `player_season_stats.games_played` |
+| F2 | age at target season's Sept 1 | `players.birth_date` (existing convention, `dynasty_validation.py`) |
+| F3 | position-cohort mean games played, season S−1 (a population statistic) | `player_season_stats` |
+| F4 | (carries + receptions) / games played, season S−1 | `player_season_stats` |
+
+Same CatBoost hyperparameters and walk-forward split as `models/uncertainty/run.py` (imported, not
+redeclared); same `MIN_TRAIN_ROWS`/`MIN_CALIB_ROWS` thresholds. `TREATED_SEASONS = (2023, 2024,
+2025)` only — `fit_rb_availability_model` raises for any other season, so abandonment condition 6
+("do not treat 2021–2022 for power") is structural rather than a rule to remember. Leakage guard
+(`validate_no_leakage`) mirrors `projection_calibration.py::fit_arm`'s raise-on-target-season
+pattern; unit tested directly, including the required "requesting a target-season feature raises"
+case. Registered as forensic tier `Y1`, reusing the X-tier scoring branch verbatim rather than
+adding a new mechanism, and deliberately a separate letter from D68's closed `X0`–`X4` set (a model
+refit is a different kind of treatment than a residual calibration, not a violation of "no sixth
+arm"). All committed (`eee911f`) before any model was fitted against real outcomes.
+
+### A real bug, found and fixed before any valid result existed
+
+The first run produced **n = 3** per treated season instead of the ~43–48 the D68/D69 RB
+draftable universe actually has — self-evidently wrong. Cause: `_control_rb_predictions` read
+`uncertainty_predictions` without filtering by position, so ranking "top-N" ran across all four
+positions at once and the RB cut landed almost entirely on QBs. Fixed to filter on
+`uncertainty_predictions.position` directly, the same column `load_season_projections` uses, so
+the population now matches D68/D69 exactly. This is a correctness fix to the measurement, not a
+change to the treatment, a feature, a hyperparameter, or a gate threshold — the same category as
+D68's shrinkage-estimator fix, made before any valid gate result was produced (`e7478b6`). The one
+number seen before the fix (B1/B2 FAIL on n=3) was discarded as an artifact, not a measurement.
+
+### Results — projection layer, `uv run alpha-squad evaluate rb-availability`
+
+| gate | verdict | detail |
+|---|---|---|
+| **B1 — accuracy** | **FAIL** | pooled MAE 71.09 vs control 72.49 (treatment *better*); pooled RMSE **88.60 vs control 88.08** (treatment worse); 1 season worse on MAE (within the 1-season tolerance) |
+| **B2 — bias falls** | **FAIL** | pooled \|bias\| **31.22 vs control 28.25** (treatment worse); **not worse in any season: False** — worse in *all three* |
+| **B3 — availability predicts games** | **PASS** | correlation positive in every treated season: 2023 +0.226, 2024 +0.176, 2025 +0.051 |
+
+Per-season detail (n = the D68/D69 draftable universe, 47/43/46):
+
+| season | n | treat MAE | ctrl MAE | treat RMSE | ctrl RMSE | treat bias | ctrl bias |
+|---|---|---|---|---|---|---|---|
+| 2023 | 47 | 63.40 | 63.27 | 81.97 | 80.86 | **+22.06** | +16.87 |
+| 2024 | 43 | 76.78 | 78.85 | 92.74 | 92.23 | **+44.70** | +44.39 |
+| 2025 | 46 | 73.09 | 75.35 | 91.10 | 91.16 | **+26.89** | +23.49 |
+
+**The decisive failure is B2, not B1.** MAE actually improved in 2 of 3 seasons (2024, 2025) and
+RMSE is only marginally worse (88.60 vs 88.08, a 0.6% difference, driven by 2 of 3 seasons). But
+the metric the whole treatment exists to move — the RB signed bias itself — got **larger, not
+smaller, in every single treated season**: +22.06 vs +16.87 in 2023, +44.70 vs +44.39 in 2024,
++26.89 vs +23.49 in 2025. The treatment did not fail by being noisy or inert; it failed by moving
+the targeted quantity in the wrong direction, consistently, across the whole treated sample.
+
+### B3 passing is worth reading carefully — it is a different, weaker claim than D69's own numbers
+
+D69 measured a **within-season** correlation of the *realized* RB residual against *realized*
+games played in the *same* season: +0.70 to +0.80. B3 measures something structurally harder and
+more honest: F1 (a **backward-looking** average of prior-season games) predicting **next**
+season's realized games, **out of fold**. That correlation is positive in all three treated seasons
+— technically clearing the gate — but is markedly weaker and trending toward zero: **+0.226 →
++0.176 → +0.051**. The gate is binary and B3 passes, but the number behind it is telling its own
+story: whatever a player's recent games-played history predicts about their next season is real
+but weak, and was getting weaker across exactly the seasons this experiment measured. This is
+consistent with, though does not prove, D69's own hedge that the underlying movement may be more
+of a league-level trend than a stable player-level signal — a trend a 3-season backward average
+is a poor instrument for.
+
+**Association, not causation, throughout.** Nothing in this result establishes *why* F1's out-
+of-fold predictive power is weak and declining, or why adding it made bias worse rather than
+better. Plausible, unranked candidates: the RB-specific movement D69 documented (draftable-RB mean
+games 11.67 → 14.19 → 13.83) may be a genuine league-level shift that a per-player backward-looking
+feature cannot track (D69's own abandonment condition 2); CatBoost with `depth=3` may not have
+enough capacity to exploit four additional weakly-informative features without adding variance that
+shows up as worse RMSE; or the treated-season sample (n ≤ 47 per season, 3 seasons) may simply be
+too thin to fit four new features reliably. This entry does not adjudicate between them — it
+reports that the pre-registered gates were not met, on the pre-registered metrics, without
+inferring a mechanism the data here cannot support.
+
+### Verdict
+
+**B1 and B2 both fail. Per the pre-registered protocol, the draft layer (B4–B9) was NOT run.**
+Nothing shipped. `Y1` exists in the forensic harness as tested, dead code — never invoked from the
+draft layer, and never will be under this pre-registration.
+
+This closes D69's H1 for the specific instrument tested here: RB availability features, as
+specified, do not improve M6's RB projections in the way the pre-registration required. It does not
+close the broader question D69 raised (whether *some* representation of RB availability could help)
+— only this closed, four-feature, RB-only, CatBoost-refit instrument, measured exactly as committed
+before it was fitted.
+
+### What was NOT done, deliberately
+
+No fifth feature was added, no hyperparameter was swept, no gate was relaxed, no season outside
+2023–2025 was treated, and the draft layer was not peeked at before B1/B2 failed. The honest
+reading is D69's own permitted outcome: "the effect is league-level, not player-level" (abandonment
+condition 2) is the best-supported explanation available, though not the only one, and this entry
+does not claim more than the gates measured.
+
+### P1-0 status
+
+**Still OPEN, unchanged.** D70 changed no production behavior, shipped no calibration, and produced
+no new draft-simulation benchmark number. D67's official result stands as recorded: +26.5, 95% CI
+[−38.0, +91.0].
+
+## D71 — P1-0's exit criterion is re-specified: the 50-trial benchmark measures ~5 independent seasons, not 50, and cannot resolve an effect the size of D67's +26.5 at any data scale that will exist within this project's lifetime. The item is split.
+
+A read-only audit of P1-0's own measurement instrument, prompted by nine consecutive decision
+cycles (D61–D70) failing to move the same CI-excludes-zero gate. **No code, model, feature, or
+production behavior changes. No new draft simulation was run** — every number below is
+recomputed from the already-stored 50 `draft_simulation_results` rows
+(`alpha_league_aware`/`market_consensus_roster_aware` vs `market_consensus_roster_aware`/
+`market_consensus_roster_aware`, the same pair D67 measured) plus one read-only query against
+`market_snapshot`. `league/draft.py`, `league/replacement.py`, and `models/uncertainty/run.py`
+remain byte-identical to D67.
+
+### The 50 trials are not 50 independent observations
+
+`evaluation/draft_simulation.py::run_draft_simulation` is a deterministic cross-product over
+`(season × strategy × opponent × slot)` — confirmed by grep: no `random`/`shuffle`/`seed` call
+exists anywhere in the draft path, consistent with the B8 byte-identical-across-two-processes
+gate every prior phase has used. Within one season, all 10 slots share one call to
+`load_season_projections` and one call to `_preseason_overall_market` (`simulate_draft`, lines
+213–215) — one projection set, one market board, one set of realized outcomes.
+
+Measured consequence: Alpha's 10 per-season rosters share **53–73% of their players** (mean
+pairwise Jaccard by season: 2021 0.526, 2022 0.653, 2023 0.644, 2024 0.594, 2025 0.727), with
+**6–9 of 16** roster spots identical across *all ten* slots in every season. Formally: ICC =
+0.0995, design effect (cluster size 10) = 1.90, effective n ≈ 26 under a random-effects
+correction — or, read the honest way, **the true experimental unit is the season, giving n = 5.**
+A slot effect does not exist as a separate factor: pooled across seasons, F(9,36) = 0.54 for
+slot vs F(4,36) = 1.91 for season — the −66.7…+154.8 apparent spread across slots (D-diagnostic,
+this session) is sampling noise, not 10 independent replicates.
+
+### D67's published interval is the naive-iid one, and is anticonservative
+
+Reproduced exactly: mean +26.53, SD 232.62, n=50 → SE 32.90 → **95% CI [−38.0, +91.0]**, matching
+D67's quoted figure. The season-clustered interval (5 season means, t-distribution, df=4):
+**mean +26.53, SD-of-season-means 102.20, SE 45.71, t = 0.580, 95% CI [−100.4, +153.4].**
+
+**This is a correction, not a relaxation — the honest interval is wider, making P1-0 harder to
+clear, not easier.** D67's number is not wrong as a description of what was measured; it is
+wrong as an inferential statement, because it assumes 50 independent draws that the
+data-generating process does not produce.
+
+### The "~603 trials for 80% power" figure means ~115 seasons, not more trials
+
+The arithmetic behind the figure is correct: ((1.96+0.842) × 232.62 / 26.53)² = 603.5 (12.1× the
+current n=50, achieved power ≈13% at n=50). But every route to that many *rows* is closed:
+
+| route to more rows | information content |
+|---|---|
+| more draft slots | **none** — 10 slots is the entire population of a 10-team league; already exhaustive, and F(9,36)=0.54 confirms slot carries no signal |
+| repeated simulation of the same season | **none** — the engine is deterministic; reruns reproduce identical rows |
+| additional historical seasons before 2021 | **unavailable** — `market_snapshot` has no `ecr_type='ro', page_type='redraft-overall'` rows in July/August before 2021 (earliest preseason capture: 2021-07-02), so `_preseason_overall_market` cannot construct an earlier board |
+| the 2026 season | **not yet available** — a market board exists, but `player_season_stats` has no 2026 realized outcomes to score a draft against until the season is played |
+| **new NFL seasons going forward** | the only genuinely new information, arriving at 1/year |
+
+Correcting for the true cluster structure (design effect 1.90): **603 × 1.90 ≈ 1,144 nominal
+trials ≈ 114 seasons** — matching the season-as-unit calculation directly: **116.5 seasons** for
+80% power at the observed effect and precision.
+
+### Variance decomposition: within-season noise dominates, but has an irreducible floor
+
+The prior finding that within-season/slot variance (SD 222.79, ANOVA dof n−k=45) exceeds
+between-season variance (SD 102.20, dof k−1=4) is confirmed exactly. What that decomposition
+does not by itself show: how much of the 102.20 is real season-to-season variation versus noise
+in estimating each season's mean from only 10 correlated slots. Decomposing further — the
+within-season SD of a season's *mean* over 10 slots is 222.79/√10 = 70.5 — the observed 102.20
+splits into **70.5 of within-season measurement noise + 74.0 of true season-to-season SD**
+(√(102.2² − 70.5²)).
+
+That 74.0 is the floor. Even a *hypothetically perfect* within-season measurement (infinite
+slots, or an infinite opponent field averaging out all within-season noise) still requires
+**~61 seasons** for 80% power at the observed effect — current precision requires 116.5. Minimum
+detectable effect at 80% power:
+
+| seasons | MDE, current precision | MDE, perfect within-season measurement |
+|---|---|---|
+| 5 (today) | 128.1 | 92.8 |
+| 10 | 90.5 | 65.6 |
+| 20 | 64.0 | 46.4 |
+
+D67's +26.5 is roughly a quarter of what 5 seasons can detect, and every draft-layer gain this
+project has shipped (D63 +39.8, D65 Candidate C +23.2, D66 +26.7/+28.2, D67 +32.1 swing) sits
+below the detectable range at any season count this project will see within a normal planning
+horizon.
+
+### What would actually constitute evidence
+
+| candidate | new information? |
+|---|---|
+| more draft slots | no — exhaustive, and not a real factor (F=0.54) |
+| repeated stochastic simulation | no — deterministic engine |
+| additional historical seasons | no — blocked by market board coverage (pre-2021) |
+| **future NFL seasons** | yes, but 1/year against a ~61-season floor |
+| randomized/mixed opponent fields | partial — sharpens the within-season component toward 0, floor stays ~61 seasons |
+| a second league format (`legacy_2qb_dynasty`) | partial — robustness evidence on a different decision problem, not independent confirmation on the same one |
+| **corrected statistical treatment** | no new data, but removes a real error in the current reporting |
+| **an effect roughly 4× larger (~+100/season)** | **yes — detectable today, with data already in hand** |
+
+No available or constructible evidence can establish absolute superiority at the D67 scale. Only
+a substantially larger effect is within this benchmark's reach.
+
+### The exit criterion is re-specified
+
+"95% CI excludes zero" on the raw Alpha-vs-consensus contrast is **inappropriate for this
+benchmark's structure** — not merely inconvenient. It is computed on a variance model the data
+violate (correcting it *widens* the interval), and even correctly computed it demands a
+precision (~61–116 seasons) the data-generating process cannot supply within any realistic
+horizon. Going forward:
+
+1. **Future engine-change evaluation uses a variant-vs-control contrast on identical (season,
+   slot) trials**, not an absolute Alpha-vs-consensus contrast — the instrument that has
+   actually produced CIs excluding zero at the current n=50 (D65's Candidate C: +23.2 over N4,
+   95% CI [+2.3, +44.1], LOSO-robust on all five seasons) precisely because near-identical
+   rosters cancel each season's outcome shocks. This is the same gate structure D65–D67 already
+   used successfully — codified here as the standard, not a new invention.
+2. **Any quoted Alpha-vs-consensus number uses season-clustered inference** (t-distribution,
+   df = k−1 = 4 with the current data), never the iid CI. D67's own number is annotated in place
+   in `docs/IMPLEMENTATION_GAP_ANALYSIS.md` rather than restated, per this repo's existing
+   convention for superseded benchmark numbers.
+3. **A future phase proposing a new mechanism must project an effect size** large enough to be
+   detectable given the table above, before being pre-registered — not to guarantee significance,
+   but so a phase whose own honest power calculation shows it cannot resolve anything is caught
+   before it is run, not after.
+
+**Required check, and it holds:** this re-specification does not retroactively pass any
+previously failed phase. D68, D69, and D70 all failed at the *projection* layer (B1–B3-style
+gates) and their protocols correctly never reached a draft-layer contrast; none of their
+verdicts change under either the old or the new criterion.
+
+### P1-0 is split
+
+`docs/IMPLEMENTATION_GAP_ANALYSIS.md`'s P1-0 conflated two claims that have different evidentiary
+status. Stored data settle the first outright: `alpha_league_aware` has **0 unfilled mandatory
+slots across all 50 trials**, every roster exactly `roster_size`=16, against 327/50 for
+`alpha_bpa`, 270/50 for `generic_prior_year`, and 109/50 for plain `market_consensus`. That is a
+direct measurement of the defect the item's own title names ("Fix `recommend_draft_pick`'s
+roster-balance failure"). The second claim — absolute superiority over fair consensus — is the
+one this entry addresses above.
+
+- **P1-0a (roster-balance defect): CLOSED.**
+- **P1-0b (absolute superiority vs. fair consensus): stays OPEN**, reclassified from "the next
+  experiment should close it" to "not resolvable at current or near-future data scale" — a
+  standing limitation of the evidence base, not a blocking gate on further engine work.
+
+Full detail and the item text: `docs/IMPLEMENTATION_GAP_ANALYSIS.md` P1-0a/P1-0b.
+
+### What this entry does not do
+
+No RB work (D68–D70 remain closed; nothing here reopens them — RB's residual and the
+availability hypothesis are unrelated to this benchmark-structure finding). No WR or QB work. No
+new feature, model fit, or projection tuning. No new pre-registration — none is warranted until a
+candidate mechanism with a plausibly large (~+100/season) effect is identified. No new draft
+simulation — reruns of a deterministic engine are provably zero-information, demonstrated above
+rather than asserted. No change to `league/draft.py`, `league/replacement.py`, or any production
+scoring path.
+
+### P1-0 status
+
+**P1-0a CLOSED (roster-balance defect fixed, evidenced by 0/50 unfilled mandatory slots). P1-0b
+OPEN, reclassified as a standing measurement limitation rather than a blocking gate** — see
+`docs/IMPLEMENTATION_GAP_ANALYSIS.md` for the split item text and the re-specified criterion
+above for what future engine work is now evaluated against.
