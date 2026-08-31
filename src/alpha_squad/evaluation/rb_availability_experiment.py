@@ -168,12 +168,23 @@ def fit_rb_availability_model(
 
 
 def _control_rb_predictions(con: duckdb.DuckDBPyConnection, season: int) -> dict[str, float]:
-    """RB `point_prediction` from the unmodified M6 model -- the `X0` control, same source
-    D68/D69's `load_residual_rows` reads."""
+    """RB-only `point_prediction` from the unmodified M6 model -- the `X0` control.
+
+    `uncertainty_predictions` holds QB/RB/WR/TE together and is not position-filtered by
+    itself, so this filters on `uncertainty_predictions.position` directly -- the same column
+    `league/replacement.py::load_season_projections` reads for its own `positions` dict, so the
+    population matches D68/D69's methodology exactly rather than introducing a second position
+    source that could disagree with it at the margin (e.g. `player_season_stats.position`).
+
+    Without this filter, ranking "top-N" against the unfiltered dict ranks across all four
+    positions at once and the RB cut ends up almost entirely QBs -- a real bug caught here,
+    before any gate was evaluated for real (n=3 instead of the ~43-48 the D68/D69 universe
+    actually has, self-evidently wrong)."""
     rows = con.execute(
         "SELECT player_id, point_prediction FROM uncertainty_predictions "
-        "WHERE season = ? AND model_version = ? AND point_prediction IS NOT NULL",
-        [season, UNCERTAINTY_MODEL_VERSION],
+        "WHERE season = ? AND model_version = ? AND point_prediction IS NOT NULL "
+        "AND position = ?",
+        [season, UNCERTAINTY_MODEL_VERSION, TREATMENT_POSITION],
     ).fetchall()
     return dict(rows)
 
