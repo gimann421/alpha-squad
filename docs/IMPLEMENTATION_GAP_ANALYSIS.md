@@ -121,6 +121,25 @@ items with no listed dependency can start immediately.
 > over-projects WR/QB. The next experiment is a walk-forward positional calibration of the
 > projection layer, not another draft-rule change.
 
+> **D68 update — the calibration experiment ran and rejected every arm. P1-0 unchanged, still
+> OPEN.** Five pre-registered walk-forward forms (none / position additive / position affine /
+> rank-band / empirical-Bayes shrunk), committed to source before any was fitted. Every arm
+> improves raw accuracy on the held-out target seasons (control MAE 63.29 → 61.83-62.88, RMSE
+> 80.23 → 77.82-79.67), and **none clears the pre-registered gates.** The reason is specific
+> rather than general: **RB is the only position whose walk-forward bias estimate is sign-stable**
+> (+2.5 / +8.0 / +16.9 / +44.4 over 2021-2024, and positive at every depth cut), and RB's bias
+> falls under every arm — but QB, WR and TE all change sign between seasons, so the same arms
+> correct them in the wrong direction. Every G3 failure is at TE or WR; none is at RB or QB.
+> Two of the exploratory numbers that motivated the phase are corrected by it: the QB slope is
+> not stable (walk-forward 0.007 / 0.196 / 0.453, always below 1 but ranging over a factor of
+> 60), and RB's residual does not flip sign in 2021 under the pre-registered population.
+> **Nothing shipped** — `league/draft.py` is byte-identical to D67 — and the draft layer was not
+> run, per the committed rule that an arm failing the projection layer never reaches it. An
+> RB-only correction is the obvious reading and was deliberately NOT adopted: it is a sixth arm
+> selected after seeing results, which is precisely the unprincipled positional bonus this phase
+> existed to avoid. Full account: `docs/DECISIONS.md` D68 and
+> `reports/projection_calibration.md`.
+
 > **The benchmark below is invalid for the current target format and is preserved as-is,
 > labelled, not restated.** Everything through "Acceptance criteria — STILL UNMET" was
 > measured against `ecr_type='rsf'` — FantasyPros' *superflex* board — because the target

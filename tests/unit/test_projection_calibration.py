@@ -337,3 +337,39 @@ class TestPreRegistrationIsIntact:
     def test_an_unknown_arm_is_refused(self):
         with pytest.raises(ValueError, match="unknown calibration arm"):
             fit_arm("X5", _rows([2021, 2022]), target_season=2023)
+
+
+class TestHarnessIdentity:
+    """X0 must be the shipped W1 engine, not a reconstruction of it."""
+
+    def test_an_identity_arm_returns_the_control_object_itself(self):
+        """`_calibrated_static` returns the control `SeasonStatic` unchanged when the arm is the
+        identity, rather than rebuilding an equal one. That is what makes 'X0 scored the same as
+        W1' mean byte-identical rather than equal-up-to-floating-point-reconstruction, so a zero
+        in the results table says exactly what it looks like it says."""
+        from alpha_squad.evaluation.draft_forensics import _calibrated_static
+
+        sentinel = object()
+        result = _calibrated_static(
+            con=None,
+            league=_target(),
+            season=2023,
+            arm="X0",
+            residual_rows=_rows([2021, 2022]),
+            control=sentinel,
+        )
+        assert result is sentinel
+
+    def test_an_arm_zeroed_by_the_evidence_prior_also_returns_the_control(self):
+        from alpha_squad.evaluation.draft_forensics import _calibrated_static
+
+        sentinel = object()
+        result = _calibrated_static(
+            con=None,
+            league=_target(),
+            season=2022,
+            arm="X1",
+            residual_rows=_rows([2021]),
+            control=sentinel,
+        )
+        assert result is sentinel
