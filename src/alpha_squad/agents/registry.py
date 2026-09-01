@@ -170,6 +170,10 @@ def run_fantasy_strategy(con: duckdb.DuckDBPyConnection, settings: Settings, tas
                 # None -> resolved from the league context (D56).
                 p.get("ecr_type"),
                 p.get("top_n", 5),
+                # This team's own drafted players, when the task supplies them: without
+                # them the engine falls back to the VORP-only value base rather than the
+                # benchmarked D63/D67 roster-aware one. Absent -> unchanged behavior.
+                roster_player_ids=p.get("roster_player_ids"),
             )
             findings = [f"recommended {rec.recommendation}"] + rec.reasons
             confidence = rec.confidence

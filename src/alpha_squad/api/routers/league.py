@@ -40,7 +40,11 @@ from alpha_squad.league.decisions import record_decision
 from alpha_squad.league.draft import recommend_draft_pick
 from alpha_squad.league.replacement import load_season_projections
 from alpha_squad.league.roster import roster_need
-from alpha_squad.league.roster_import import resolve_roster_positions, teams_for_league
+from alpha_squad.league.roster_import import (
+    resolve_roster_positions,
+    resolve_roster_selection,
+    teams_for_league,
+)
 from alpha_squad.league.roster_intelligence import (
     build_action_center,
     build_my_team_report,
@@ -348,20 +352,30 @@ def post_draft(
         projections, _ = load_season_projections(con, body.season)
         available = set(projections)
     try:
-        roster_positions = resolve_roster_positions(
+        # `roster_id` already resolves this team's real players in order to read their
+        # positions (D53); the canonical ids come from that SAME fetch. Passing them is what
+        # lets the served engine run the benchmarked D63/D67 roster-aware value base
+        # (`msv + draft_aware_vorp`) instead of silently falling back to the VORP-only path
+        # that no benchmark selected. An explicit `roster_id` wins over an explicit
+        # `roster_player_ids` for exactly the reason it already wins over `roster_positions`:
+        # it is the real roster, not a client's picture of one.
+        selection = resolve_roster_selection(
             con, get_settings(), league, roster_id=body.roster_id, fallback=body.roster_positions
+        )
+        roster_player_ids = (
+            selection.player_ids if selection.player_ids is not None else body.roster_player_ids
         )
         rec = recommend_draft_pick(
             con,
             league,
             body.season,
-            roster_positions,
+            selection.positions,
             available,
             body.next_pick_overall,
             body.ecr_type,
             body.top_n,
             current_pick_overall=body.current_pick_overall,
-            roster_player_ids=body.roster_player_ids,
+            roster_player_ids=roster_player_ids,
         )
     except RuntimeError as e:
         raise HTTPException(status_code=422, detail=str(e)) from e

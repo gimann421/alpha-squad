@@ -982,3 +982,178 @@ class TestRookiesModelVersionFiltering:
 
         assert len(rows) == 1
         assert rows[0]["predicted_rookie_points"] == 111.0
+
+
+class TestDraftCallSiteRosterParity:
+    """The served draft endpoint must reach the SAME roster-aware configuration the D63/D67
+    ablations selected (`msv + draft_aware_vorp`), not the VORP-only fallback.
+
+    `recommend_draft_pick` silently changes value base depending on whether it is given
+    `roster_player_ids` (`league/draft.py`), so a production call site that omits them runs a
+    configuration no benchmark ever selected -- the same class of defect D61 Stage 1.3 fixed
+    in `pick_attribution.py`, where the roster-blind fallback was making the *measurement*
+    wrong. These tests pin the call site itself, not the scoring function."""
+
+    def _seed_candidate(self, con, player_id, position, points, ecr_rank=1.0):
+        _seed_player(con, player_id, f"Player {player_id}", position)
+        con.execute(
+            "INSERT INTO uncertainty_predictions (prediction_id, player_id, season, position, "
+            "model_version, feature_version, point_prediction, confidence, calibration_season, "
+            "predicted_at) VALUES (?, ?, 2025, ?, 'uncertainty_catboost_v1', 'fv1', ?, 0.8, "
+            "2024, current_timestamp)",
+            [f"pred_{player_id}", player_id, position, points],
+        )
+        con.execute(
+            "INSERT INTO market_snapshot (player_id, scrape_date, ecr_type, position, ecr_rank, "
+            "page_type) VALUES (?, '2025-08-01', 'ro', ?, ?, 'redraft-overall')",
+            [player_id, position, ecr_rank],
+        )
+
+    def _spy_on_engine(self, monkeypatch):
+        """Capture exactly what the router hands the engine."""
+        from alpha_squad.api.routers import league as league_router
+
+        real = league_router.recommend_draft_pick
+        captured: dict = {}
+
+        def spy(*args, **kwargs):
+            captured["roster_positions"] = args[3]
+            captured["available_player_ids"] = args[4]
+            captured["roster_player_ids"] = kwargs.get("roster_player_ids")
+            return real(*args, **kwargs)
+
+        monkeypatch.setattr(league_router, "recommend_draft_pick", spy)
+        return captured
+
+    def _patch_real_roster(self, monkeypatch, players):
+        """Stand in for the live Sleeper fetch at its own boundary, so the router's wiring and
+        the real `resolve_roster_selection` both run for real."""
+        from alpha_squad.league import roster_import
+        from alpha_squad.league.roster_import import RosterPlayer, TeamRoster
+
+        team = TeamRoster(
+            roster_id=1,
+            owner_user_id="u1",
+            owner_display_name="me",
+            team_name="Mine",
+            players=[RosterPlayer(pid, pid, pos, f"sleeper_{pid}") for pid, pos in players],
+        )
+        monkeypatch.setattr(roster_import, "teams_for_league", lambda *a, **k: [team])
+
+    def test_no_roster_id_and_no_ids_keeps_the_documented_vorp_fallback(
+        self, con, client, monkeypatch
+    ):
+        """Callers that genuinely cannot say which players are theirs must keep the existing
+        behavior rather than being handed a fabricated roster."""
+        captured = self._spy_on_engine(monkeypatch)
+        self._seed_candidate(con, "p1", "QB", 300.0)
+
+        r = client.post(
+            "/league/target_league/draft",
+            json={"season": 2025, "roster_positions": [], "available_player_ids": ["p1"]},
+        )
+
+        assert r.status_code == 200
+        assert captured["roster_player_ids"] is None
+
+    def test_explicit_roster_player_ids_reach_the_engine(self, con, client, monkeypatch):
+        captured = self._spy_on_engine(monkeypatch)
+        self._seed_candidate(con, "p1", "QB", 300.0)
+        self._seed_candidate(con, "mine", "RB", 200.0, ecr_rank=2.0)
+
+        r = client.post(
+            "/league/target_league/draft",
+            json={
+                "season": 2025,
+                "roster_positions": ["RB"],
+                "available_player_ids": ["p1"],
+                "roster_player_ids": ["mine"],
+            },
+        )
+
+        assert r.status_code == 200
+        assert captured["roster_player_ids"] == ["mine"]
+
+    def test_a_resolved_real_roster_supplies_the_ids_without_the_client_sending_them(
+        self, con, client, monkeypatch
+    ):
+        """The gap this closes: `roster_id` already resolved the team's real players to read
+        their positions, then threw the ids away."""
+        captured = self._spy_on_engine(monkeypatch)
+        self._patch_real_roster(monkeypatch, [("mine_rb", "RB"), ("mine_wr", "WR")])
+        self._seed_candidate(con, "p1", "QB", 300.0)
+
+        r = client.post(
+            "/league/target_league/draft",
+            json={"season": 2025, "roster_id": 1, "available_player_ids": ["p1"]},
+        )
+
+        assert r.status_code == 200
+        assert sorted(captured["roster_player_ids"]) == ["mine_rb", "mine_wr"]
+        assert sorted(captured["roster_positions"]) == ["RB", "WR"]
+
+    def test_the_league_wide_available_pool_is_never_passed_as_the_roster(
+        self, con, client, monkeypatch
+    ):
+        """`available_player_ids` is the board, not my team. Passing it (or the client's
+        league-wide drafted list) as `roster_player_ids` would tell the engine my roster
+        already holds every position in the draft."""
+        captured = self._spy_on_engine(monkeypatch)
+        self._patch_real_roster(monkeypatch, [("mine_rb", "RB")])
+        for i, pid in enumerate(["p1", "p2", "p3"]):
+            self._seed_candidate(con, pid, "QB", 300.0 - i, ecr_rank=float(i + 1))
+
+        r = client.post(
+            "/league/target_league/draft",
+            json={"season": 2025, "roster_id": 1, "available_player_ids": ["p1", "p2", "p3"]},
+        )
+
+        assert r.status_code == 200
+        assert captured["roster_player_ids"] == ["mine_rb"]
+        assert set(captured["roster_player_ids"]) != set(captured["available_player_ids"])
+
+    def test_a_resolved_roster_id_supersedes_a_client_supplied_roster(
+        self, con, client, monkeypatch
+    ):
+        """Same precedence `roster_id` already has over `roster_positions`: the real roster
+        wins over a client's picture of one."""
+        captured = self._spy_on_engine(monkeypatch)
+        self._patch_real_roster(monkeypatch, [("real_rb", "RB")])
+        self._seed_candidate(con, "p1", "QB", 300.0)
+
+        r = client.post(
+            "/league/target_league/draft",
+            json={
+                "season": 2025,
+                "roster_id": 1,
+                "available_player_ids": ["p1"],
+                "roster_player_ids": ["stale_client_id"],
+            },
+        )
+
+        assert r.status_code == 200
+        assert captured["roster_player_ids"] == ["real_rb"]
+
+    def test_the_roster_aware_value_base_is_actually_used_end_to_end(self, con, client):
+        """No spy: the engine discloses marginal starter value in its own `reasons` only when
+        the roster-aware value base is active (`test_league_draft_msv_integration.py`), so the
+        served response itself proves which configuration ran."""
+        self._seed_candidate(con, "p1", "QB", 300.0)
+        self._seed_candidate(con, "mine", "RB", 200.0, ecr_rank=2.0)
+
+        blind = client.post(
+            "/league/target_league/draft",
+            json={"season": 2025, "roster_positions": ["RB"], "available_player_ids": ["p1"]},
+        ).json()
+        aware = client.post(
+            "/league/target_league/draft",
+            json={
+                "season": 2025,
+                "roster_positions": ["RB"],
+                "available_player_ids": ["p1"],
+                "roster_player_ids": ["mine"],
+            },
+        ).json()
+
+        assert not any("marginal starter value" in r for r in blind["reasons"])
+        assert any("marginal starter value" in r for r in aware["reasons"])

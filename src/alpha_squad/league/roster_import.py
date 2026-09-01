@@ -115,17 +115,80 @@ def fetch_sleeper_rosters(
     return teams
 
 
+def _team_for(teams: list[TeamRoster], roster_id: int) -> TeamRoster:
+    for team in teams:
+        if team.roster_id == roster_id:
+            return team
+    known = ", ".join(str(t.roster_id) for t in teams) or "(none)"
+    raise RuntimeError(f"no roster_id {roster_id} in this league; known roster ids: {known}")
+
+
 def roster_positions_for(teams: list[TeamRoster], roster_id: int) -> list[str]:
     """The real starting-lineup-input shape `roster_need`/`recommend_waiver_pickup`/
     `recommend_draft_pick` already expect: one position string per rostered player (bench
     included -- `roster_need` itself decides what counts as "enough" depth). Raises if
     `roster_id` isn't one of the real teams just fetched, rather than silently returning []
     (which would read as "empty roster" instead of "wrong id")."""
-    for team in teams:
-        if team.roster_id == roster_id:
-            return [p.position for p in team.players if p.position]
-    known = ", ".join(str(t.roster_id) for t in teams) or "(none)"
-    raise RuntimeError(f"no roster_id {roster_id} in this league; known roster ids: {known}")
+    return [p.position for p in _team_for(teams, roster_id).players if p.position]
+
+
+def roster_player_ids_for(teams: list[TeamRoster], roster_id: int) -> list[str]:
+    """The same roster as `roster_positions_for`, as canonical player ids -- what
+    `recommend_draft_pick`'s `roster_player_ids` needs to price marginal starter value
+    (D60/D63/D67) instead of falling back to the un-benchmarked VORP-only value base.
+
+    Filtered on `p.position` exactly like `roster_positions_for`, so the two lists always
+    describe the SAME players. `recommend_draft_pick` receives both -- positions drive
+    `roster_need`, ids drive marginal starter value -- and a roster that disagreed with
+    itself between them would price a lineup the team does not actually have.
+
+    Never invents an id: a rostered player the identity crosswalk cannot bridge is already
+    reported in `TeamRoster.unmapped_sleeper_ids` and is absent from both lists."""
+    return [p.player_id for p in _team_for(teams, roster_id).players if p.position]
+
+
+@dataclass
+class RosterSelection:
+    """One real roster, resolved once, in both shapes `recommend_draft_pick` consumes.
+
+    `player_ids` is `None` -- not `[]` -- when the roster is genuinely unknown. That is the
+    same distinction `recommend_draft_pick` itself already draws: `[]` is a KNOWN empty
+    roster (pick 1 of a draft) and activates marginal starter value, while `None` is an
+    unknown one and falls back to VORP."""
+
+    positions: list[str]
+    player_ids: list[str] | None
+
+
+def resolve_roster_selection(
+    con: duckdb.DuckDBPyConnection,
+    settings: Settings,
+    league: LeagueContext,
+    *,
+    roster_id: int | None = None,
+    fallback: list[str] | None = None,
+) -> RosterSelection:
+    """`resolve_roster_positions`, plus the canonical player ids from the SAME roster fetch.
+
+    One `teams_for_league` call serves both. Resolving them separately would fetch the live
+    Sleeper roster twice per request -- the exact duplicated-fetch waste D53 found and fixed
+    in `build_action_center`.
+
+    When no `roster_id` is given, `player_ids` is `None` rather than `[]`: `fallback`
+    describes positions only, so the caller has told us nothing about *which* players are
+    rostered. Returning `[]` there would assert an empty roster the caller never claimed."""
+    if roster_id is None:
+        return RosterSelection(positions=fallback or [], player_ids=None)
+    teams = teams_for_league(con, settings, league)
+    if teams is None:
+        raise RuntimeError(
+            f"league {league.league_id!r} has no real per-team roster source "
+            "(only Sleeper-connected leagues support roster_id)"
+        )
+    return RosterSelection(
+        positions=roster_positions_for(teams, roster_id),
+        player_ids=roster_player_ids_for(teams, roster_id),
+    )
 
 
 def resolve_roster_positions(
@@ -142,15 +205,9 @@ def resolve_roster_positions(
     entered list) when no `roster_id` is given, or the league has no real roster source (a
     `source: yaml` league) -- never silently ignores an explicit `roster_id` that can't be
     resolved, since that's much more likely a wrong id than "no roster"."""
-    if roster_id is None:
-        return fallback or []
-    teams = teams_for_league(con, settings, league)
-    if teams is None:
-        raise RuntimeError(
-            f"league {league.league_id!r} has no real per-team roster source "
-            "(only Sleeper-connected leagues support roster_id)"
-        )
-    return roster_positions_for(teams, roster_id)
+    return resolve_roster_selection(
+        con, settings, league, roster_id=roster_id, fallback=fallback
+    ).positions
 
 
 def teams_for_league(

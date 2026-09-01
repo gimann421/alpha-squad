@@ -123,6 +123,10 @@ export const api = {
       season: number;
       roster_positions?: string[];
       roster_id?: number;
+      // This team's own drafted players -- NOT the league-wide drafted pool. Enables the
+      // benchmarked roster-aware value base (D60/D63/D67); omitted, the engine falls back
+      // to VORP. Superseded server-side by a resolved `roster_id`.
+      roster_player_ids?: string[];
       available_player_ids?: string[];
       next_pick_overall?: number;
       current_pick_overall?: number;
