@@ -16,6 +16,8 @@ from alpha_squad.league.context import LeagueContext
 from alpha_squad.league.roster_import import (
     fetch_sleeper_rosters,
     resolve_roster_positions,
+    resolve_roster_selection,
+    roster_player_ids_for,
     roster_positions_for,
 )
 from alpha_squad.storage.db import init_db
@@ -190,3 +192,75 @@ class TestResolveRosterPositions:
     ):
         with pytest.raises(RuntimeError, match="no real per-team roster source"):
             resolve_roster_positions(con, settings, _yaml_league(), roster_id=1)
+
+
+class TestRosterPlayerIdsFor:
+    """The canonical ids `recommend_draft_pick`'s `roster_player_ids` needs. Without them the
+    engine falls back to the VORP-only value base rather than the D63/D67 roster-aware one
+    the benchmark actually selected."""
+
+    def test_returns_canonical_ids_for_a_known_roster(self, con, settings, monkeypatch):
+        monkeypatch.setattr(httpx, "get", _fake_get_by_url())
+        teams = fetch_sleeper_rosters(con, settings, LEAGUE_ID)
+
+        assert sorted(roster_player_ids_for(teams, 1)) == ["asq_qb1", "asq_wr1"]
+
+    def test_never_invents_an_id_for_an_unbridged_player(self, con, settings, monkeypatch):
+        """Sleeper id 9999999 has no crosswalk match. It must be absent, not guessed at and
+        not passed through as a raw Sleeper id -- ARCHITECTURE.md's never-fabricate rule."""
+        monkeypatch.setattr(httpx, "get", _fake_get_by_url())
+        teams = fetch_sleeper_rosters(con, settings, LEAGUE_ID)
+
+        ids = roster_player_ids_for(teams, 1)
+        assert "9999999" not in ids
+        assert len(ids) == 2
+
+    def test_describes_the_same_players_as_roster_positions_for(self, con, settings, monkeypatch):
+        """The engine receives both lists for one roster -- positions drive `roster_need`,
+        ids drive marginal starter value. If they described different player sets the engine
+        would price a lineup the team does not have."""
+        monkeypatch.setattr(httpx, "get", _fake_get_by_url())
+        teams = fetch_sleeper_rosters(con, settings, LEAGUE_ID)
+
+        assert len(roster_player_ids_for(teams, 1)) == len(roster_positions_for(teams, 1))
+
+    def test_unknown_roster_id_raises_rather_than_returning_empty(self, con, settings, monkeypatch):
+        monkeypatch.setattr(httpx, "get", _fake_get_by_url())
+        teams = fetch_sleeper_rosters(con, settings, LEAGUE_ID)
+
+        with pytest.raises(RuntimeError, match="no roster_id 999"):
+            roster_player_ids_for(teams, 999)
+
+
+class TestResolveRosterSelection:
+    def test_no_roster_id_leaves_the_roster_unknown_not_empty(self, con, settings):
+        """The fallback describes positions only, so which players are rostered is genuinely
+        unknown. `None` preserves `recommend_draft_pick`'s VORP fallback; `[]` would assert a
+        known-empty roster the caller never claimed."""
+        selection = resolve_roster_selection(
+            con, settings, _sleeper_league(), roster_id=None, fallback=["QB", "RB"]
+        )
+        assert selection.positions == ["QB", "RB"]
+        assert selection.player_ids is None
+
+    def test_roster_id_resolves_both_shapes(self, con, settings, monkeypatch):
+        monkeypatch.setattr(httpx, "get", _fake_get_by_url())
+        selection = resolve_roster_selection(
+            con, settings, _sleeper_league(), roster_id=1, fallback=["K"]
+        )
+        assert sorted(selection.positions) == ["QB", "WR"]
+        assert sorted(selection.player_ids or []) == ["asq_qb1", "asq_wr1"]
+
+    def test_a_real_empty_roster_is_known_empty_not_unknown(self, con, settings, monkeypatch):
+        """Roster 2 really has no players. That is `[]` (a KNOWN empty roster, which activates
+        marginal starter value at pick 1) -- not `None`, which means "no idea"."""
+        monkeypatch.setattr(httpx, "get", _fake_get_by_url())
+        selection = resolve_roster_selection(con, settings, _sleeper_league(), roster_id=2)
+        assert selection.player_ids == []
+        assert selection.positions == []
+
+    def test_roster_id_on_a_yaml_league_raises_rather_than_silently_falling_back(
+        self, con, settings
+    ):
+        with pytest.raises(RuntimeError, match="no real per-team roster source"):
+            resolve_roster_selection(con, settings, _yaml_league(), roster_id=1)

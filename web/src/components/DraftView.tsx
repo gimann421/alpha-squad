@@ -27,6 +27,12 @@ export function DraftView() {
   const [poolError, setPoolError] = useState<string | null>(null);
   const [draftedIds, setDraftedIds] = useState<string[]>([]);
   const [addDraftedId, setAddDraftedId] = useState("");
+  // Which of the drafted players are on MY team. Deliberately a separate list from
+  // `draftedIds` (the league-wide pool): the engine's roster-aware value base needs my own
+  // roster, and `draftedIds` is not it. See the request body below.
+  const [myPickIds, setMyPickIds] = useState<string[]>([]);
+  const [addMyPickId, setAddMyPickId] = useState("");
+  const usingRealRoster = teamsSupported && rosterId != null;
 
   const [decision, setDecision] = useState<DecisionResponse | null>(null);
   const [decisionError, setDecisionError] = useState<string | null>(null);
@@ -56,6 +62,22 @@ export function DraftView() {
 
   function removeDrafted(playerId: string) {
     setDraftedIds((ids) => ids.filter((id) => id !== playerId));
+    // My picks are a strict subset of the drafted pool -- un-drafting a player has to drop
+    // him from my roster too, or the two lists disagree about who is even off the board.
+    setMyPickIds((ids) => ids.filter((id) => id !== playerId));
+  }
+
+  // Taking a player both removes him from the board AND puts him on my roster, so this adds
+  // to both lists. `draftedIds` keeps its existing league-wide meaning untouched; this only
+  // adds the "which of them are mine" split.
+  function addMyPick(playerId: string) {
+    if (!playerId) return;
+    addDrafted(playerId);
+    setMyPickIds((ids) => (ids.includes(playerId) ? ids : [...ids, playerId]));
+  }
+
+  function removeMyPick(playerId: string) {
+    setMyPickIds((ids) => ids.filter((id) => id !== playerId));
   }
 
   async function runDraft() {
@@ -81,13 +103,18 @@ export function DraftView() {
         // next turn. It needs to know where the draft is now -- every pick you have marked
         // drafted, plus the one you are on.
         current_pick_overall: draftedIds.length + 1,
-        // D60: `roster_player_ids` (enables marginal starter value) is deliberately omitted
-        // here. `draftedIds` tracks EVERY player marked drafted league-wide, not this team's
-        // own picks -- there is no per-team split in this picker's state. Passing it would
-        // tell the engine "my roster already holds every position anyone has drafted," which
-        // is actively wrong, not just incomplete, so the engine falls back to VORP instead
-        // (see league/draft.py). Wiring this correctly needs a "my picks" list distinct from
-        // the full drafted pool, which this view does not yet track.
+        // D60/D63/D67: the benchmarked roster-aware value base needs THIS team's own picks.
+        // `draftedIds` is the league-wide drafted pool and must never be sent here -- it
+        // would tell the engine "my roster already holds every position anyone has drafted",
+        // which is actively wrong, not merely incomplete. `myPickIds` is the separate
+        // my-picks list this view now tracks for exactly this purpose.
+        //
+        // Sent only when non-empty: `[]` asserts a KNOWN empty roster, and if the user
+        // simply has not marked their picks that assertion is false -- so the engine keeps
+        // its documented VORP fallback for an unknown roster instead. When a real Sleeper
+        // team is connected the server resolves the actual roster from `roster_id` and that
+        // supersedes this field entirely.
+        roster_player_ids: myPickIds.length > 0 ? myPickIds : undefined,
         ecr_type: ecrType || undefined,
         top_n: topN,
       });
@@ -121,7 +148,7 @@ export function DraftView() {
         <label>
           Top N alternatives <input type="number" value={topN} onChange={(e) => setTopN(Number(e.target.value))} />
         </label>
-        {!(teamsSupported && rosterId != null) && (
+        {!usingRealRoster && (
           <label>
             Roster positions{" "}
             <input value={rosterPositions} onChange={(e) => setRosterPositions(e.target.value)} placeholder="QB,RB" />
@@ -156,6 +183,46 @@ export function DraftView() {
         </ul>
       )}
 
+      {!usingRealRoster && (
+        <>
+          <h3>My picks</h3>
+          <p className="muted">
+            Which of the drafted players above are on <em>your</em> team — a separate list from
+            the league-wide pool. This is what lets the engine price how much a candidate would
+            actually improve your own starting lineup, rather than scoring him against
+            league-wide replacement level alone. With a connected Sleeper team the server reads
+            your real roster instead and this section is unnecessary.
+          </p>
+          <div className="controls">
+            <span className="picker-field">
+              <span className="picker-field-label">Mark my pick</span>
+              <PlayerPicker
+                value={addMyPickId}
+                onChange={(id) => {
+                  setAddMyPickId(id);
+                  if (id) {
+                    addMyPick(id);
+                    setAddMyPickId("");
+                  }
+                }}
+              />
+            </span>
+          </div>
+          {myPickIds.length > 0 && (
+            <ul className="action-list">
+              {myPickIds.map((id) => (
+                <li key={id}>
+                  {nameFor(id)}{" "}
+                  <button className="secondary" onClick={() => removeMyPick(id)}>
+                    undo
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </>
+      )}
+
       <div className="controls">
         <button onClick={runDraft} disabled={submitting || !leagueId || !pool}>
           {submitting ? "Recommending…" : "Who should I take?"}
@@ -169,7 +236,12 @@ export function DraftView() {
             <PlayerLink playerId={decision.recommendation}>{nameFor(decision.recommendation)}</PlayerLink>{" "}
             <button className="secondary" onClick={() => addDrafted(decision.recommendation)}>
               mark drafted
-            </button>
+            </button>{" "}
+            {!usingRealRoster && (
+              <button className="secondary" onClick={() => addMyPick(decision.recommendation)}>
+                mark as my pick
+              </button>
+            )}
           </div>
           <div>
             <strong>Expected value:</strong> {decision.expected_value?.toFixed(1) ?? "-"} ·{" "}
