@@ -22,6 +22,7 @@ import type {
   RookieComp,
   RookieRow,
   SimulationResponse,
+  SleeperDraftState,
   SourceHealthRow,
   TradePackageRequest,
   TradePackageResponse,
@@ -91,6 +92,8 @@ export const api = {
     postJson<LeagueSummary>("/league/register", body),
   getLeagueTeams: (leagueId: string) => getJson<LeagueTeamsResponse>(`/league/${leagueId}/teams`),
   getLeagueContext: (leagueId: string) => getJson<LeagueContext>(`/league/${leagueId}/context`),
+  getSleeperDraft: (leagueId: string, params?: { roster_id?: number }) =>
+    getJson<SleeperDraftState>(`/league/${leagueId}/sleeper-draft`, params),
   getRosterNeed: (leagueId: string, params: { roster_positions?: string; roster_id?: number }) =>
     getJson<{ need: Record<string, number>; roster_positions: string[] }>(
       `/league/${leagueId}/roster`,

@@ -21,6 +21,8 @@ from alpha_squad.api.schemas import (
     MyTeamResponse,
     RegisterLeagueRequest,
     RosterPlayerRow,
+    SleeperDraftPickRow,
+    SleeperDraftStateResponse,
     TeamRosterRow,
     TradePackageRequest,
     TradePackageResponse,
@@ -50,6 +52,11 @@ from alpha_squad.league.roster_intelligence import (
     build_my_team_report,
     recommend_drops,
 )
+from alpha_squad.league.sleeper_draft import (
+    compute_turn_info,
+    fetch_sleeper_draft_id,
+    fetch_sleeper_draft_state,
+)
 from alpha_squad.league.trade import (
     PickAsset,
     TradePackageSide,
@@ -58,6 +65,7 @@ from alpha_squad.league.trade import (
 )
 from alpha_squad.league.waiver import rank_waiver_targets, recommend_waiver_pickup
 from alpha_squad.market.edge import DEFAULT_ECR_TYPE
+from alpha_squad.sources.base import SourceError
 
 router = APIRouter(prefix="/league", tags=["league"])
 
@@ -67,9 +75,17 @@ def _league_or_404(league_id: str, con: duckdb.DuckDBPyConnection) -> LeagueCont
     resolves it -- a local YAML config or a live Sleeper league, D33 -- rather than the M10-era
     behavior of always loading the one hardcoded target_league.yaml and merely checking
     whether its own id happened to match the URL. A missing/unregistered league_id returns
-    404, never a fabricated universal answer (ARCHITECTURE.md)."""
+    404, never a fabricated universal answer (ARCHITECTURE.md).
+
+    A `source: sleeper` league is re-hydrated live on every call (D33), so a transient Sleeper
+    outage surfaces here too -- as `SourceError`, which is itself a `RuntimeError` subclass.
+    Caught separately as 503 (2026-09-03 product-gap PART 1: "handle API unavailable / temporary
+    Sleeper errors") rather than falling into the generic branch, which would otherwise
+    misreport "Sleeper is down right now" as "this league doesn't exist"."""
     try:
         return resolve_league(league_id, con=con)
+    except SourceError as e:
+        raise HTTPException(status_code=503, detail=f"Sleeper temporarily unavailable: {e}") from e
     except RuntimeError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
 
@@ -144,6 +160,100 @@ def get_league_teams(
             )
             for t in teams
         ],
+    )
+
+
+@router.get("/{league_id}/sleeper-draft", response_model=SleeperDraftStateResponse)
+def get_sleeper_draft(
+    league_id: str,
+    roster_id: int | None = Query(
+        None, description="This team's real roster_id, to compute my-picks/turn/next-pick"
+    ),
+    con: duckdb.DuckDBPyConnection = Depends(get_db),
+) -> SleeperDraftStateResponse:
+    """PART 1 of the 2026-09-03 product-gap request: reconstructs the live draft board from
+    Sleeper's own authoritative `draft/{id}/picks` feed (league/sleeper_draft.py) instead of the
+    user re-typing every opposing team's pick. No decision logic here -- this only reports facts
+    Sleeper already knows (who's been picked, whose turn it is); `POST /league/{id}/draft` is
+    still the one place a recommendation gets computed, using this endpoint's
+    `drafted_player_ids`/`current_pick_overall`/`next_pick_overall` as its inputs.
+
+    `status="no_draft"` (not an error) covers both "not a Sleeper league" being asked anyway and
+    a real Sleeper league that has no draft yet -- both are "nothing to sync", not a failure.
+    A real Sleeper fetch failure (blocked egress, transient error, bad draft id) surfaces as 503
+    with the real underlying message rather than a silently empty/fabricated board."""
+    league = _league_or_404(league_id, con)
+    sleeper_league_id = getattr(league, "sleeper_league_id", None)
+    if getattr(league, "source", None) != "sleeper" or not sleeper_league_id:
+        return SleeperDraftStateResponse(
+            league_id=league_id,
+            draft_id=None,
+            status="no_draft",
+            draft_type=None,
+            teams=None,
+            rounds=None,
+            picks=[],
+            drafted_player_ids=[],
+            unmapped_sleeper_ids=[],
+        )
+
+    try:
+        draft_id = fetch_sleeper_draft_id(con, get_settings(), sleeper_league_id)
+        if draft_id is None:
+            return SleeperDraftStateResponse(
+                league_id=league_id,
+                draft_id=None,
+                status="no_draft",
+                draft_type=None,
+                teams=None,
+                rounds=None,
+                picks=[],
+                drafted_player_ids=[],
+                unmapped_sleeper_ids=[],
+            )
+        state = fetch_sleeper_draft_state(con, get_settings(), draft_id)
+    except SourceError as e:
+        raise HTTPException(
+            status_code=503, detail=f"Sleeper draft sync temporarily unavailable: {e}"
+        ) from e
+
+    turn = compute_turn_info(state, roster_id)
+
+    names: dict[str, str | None] = {}
+    picked_ids = [p.player_id for p in state.picks if p.player_id]
+    if picked_ids:
+        placeholders = ", ".join("?" for _ in picked_ids)
+        names = dict(
+            con.execute(
+                f"SELECT player_id, display_name FROM players WHERE player_id IN ({placeholders})",
+                picked_ids,
+            ).fetchall()
+        )
+
+    return SleeperDraftStateResponse(
+        league_id=league_id,
+        draft_id=state.draft_id,
+        status=state.status,
+        draft_type=state.draft_type,
+        teams=state.teams or None,
+        rounds=state.rounds or None,
+        picks=[
+            SleeperDraftPickRow(
+                pick_no=p.pick_no,
+                round=p.round,
+                roster_id=p.roster_id,
+                player_id=p.player_id,
+                display_name=names.get(p.player_id) if p.player_id else None,
+            )
+            for p in state.picks
+        ],
+        drafted_player_ids=state.drafted_player_ids,
+        unmapped_sleeper_ids=state.unmapped_sleeper_ids,
+        my_player_ids=state.player_ids_for_roster(roster_id) if roster_id is not None else None,
+        current_pick_overall=turn.current_pick_overall,
+        on_the_clock_roster_id=turn.on_the_clock_roster_id,
+        next_pick_overall=turn.next_pick_overall_for_roster,
+        is_users_turn=turn.is_users_turn,
     )
 
 

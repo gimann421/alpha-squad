@@ -244,6 +244,31 @@ class MyTeamResponse(BaseModel):
     total_projected_points: float
 
 
+class SleeperDraftPickRow(BaseModel):
+    pick_no: int
+    round: int
+    roster_id: int | None
+    player_id: str | None
+    display_name: str | None
+
+
+class SleeperDraftStateResponse(BaseModel):
+    league_id: str
+    draft_id: str | None
+    status: str  # "no_draft" | "pre_draft" | "drafting" | "paused" | "complete"
+    draft_type: str | None
+    teams: int | None
+    rounds: int | None
+    picks: list[SleeperDraftPickRow]
+    drafted_player_ids: list[str]
+    unmapped_sleeper_ids: list[str]
+    my_player_ids: list[str] | None = None
+    current_pick_overall: int | None = None
+    on_the_clock_roster_id: int | None = None
+    next_pick_overall: int | None = None
+    is_users_turn: bool | None = None
+
+
 class ProvenanceResponse(BaseModel):
     entity_type: str
     entity_id: str

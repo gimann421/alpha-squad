@@ -741,6 +741,121 @@ class TestLeague:
         assert r.status_code == 404
 
 
+class TestSleeperDraftSync:
+    """PART 1 of the 2026-09-03 product-gap request: GET /league/{id}/sleeper-draft
+    reconstructs the live board from Sleeper's own draft/picks feed."""
+
+    def _register(self, con, client, monkeypatch, *, league_id="sleeper_draft_test"):
+        import httpx
+
+        from tests.fixtures.httpx_fakes import FakeGetResponse
+
+        league_body = {
+            "league_id": "888",
+            "name": "Draft Sync League",
+            "total_rosters": 2,
+            "roster_positions": ["QB", "BN"],
+            "scoring_settings": {"rec": 1.0},
+            "settings": {"type": 0, "waiver_budget": 0},
+        }
+
+        def fake_get(url, **kwargs):
+            import json as _json
+
+            return FakeGetResponse(200, league_body, _json.dumps(league_body).encode())
+
+        monkeypatch.setattr(httpx, "get", fake_get)
+        reg = client.post(
+            "/league/register", json={"sleeper_league_id": "888", "league_id": league_id}
+        )
+        assert reg.status_code == 200
+        return league_id
+
+    def test_yaml_league_returns_no_draft_not_an_error(self, client):
+        r = client.get("/league/target_league/sleeper-draft")
+        assert r.status_code == 200
+        assert r.json()["status"] == "no_draft"
+
+    def test_unknown_league_404s(self, client):
+        r = client.get("/league/not-a-real-league/sleeper-draft")
+        assert r.status_code == 404
+
+    def test_sleeper_league_with_no_draft_yet_returns_no_draft(self, con, client, monkeypatch):
+        import httpx
+
+        from tests.fixtures.httpx_fakes import FakeGetResponse
+
+        league_id = self._register(con, client, monkeypatch)
+
+        def fake_get(url, **kwargs):
+            body = [] if url.endswith("/drafts") else {}
+            import json as _json
+
+            return FakeGetResponse(200, body, _json.dumps(body).encode())
+
+        monkeypatch.setattr(httpx, "get", fake_get)
+        r = client.get(f"/league/{league_id}/sleeper-draft")
+        assert r.status_code == 200
+        assert r.json()["status"] == "no_draft"
+
+    def test_in_progress_draft_reports_picks_and_turn(self, con, client, monkeypatch):
+        import httpx
+
+        from tests.fixtures.httpx_fakes import FakeGetResponse
+
+        league_id = self._register(con, client, monkeypatch)
+        _seed_player(con, "asq_qb1", "Real QB", "QB")
+        con.execute(
+            "INSERT INTO player_id_map (id_type, id_value, player_id, source) "
+            "VALUES ('sleeper_id', '6813', 'asq_qb1', 'test')"
+        )
+
+        draft_obj = {
+            "draft_id": "d1",
+            "type": "snake",
+            "status": "drafting",
+            "settings": {"teams": 2, "rounds": 2},
+            "slot_to_roster_id": {"1": 1, "2": 2},
+        }
+        picks = [{"pick_no": 1, "round": 1, "roster_id": 1, "draft_slot": 1, "player_id": "6813"}]
+
+        def fake_get(url, **kwargs):
+            import json as _json
+
+            if url.endswith("/picks"):
+                body = picks
+            elif url.endswith("/drafts"):
+                body = [{"draft_id": "d1", "status": "drafting"}]
+            else:
+                body = draft_obj
+            return FakeGetResponse(200, body, _json.dumps(body).encode())
+
+        monkeypatch.setattr(httpx, "get", fake_get)
+
+        r = client.get(f"/league/{league_id}/sleeper-draft", params={"roster_id": 2})
+        assert r.status_code == 200
+        body = r.json()
+        assert body["status"] == "drafting"
+        assert body["drafted_player_ids"] == ["asq_qb1"]
+        assert body["current_pick_overall"] == 2
+        assert body["on_the_clock_roster_id"] == 2
+        assert body["is_users_turn"] is True
+        assert body["my_player_ids"] == []
+        assert body["picks"][0]["display_name"] == "Real QB"
+
+    def test_sleeper_unavailable_returns_503_not_a_fabricated_board(self, con, client, monkeypatch):
+        import httpx
+
+        league_id = self._register(con, client, monkeypatch)
+
+        def raise_blocked(url, **kwargs):
+            raise httpx.ProxyError("blocked")
+
+        monkeypatch.setattr(httpx, "get", raise_blocked)
+        r = client.get(f"/league/{league_id}/sleeper-draft")
+        assert r.status_code == 503
+
+
 class TestSimulation:
     """P1-4: the same real `simulate_team_season` the CLI's `simulate team-season` calls,
     over a synthetic history shaped like tests/unit/test_simulation.py's fixture -- proving

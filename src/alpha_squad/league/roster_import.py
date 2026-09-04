@@ -43,11 +43,12 @@ class TeamRoster:
     unmapped_sleeper_ids: list[str] = field(default_factory=list)
 
 
-def _bridge_sleeper_ids(
+def bridge_sleeper_player_ids(
     con: duckdb.DuckDBPyConnection, sleeper_ids: list[str]
 ) -> dict[str, tuple[str, str | None, str | None]]:
     """{sleeper_player_id: (player_id, display_name, position)} for every id this deployment's
-    identity crosswalk already covers."""
+    identity crosswalk already covers. Shared by roster import and draft-pick sync
+    (league/sleeper_draft.py) -- one bridging implementation, not two."""
     if not sleeper_ids:
         return {}
     placeholders = ", ".join("?" for _ in sleeper_ids)
@@ -82,7 +83,7 @@ def fetch_sleeper_rosters(
     users_by_id = {u["user_id"]: u for u in users}
 
     all_sleeper_ids = sorted({pid for r in rosters for pid in (r.get("players") or [])})
-    bridged = _bridge_sleeper_ids(con, all_sleeper_ids)
+    bridged = bridge_sleeper_player_ids(con, all_sleeper_ids)
 
     teams: list[TeamRoster] = []
     for r in rosters:
