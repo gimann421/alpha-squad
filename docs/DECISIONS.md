@@ -4182,3 +4182,82 @@ scoring path.
 OPEN, reclassified as a standing measurement limitation rather than a blocking gate** — see
 `docs/IMPLEMENTATION_GAP_ANALYSIS.md` for the split item text and the re-specified criterion
 above for what future engine work is now evaluated against.
+
+## D72 — Three product/usability gaps closed ahead of a real draft: Sleeper pick sync, a league-settings audit that found roster config already wired but scoring format is not, and Draft-page state persistence
+
+Product-correctness request (not a strategy/model change): the user identified three gaps
+before trusting Alpha Squad for a real draft. **No change to `league/draft.py`'s scoring math, no
+new pre-registration, no benchmark run.** All three addressed with the smallest change that fit
+the existing architecture, reusing the already-benchmarked `recommend_draft_pick` unchanged.
+
+**1. Sleeper draft-pick sync (was fully manual).** New `league/sleeper_draft.py`: fetches a
+league's current draft (`GET /draft/{id}`) and its completed picks (`GET /draft/{id}/picks`),
+bridges Sleeper's numeric player ids through the existing `player_id_map` crosswalk (exported
+`roster_import.py::bridge_sleeper_player_ids` for reuse rather than duplicating it), and
+reconstructs the full snake/linear pick order from `slot_to_roster_id` + `teams` + `rounds` to
+answer "whose turn is it" and "when do I pick next" without waiting for a not-yet-made pick.
+New `GET /league/{id}/sleeper-draft` route (zero decision logic — a pure fact reporter;
+`POST /league/{id}/draft` remains the only place a recommendation is computed).
+`DraftView.tsx` polls it every 8s for a Sleeper-connected league and auto-recommends the instant
+`is_users_turn` flips true; manual entry is unchanged and still the only path for a non-Sleeper
+draft. Verified against real data three ways: 12 offline unit tests + 5 API tests (mocked
+Sleeper responses); a live integration test (`tests/integration/test_sleeper_draft_live.py`)
+against the two already-registered real leagues (`dilworth`: 12-team snake, 180 real picks;
+`boys_of_fall`: 10-team linear) confirming the real JSON shapes and pick-order math against
+real Sleeper data, not a guessed schema; and a live curl/Playwright check of the deployed route
+end-to-end. One real bug this surfaced and fixed along the way: `api/routers/league.py`'s
+`_league_or_404` caught every `RuntimeError` from `resolve_league` — including `SourceError`,
+itself a `RuntimeError` subclass raised when a Sleeper league's live re-hydration hits a
+transient outage — and reported it as 404 "league not found" instead of 503 "temporarily
+unavailable," on every Sleeper-backed endpoint, not just the new one.
+
+**2. League scoring/roster configuration audit.** Roster/lineup construction (positions, FLEX,
+SUPERFLEX, teams, roster size) was **already fully plumbed**: Sleeper's `roster_positions` →
+`sleeper_context.py` → `LeagueContext.lineup/roster/teams` → consumed throughout
+`replacement.py`/`roster.py`/`draft.py` for replacement level, VORP, and positional caps — no
+code change needed, confirmed by re-reading the existing D33/D58 wiring and the existing
+`test_sleeper_league_context.py` coverage (a superflex Sleeper league already produces a
+different `dedicated_slots()`/`flex_slots()` than a 1-QB one). **Scoring VALUE (PPR/half-PPR/
+standard point-per-reception) is NOT plumbed, and this is a hard architectural stop, not an
+oversight to patch here.** `LeagueContext.scoring.ppr_value` is correctly parsed from Sleeper
+(`sleeper_context.py`, unchanged since D33) but has zero consumers anywhere in the codebase —
+grepped repo-wide. Every projection (`uncertainty_predictions`, VORP, marginal starter value)
+derives from nflverse's `fantasy_points_ppr` column, which is itself fixed full-PPR scoring
+baked in at `features/panel.py` (M3), years before any league-settings concept existed.
+Supporting arbitrary scoring would mean re-deriving fantasy points from raw box-score component
+stats (available) under each league's own formula and re-projecting/retraining the M5/M6 model
+stack against it — exactly the "modify the underlying Alpha scoring strategy" / "tune the model"
+work this request explicitly ruled out. Per the request's own stop condition: **not implemented,
+not faked.** Instead, `DraftView.tsx` now reads the already-parsed `ppr_value` and shows an
+honest disclosure banner when a connected Sleeper league's scoring isn't ~full PPR, rather than
+silently mispricing pass-catchers with no warning.
+
+**3. Draft-page state persistence (was lost on navigation/refresh).** `DraftView.tsx` now
+persists to `localStorage` under `alpha-squad:draft-view:{sleeper|manual}:{league_id}` — UI
+prefs (season/ECR type/top-N) always, and (manual/non-Sleeper leagues only) the hand-tracked
+drafted/my-picks lists and roster-position string. A Sleeper league's completed picks are never
+persisted — every mount re-fetches live from `GET /league/{id}/sleeper-draft` and treats it as
+authoritative, so a stale local copy can never override newer Sleeper data. Corrupted/invalid
+JSON in storage is caught and falls back to defaults rather than crashing the view (verified live
+by writing garbage into the key and reloading). One real bug found and fixed by an actual
+reload-and-inspect Playwright check, not just written and assumed correct: the load-persisted-
+state effect and the save-current-state effect raced in the same commit — the save effect's
+first firing captured pre-load default state (its closure predates the load effect's `setState`
+calls reaching a new render) and overwrote the just-read persisted value with those defaults.
+Reproduced deterministically under React StrictMode's double-effect-invoke; fixed with a
+`hydrated` gate that blocks the save effect until the load effect for the current league/mode
+has actually applied its values. Re-verified with the same reload-and-inspect check: exactly one
+correct save fires post-reload, and the restored season/roster-positions match what was set
+before reloading.
+
+**Verification summary:** 851 offline tests pass (12 new unit + 5 new API, both included), 2 new
+live-network tests pass against real Sleeper leagues, `ruff`/`ruff format`/`check_no_secrets.py`
+clean, frontend `tsc -b && vite build` clean, frontend lint clean. Live-verified in a real
+Chromium browser via Playwright against the real deployed API (not just unit-mocked): league
+switching, Sleeper pick sync end-to-end (using a completed real draft — this is real-fetch/
+parse/bridge/pick-order verification, not proof that live in-draft polling works, which needs
+an actual live draft to fully confirm), the scoring-mismatch banner's absence for a full-PPR
+league, corrupted-localStorage safety, and cross-reload state persistence. Not live-tested: an
+actual in-progress Sleeper draft (neither registered league has one right now), so the
+auto-recommend-on-my-turn trigger and the 8s polling cadence are unit/integration-verified
+(the turn-detection math against real historical picks) but not watched fire in real time.

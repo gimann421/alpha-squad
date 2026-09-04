@@ -32,6 +32,8 @@ _ENDPOINTS = {
     "league_rosters": "/league/{league_id}/rosters",
     "league_drafts": "/league/{league_id}/drafts",
     "league_users": "/league/{league_id}/users",
+    "draft": "/draft/{draft_id}",
+    "draft_picks": "/draft/{draft_id}/picks",
 }
 
 
@@ -47,6 +49,8 @@ class SleeperSource(SourceAdapter):
     def default_health_params(self, dataset: str) -> dict:
         if "{league_id}" in _ENDPOINTS[dataset]:
             return {"league_id": "0"}
+        if "{draft_id}" in _ENDPOINTS[dataset]:
+            return {"draft_id": "0"}
         return {}
 
     def fetch(self, dataset: str, *, captured_at: datetime | None = None, **params) -> RawSnapshot:

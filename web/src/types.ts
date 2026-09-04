@@ -189,6 +189,31 @@ export interface LeagueTeamsResponse {
   teams: TeamRosterRow[];
 }
 
+export interface SleeperDraftPickRow {
+  pick_no: number;
+  round: number;
+  roster_id: number | null;
+  player_id: string | null;
+  display_name: string | null;
+}
+
+export interface SleeperDraftState {
+  league_id: string;
+  draft_id: string | null;
+  status: "no_draft" | "pre_draft" | "drafting" | "paused" | "complete" | string;
+  draft_type: string | null;
+  teams: number | null;
+  rounds: number | null;
+  picks: SleeperDraftPickRow[];
+  drafted_player_ids: string[];
+  unmapped_sleeper_ids: string[];
+  my_player_ids: string[] | null;
+  current_pick_overall: number | null;
+  on_the_clock_roster_id: number | null;
+  next_pick_overall: number | null;
+  is_users_turn: boolean | null;
+}
+
 export interface MyTeamPlayerRow {
   player_id: string;
   display_name: string | null;
