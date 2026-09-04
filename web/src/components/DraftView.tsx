@@ -63,7 +63,7 @@ function saveJson(key: string, value: unknown) {
 export function DraftView() {
   const { leagueId, rosterId, teamsSupported } = useLeague();
   const latestSeason = useLatestSeason("uncertainty", 2025);
-  const usingRealRoster = teamsSupported && rosterId != null;
+  const usingRealRoster = Boolean(teamsSupported && rosterId != null);
   const mode: "sleeper" | "manual" = usingRealRoster ? "sleeper" : "manual";
 
   const [season, setSeason] = useState(latestSeason);
@@ -90,6 +90,12 @@ export function DraftView() {
 
   const [draftSync, setDraftSync] = useState<SleeperDraftState | null>(null);
   const [draftSyncError, setDraftSyncError] = useState<string | null>(null);
+
+  // How many real picks had landed (across the whole league) when the current `decision` was
+  // computed -- lets the UI flag a recommendation as stale the instant a NEW pick comes in
+  // from Sleeper before the user acts on it (Phase 3/6: "no stale recommendation survives a
+  // material board change"). `null` while no decision has been requested yet.
+  const [decisionPickCount, setDecisionPickCount] = useState<number | null>(null);
 
   const nameFor = (playerId: string) =>
     pool?.find((p) => p.player_id === playerId)?.display_name ??
@@ -205,6 +211,15 @@ export function DraftView() {
   // user's turn... refresh/recompute the recommendation when relevant"). Tracked via a ref so
   // this fires once on the true->false->true transition, not on every unrelated poll tick.
   const wasUsersTurn = useRef<boolean | null>(null);
+
+  // Reset that transition-tracking ref whenever the connected league/roster changes. Without
+  // this, switching from a league where it was already the user's turn (ref left at `true`)
+  // into a different league that also happens to open on the user's turn would read as "no
+  // transition" and silently skip the auto-recommend for the new league/roster.
+  useEffect(() => {
+    wasUsersTurn.current = null;
+  }, [leagueId, rosterId]);
+
   useEffect(() => {
     if (!usingRealRoster || !draftSync || !pool) return;
     const isTurnNow = draftSync.is_users_turn === true;
@@ -237,6 +252,12 @@ export function DraftView() {
 
   async function runDraft() {
     if (!leagueId || !pool) return;
+    // A connected Sleeper draft's first sync is asynchronous: without this guard, a click (or
+    // the auto-recommend effect, which already checks `draftSync` itself) landing before the
+    // initial poll resolves would treat NO players as drafted yet and could recommend someone
+    // already off the board -- exactly the "recommendation reflects the correct roster state"
+    // failure this hardening pass targets. Manual mode has no such fetch to wait for.
+    if (usingRealRoster && !draftSync) return;
     setSubmitting(true);
     setDecisionError(null);
     setDecision(null);
@@ -267,12 +288,24 @@ export function DraftView() {
         top_n: topN,
       });
       setDecision(result);
+      setDecisionPickCount(usingRealRoster ? (draftSync?.drafted_player_ids.length ?? null) : null);
     } catch (e) {
       setDecisionError(String(e));
     } finally {
       setSubmitting(false);
     }
   }
+
+  // A material board change (a new real pick landing) since this recommendation was computed
+  // means it may no longer reflect who's actually still available (Phase 3/6: "no stale
+  // recommendation survives a material board change"). This never hides or auto-clears the
+  // recommendation -- during a live draft the user may still want to see it -- it only flags
+  // that it should be refreshed before acting on it.
+  const decisionIsStale =
+    usingRealRoster &&
+    decision != null &&
+    decisionPickCount != null &&
+    (draftSync?.drafted_player_ids.length ?? decisionPickCount) !== decisionPickCount;
 
   const pprValue = leagueContext ? (leagueContext.scoring as Record<string, unknown>)?.ppr_value : undefined;
   const scoringMismatch =
@@ -449,13 +482,34 @@ export function DraftView() {
       )}
 
       <div className="controls">
-        <button onClick={runDraft} disabled={submitting || !leagueId || !pool}>
-          {submitting ? "Recommending…" : "Who should I take?"}
+        <button
+          onClick={runDraft}
+          disabled={
+            submitting ||
+            !leagueId ||
+            !pool ||
+            (usingRealRoster && !draftSync) ||
+            syncStatus === "complete"
+          }
+        >
+          {submitting
+            ? "Recommending…"
+            : syncStatus === "complete"
+              ? "Draft complete"
+              : usingRealRoster && !draftSync
+                ? "Waiting for Sleeper sync…"
+                : "Who should I take?"}
         </button>
       </div>
       {decisionError && <p className="error">Error: {decisionError}</p>}
       {decision && (
         <div className="card">
+          {decisionIsStale && (
+            <p className="error">
+              A new pick has come in since this recommendation was computed — refresh ("Who
+              should I take?") before acting on it.
+            </p>
+          )}
           <div>
             <strong>Recommended pick:</strong>{" "}
             <PlayerLink playerId={decision.recommendation}>{nameFor(decision.recommendation)}</PlayerLink>{" "}
@@ -492,6 +546,44 @@ export function DraftView() {
               ))}
             </ul>
           </div>
+          {decision.trace && decision.trace.runner_up_player_id && (
+            <p className="muted">
+              Beat runner-up <PlayerLink playerId={decision.trace.runner_up_player_id}>
+                {nameFor(decision.trace.runner_up_player_id)}
+              </PlayerLink>{" "}
+              by {decision.trace.score_gap_to_runner_up?.toFixed(1) ?? "-"} score pts, out of{" "}
+              {decision.trace.available_pool_size} evaluable players on the board.
+            </p>
+          )}
+          {decision.trace && decision.trace.top_candidates.length > 1 && (
+            <details>
+              <summary>Decision trace: all {decision.trace.top_candidates.length} candidates considered</summary>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Player</th>
+                    <th>Pos</th>
+                    <th>Score</th>
+                    <th>VORP</th>
+                    <th>MSV</th>
+                    <th>Survival</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {decision.trace.top_candidates.map((c) => (
+                    <tr key={c.player_id}>
+                      <td>{nameFor(c.player_id)}</td>
+                      <td>{c.position}</td>
+                      <td>{c.score.toFixed(1)}</td>
+                      <td>{c.vorp.toFixed(1)}</td>
+                      <td>{c.marginal_starter_value?.toFixed(1) ?? "-"}</td>
+                      <td>{c.survival_probability != null ? `${(c.survival_probability * 100).toFixed(0)}%` : "-"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </details>
+          )}
           <div className="muted">Decision recorded: {decision.decision_id}</div>
         </div>
       )}

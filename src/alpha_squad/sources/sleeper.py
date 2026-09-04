@@ -65,11 +65,22 @@ class SleeperSource(SourceAdapter):
         except httpx.ProxyError as e:
             raise SourceBlockedError(f"egress policy blocked sleeper/{dataset}: {e}") from e
         except httpx.TransportError as e:
+            # Covers connect/read timeouts too (httpx.TimeoutException subclasses
+            # TransportError) -- a live draft polls this every 8s, so a single timeout must
+            # surface as a retryable SourceError, not an unhandled exception.
             raise SourceError(f"transport error fetching sleeper/{dataset}: {e}") from e
 
         if resp.status_code == 404:
             raise SourceError(f"sleeper/{dataset} not found (404): {url}")
-        resp.raise_for_status()
+        try:
+            resp.raise_for_status()
+        except httpx.HTTPStatusError as e:
+            # REGRESSION (2026-09-04 hardening pass): a real Sleeper 429/5xx previously
+            # propagated as a raw, uncaught httpx.HTTPStatusError -- neither a SourceError nor
+            # a RuntimeError, so it fell through every `except SourceError`/`except
+            # RuntimeError` handler in api/routers/league.py and surfaced to the user as an
+            # unhandled 500 instead of the intended "Sleeper temporarily unavailable" 503.
+            raise SourceError(f"sleeper/{dataset} returned HTTP {resp.status_code}: {e}") from e
 
         # D53: dataset-only filenames (no params) meant every league-scoped endpoint
         # (league/league_rosters/league_drafts/league_users) shared one file across ALL
@@ -89,7 +100,13 @@ class SleeperSource(SourceAdapter):
         dest.parent.mkdir(parents=True, exist_ok=True)
         write_bytes_atomic(dest, resp.content)
 
-        body = resp.json()
+        try:
+            body = resp.json()
+        except ValueError as e:
+            # A malformed body (e.g. an HTML error/maintenance page served with a 200) must
+            # not crash the caller outright -- translated into the same SourceError hierarchy
+            # every other real fetch failure already uses.
+            raise SourceError(f"sleeper/{dataset} returned a non-JSON response: {e}") from e
         if isinstance(body, list):
             rows = len(body)
             columns = tuple(sorted(body[0].keys())) if body and isinstance(body[0], dict) else None

@@ -13,6 +13,8 @@ from alpha_squad.api.deps import get_db
 from alpha_squad.api.schemas import (
     ActionCenterResponse,
     DecisionResponse,
+    DraftCandidateTraceRow,
+    DraftDecisionTrace,
     DraftRequest,
     DropCandidateRow,
     LeagueSummary,
@@ -68,6 +70,60 @@ from alpha_squad.market.edge import DEFAULT_ECR_TYPE
 from alpha_squad.sources.base import SourceError
 
 router = APIRouter(prefix="/league", tags=["league"])
+
+
+def _augment_with_live_draft_picks(
+    con: duckdb.DuckDBPyConnection,
+    league: LeagueContext,
+    roster_id: int,
+    roster_positions: list[str],
+    roster_player_ids: list[str] | None,
+) -> tuple[list[str], list[str] | None]:
+    """Sleeper's own API docs do not state that `GET /league/{id}/rosters` (what
+    `resolve_roster_selection` above reads) updates its `players` array incrementally as a
+    LIVE draft progresses -- only that `GET /draft/{id}/picks` does (verified against
+    docs.sleeper.com, 2026-09-04 hardening pass). If rosters lag the draft, a mid-draft
+    recommendation would price marginal starter value (D60/D63/D67) against a roster that is
+    missing this team's own picks so far -- exactly the "recommendation reflects the correct
+    roster state" failure mode this hardening pass targets.
+
+    Unions in this roster's players from the SAME authoritative picks feed
+    `GET /league/{id}/sleeper-draft` already uses (proven live-accurate,
+    `tests/unit/test_sleeper_draft.py`), rather than replacing the `league_rosters` read
+    outright -- a keeper/dynasty roster's pre-draft players (never in the picks feed, since
+    they weren't drafted THIS draft) still need `league_rosters` to be represented at all.
+    Best-effort: any Sleeper failure here is swallowed rather than failing the whole
+    recommendation, since `resolve_roster_selection`'s roster is still a real answer on its
+    own -- this is a completeness improvement, not the only source of roster truth."""
+    sleeper_league_id = getattr(league, "sleeper_league_id", None)
+    if getattr(league, "source", None) != "sleeper" or not sleeper_league_id:
+        return roster_positions, roster_player_ids
+    try:
+        draft_id = fetch_sleeper_draft_id(con, get_settings(), sleeper_league_id)
+        if draft_id is None:
+            return roster_positions, roster_player_ids
+        state = fetch_sleeper_draft_state(con, get_settings(), draft_id)
+    except SourceError:
+        return roster_positions, roster_player_ids
+
+    live_picks = state.player_ids_for_roster(roster_id)
+    known = set(roster_player_ids or [])
+    new_ids = [pid for pid in live_picks if pid not in known]
+    if not new_ids:
+        return roster_positions, roster_player_ids
+
+    placeholders = ", ".join("?" for _ in new_ids)
+    rows = con.execute(
+        f"SELECT player_id, position FROM players WHERE player_id IN ({placeholders})",
+        new_ids,
+    ).fetchall()
+    position_by_id = dict(rows)
+    augmented_ids = [*(roster_player_ids or []), *new_ids]
+    augmented_positions = [
+        *roster_positions,
+        *(position_by_id[pid] for pid in new_ids if pid in position_by_id),
+    ]
+    return augmented_positions, augmented_ids
 
 
 def _league_or_404(league_id: str, con: duckdb.DuckDBPyConnection) -> LeagueContext:
@@ -475,11 +531,16 @@ def post_draft(
         roster_player_ids = (
             selection.player_ids if selection.player_ids is not None else body.roster_player_ids
         )
+        roster_positions = selection.positions
+        if body.roster_id is not None:
+            roster_positions, roster_player_ids = _augment_with_live_draft_picks(
+                con, league, body.roster_id, roster_positions, roster_player_ids
+            )
         rec = recommend_draft_pick(
             con,
             league,
             body.season,
-            selection.positions,
+            roster_positions,
             available,
             body.next_pick_overall,
             body.ecr_type,
@@ -489,6 +550,29 @@ def post_draft(
         )
     except RuntimeError as e:
         raise HTTPException(status_code=422, detail=str(e)) from e
+    trace_row = DraftDecisionTrace(
+        season=rec.trace.season,
+        ecr_type=rec.trace.ecr_type,
+        current_pick_overall=rec.trace.current_pick_overall,
+        next_pick_overall=rec.trace.next_pick_overall,
+        available_pool_size=rec.trace.available_pool_size,
+        roster_size=rec.trace.roster_size,
+        runner_up_player_id=rec.trace.runner_up_player_id,
+        score_gap_to_runner_up=rec.trace.score_gap_to_runner_up,
+        top_candidates=[
+            DraftCandidateTraceRow(
+                player_id=c.player_id,
+                position=c.position,
+                score=c.score,
+                vorp=c.vorp,
+                marginal_starter_value=c.marginal_starter_value,
+                confidence=c.confidence,
+                survival_probability=c.survival_probability,
+                reasons=c.reasons,
+            )
+            for c in rec.trace.top_candidates
+        ],
+    )
     decision_id = record_decision(
         con,
         "draft_pick",
@@ -499,7 +583,12 @@ def post_draft(
         rec.expected_value,
         rec.confidence,
         rec.reasons,
-        {"source": "api"},
+        # `trace` (the same structured trace returned to the caller below) is persisted here
+        # too, into the existing free-form `provenance_json` column -- no schema migration --
+        # so a decision recorded during a real draft can still be reconstructed afterward, per
+        # Phase 5 of the 2026-09-04 hardening pass ("why did Alpha recommend this player at
+        # this exact moment"), not just observed in the moment via the API response.
+        {"source": "api", "trace": trace_row.model_dump()},
     )
     return DecisionResponse(
         decision_id=decision_id,
@@ -508,6 +597,7 @@ def post_draft(
         expected_value=rec.expected_value,
         confidence=rec.confidence,
         reasons=rec.reasons,
+        trace=trace_row,
     )
 
 

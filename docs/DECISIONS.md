@@ -4261,3 +4261,102 @@ league, corrupted-localStorage safety, and cross-reload state persistence. Not l
 actual in-progress Sleeper draft (neither registered league has one right now), so the
 auto-recommend-on-my-turn trigger and the 8s polling cadence are unit/integration-verified
 (the turn-detection math against real historical picks) but not watched fire in real time.
+
+## D73 — Production-readiness hardening pass ahead of a real draft: one real live-draft roster-correctness bug fixed, one real unhandled-exception bug fixed, a decision trace exposed for a future Claude layer, and two frontend live-draft UI bugs fixed. No scoring/methodology change.
+
+Hardening request (not a strategy/model change): audit the full live-draft path (Sleeper ->
+league/roster context -> draft state -> recommendation -> UI) for production risk ahead of a
+real draft, and prepare a clean, observable decision-contract seam for a future Claude
+strategic-reasoning layer, without touching `league/draft.py`'s scoring formula, VORP/MSV/
+replacement methodology, or any model. Traced the real request path end to end rather than
+trusting existing tests alone, per the request's own instruction.
+
+**1. Real, load-bearing correctness bug: mid-draft roster resolution could silently miss this
+team's own just-drafted players.** `POST /league/{id}/draft`'s roster resolution
+(`resolve_roster_selection`) reads `GET /league/{id}/rosters` (Sleeper's roster snapshot).
+Checked against docs.sleeper.com directly (not assumed): Sleeper's own API docs do **not**
+state that this endpoint's `players` array updates incrementally as a live draft progresses —
+only that `GET /draft/{id}/picks` does. If rosters lag the live draft (undocumented either way),
+every recommendation for the rest of that draft would price marginal starter value (D60/D63/D67)
+against a roster missing this team's own picks so far — exactly the "recommendation reflects the
+correct roster state" failure Phase 3 of this audit targeted. Fixed in
+`api/routers/league.py::_augment_with_live_draft_picks`: unions this roster's own players from
+the SAME authoritative picks feed `GET /league/{id}/sleeper-draft` already uses (proven
+live-accurate) into the `league_rosters`-derived roster, rather than replacing it outright (a
+keeper/dynasty roster's pre-draft players are never in the picks feed and still need
+`league_rosters`). Best-effort: a Sleeper failure here degrades to the pre-fix behavior rather
+than failing the whole recommendation. Verified against two REAL live Sleeper leagues
+(`dilworth`, `boys_of_fall`) that the augmentation code path executes cleanly against genuine
+completed-draft data (180 and 40 real picks respectively) with zero exceptions; no live
+in-progress draft was available to observe the exact lagging behavior in real time (documented
+limitation, not faked). 2 new regression tests pin both the union and the no-duplication case.
+
+**2. Real bug: a genuine Sleeper 429/5xx or a malformed (non-JSON) 200 response was an unhandled
+exception, not a graceful failure.** `sources/sleeper.py::fetch()` only translated
+`httpx.ProxyError`/`httpx.TransportError` into `SourceError`; a real HTTP error status
+(`resp.raise_for_status()`) or a malformed body (`resp.json()`) raised a raw `httpx.HTTPStatusError`
+or `json.JSONDecodeError` that is neither a `SourceError` nor a `RuntimeError` — invisible to
+every `except SourceError`/`except RuntimeError` handler in `api/routers/league.py`, so it would
+have surfaced as an unhandled 500 instead of the intended "Sleeper temporarily unavailable" 503
+during a live draft's 8s polling. Both paths now wrap into `SourceError`. 7 new unit tests
+(`tests/unit/test_sleeper_source.py`) cover 5xx, 429, malformed-200, connect-timeout, blocked-
+egress, genuine-404, and the healthy-response case.
+
+**3. Decision trace exposed for observability and a future Claude seam (Phase 4/5).**
+`recommend_draft_pick` already computed a full scored candidate list, a runner-up, and the
+draft-state inputs it scored against, then discarded everything but the winner's id, its score,
+and a text `reasons` list before it reached the API. Added `DraftDecisionTrace` (`league/draft.py`)
+— season/ecr_type/current & next pick/pool size/roster size, the runner-up id, the score gap to
+it, and the full (already-top_n-limited) candidate list with each candidate's score, VORP,
+marginal starter value, confidence, and survival probability — computing nothing new, only
+retaining what already existed. Surfaced as `DecisionResponse.trace` (new optional field, so
+existing clients are unaffected) and persisted into the existing free-form `provenance_json`
+column of the `decisions` table (no schema migration) so a decision made during a real draft can
+be reconstructed afterward, not just observed live. `DraftView.tsx` renders the runner-up gap and
+a collapsible full-candidate table. This is the concrete answer to "what is calculated but
+discarded before reaching the UI" (Phase 4C): the whole candidate list and its score components.
+7 new unit/API tests cover the trace's contents, the runner-up/score-gap math, and provenance
+persistence.
+
+**4. Two real frontend live-draft bugs in `DraftView.tsx`.** (a) The auto-recommend-on-my-turn
+transition ref (`wasUsersTurn`) was never reset on a league/roster switch: switching into a
+different Sleeper league/roster that also happened to already be on the user's turn would read
+as "no transition" (still `true` from the previous league) and silently skip the auto-
+recommendation. Fixed with a reset effect keyed on `[leagueId, rosterId]`. (b) `runDraft()` could
+fire (via the "Who should I take?" button, before the guard existed) before the first Sleeper
+draft-state poll resolved, computing `available_player_ids` as if nobody had been drafted yet —
+a real "recommendation reflects the correct board state" risk on initial page load mid-draft.
+Fixed by disabling the button (and short-circuiting `runDraft`) until the first sync completes,
+and separately disabling it once the draft reports `complete`. Also added a stale-recommendation
+banner: the pick count at the moment a recommendation was computed is compared against the live
+poll on every render, and a banner tells the user to refresh if a new pick has landed since —
+Phase 3/6's "no stale recommendation survives a material board change," made visible rather than
+silently possible.
+
+**What was NOT changed:** `league/replacement.py`, `league/opportunity_cost.py`,
+`league/roster.py`'s scoring, every `models/`/`features/`/`evaluation/` module, and
+`recommend_draft_pick`'s score formula are byte-identical except for the additive trace
+assembly at the very end (after `best`/`top` are already selected). No new pre-registration, no
+benchmark run — none was needed, since nothing about what gets recommended changed.
+
+**Real-world verification (Phase 9):** registered both real live leagues used throughout this
+project (`dilworth`, 12-team; `boys_of_fall`, 10-team) against a running instance of the real
+API (fresh, unseeded DuckDB — no projection data, so this exercises Sleeper connectivity/
+identity-bridging/draft-reconstruction, not scoring). Confirmed live: real team/roster fetch,
+real completed-draft reconstruction (180 and 40 real picks respectively, correct snake order),
+turn-detection correctly degrading to `None` on a real completed draft, graceful 404/422 (never
+500) for an unregistered league, a malformed Sleeper league id, and a recommendation request
+against a database with no projections loaded. **Limitation, not faked:** both real leagues are
+already `in_season` for 2026 (already drafted) — no in-progress draft was available, so the
+undocumented mid-draft roster-freshness question in item 1 and the live 8s-polling/auto-
+recommend UI path are verified by realistic mocked-Sleeper-shape unit/integration tests, not
+watched fire against a real live draft.
+
+**Verification summary:** 866 offline tests pass (up from 853: 2 new roster-augmentation API
+tests, 4 new decision-trace unit tests, 2 new decision-trace API tests, 7 new Sleeper
+failure-mode unit tests), `ruff`/`ruff format`/`check_no_secrets.py` clean, frontend
+`tsc -b && vite build` clean, frontend `oxlint` clean (zero new warnings — diffed against the
+pre-change baseline). No autonomous Sleeper pick submission exists anywhere in this codebase
+(grepped repo-wide for any write/mutating call to Sleeper) — the recommendation/action boundary
+Phase 7 asked about is trivially, currently satisfied because the action side does not exist yet;
+building it (hard legality validation, then submission) remains future work, not started here.

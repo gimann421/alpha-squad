@@ -120,6 +120,27 @@ class DraftCandidate:
 
 
 @dataclass
+class DraftDecisionTrace:
+    """The minimum decision trace needed to answer "why did Alpha recommend this player at
+    this exact moment" after the fact, and the structured seam a future Claude strategic
+    layer would read `DecisionResponse.trace` through (docs: 2026-09-04 hardening pass,
+    Phase 4/5). Every field here was already computed inside `recommend_draft_pick` and
+    previously discarded once `DraftRecommendation.recommendation`/`alternatives` (ids only)
+    were extracted -- this does not compute anything new and does not change what gets
+    recommended, only what is retained about the recommendation that was already made."""
+
+    season: int
+    ecr_type: str
+    current_pick_overall: int | None
+    next_pick_overall: int | None
+    available_pool_size: int
+    roster_size: int | None
+    runner_up_player_id: str | None
+    score_gap_to_runner_up: float | None
+    top_candidates: list[DraftCandidate]
+
+
+@dataclass
 class DraftRecommendation:
     recommendation: str
     alternatives: list[str]
@@ -127,6 +148,7 @@ class DraftRecommendation:
     confidence: float
     reasons: list[str]
     candidates: list[DraftCandidate]
+    trace: DraftDecisionTrace
 
 
 def _confidence_for(con: duckdb.DuckDBPyConnection, player_id: str, season: int) -> float | None:
@@ -403,6 +425,18 @@ def recommend_draft_pick(
         )
 
     best = top[0]
+    runner_up = top[1] if len(top) > 1 else None
+    trace = DraftDecisionTrace(
+        season=season,
+        ecr_type=ecr_type,
+        current_pick_overall=current_pick_overall,
+        next_pick_overall=next_pick_overall,
+        available_pool_size=len(available_player_ids),
+        roster_size=len(roster_player_ids) if roster_player_ids is not None else None,
+        runner_up_player_id=runner_up.player_id if runner_up is not None else None,
+        score_gap_to_runner_up=(best.score - runner_up.score) if runner_up is not None else None,
+        top_candidates=top,
+    )
     return DraftRecommendation(
         recommendation=best.player_id,
         alternatives=[c.player_id for c in top[1:]],
@@ -410,4 +444,5 @@ def recommend_draft_pick(
         confidence=best.confidence if best.confidence is not None else 0.5,
         reasons=best.reasons,
         candidates=top,
+        trace=trace,
     )

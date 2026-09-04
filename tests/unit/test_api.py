@@ -1272,3 +1272,201 @@ class TestDraftCallSiteRosterParity:
 
         assert not any("marginal starter value" in r for r in blind["reasons"])
         assert any("marginal starter value" in r for r in aware["reasons"])
+
+    def test_a_live_draft_pick_not_yet_in_league_rosters_still_counts_as_mine(
+        self, con, client, monkeypatch
+    ):
+        """Regression, 2026-09-04 hardening pass: Sleeper's own docs do not promise
+        `GET /league/{id}/rosters` updates its `players` array incrementally as a live draft
+        progresses -- only that `GET /draft/{id}/picks` does (verified against docs.sleeper.com).
+        A player this roster just drafted must still count toward roster fit / marginal starter
+        value even when `league_rosters` hasn't (or may not) have caught up yet."""
+        import json as _json
+
+        import httpx
+
+        from tests.fixtures.httpx_fakes import FakeGetResponse
+
+        self._seed_candidate(con, "p1", "QB", 300.0)
+        _seed_player(con, "mine_rb", "My RB", "RB")
+        con.execute(
+            "INSERT INTO player_id_map (id_type, id_value, player_id, source) "
+            "VALUES ('sleeper_id', '7001', 'mine_rb', 'test')"
+        )
+
+        league_body = {
+            "league_id": "999",
+            "total_rosters": 1,
+            "roster_positions": ["QB", "RB", "BN"],
+            "scoring_settings": {},
+            "settings": {"type": 2},
+        }
+        rosters_body = [{"roster_id": 1, "owner_id": "u1", "players": []}]  # lags the live draft
+        users_body = [{"user_id": "u1", "display_name": "gimann", "metadata": {}}]
+        drafts_body = [{"draft_id": "d1", "status": "drafting"}]
+        draft_obj = {
+            "draft_id": "d1",
+            "status": "drafting",
+            "type": "snake",
+            "settings": {"teams": 1, "rounds": 2},
+            "slot_to_roster_id": {"1": 1},
+        }
+        picks_body = [
+            {"pick_no": 1, "round": 1, "roster_id": 1, "draft_slot": 1, "player_id": "7001"}
+        ]
+
+        def fake_get(url, **kwargs):
+            if url.endswith("/rosters"):
+                body = rosters_body
+            elif url.endswith("/users"):
+                body = users_body
+            elif url.endswith("/picks"):
+                body = picks_body
+            elif url.endswith("/drafts"):
+                body = drafts_body
+            elif "/draft/" in url:
+                body = draft_obj
+            else:
+                body = league_body
+            return FakeGetResponse(200, body, _json.dumps(body).encode())
+
+        monkeypatch.setattr(httpx, "get", fake_get)
+        client.post("/league/register", json={"sleeper_league_id": "999", "league_id": "live_test"})
+
+        captured = self._spy_on_engine(monkeypatch)
+        r = client.post(
+            "/league/live_test/draft",
+            json={"season": 2025, "roster_id": 1, "available_player_ids": ["p1"]},
+        )
+
+        assert r.status_code == 200
+        assert "mine_rb" in captured["roster_player_ids"]
+        assert "RB" in captured["roster_positions"]
+
+    def test_league_rosters_already_reflecting_the_pick_is_not_duplicated(
+        self, con, client, monkeypatch
+    ):
+        """If `league_rosters` DOES already carry a just-drafted player (docs.sleeper.com does
+        not rule this out either), the live-picks union must be a no-op, not a duplicate."""
+        import json as _json
+
+        import httpx
+
+        from tests.fixtures.httpx_fakes import FakeGetResponse
+
+        self._seed_candidate(con, "p1", "QB", 300.0)
+        _seed_player(con, "mine_rb", "My RB", "RB")
+        con.execute(
+            "INSERT INTO player_id_map (id_type, id_value, player_id, source) "
+            "VALUES ('sleeper_id', '7001', 'mine_rb', 'test')"
+        )
+
+        league_body = {
+            "league_id": "998",
+            "total_rosters": 1,
+            "roster_positions": ["QB", "RB", "BN"],
+            "scoring_settings": {},
+            "settings": {"type": 2},
+        }
+        rosters_body = [{"roster_id": 1, "owner_id": "u1", "players": ["7001"]}]  # already current
+        users_body = [{"user_id": "u1", "display_name": "gimann", "metadata": {}}]
+        drafts_body = [{"draft_id": "d2", "status": "drafting"}]
+        draft_obj = {
+            "draft_id": "d2",
+            "status": "drafting",
+            "type": "snake",
+            "settings": {"teams": 1, "rounds": 2},
+            "slot_to_roster_id": {"1": 1},
+        }
+        picks_body = [
+            {"pick_no": 1, "round": 1, "roster_id": 1, "draft_slot": 1, "player_id": "7001"}
+        ]
+
+        def fake_get(url, **kwargs):
+            if url.endswith("/rosters"):
+                body = rosters_body
+            elif url.endswith("/users"):
+                body = users_body
+            elif url.endswith("/picks"):
+                body = picks_body
+            elif url.endswith("/drafts"):
+                body = drafts_body
+            elif "/draft/" in url:
+                body = draft_obj
+            else:
+                body = league_body
+            return FakeGetResponse(200, body, _json.dumps(body).encode())
+
+        monkeypatch.setattr(httpx, "get", fake_get)
+        client.post("/league/register", json={"sleeper_league_id": "998", "league_id": "dup_test"})
+
+        captured = self._spy_on_engine(monkeypatch)
+        r = client.post(
+            "/league/dup_test/draft",
+            json={"season": 2025, "roster_id": 1, "available_player_ids": ["p1"]},
+        )
+
+        assert r.status_code == 200
+        assert captured["roster_player_ids"] == ["mine_rb"]
+
+
+class TestDraftDecisionTraceEndpoint:
+    """The served `/league/{id}/draft` response and its persisted `decisions` row must carry
+    the structured decision trace (2026-09-04 hardening pass, Phase 4/5) -- observability
+    without changing what gets recommended."""
+
+    def _seed_candidate(self, con, player_id, position, points, ecr_rank=1.0):
+        _seed_player(con, player_id, f"Player {player_id}", position)
+        con.execute(
+            "INSERT INTO uncertainty_predictions (prediction_id, player_id, season, position, "
+            "model_version, feature_version, point_prediction, confidence, calibration_season, "
+            "predicted_at) VALUES (?, ?, 2025, ?, 'uncertainty_catboost_v1', 'fv1', ?, 0.8, "
+            "2024, current_timestamp)",
+            [f"pred_{player_id}", player_id, position, points],
+        )
+        con.execute(
+            "INSERT INTO market_snapshot (player_id, scrape_date, ecr_type, position, ecr_rank, "
+            "page_type) VALUES (?, '2025-08-01', 'ro', ?, ?, 'redraft-overall')",
+            [player_id, position, ecr_rank],
+        )
+
+    def test_response_trace_matches_recommendation_and_runner_up(self, con, client):
+        self._seed_candidate(con, "p1", "QB", 300.0, ecr_rank=1.0)
+        self._seed_candidate(con, "p2", "QB", 250.0, ecr_rank=2.0)
+
+        r = client.post(
+            "/league/target_league/draft",
+            json={"season": 2025, "available_player_ids": ["p1", "p2"], "top_n": 5},
+        )
+
+        assert r.status_code == 200
+        body = r.json()
+        trace = body["trace"]
+        assert trace is not None
+        assert trace["season"] == 2025
+        assert trace["available_pool_size"] == 2
+        assert trace["runner_up_player_id"] == body["alternatives"][0]
+        assert trace["score_gap_to_runner_up"] >= 0
+        assert [c["player_id"] for c in trace["top_candidates"]] == [
+            body["recommendation"],
+            *body["alternatives"],
+        ]
+
+    def test_trace_is_persisted_into_the_decision_row_provenance(self, con, client):
+        import json as _json
+
+        self._seed_candidate(con, "p1", "QB", 300.0)
+
+        r = client.post(
+            "/league/target_league/draft",
+            json={"season": 2025, "available_player_ids": ["p1"]},
+        )
+        decision_id = r.json()["decision_id"]
+
+        row = con.execute(
+            "SELECT provenance_json FROM decisions WHERE decision_id = ?", [decision_id]
+        ).fetchone()
+        provenance = _json.loads(row[0])
+        assert provenance["source"] == "api"
+        assert provenance["trace"]["season"] == 2025
+        assert provenance["trace"]["top_candidates"][0]["player_id"] == "p1"

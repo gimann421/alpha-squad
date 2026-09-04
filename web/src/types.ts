@@ -152,6 +152,29 @@ export interface SimulationResponse {
   players: PlayerSimResultRow[];
 }
 
+export interface DraftCandidateTraceRow {
+  player_id: string;
+  position: string;
+  score: number;
+  vorp: number;
+  marginal_starter_value: number | null;
+  confidence: number | null;
+  survival_probability: number | null;
+  reasons: string[];
+}
+
+export interface DraftDecisionTrace {
+  season: number;
+  ecr_type: string;
+  current_pick_overall: number | null;
+  next_pick_overall: number | null;
+  available_pool_size: number;
+  roster_size: number | null;
+  runner_up_player_id: string | null;
+  score_gap_to_runner_up: number | null;
+  top_candidates: DraftCandidateTraceRow[];
+}
+
 export interface DecisionResponse {
   decision_id: string;
   recommendation: string;
@@ -160,6 +183,7 @@ export interface DecisionResponse {
   confidence: number | null;
   reasons: string[];
   action?: string | null;
+  trace?: DraftDecisionTrace | null;
 }
 
 export interface ProvenanceResponse {
