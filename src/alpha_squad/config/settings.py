@@ -30,6 +30,15 @@ class Settings(BaseSettings):
     fantasypros_api_key: str | None = Field(default=None, validation_alias="FANTASYPROS_API_KEY")
     cfbd_api_key: str | None = Field(default=None, validation_alias="CFBD_API_KEY")
 
+    # Claude strategic decision layer (Stage 1, docs/DECISIONS.md D74). Absent key means the
+    # feature is simply unavailable -- strategy/provider.py degrades to a clear "unavailable"
+    # status rather than erroring, the same discipline fantasypros/cfbd already follow above.
+    anthropic_api_key: str | None = Field(default=None, validation_alias="ANTHROPIC_API_KEY")
+    anthropic_model: str = Field(default="claude-opus-5", validation_alias="ANTHROPIC_MODEL")
+    anthropic_timeout_seconds: float = Field(
+        default=20.0, validation_alias="ANTHROPIC_TIMEOUT_SECONDS"
+    )
+
     @property
     def raw_dir(self) -> Path:
         return self.data_dir / "raw"

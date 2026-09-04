@@ -4360,3 +4360,89 @@ pre-change baseline). No autonomous Sleeper pick submission exists anywhere in t
 (grepped repo-wide for any write/mutating call to Sleeper) — the recommendation/action boundary
 Phase 7 asked about is trivially, currently satisfied because the action side does not exist yet;
 building it (hard legality validation, then submission) remains future work, not started here.
+
+## D74 — Stage 1 Claude strategic decision layer shipped on top of Alpha's quantitative engine, behind a new opt-in endpoint. No change to Alpha's scoring, projections, VORP, MSV, replacement, or survival methodology.
+
+Product request: give Claude a structured, bounded seam to review Alpha's own draft
+recommendation and either agree or strategically override it, with the user still manually
+approving every pick. Explicitly NOT autonomous drafting — nothing in this change calls
+Sleeper, writes draft state, or executes an action; every code path here ends at a
+recommendation object returned to the user.
+
+**Architecture** (new `strategy/` package, ~600 lines, zero changes to `league/`,
+`models/`, `features/`, or `evaluation/`):
+
+- `strategy/contracts.py` — the two typed boundaries. `ClaudeDecisionContext` (input) is built
+  entirely from fields the pre-Claude hardening pass already computed and exposed
+  (`league/draft.py::DraftDecisionTrace`, D73) plus `roster_need` (`league/roster.py`,
+  already called inside `recommend_draft_pick` for the same inputs) — nothing here is
+  independently fetched or re-derived. `ClaudeDraftDecision` (output) is a `pydantic` model
+  with `extra="forbid"`, a `Literal["FOLLOW_ALPHA","OVERRIDE_ALPHA"]` decision field, and a
+  `model_validator` enforcing that an override always carries a non-empty reason — a
+  self-consistency rule a bare JSON schema cannot express.
+- `strategy/context_builder.py` — `build_decision_context()` assembles the context from an
+  already-computed `DraftRecommendation`; computes a `context_fingerprint`
+  (`md5(league_id:season:current_pick:sorted(candidate_ids))`) identifying the exact board
+  state reasoned over, for staleness detection.
+- `strategy/provider.py` — the LLM boundary, mirroring `sources/base.py`'s existing
+  `SourceError`/`SourceBlockedError` taxonomy: `ClaudeProvider` (abstract),
+  `AnthropicClaudeProvider` (real `anthropic` SDK call, JSON-schema-constrained structured
+  output via `output_config.format` — not `messages.parse()`, so `effort` can be set
+  explicitly), `FakeClaudeProvider` (the only provider any test in this repo uses). Every real
+  Anthropic SDK error (`RateLimitError`, `APITimeoutError`, `APIConnectionError`,
+  `AuthenticationError`, `APIStatusError`, a `refusal` stop reason, non-JSON output, schema
+  validation failure) is translated into `ClaudeUnavailableError`/`ClaudeInvalidResponseError`.
+  `PROMPT_VERSION = "draft_strategy_v1"` — a plain string, not a prompt-management system, per
+  the request's own "do not build one" instruction.
+- `strategy/review.py` — `get_strategic_review()` calls the provider, then hard-validates the
+  result independently of the pydantic schema: `selected_player_id` must be one of the
+  candidates Claude was actually shown (bounding Claude's action space to Alpha's own top-N
+  shortlist, never the full board), FOLLOW_ALPHA must name Alpha's own pick, OVERRIDE_ALPHA
+  must name a different one. Any failure (provider error OR hard-validation rejection) is
+  persisted with a non-"ok" `status` and NEVER repaired — the caller falls back to Alpha's
+  already-computed, already-valid recommendation, which is unaffected either way since it was
+  computed first and independently.
+- `storage/schema.py` — new `claude_decisions` table (`M32_CLAUDE_STRATEGY_DDL`): one row per
+  review, storing the full context JSON, the raw decision JSON (even when rejected, for
+  debugging), status, agreement, confidence, reasoning, model, prompt version, and a nullable
+  `actual_pick_player_id` reserved for future reconciliation against the real Sleeper
+  draft-picks feed (not built in this pass — see Next Phase).
+- `api/routers/league.py` — new `POST /league/{id}/draft/claude-review`. Refactored
+  `post_draft`'s Alpha-computation core into `_recommend_draft_pick_for_request` (roster
+  resolution, live-draft-pick augmentation, the `recommend_draft_pick` call) so the new
+  endpoint calls the IDENTICAL function `POST /draft` calls — verified byte-identical output
+  for the same inputs (`test_api_claude_review.py::test_alpha_is_always_returned_and_matches_draft_endpoint`).
+  `POST /draft` itself is behaviorally unchanged (confirmed: its own diff is a pure
+  extract-and-call refactor, no logic changed).
+- `web/src/components/DraftView.tsx` — a separate, opt-in "Get Claude's strategic review"
+  button next to the existing "Who should I take?" (never automatic on every pick — cost/
+  latency discipline for a live draft, Phase 15/16). Non-blocking: Alpha's own recommendation
+  flow is completely untouched by this addition. Shows agree/override, confidence, reasons,
+  risk flags, missing-information disclosures, and a staleness banner reusing the exact
+  pick-count mechanism the pre-Claude hardening pass already built for Alpha's own
+  recommendation (D73's `decisionIsStale`), applied identically to the Claude review.
+
+**Prompt design** (`strategy/provider.py::SYSTEM_PROMPT`): explicitly frames Claude as a
+reviewer, not an independent opinion — "Alpha is the quantitative authority... you do not
+compute any of that... Given Alpha's recommendation and the current draft state, should we
+follow it or strategically override it?" Instructs Claude to use only supplied information, put
+anything missing in `missing_information` rather than guessing, never chase an unevidenced
+"positional run," and require a concrete supplied-context reason for any override — "most
+picks, the correct answer is Alpha is right, follow it." No position-specific heuristics are
+hardcoded anywhere (no "wait on QB," no round-based rules) — per the request's own
+anti-overfitting instruction, Claude reasons from the supplied state each time, nothing is
+templated from past examples.
+
+**Real API smoke test: NOT performed.** No `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`, `ant`
+CLI, or OAuth profile is present in this sandbox (verified: env grep, `which ant`, `~/.config/
+anthropic/`) — this is a data/build sandbox for Alpha Squad, not itself authenticated to the
+Anthropic API as an application credential. Documented as a limitation per the request's own
+"do not block the implementation" instruction, not faked. Every other layer is exercised
+against a mocked `anthropic.Anthropic` client (12 tests covering every real SDK error type) or
+`FakeClaudeProvider` (24 tests), never a real network call.
+
+**Verification:** 906 offline tests pass (up from 866: 31 in `test_strategy.py`, 9 in
+`test_api_claude_review.py`), `ruff`/`ruff format`/`check_no_secrets.py` clean, frontend
+`tsc -b && vite build` and `oxlint` clean (zero new warnings). Full diff touches zero files
+under `league/`, `models/`, `features/`, `evaluation/` — confirmed by `git diff --stat` against
+those paths returning empty.

@@ -8,6 +8,7 @@ from __future__ import annotations
 from pydantic import BaseModel
 
 from alpha_squad.market.edge import DEFAULT_ECR_TYPE
+from alpha_squad.strategy.contracts import ClaudeDraftDecision
 
 
 class PlayerSummary(BaseModel):
@@ -453,3 +454,29 @@ class DecisionResponse(BaseModel):
     reasons: list[str]
     action: str | None = None
     trace: DraftDecisionTrace | None = None
+
+
+class ClaudeDraftReviewRequest(DraftRequest):
+    """Same fields `POST /league/{id}/draft` already takes -- this endpoint recomputes the
+    IDENTICAL Alpha recommendation (same call, same inputs) before handing it to Claude, so
+    there is no second decision engine and no risk of reviewing a different recommendation
+    than the one already shown to the user."""
+
+    is_users_turn: bool | None = None
+
+
+class ClaudeReviewResponse(BaseModel):
+    """Alpha's recommendation is `alpha` -- byte-identical in shape to what `/draft` itself
+    returns. Everything else is Claude's review of it; `status != "ok"` means Claude's opinion
+    could not be trusted for this pick and the frontend should show Alpha's own recommendation
+    with a non-blocking "Claude unavailable" indicator (Phase 6)."""
+
+    claude_decision_id: str
+    status: str
+    error_message: str | None
+    context_fingerprint: str
+    alpha: DecisionResponse
+    decision: ClaudeDraftDecision | None
+    model: str | None
+    prompt_version: str
+    agrees_with_alpha: bool | None

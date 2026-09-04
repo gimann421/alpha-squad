@@ -186,6 +186,32 @@ export interface DecisionResponse {
   trace?: DraftDecisionTrace | null;
 }
 
+// Stage 1 Claude strategic decision layer (docs/DECISIONS.md D74). Mirrors
+// strategy/contracts.py::ClaudeDraftDecision and api/schemas.py::ClaudeReviewResponse.
+export interface ClaudeDraftDecision {
+  decision: "FOLLOW_ALPHA" | "OVERRIDE_ALPHA";
+  selected_player_id: string;
+  confidence: number;
+  override_reason: string | null;
+  key_factors: string[];
+  risk_flags: string[];
+  missing_information: string[];
+}
+
+export type ClaudeReviewStatus = "ok" | "claude_unavailable" | "invalid_response" | "validation_failed";
+
+export interface ClaudeReviewResponse {
+  claude_decision_id: string;
+  status: ClaudeReviewStatus;
+  error_message: string | null;
+  context_fingerprint: string;
+  alpha: DecisionResponse;
+  decision: ClaudeDraftDecision | null;
+  model: string | null;
+  prompt_version: string;
+  agrees_with_alpha: boolean | null;
+}
+
 export interface ProvenanceResponse {
   entity_type: string;
   entity_id: string;

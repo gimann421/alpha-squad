@@ -12,6 +12,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from alpha_squad.api.deps import get_db
 from alpha_squad.api.schemas import (
     ActionCenterResponse,
+    ClaudeDraftReviewRequest,
+    ClaudeReviewResponse,
     DecisionResponse,
     DraftCandidateTraceRow,
     DraftDecisionTrace,
@@ -41,7 +43,7 @@ from alpha_squad.league.context import (
     resolve_league,
 )
 from alpha_squad.league.decisions import record_decision
-from alpha_squad.league.draft import recommend_draft_pick
+from alpha_squad.league.draft import DraftRecommendation, recommend_draft_pick
 from alpha_squad.league.replacement import load_season_projections
 from alpha_squad.league.roster import roster_need
 from alpha_squad.league.roster_import import (
@@ -68,6 +70,9 @@ from alpha_squad.league.trade import (
 from alpha_squad.league.waiver import rank_waiver_targets, recommend_waiver_pickup
 from alpha_squad.market.edge import DEFAULT_ECR_TYPE
 from alpha_squad.sources.base import SourceError
+from alpha_squad.strategy.context_builder import build_decision_context
+from alpha_squad.strategy.provider import AnthropicClaudeProvider
+from alpha_squad.strategy.review import get_strategic_review
 
 router = APIRouter(prefix="/league", tags=["league"])
 
@@ -507,50 +512,54 @@ def get_roster_need(
     }
 
 
-@router.post("/{league_id}/draft", response_model=DecisionResponse)
-def post_draft(
-    league_id: str, body: DraftRequest, con: duckdb.DuckDBPyConnection = Depends(get_db)
-) -> DecisionResponse:
-    league = _league_or_404(league_id, con)
+def _recommend_draft_pick_for_request(
+    con: duckdb.DuckDBPyConnection, league: LeagueContext, body: DraftRequest
+) -> tuple[DraftRecommendation, list[str]]:
+    """The Alpha-computation core shared by `POST /draft` and `POST /draft/claude-review`
+    (Stage 1 Claude strategic layer, D74) -- identical roster resolution, live-draft-pick
+    augmentation, and `recommend_draft_pick` call either endpoint would otherwise have to
+    duplicate. Returns `(rec, roster_positions)`; `roster_positions` is also what
+    `strategy/context_builder.py` needs to recompute `roster_need` for Claude's context."""
     if body.available_player_ids is not None:
         available = set(body.available_player_ids)
     else:
         projections, _ = load_season_projections(con, body.season)
         available = set(projections)
-    try:
-        # `roster_id` already resolves this team's real players in order to read their
-        # positions (D53); the canonical ids come from that SAME fetch. Passing them is what
-        # lets the served engine run the benchmarked D63/D67 roster-aware value base
-        # (`msv + draft_aware_vorp`) instead of silently falling back to the VORP-only path
-        # that no benchmark selected. An explicit `roster_id` wins over an explicit
-        # `roster_player_ids` for exactly the reason it already wins over `roster_positions`:
-        # it is the real roster, not a client's picture of one.
-        selection = resolve_roster_selection(
-            con, get_settings(), league, roster_id=body.roster_id, fallback=body.roster_positions
+    # `roster_id` already resolves this team's real players in order to read their
+    # positions (D53); the canonical ids come from that SAME fetch. Passing them is what
+    # lets the served engine run the benchmarked D63/D67 roster-aware value base
+    # (`msv + draft_aware_vorp`) instead of silently falling back to the VORP-only path
+    # that no benchmark selected. An explicit `roster_id` wins over an explicit
+    # `roster_player_ids` for exactly the reason it already wins over `roster_positions`:
+    # it is the real roster, not a client's picture of one.
+    selection = resolve_roster_selection(
+        con, get_settings(), league, roster_id=body.roster_id, fallback=body.roster_positions
+    )
+    roster_player_ids = (
+        selection.player_ids if selection.player_ids is not None else body.roster_player_ids
+    )
+    roster_positions = selection.positions
+    if body.roster_id is not None:
+        roster_positions, roster_player_ids = _augment_with_live_draft_picks(
+            con, league, body.roster_id, roster_positions, roster_player_ids
         )
-        roster_player_ids = (
-            selection.player_ids if selection.player_ids is not None else body.roster_player_ids
-        )
-        roster_positions = selection.positions
-        if body.roster_id is not None:
-            roster_positions, roster_player_ids = _augment_with_live_draft_picks(
-                con, league, body.roster_id, roster_positions, roster_player_ids
-            )
-        rec = recommend_draft_pick(
-            con,
-            league,
-            body.season,
-            roster_positions,
-            available,
-            body.next_pick_overall,
-            body.ecr_type,
-            body.top_n,
-            current_pick_overall=body.current_pick_overall,
-            roster_player_ids=roster_player_ids,
-        )
-    except RuntimeError as e:
-        raise HTTPException(status_code=422, detail=str(e)) from e
-    trace_row = DraftDecisionTrace(
+    rec = recommend_draft_pick(
+        con,
+        league,
+        body.season,
+        roster_positions,
+        available,
+        body.next_pick_overall,
+        body.ecr_type,
+        body.top_n,
+        current_pick_overall=body.current_pick_overall,
+        roster_player_ids=roster_player_ids,
+    )
+    return rec, roster_positions
+
+
+def _trace_row_for(rec: DraftRecommendation) -> DraftDecisionTrace:
+    return DraftDecisionTrace(
         season=rec.trace.season,
         ecr_type=rec.trace.ecr_type,
         current_pick_overall=rec.trace.current_pick_overall,
@@ -573,6 +582,18 @@ def post_draft(
             for c in rec.trace.top_candidates
         ],
     )
+
+
+@router.post("/{league_id}/draft", response_model=DecisionResponse)
+def post_draft(
+    league_id: str, body: DraftRequest, con: duckdb.DuckDBPyConnection = Depends(get_db)
+) -> DecisionResponse:
+    league = _league_or_404(league_id, con)
+    try:
+        rec, _roster_positions = _recommend_draft_pick_for_request(con, league, body)
+    except RuntimeError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
+    trace_row = _trace_row_for(rec)
     decision_id = record_decision(
         con,
         "draft_pick",
@@ -598,6 +619,69 @@ def post_draft(
         confidence=rec.confidence,
         reasons=rec.reasons,
         trace=trace_row,
+    )
+
+
+@router.post("/{league_id}/draft/claude-review", response_model=ClaudeReviewResponse)
+def post_draft_claude_review(
+    league_id: str,
+    body: ClaudeDraftReviewRequest,
+    con: duckdb.DuckDBPyConnection = Depends(get_db),
+) -> ClaudeReviewResponse:
+    """Stage 1 Claude strategic decision layer (D74): recomputes the IDENTICAL Alpha
+    recommendation `POST /draft` would (same helper, same inputs -- never a second, divergent
+    decision engine), then asks Claude to review it. Alpha's own recommendation is always
+    returned and always valid even when Claude is unavailable, slow, or returns something
+    invalid -- `status` tells the caller which case this is (Phase 6); a non-"ok" status means
+    `decision` is None and the frontend shows Alpha's recommendation with a clear
+    Claude-unavailable indicator rather than blocking the draft.
+
+    No autonomous action: this endpoint only ever returns a recommendation for the user to
+    read and approve. Nothing here calls Sleeper or writes draft state anywhere."""
+    league = _league_or_404(league_id, con)
+    try:
+        rec, roster_positions = _recommend_draft_pick_for_request(con, league, body)
+    except RuntimeError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
+    trace_row = _trace_row_for(rec)
+    alpha_decision_id = record_decision(
+        con,
+        "draft_pick",
+        league.league_id,
+        body.season,
+        rec.recommendation,
+        rec.alternatives,
+        rec.expected_value,
+        rec.confidence,
+        rec.reasons,
+        {"source": "api_claude_review", "trace": trace_row.model_dump()},
+    )
+    alpha_response = DecisionResponse(
+        decision_id=alpha_decision_id,
+        recommendation=rec.recommendation,
+        alternatives=rec.alternatives,
+        expected_value=rec.expected_value,
+        confidence=rec.confidence,
+        reasons=rec.reasons,
+        trace=trace_row,
+    )
+
+    context = build_decision_context(
+        con, league, body.season, roster_positions, rec, is_users_turn=body.is_users_turn
+    )
+    provider = AnthropicClaudeProvider(get_settings())
+    review = get_strategic_review(con, provider, context, alpha_decision_id=alpha_decision_id)
+
+    return ClaudeReviewResponse(
+        claude_decision_id=review.claude_decision_id,
+        status=review.status,
+        error_message=review.error_message,
+        context_fingerprint=context.context_fingerprint,
+        alpha=alpha_response,
+        decision=review.decision,
+        model=review.model,
+        prompt_version=review.prompt_version,
+        agrees_with_alpha=review.agrees_with_alpha,
     )
 
 

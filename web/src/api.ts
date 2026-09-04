@@ -6,6 +6,7 @@
 
 import type {
   ActionCenterResponse,
+  ClaudeReviewResponse,
   DecisionResponse,
   DropCandidateRow,
   EdgeRow,
@@ -137,6 +138,23 @@ export const api = {
       top_n?: number;
     },
   ) => postJson<DecisionResponse>(`/league/${leagueId}/draft`, body),
+  // Stage 1 Claude strategic decision layer (D74): same request shape as postDraft, plus
+  // `is_users_turn` -- included in Claude's context, never used to hard-block the review.
+  postDraftClaudeReview: (
+    leagueId: string,
+    body: {
+      season: number;
+      roster_positions?: string[];
+      roster_id?: number;
+      roster_player_ids?: string[];
+      available_player_ids?: string[];
+      next_pick_overall?: number;
+      current_pick_overall?: number;
+      ecr_type?: string;
+      top_n?: number;
+      is_users_turn?: boolean | null;
+    },
+  ) => postJson<ClaudeReviewResponse>(`/league/${leagueId}/draft/claude-review`, body),
   postWaiver: (
     leagueId: string,
     body: {
