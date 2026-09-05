@@ -17,6 +17,8 @@ from alpha_squad.storage.db import init_db
 from alpha_squad.strategy.context_builder import build_decision_context
 from alpha_squad.strategy.contracts import ClaudeDraftDecision
 from alpha_squad.strategy.provider import (
+    PROMPT_VERSION,
+    SYSTEM_PROMPT,
     AnthropicClaudeProvider,
     ClaudeInvalidResponseError,
     ClaudeUnavailableError,
@@ -60,6 +62,22 @@ def _context(con):
         con, league, 2025, [], {"qb0", "qb1"}, next_pick_overall=25, current_pick_overall=10
     )
     return build_decision_context(con, league, 2025, [], rec, is_users_turn=True), rec
+
+
+class TestSystemPromptSurvivalGuard:
+    """The survival-double-counting guard (docs/DECISIONS.md D76): Alpha's score already prices
+    in a candidate's own survival probability, so the prompt must tell Claude not to treat a
+    recommended player's nonzero survival probability as a fresh reason to wait on it. Content
+    presence is the only thing unit-testable here -- whether the guard actually changes model
+    behavior needs a real Claude call, not a unit test."""
+
+    def test_prompt_contains_the_survival_double_counting_guard(self):
+        assert "not override" in SYSTEM_PROMPT
+        assert "survive" in SYSTEM_PROMPT
+        assert "already priced in" in SYSTEM_PROMPT
+
+    def test_prompt_version_was_bumped_for_the_guard(self):
+        assert PROMPT_VERSION == "draft_strategy_v2"
 
 
 class TestClaudeDraftDecisionContract:
@@ -417,7 +435,7 @@ class TestGetStrategicReview:
         fingerprint, model, prompt_version, context_json = row
         assert fingerprint == context.context_fingerprint
         assert model == "fake-claude-model"
-        assert prompt_version == "draft_strategy_v1"
+        assert prompt_version == PROMPT_VERSION
         assert json.loads(context_json)["context_fingerprint"] == context.context_fingerprint
 
 

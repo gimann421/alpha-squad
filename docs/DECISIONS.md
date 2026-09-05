@@ -4516,3 +4516,37 @@ draft, equivalent) staleness gate. Comment-only; no behavior changed.
 warnings, zero new). No changes to `league/`, `models/`, `features/`, `evaluation/`, or the
 Claude prompt/schema/validation logic itself -- this pass found one real frontend state bug and
 fixed it; everything else already worked as D73/D74 described.
+
+## D76 — Stage 1 Claude prompt: add the survival-double-counting guard, bump to `draft_strategy_v2`
+
+A pre-draft evaluation pass (structured replay of the real `recommend_draft_pick` ->
+`build_decision_context` pipeline against a synthetic-but-schema-accurate season, reasoned over
+by this session's own model under the exact unmodified `SYSTEM_PROMPT`/contract, since no
+`ANTHROPIC_API_KEY` was configured in that sandbox) found the prompt already guards against
+positional-run chasing and against overriding on bare personal opinion, but has no explicit
+guard against the mirror-image mistake: passing on Alpha's own recommended player because it
+"should still be there" at the next pick. `recommend_draft_pick`'s opportunity-cost term already
+prices a candidate's own survival probability into its score (D55), so treating that survival
+probability as *additional* evidence to wait would double-count it. No instance of this failure
+was actually observed in the eval pass -- this is a targeted, evidence-adjacent addition (the
+prompt already states the analogous guard for the alternative's survival probability; this
+closes the same gap for the recommended player's own), not a fix for an observed bug.
+
+Added one bullet to `SYSTEM_PROMPT` (`strategy/provider.py`), directly after the existing
+override-justification bullet it mirrors: "Do not override Alpha's own recommendation on the
+theory that it will 'survive' to your next pick -- Alpha's score already accounts for survival
+probability; treat a recommended player's own nonzero survival probability as already priced in,
+not as fresh evidence to wait." Bumped `PROMPT_VERSION` to `"draft_strategy_v2"` so any
+previously-persisted `claude_decisions` rows stay distinguishable from decisions made under the
+new prompt (the whole point of `PROMPT_VERSION` existing at all, D74). No other prompt text,
+schema, validation logic, candidate count/top-N, model, or effort setting changed -- see the
+eval's other findings (top-N, cost/latency) as open, undecided follow-ups, not part of this
+change.
+
+Test changes: two existing assertions that hardcoded the old literal `"draft_strategy_v1"`
+(`test_api_claude_review.py`, `test_strategy.py`) now compare against the real `PROMPT_VERSION`
+constant instead, so they can't silently drift from the source of truth on the next bump. Added
+`TestSystemPromptSurvivalGuard` (`test_strategy.py`): asserts the new sentence's key phrases are
+present in `SYSTEM_PROMPT` and that `PROMPT_VERSION == "draft_strategy_v2"`. Whether the guard
+changes real model behavior is not unit-testable and was not claimed -- that needs a real Claude
+call, which this change deliberately does not make.

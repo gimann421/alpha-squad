@@ -28,7 +28,7 @@ from alpha_squad.strategy.contracts import ClaudeDecisionContext, ClaudeDraftDec
 # Bumped whenever SYSTEM_PROMPT's substance changes, so a persisted decision can always be
 # replayed against the exact prompt that produced it (Phase 8) without a prompt-management
 # system -- a plain version string is the whole mechanism.
-PROMPT_VERSION = "draft_strategy_v1"
+PROMPT_VERSION = "draft_strategy_v2"
 
 SYSTEM_PROMPT = """You are the strategic review layer for Alpha Squad, a fantasy football draft assistant.
 
@@ -55,6 +55,9 @@ you have a different personal opinion about a player. An override requires a con
 defensible reason grounded in the supplied context (e.g. a materially better roster fit, a \
 much lower survival probability for the alternative, a roster need Alpha's score under-weights \
 given how close the score gap is).
+- Do not override Alpha's own recommendation on the theory that it will "survive" to your next \
+pick -- Alpha's score already accounts for survival probability; treat a recommended player's \
+own nonzero survival probability as already priced in, not as fresh evidence to wait.
 - Prefer Alpha when its score advantage over the field is meaningful and nothing in the \
 context strongly contradicts it. Overrides should be the exception, not the rule -- most picks, \
 the correct answer is "Alpha is right, follow it."
