@@ -4261,3 +4261,258 @@ league, corrupted-localStorage safety, and cross-reload state persistence. Not l
 actual in-progress Sleeper draft (neither registered league has one right now), so the
 auto-recommend-on-my-turn trigger and the 8s polling cadence are unit/integration-verified
 (the turn-detection math against real historical picks) but not watched fire in real time.
+
+## D73 — Production-readiness hardening pass ahead of a real draft: one real live-draft roster-correctness bug fixed, one real unhandled-exception bug fixed, a decision trace exposed for a future Claude layer, and two frontend live-draft UI bugs fixed. No scoring/methodology change.
+
+Hardening request (not a strategy/model change): audit the full live-draft path (Sleeper ->
+league/roster context -> draft state -> recommendation -> UI) for production risk ahead of a
+real draft, and prepare a clean, observable decision-contract seam for a future Claude
+strategic-reasoning layer, without touching `league/draft.py`'s scoring formula, VORP/MSV/
+replacement methodology, or any model. Traced the real request path end to end rather than
+trusting existing tests alone, per the request's own instruction.
+
+**1. Real, load-bearing correctness bug: mid-draft roster resolution could silently miss this
+team's own just-drafted players.** `POST /league/{id}/draft`'s roster resolution
+(`resolve_roster_selection`) reads `GET /league/{id}/rosters` (Sleeper's roster snapshot).
+Checked against docs.sleeper.com directly (not assumed): Sleeper's own API docs do **not**
+state that this endpoint's `players` array updates incrementally as a live draft progresses —
+only that `GET /draft/{id}/picks` does. If rosters lag the live draft (undocumented either way),
+every recommendation for the rest of that draft would price marginal starter value (D60/D63/D67)
+against a roster missing this team's own picks so far — exactly the "recommendation reflects the
+correct roster state" failure Phase 3 of this audit targeted. Fixed in
+`api/routers/league.py::_augment_with_live_draft_picks`: unions this roster's own players from
+the SAME authoritative picks feed `GET /league/{id}/sleeper-draft` already uses (proven
+live-accurate) into the `league_rosters`-derived roster, rather than replacing it outright (a
+keeper/dynasty roster's pre-draft players are never in the picks feed and still need
+`league_rosters`). Best-effort: a Sleeper failure here degrades to the pre-fix behavior rather
+than failing the whole recommendation. Verified against two REAL live Sleeper leagues
+(`dilworth`, `boys_of_fall`) that the augmentation code path executes cleanly against genuine
+completed-draft data (180 and 40 real picks respectively) with zero exceptions; no live
+in-progress draft was available to observe the exact lagging behavior in real time (documented
+limitation, not faked). 2 new regression tests pin both the union and the no-duplication case.
+
+**2. Real bug: a genuine Sleeper 429/5xx or a malformed (non-JSON) 200 response was an unhandled
+exception, not a graceful failure.** `sources/sleeper.py::fetch()` only translated
+`httpx.ProxyError`/`httpx.TransportError` into `SourceError`; a real HTTP error status
+(`resp.raise_for_status()`) or a malformed body (`resp.json()`) raised a raw `httpx.HTTPStatusError`
+or `json.JSONDecodeError` that is neither a `SourceError` nor a `RuntimeError` — invisible to
+every `except SourceError`/`except RuntimeError` handler in `api/routers/league.py`, so it would
+have surfaced as an unhandled 500 instead of the intended "Sleeper temporarily unavailable" 503
+during a live draft's 8s polling. Both paths now wrap into `SourceError`. 7 new unit tests
+(`tests/unit/test_sleeper_source.py`) cover 5xx, 429, malformed-200, connect-timeout, blocked-
+egress, genuine-404, and the healthy-response case.
+
+**3. Decision trace exposed for observability and a future Claude seam (Phase 4/5).**
+`recommend_draft_pick` already computed a full scored candidate list, a runner-up, and the
+draft-state inputs it scored against, then discarded everything but the winner's id, its score,
+and a text `reasons` list before it reached the API. Added `DraftDecisionTrace` (`league/draft.py`)
+— season/ecr_type/current & next pick/pool size/roster size, the runner-up id, the score gap to
+it, and the full (already-top_n-limited) candidate list with each candidate's score, VORP,
+marginal starter value, confidence, and survival probability — computing nothing new, only
+retaining what already existed. Surfaced as `DecisionResponse.trace` (new optional field, so
+existing clients are unaffected) and persisted into the existing free-form `provenance_json`
+column of the `decisions` table (no schema migration) so a decision made during a real draft can
+be reconstructed afterward, not just observed live. `DraftView.tsx` renders the runner-up gap and
+a collapsible full-candidate table. This is the concrete answer to "what is calculated but
+discarded before reaching the UI" (Phase 4C): the whole candidate list and its score components.
+7 new unit/API tests cover the trace's contents, the runner-up/score-gap math, and provenance
+persistence.
+
+**4. Two real frontend live-draft bugs in `DraftView.tsx`.** (a) The auto-recommend-on-my-turn
+transition ref (`wasUsersTurn`) was never reset on a league/roster switch: switching into a
+different Sleeper league/roster that also happened to already be on the user's turn would read
+as "no transition" (still `true` from the previous league) and silently skip the auto-
+recommendation. Fixed with a reset effect keyed on `[leagueId, rosterId]`. (b) `runDraft()` could
+fire (via the "Who should I take?" button, before the guard existed) before the first Sleeper
+draft-state poll resolved, computing `available_player_ids` as if nobody had been drafted yet —
+a real "recommendation reflects the correct board state" risk on initial page load mid-draft.
+Fixed by disabling the button (and short-circuiting `runDraft`) until the first sync completes,
+and separately disabling it once the draft reports `complete`. Also added a stale-recommendation
+banner: the pick count at the moment a recommendation was computed is compared against the live
+poll on every render, and a banner tells the user to refresh if a new pick has landed since —
+Phase 3/6's "no stale recommendation survives a material board change," made visible rather than
+silently possible.
+
+**What was NOT changed:** `league/replacement.py`, `league/opportunity_cost.py`,
+`league/roster.py`'s scoring, every `models/`/`features/`/`evaluation/` module, and
+`recommend_draft_pick`'s score formula are byte-identical except for the additive trace
+assembly at the very end (after `best`/`top` are already selected). No new pre-registration, no
+benchmark run — none was needed, since nothing about what gets recommended changed.
+
+**Real-world verification (Phase 9):** registered both real live leagues used throughout this
+project (`dilworth`, 12-team; `boys_of_fall`, 10-team) against a running instance of the real
+API (fresh, unseeded DuckDB — no projection data, so this exercises Sleeper connectivity/
+identity-bridging/draft-reconstruction, not scoring). Confirmed live: real team/roster fetch,
+real completed-draft reconstruction (180 and 40 real picks respectively, correct snake order),
+turn-detection correctly degrading to `None` on a real completed draft, graceful 404/422 (never
+500) for an unregistered league, a malformed Sleeper league id, and a recommendation request
+against a database with no projections loaded. **Limitation, not faked:** both real leagues are
+already `in_season` for 2026 (already drafted) — no in-progress draft was available, so the
+undocumented mid-draft roster-freshness question in item 1 and the live 8s-polling/auto-
+recommend UI path are verified by realistic mocked-Sleeper-shape unit/integration tests, not
+watched fire against a real live draft.
+
+**Verification summary:** 866 offline tests pass (up from 853: 2 new roster-augmentation API
+tests, 4 new decision-trace unit tests, 2 new decision-trace API tests, 7 new Sleeper
+failure-mode unit tests), `ruff`/`ruff format`/`check_no_secrets.py` clean, frontend
+`tsc -b && vite build` clean, frontend `oxlint` clean (zero new warnings — diffed against the
+pre-change baseline). No autonomous Sleeper pick submission exists anywhere in this codebase
+(grepped repo-wide for any write/mutating call to Sleeper) — the recommendation/action boundary
+Phase 7 asked about is trivially, currently satisfied because the action side does not exist yet;
+building it (hard legality validation, then submission) remains future work, not started here.
+
+## D74 — Stage 1 Claude strategic decision layer shipped on top of Alpha's quantitative engine, behind a new opt-in endpoint. No change to Alpha's scoring, projections, VORP, MSV, replacement, or survival methodology.
+
+Product request: give Claude a structured, bounded seam to review Alpha's own draft
+recommendation and either agree or strategically override it, with the user still manually
+approving every pick. Explicitly NOT autonomous drafting — nothing in this change calls
+Sleeper, writes draft state, or executes an action; every code path here ends at a
+recommendation object returned to the user.
+
+**Architecture** (new `strategy/` package, ~600 lines, zero changes to `league/`,
+`models/`, `features/`, or `evaluation/`):
+
+- `strategy/contracts.py` — the two typed boundaries. `ClaudeDecisionContext` (input) is built
+  entirely from fields the pre-Claude hardening pass already computed and exposed
+  (`league/draft.py::DraftDecisionTrace`, D73) plus `roster_need` (`league/roster.py`,
+  already called inside `recommend_draft_pick` for the same inputs) — nothing here is
+  independently fetched or re-derived. `ClaudeDraftDecision` (output) is a `pydantic` model
+  with `extra="forbid"`, a `Literal["FOLLOW_ALPHA","OVERRIDE_ALPHA"]` decision field, and a
+  `model_validator` enforcing that an override always carries a non-empty reason — a
+  self-consistency rule a bare JSON schema cannot express.
+- `strategy/context_builder.py` — `build_decision_context()` assembles the context from an
+  already-computed `DraftRecommendation`; computes a `context_fingerprint`
+  (`md5(league_id:season:current_pick:sorted(candidate_ids))`) identifying the exact board
+  state reasoned over, for staleness detection.
+- `strategy/provider.py` — the LLM boundary, mirroring `sources/base.py`'s existing
+  `SourceError`/`SourceBlockedError` taxonomy: `ClaudeProvider` (abstract),
+  `AnthropicClaudeProvider` (real `anthropic` SDK call, JSON-schema-constrained structured
+  output via `output_config.format` — not `messages.parse()`, so `effort` can be set
+  explicitly), `FakeClaudeProvider` (the only provider any test in this repo uses). Every real
+  Anthropic SDK error (`RateLimitError`, `APITimeoutError`, `APIConnectionError`,
+  `AuthenticationError`, `APIStatusError`, a `refusal` stop reason, non-JSON output, schema
+  validation failure) is translated into `ClaudeUnavailableError`/`ClaudeInvalidResponseError`.
+  `PROMPT_VERSION = "draft_strategy_v1"` — a plain string, not a prompt-management system, per
+  the request's own "do not build one" instruction.
+- `strategy/review.py` — `get_strategic_review()` calls the provider, then hard-validates the
+  result independently of the pydantic schema: `selected_player_id` must be one of the
+  candidates Claude was actually shown (bounding Claude's action space to Alpha's own top-N
+  shortlist, never the full board), FOLLOW_ALPHA must name Alpha's own pick, OVERRIDE_ALPHA
+  must name a different one. Any failure (provider error OR hard-validation rejection) is
+  persisted with a non-"ok" `status` and NEVER repaired — the caller falls back to Alpha's
+  already-computed, already-valid recommendation, which is unaffected either way since it was
+  computed first and independently.
+- `storage/schema.py` — new `claude_decisions` table (`M32_CLAUDE_STRATEGY_DDL`): one row per
+  review, storing the full context JSON, the raw decision JSON (even when rejected, for
+  debugging), status, agreement, confidence, reasoning, model, prompt version, and a nullable
+  `actual_pick_player_id` reserved for future reconciliation against the real Sleeper
+  draft-picks feed (not built in this pass — see Next Phase).
+- `api/routers/league.py` — new `POST /league/{id}/draft/claude-review`. Refactored
+  `post_draft`'s Alpha-computation core into `_recommend_draft_pick_for_request` (roster
+  resolution, live-draft-pick augmentation, the `recommend_draft_pick` call) so the new
+  endpoint calls the IDENTICAL function `POST /draft` calls — verified byte-identical output
+  for the same inputs (`test_api_claude_review.py::test_alpha_is_always_returned_and_matches_draft_endpoint`).
+  `POST /draft` itself is behaviorally unchanged (confirmed: its own diff is a pure
+  extract-and-call refactor, no logic changed).
+- `web/src/components/DraftView.tsx` — a separate, opt-in "Get Claude's strategic review"
+  button next to the existing "Who should I take?" (never automatic on every pick — cost/
+  latency discipline for a live draft, Phase 15/16). Non-blocking: Alpha's own recommendation
+  flow is completely untouched by this addition. Shows agree/override, confidence, reasons,
+  risk flags, missing-information disclosures, and a staleness banner reusing the exact
+  pick-count mechanism the pre-Claude hardening pass already built for Alpha's own
+  recommendation (D73's `decisionIsStale`), applied identically to the Claude review.
+
+**Prompt design** (`strategy/provider.py::SYSTEM_PROMPT`): explicitly frames Claude as a
+reviewer, not an independent opinion — "Alpha is the quantitative authority... you do not
+compute any of that... Given Alpha's recommendation and the current draft state, should we
+follow it or strategically override it?" Instructs Claude to use only supplied information, put
+anything missing in `missing_information` rather than guessing, never chase an unevidenced
+"positional run," and require a concrete supplied-context reason for any override — "most
+picks, the correct answer is Alpha is right, follow it." No position-specific heuristics are
+hardcoded anywhere (no "wait on QB," no round-based rules) — per the request's own
+anti-overfitting instruction, Claude reasons from the supplied state each time, nothing is
+templated from past examples.
+
+**Real API smoke test: NOT performed.** No `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`, `ant`
+CLI, or OAuth profile is present in this sandbox (verified: env grep, `which ant`, `~/.config/
+anthropic/`) — this is a data/build sandbox for Alpha Squad, not itself authenticated to the
+Anthropic API as an application credential. Documented as a limitation per the request's own
+"do not block the implementation" instruction, not faked. Every other layer is exercised
+against a mocked `anthropic.Anthropic` client (12 tests covering every real SDK error type) or
+`FakeClaudeProvider` (24 tests), never a real network call.
+
+**Verification:** 906 offline tests pass (up from 866: 31 in `test_strategy.py`, 9 in
+`test_api_claude_review.py`), `ruff`/`ruff format`/`check_no_secrets.py` clean, frontend
+`tsc -b && vite build` and `oxlint` clean (zero new warnings). Full diff touches zero files
+under `league/`, `models/`, `features/`, `evaluation/` — confirmed by `git diff --stat` against
+those paths returning empty.
+
+## D75 — Final pre-draft verification of D73/D74 (hardening + Claude Stage 1): one real bug found and fixed (league-switch state contamination), everything else confirmed working end to end. No scoring/strategy/methodology change.
+
+Verification pass, not a new build. Re-read `strategy/`, the router, and `DraftView.tsx` fresh
+(not from memory) and traced Sleeper -> roster -> Alpha -> `DraftDecisionTrace` ->
+`ClaudeDecisionContext` -> provider -> `ClaudeDraftDecision` -> hard validation -> API -> UI.
+
+**Real bug found and fixed: switching Sleeper leagues could show one league's Alpha/Claude
+recommendation as if it were current for a different league.** `<DraftView>` is not remounted
+on a league switch (no `key={leagueId}` in `App.tsx`), and neither `draftSync` nor
+`decision`/`claudeReview` were ever cleared when `leagueId`/`rosterId` changed. Switching from
+Sleeper league A to a different Sleeper league B left League A's fully-populated recommendation
+cards on screen, and left `draftSync` (drafted picks, current/next pick, `is_users_turn`)
+pointing at League A until League B's first poll resolved -- during which a click on either
+"Who should I take?" or "Get Claude's strategic review" would have built its request against
+the wrong league's board. The staleness banners made this worse rather than catching it: they
+compare `decisionPickCount`/`claudeReviewPickCount` (captured under League A) against
+`draftSync.drafted_player_ids.length`, and two unrelated leagues' pick counts can coincidentally
+match, so the wrong-league recommendation could show with no stale-warning at all. Fixed with
+one `useEffect` keyed on `[leagueId, rosterId]` that clears `draftSync`, `draftSyncError`,
+`decision`, `decisionError`, `decisionPickCount`, `claudeReview`, `claudeReviewError`, and
+`claudeReviewPickCount` the instant the connected league/roster changes -- the board and any
+prior recommendation are gone before the new league's data could ever be misread as current.
+
+**Also corrected a comment overclaim** (`DraftView.tsx`'s `claudeReviewIsStale`): it described
+`context_fingerprint` as "the authoritative identity check" performed "server-side," but nothing
+actually re-derives or compares it -- the pick-count comparison IS the real (and, for a live
+draft, equivalent) staleness gate. Comment-only; no behavior changed.
+
+**Verified working, end to end, with real evidence (not re-asserted from the prior session):**
+- Mocked-Claude cases A-E (agree, override, invalid-player-outside-pool, stale-decision-applied-
+  to-a-changed-board, provider-failure) — Case D added as a new test
+  (`test_fingerprint_changes_and_old_selection_is_rejected_against_the_new_board`): building a
+  second context after a real board change and re-validating the FIRST context's decision
+  against it correctly rejects it (`validation_failed`), proving a stale decision cannot survive
+  a material board change, not just that fingerprints differ.
+- Cross-league decision isolation: a new test
+  (`test_decisions_from_different_leagues_never_collide_or_contaminate`) confirms two reviews
+  from `target_league` and `legacy_2qb_dynasty` produce two distinct `claude_decisions` rows,
+  correctly tagged, never overwriting each other.
+- Real Sleeper, live: registered the real `dilworth` league fresh, confirmed real league
+  context/teams/rosters, a real 180-pick completed-draft reconstruction, and (new this pass) a
+  full `/draft/claude-review` call against a REAL Sleeper roster_id=1 -- seeding one synthetic
+  player mapped to a real rostered Sleeper player id (`11581`, genuinely on that roster) and
+  confirming the served roster correctly counted it as already-owned (`marginal_starter_value
+  +0.0`, the correct answer for "should I draft a player I already have"), the real live-picks
+  feed (`_augment_with_live_draft_picks`) executed with zero errors, and Claude correctly
+  reported `claude_unavailable` with the accurate `"no ANTHROPIC_API_KEY configured"` message
+  while Alpha's own recommendation was computed and persisted normally.
+- Real Anthropic credentials: still absent in this sandbox (re-verified: env grep, `which ant`,
+  `~/.config/anthropic/`) — real-call smoke test remains unverified, not faked, exactly as D74
+  already disclosed; nothing changed about that limitation this pass.
+- Security: grepped the full `web/src` tree for any Anthropic/credential reference (zero hits --
+  the key never reaches the browser), confirmed `anthropic_api_key` is read only in
+  `config/settings.py`/`strategy/provider.py`, confirmed no logging of settings/keys anywhere,
+  re-confirmed zero write/mutating HTTP calls to any external service anywhere in `src/
+  alpha_squad` (Claude cannot execute a Sleeper action because no such code path exists at all),
+  and confirmed `check_no_secrets.py` passes.
+- Cost/latency: re-measured against a realistic 150-player available pool (full-draft-board
+  scale) -- still exactly 5 candidates reach Claude regardless of pool size, ~1,220 total
+  tokens, zero secret-shaped strings in the serialized context.
+- Failure modes (Phase 6's 10 scenarios): all verified either by direct test, direct code
+  reading, or the real-Sleeper call above; the one genuine gap (league switching) is the bug
+  fixed above.
+
+**Verification summary:** 908 offline tests pass (up from 906: 2 new), `ruff`/`ruff format`/
+`check_no_secrets.py` clean, frontend `tsc -b && vite build` and `oxlint` clean (28 pre-existing
+warnings, zero new). No changes to `league/`, `models/`, `features/`, `evaluation/`, or the
+Claude prompt/schema/validation logic itself -- this pass found one real frontend state bug and
+fixed it; everything else already worked as D73/D74 described.

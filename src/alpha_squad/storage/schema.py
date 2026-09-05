@@ -787,6 +787,44 @@ M16_EVALUATION_DDL = [
     """,
 ]
 
+M32_CLAUDE_STRATEGY_DDL = [
+    # Stage 1 Claude strategic decision layer (docs/DECISIONS.md D74). One row per review
+    # request -- replayable independent of the `decisions` table (which only records Alpha's
+    # own recommendation): `context_json` is the exact `ClaudeDecisionContext` Claude reasoned
+    # over, so "why did Claude decide X" is reconstructable the same way `decisions
+    # .provenance_json.trace` already makes Alpha's own decisions reconstructable (D73).
+    # `status` is never silently repaired to "ok" -- a validation/parse failure is recorded as
+    # such, with `raw_decision_json` retaining whatever Claude actually said (even if rejected)
+    # for debugging, per Phase 5's "do not silently repair it."
+    """
+    CREATE TABLE IF NOT EXISTS claude_decisions (
+        claude_decision_id VARCHAR PRIMARY KEY,
+        alpha_decision_id VARCHAR,
+        league_id VARCHAR NOT NULL,
+        season INTEGER NOT NULL,
+        context_fingerprint VARCHAR NOT NULL,
+        current_pick_overall INTEGER,
+        alpha_player_id VARCHAR NOT NULL,
+        status VARCHAR NOT NULL,
+        error_message VARCHAR,
+        decision VARCHAR,
+        selected_player_id VARCHAR,
+        agrees_with_alpha BOOLEAN,
+        confidence DOUBLE,
+        override_reason VARCHAR,
+        key_factors_json VARCHAR,
+        risk_flags_json VARCHAR,
+        missing_information_json VARCHAR,
+        model VARCHAR,
+        prompt_version VARCHAR NOT NULL,
+        context_json VARCHAR NOT NULL,
+        raw_decision_json VARCHAR,
+        actual_pick_player_id VARCHAR,
+        created_at TIMESTAMP NOT NULL
+    )
+    """,
+]
+
 # M15+ DDL is appended here as later milestones are implemented.
 ALL_DDL: list[str] = [
     *M1_SNAPSHOTS_DDL,
@@ -804,6 +842,7 @@ ALL_DDL: list[str] = [
     *M13_SIMULATION_DDL,
     *M14_PRODUCTIZATION_DDL,
     *M16_EVALUATION_DDL,
+    *M32_CLAUDE_STRATEGY_DDL,
 ]
 
 # ---------------------------------------------------------------------------

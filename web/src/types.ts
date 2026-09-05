@@ -152,6 +152,29 @@ export interface SimulationResponse {
   players: PlayerSimResultRow[];
 }
 
+export interface DraftCandidateTraceRow {
+  player_id: string;
+  position: string;
+  score: number;
+  vorp: number;
+  marginal_starter_value: number | null;
+  confidence: number | null;
+  survival_probability: number | null;
+  reasons: string[];
+}
+
+export interface DraftDecisionTrace {
+  season: number;
+  ecr_type: string;
+  current_pick_overall: number | null;
+  next_pick_overall: number | null;
+  available_pool_size: number;
+  roster_size: number | null;
+  runner_up_player_id: string | null;
+  score_gap_to_runner_up: number | null;
+  top_candidates: DraftCandidateTraceRow[];
+}
+
 export interface DecisionResponse {
   decision_id: string;
   recommendation: string;
@@ -160,6 +183,33 @@ export interface DecisionResponse {
   confidence: number | null;
   reasons: string[];
   action?: string | null;
+  trace?: DraftDecisionTrace | null;
+}
+
+// Stage 1 Claude strategic decision layer (docs/DECISIONS.md D74). Mirrors
+// strategy/contracts.py::ClaudeDraftDecision and api/schemas.py::ClaudeReviewResponse.
+export interface ClaudeDraftDecision {
+  decision: "FOLLOW_ALPHA" | "OVERRIDE_ALPHA";
+  selected_player_id: string;
+  confidence: number;
+  override_reason: string | null;
+  key_factors: string[];
+  risk_flags: string[];
+  missing_information: string[];
+}
+
+export type ClaudeReviewStatus = "ok" | "claude_unavailable" | "invalid_response" | "validation_failed";
+
+export interface ClaudeReviewResponse {
+  claude_decision_id: string;
+  status: ClaudeReviewStatus;
+  error_message: string | null;
+  context_fingerprint: string;
+  alpha: DecisionResponse;
+  decision: ClaudeDraftDecision | null;
+  model: string | null;
+  prompt_version: string;
+  agrees_with_alpha: boolean | null;
 }
 
 export interface ProvenanceResponse {

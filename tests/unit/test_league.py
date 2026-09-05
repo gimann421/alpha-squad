@@ -509,6 +509,61 @@ class TestRecommendDraftPick:
         assert rec.recommendation == "alpha_p"
 
 
+class TestDraftDecisionTrace:
+    """Regression coverage for the 2026-09-04 hardening pass (Phase 4/5): the decision trace
+    is assembled entirely from data `recommend_draft_pick` already computes for scoring --
+    these tests pin that it is retained and reported correctly, not that scoring changes."""
+
+    def test_trace_reports_draft_state_inputs_verbatim(self, con):
+        league = load_league_context()
+        for i, pts in enumerate([300, 250, 200]):
+            _seed_uncertainty(con, f"qb{i}", 2025, "QB", pts)
+        rec = recommend_draft_pick(
+            con,
+            league,
+            2025,
+            ["QB"],
+            {"qb0", "qb1", "qb2"},
+            next_pick_overall=25,
+            current_pick_overall=10,
+            roster_player_ids=["qb_owned"],
+        )
+        assert rec.trace.season == 2025
+        assert rec.trace.current_pick_overall == 10
+        assert rec.trace.next_pick_overall == 25
+        assert rec.trace.available_pool_size == 3
+        assert rec.trace.roster_size == 1
+
+    def test_runner_up_and_score_gap_match_the_top_two_candidates(self, con):
+        league = load_league_context()
+        for i, pts in enumerate([300, 250, 200]):
+            _seed_uncertainty(con, f"qb{i}", 2025, "QB", pts)
+        rec = recommend_draft_pick(con, league, 2025, [], {"qb0", "qb1", "qb2"}, top_n=5)
+        assert rec.trace.runner_up_player_id == rec.alternatives[0]
+        best_score = rec.trace.top_candidates[0].score
+        runner_up_score = rec.trace.top_candidates[1].score
+        assert rec.trace.score_gap_to_runner_up == pytest.approx(best_score - runner_up_score)
+        assert rec.trace.score_gap_to_runner_up >= 0
+
+    def test_single_candidate_has_no_runner_up(self, con):
+        league = load_league_context()
+        _seed_uncertainty(con, "only", 2025, "QB", 300.0)
+        rec = recommend_draft_pick(con, league, 2025, [], {"only"})
+        assert rec.trace.runner_up_player_id is None
+        assert rec.trace.score_gap_to_runner_up is None
+
+    def test_top_candidates_are_not_truncated_below_top_n(self, con):
+        league = load_league_context()
+        for i, pts in enumerate([300, 250, 200, 150, 100]):
+            _seed_uncertainty(con, f"qb{i}", 2025, "QB", pts)
+        rec = recommend_draft_pick(con, league, 2025, [], {f"qb{i}" for i in range(5)}, top_n=2)
+        assert len(rec.trace.top_candidates) == 2
+        assert [c.player_id for c in rec.trace.top_candidates] == [
+            rec.recommendation,
+            *rec.alternatives,
+        ]
+
+
 class TestRecommendWaiverPickup:
     def test_raises_for_a_player_with_no_projection(self, con):
         league = load_league_context()

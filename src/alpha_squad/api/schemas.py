@@ -8,6 +8,7 @@ from __future__ import annotations
 from pydantic import BaseModel
 
 from alpha_squad.market.edge import DEFAULT_ECR_TYPE
+from alpha_squad.strategy.contracts import ClaudeDraftDecision
 
 
 class PlayerSummary(BaseModel):
@@ -411,6 +412,39 @@ class ActionCenterResponse(BaseModel):
     trade_signals: list[TradeSignalRow]
 
 
+class DraftCandidateTraceRow(BaseModel):
+    """One scored candidate from a draft recommendation, with the score components already
+    computed by `league/draft.py::recommend_draft_pick` and previously discarded before
+    reaching the API -- the structured seam a future Claude strategic layer reads (2026-09-04
+    hardening pass, Phase 4/5)."""
+
+    player_id: str
+    position: str
+    score: float
+    vorp: float
+    marginal_starter_value: float | None
+    confidence: float | None
+    survival_probability: float | None
+    reasons: list[str]
+
+
+class DraftDecisionTrace(BaseModel):
+    """Minimum decision trace for "why did Alpha recommend this player at this exact
+    moment": the draft-state inputs the recommendation was computed against, plus every
+    candidate considered (not just the winner) with a runner-up score gap. Only populated
+    for `decision_type == "draft_pick"`."""
+
+    season: int
+    ecr_type: str
+    current_pick_overall: int | None
+    next_pick_overall: int | None
+    available_pool_size: int
+    roster_size: int | None
+    runner_up_player_id: str | None
+    score_gap_to_runner_up: float | None
+    top_candidates: list[DraftCandidateTraceRow]
+
+
 class DecisionResponse(BaseModel):
     decision_id: str
     recommendation: str
@@ -419,3 +453,30 @@ class DecisionResponse(BaseModel):
     confidence: float | None
     reasons: list[str]
     action: str | None = None
+    trace: DraftDecisionTrace | None = None
+
+
+class ClaudeDraftReviewRequest(DraftRequest):
+    """Same fields `POST /league/{id}/draft` already takes -- this endpoint recomputes the
+    IDENTICAL Alpha recommendation (same call, same inputs) before handing it to Claude, so
+    there is no second decision engine and no risk of reviewing a different recommendation
+    than the one already shown to the user."""
+
+    is_users_turn: bool | None = None
+
+
+class ClaudeReviewResponse(BaseModel):
+    """Alpha's recommendation is `alpha` -- byte-identical in shape to what `/draft` itself
+    returns. Everything else is Claude's review of it; `status != "ok"` means Claude's opinion
+    could not be trusted for this pick and the frontend should show Alpha's own recommendation
+    with a non-blocking "Claude unavailable" indicator (Phase 6)."""
+
+    claude_decision_id: str
+    status: str
+    error_message: str | None
+    context_fingerprint: str
+    alpha: DecisionResponse
+    decision: ClaudeDraftDecision | None
+    model: str | None
+    prompt_version: str
+    agrees_with_alpha: bool | None

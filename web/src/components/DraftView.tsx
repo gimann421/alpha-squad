@@ -3,7 +3,13 @@ import { api } from "../api";
 import { useLatestSeason } from "../hooks";
 import { useLeague } from "../league-context";
 import { PlayerLink } from "../player-context";
-import type { DecisionResponse, LeagueContext, RankingRow, SleeperDraftState } from "../types";
+import type {
+  ClaudeReviewResponse,
+  DecisionResponse,
+  LeagueContext,
+  RankingRow,
+  SleeperDraftState,
+} from "../types";
 import { PlayerPicker } from "./PlayerPicker";
 
 // PART 1 (2026-09-03 product-gap request): a reasonable, non-aggressive refresh cadence for a
@@ -63,7 +69,7 @@ function saveJson(key: string, value: unknown) {
 export function DraftView() {
   const { leagueId, rosterId, teamsSupported } = useLeague();
   const latestSeason = useLatestSeason("uncertainty", 2025);
-  const usingRealRoster = teamsSupported && rosterId != null;
+  const usingRealRoster = Boolean(teamsSupported && rosterId != null);
   const mode: "sleeper" | "manual" = usingRealRoster ? "sleeper" : "manual";
 
   const [season, setSeason] = useState(latestSeason);
@@ -90,6 +96,22 @@ export function DraftView() {
 
   const [draftSync, setDraftSync] = useState<SleeperDraftState | null>(null);
   const [draftSyncError, setDraftSyncError] = useState<string | null>(null);
+
+  // How many real picks had landed (across the whole league) when the current `decision` was
+  // computed -- lets the UI flag a recommendation as stale the instant a NEW pick comes in
+  // from Sleeper before the user acts on it (Phase 3/6: "no stale recommendation survives a
+  // material board change"). `null` while no decision has been requested yet.
+  const [decisionPickCount, setDecisionPickCount] = useState<number | null>(null);
+
+  // Stage 1 Claude strategic decision layer (D74). Opt-in and separate from Alpha's own
+  // recommendation request: Alpha must stay immediately available with zero dependency on
+  // Claude (Phase 6), so this is a second, independent, non-blocking call the user triggers
+  // deliberately -- never automatic on every pick, both for latency and API-cost discipline
+  // during a real live draft (Phase 11/15/16).
+  const [claudeReview, setClaudeReview] = useState<ClaudeReviewResponse | null>(null);
+  const [claudeReviewError, setClaudeReviewError] = useState<string | null>(null);
+  const [claudeReviewLoading, setClaudeReviewLoading] = useState(false);
+  const [claudeReviewPickCount, setClaudeReviewPickCount] = useState<number | null>(null);
 
   const nameFor = (playerId: string) =>
     pool?.find((p) => p.player_id === playerId)?.display_name ??
@@ -205,6 +227,38 @@ export function DraftView() {
   // user's turn... refresh/recompute the recommendation when relevant"). Tracked via a ref so
   // this fires once on the true->false->true transition, not on every unrelated poll tick.
   const wasUsersTurn = useRef<boolean | null>(null);
+
+  // Reset that transition-tracking ref whenever the connected league/roster changes. Without
+  // this, switching from a league where it was already the user's turn (ref left at `true`)
+  // into a different league that also happens to open on the user's turn would read as "no
+  // transition" and silently skip the auto-recommend for the new league/roster.
+  useEffect(() => {
+    wasUsersTurn.current = null;
+  }, [leagueId, rosterId]);
+
+  // REGRESSION (2026-09-05 pre-draft verification): `<DraftView>` is not remounted on a league
+  // switch (no `key={leagueId}` in App.tsx), so without this reset a switch from League A to a
+  // DIFFERENT Sleeper league B left League A's `decision`/`claudeReview` cards fully populated
+  // and visible, and -- more seriously -- left `draftSync` holding League A's board (drafted
+  // picks, current/next pick, is_users_turn) until League B's first poll resolved. Both
+  // `runDraft`/`runClaudeReview` read `draftSync` to build the request, so a fast click in that
+  // window would compute League B's recommendation against League A's board. Worse, the
+  // staleness banners compare `decisionPickCount`/`claudeReviewPickCount` (captured under
+  // League A) against `draftSync.drafted_player_ids.length` -- two different leagues' pick
+  // counts can coincidentally match, so the stale recommendation could show with NO warning at
+  // all. Clearing everything the instant league/roster changes closes this: the board and any
+  // prior recommendation are gone before the new league's data can be misread as current.
+  useEffect(() => {
+    setDraftSync(null);
+    setDraftSyncError(null);
+    setDecision(null);
+    setDecisionError(null);
+    setDecisionPickCount(null);
+    setClaudeReview(null);
+    setClaudeReviewError(null);
+    setClaudeReviewPickCount(null);
+  }, [leagueId, rosterId]);
+
   useEffect(() => {
     if (!usingRealRoster || !draftSync || !pool) return;
     const isTurnNow = draftSync.is_users_turn === true;
@@ -235,44 +289,112 @@ export function DraftView() {
     setMyPickIds((ids) => ids.filter((id) => id !== playerId));
   }
 
+  // Shared by `runDraft` and `runClaudeReview` -- both endpoints take the same request shape
+  // (api/schemas.py::ClaudeDraftReviewRequest extends DraftRequest), and building it in one
+  // place means the two calls can never silently drift into asking about different boards.
+  function buildDraftRequestBody() {
+    if (!pool) return null;
+    // PART 1: for a Sleeper-connected draft, drafted ids / current-pick / next-pick all come
+    // from the live sync rather than manual tracking. `roster_player_ids` is intentionally
+    // left unsent here -- the server resolves this team's real roster from `roster_id` and
+    // that supersedes any client-supplied list (see api/routers/league.py::post_draft).
+    const draftedFromSync = usingRealRoster ? (draftSync?.drafted_player_ids ?? []) : draftedIds;
+    const availableIds = pool.map((p) => p.player_id).filter((id) => !draftedFromSync.includes(id));
+    return {
+      season,
+      roster_positions: usingRealRoster
+        ? undefined
+        : rosterPositions
+            .split(",")
+            .map((s) => s.trim())
+            .filter(Boolean),
+      roster_id: usingRealRoster ? (rosterId ?? undefined) : undefined,
+      available_player_ids: availableIds,
+      next_pick_overall: usingRealRoster ? (draftSync?.next_pick_overall ?? undefined) : nextPick,
+      current_pick_overall: usingRealRoster
+        ? (draftSync?.current_pick_overall ?? undefined)
+        : draftedIds.length + 1,
+      roster_player_ids: !usingRealRoster && myPickIds.length > 0 ? myPickIds : undefined,
+      ecr_type: ecrType || undefined,
+      top_n: topN,
+    };
+  }
+
   async function runDraft() {
     if (!leagueId || !pool) return;
+    // A connected Sleeper draft's first sync is asynchronous: without this guard, a click (or
+    // the auto-recommend effect, which already checks `draftSync` itself) landing before the
+    // initial poll resolves would treat NO players as drafted yet and could recommend someone
+    // already off the board -- exactly the "recommendation reflects the correct roster state"
+    // failure this hardening pass targets. Manual mode has no such fetch to wait for.
+    if (usingRealRoster && !draftSync) return;
     setSubmitting(true);
     setDecisionError(null);
     setDecision(null);
+    // A fresh Alpha recommendation makes any prior Claude review stale by construction (it
+    // reviewed the OLD recommendation) -- clear it rather than leaving a mismatched opinion on
+    // screen next to the new pick.
+    setClaudeReview(null);
+    setClaudeReviewError(null);
     try {
-      // PART 1: for a Sleeper-connected draft, drafted ids / current-pick / next-pick all come
-      // from the live sync rather than manual tracking. `roster_player_ids` is intentionally
-      // left unsent here -- the server resolves this team's real roster from `roster_id` and
-      // that supersedes any client-supplied list (see api/routers/league.py::post_draft).
-      const draftedFromSync = usingRealRoster ? (draftSync?.drafted_player_ids ?? []) : draftedIds;
-      const availableIds = pool.map((p) => p.player_id).filter((id) => !draftedFromSync.includes(id));
-
-      const result = await api.postDraft(leagueId, {
-        season,
-        roster_positions: usingRealRoster
-          ? undefined
-          : rosterPositions
-              .split(",")
-              .map((s) => s.trim())
-              .filter(Boolean),
-        roster_id: usingRealRoster ? (rosterId ?? undefined) : undefined,
-        available_player_ids: availableIds,
-        next_pick_overall: usingRealRoster ? (draftSync?.next_pick_overall ?? undefined) : nextPick,
-        current_pick_overall: usingRealRoster
-          ? (draftSync?.current_pick_overall ?? undefined)
-          : draftedIds.length + 1,
-        roster_player_ids: !usingRealRoster && myPickIds.length > 0 ? myPickIds : undefined,
-        ecr_type: ecrType || undefined,
-        top_n: topN,
-      });
+      const body = buildDraftRequestBody();
+      if (!body) return;
+      const result = await api.postDraft(leagueId, body);
       setDecision(result);
+      setDecisionPickCount(usingRealRoster ? (draftSync?.drafted_player_ids.length ?? null) : null);
     } catch (e) {
       setDecisionError(String(e));
     } finally {
       setSubmitting(false);
     }
   }
+
+  async function runClaudeReview() {
+    if (!leagueId || !pool) return;
+    if (usingRealRoster && !draftSync) return;
+    setClaudeReviewLoading(true);
+    setClaudeReviewError(null);
+    try {
+      const body = buildDraftRequestBody();
+      if (!body) return;
+      const result = await api.postDraftClaudeReview(leagueId, {
+        ...body,
+        is_users_turn: usingRealRoster ? draftSync?.is_users_turn : undefined,
+      });
+      setClaudeReview(result);
+      setClaudeReviewPickCount(usingRealRoster ? (draftSync?.drafted_player_ids.length ?? null) : null);
+    } catch (e) {
+      setClaudeReviewError(String(e));
+    } finally {
+      setClaudeReviewLoading(false);
+    }
+  }
+
+  // A material board change (a new real pick landing) since this recommendation was computed
+  // means it may no longer reflect who's actually still available (Phase 3/6: "no stale
+  // recommendation survives a material board change"). This never hides or auto-clears the
+  // recommendation -- during a live draft the user may still want to see it -- it only flags
+  // that it should be refreshed before acting on it.
+  const decisionIsStale =
+    usingRealRoster &&
+    decision != null &&
+    decisionPickCount != null &&
+    (draftSync?.drafted_player_ids.length ?? decisionPickCount) !== decisionPickCount;
+
+  // Same staleness check as Alpha's own recommendation, applied to the Claude review (Phase
+  // 11: "a Claude decision must become invalid if the underlying draft context materially
+  // changes... do not blindly apply the old Claude response to the new board"). During a live
+  // draft the pick count and the candidate pool always move together (the only way the board
+  // changes is a new pick landing), so this comparison is a faithful, cheap proxy for "has
+  // `context_fingerprint` changed" without a round trip -- `context_fingerprint` itself is
+  // returned by the API and persisted for replay, but nothing currently re-derives and compares
+  // it client-side; this pick-count check is the actual (and, for this use case, equivalent)
+  // staleness gate, matching Alpha's own banner above so both behave identically to the user.
+  const claudeReviewIsStale =
+    usingRealRoster &&
+    claudeReview != null &&
+    claudeReviewPickCount != null &&
+    (draftSync?.drafted_player_ids.length ?? claudeReviewPickCount) !== claudeReviewPickCount;
 
   const pprValue = leagueContext ? (leagueContext.scoring as Record<string, unknown>)?.ppr_value : undefined;
   const scoringMismatch =
@@ -449,13 +571,34 @@ export function DraftView() {
       )}
 
       <div className="controls">
-        <button onClick={runDraft} disabled={submitting || !leagueId || !pool}>
-          {submitting ? "Recommending…" : "Who should I take?"}
+        <button
+          onClick={runDraft}
+          disabled={
+            submitting ||
+            !leagueId ||
+            !pool ||
+            (usingRealRoster && !draftSync) ||
+            syncStatus === "complete"
+          }
+        >
+          {submitting
+            ? "Recommending…"
+            : syncStatus === "complete"
+              ? "Draft complete"
+              : usingRealRoster && !draftSync
+                ? "Waiting for Sleeper sync…"
+                : "Who should I take?"}
         </button>
       </div>
       {decisionError && <p className="error">Error: {decisionError}</p>}
       {decision && (
         <div className="card">
+          {decisionIsStale && (
+            <p className="error">
+              A new pick has come in since this recommendation was computed — refresh ("Who
+              should I take?") before acting on it.
+            </p>
+          )}
           <div>
             <strong>Recommended pick:</strong>{" "}
             <PlayerLink playerId={decision.recommendation}>{nameFor(decision.recommendation)}</PlayerLink>{" "}
@@ -492,7 +635,126 @@ export function DraftView() {
               ))}
             </ul>
           </div>
+          {decision.trace && decision.trace.runner_up_player_id && (
+            <p className="muted">
+              Beat runner-up <PlayerLink playerId={decision.trace.runner_up_player_id}>
+                {nameFor(decision.trace.runner_up_player_id)}
+              </PlayerLink>{" "}
+              by {decision.trace.score_gap_to_runner_up?.toFixed(1) ?? "-"} score pts, out of{" "}
+              {decision.trace.available_pool_size} evaluable players on the board.
+            </p>
+          )}
+          {decision.trace && decision.trace.top_candidates.length > 1 && (
+            <details>
+              <summary>Decision trace: all {decision.trace.top_candidates.length} candidates considered</summary>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Player</th>
+                    <th>Pos</th>
+                    <th>Score</th>
+                    <th>VORP</th>
+                    <th>MSV</th>
+                    <th>Survival</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {decision.trace.top_candidates.map((c) => (
+                    <tr key={c.player_id}>
+                      <td>{nameFor(c.player_id)}</td>
+                      <td>{c.position}</td>
+                      <td>{c.score.toFixed(1)}</td>
+                      <td>{c.vorp.toFixed(1)}</td>
+                      <td>{c.marginal_starter_value?.toFixed(1) ?? "-"}</td>
+                      <td>{c.survival_probability != null ? `${(c.survival_probability * 100).toFixed(0)}%` : "-"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </details>
+          )}
           <div className="muted">Decision recorded: {decision.decision_id}</div>
+
+          <div className="controls">
+            <button
+              className="secondary"
+              onClick={runClaudeReview}
+              disabled={claudeReviewLoading || (usingRealRoster && !draftSync) || syncStatus === "complete"}
+            >
+              {claudeReviewLoading ? "Claude is thinking…" : "Get Claude's strategic review"}
+            </button>
+          </div>
+          {claudeReviewError && (
+            <p className="error">Claude review unavailable right now: {claudeReviewError}</p>
+          )}
+          {claudeReview && (
+            <div className="card">
+              {claudeReviewIsStale && (
+                <p className="error">
+                  A new pick has come in since Claude reviewed this board — refresh before
+                  trusting this opinion.
+                </p>
+              )}
+              {claudeReview.status !== "ok" && (
+                <p className="muted">
+                  Claude's strategic review isn't available for this pick ({claudeReview.status.replace(/_/g, " ")}
+                  {claudeReview.error_message ? `: ${claudeReview.error_message}` : ""}). Alpha's
+                  recommendation above is unaffected.
+                </p>
+              )}
+              {claudeReview.status === "ok" && claudeReview.decision && (
+                <>
+                  <div>
+                    {claudeReview.agrees_with_alpha ? (
+                      <strong>✓ Claude agrees with Alpha: {nameFor(claudeReview.decision.selected_player_id)}</strong>
+                    ) : (
+                      <strong>
+                        ⚠ Claude override: {nameFor(claudeReview.decision.selected_player_id)} over{" "}
+                        {nameFor(claudeReview.alpha.recommendation)}
+                      </strong>
+                    )}
+                  </div>
+                  <div>
+                    <strong>Claude confidence:</strong> {claudeReview.decision.confidence.toFixed(2)}
+                  </div>
+                  {claudeReview.decision.override_reason && (
+                    <div>
+                      <strong>Reason:</strong> {claudeReview.decision.override_reason}
+                    </div>
+                  )}
+                  {claudeReview.decision.key_factors.length > 0 && (
+                    <div className="reasons">
+                      <strong>Key factors:</strong>
+                      <ul>
+                        {claudeReview.decision.key_factors.map((f, i) => (
+                          <li key={i}>{f}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {claudeReview.decision.risk_flags.length > 0 && (
+                    <div className="reasons">
+                      <strong>Risk flags:</strong>
+                      <ul>
+                        {claudeReview.decision.risk_flags.map((f, i) => (
+                          <li key={i}>{f}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {claudeReview.decision.missing_information.length > 0 && (
+                    <p className="muted">
+                      Claude noted missing information: {claudeReview.decision.missing_information.join("; ")}
+                    </p>
+                  )}
+                  <div className="muted">
+                    {claudeReview.model} · prompt {claudeReview.prompt_version} · review{" "}
+                    {claudeReview.claude_decision_id}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
         </div>
       )}
     </section>
