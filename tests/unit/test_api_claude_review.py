@@ -215,3 +215,37 @@ class TestClaudeReviewEndpoint:
             json={"season": 2025, "available_player_ids": ["qb0"]},
         ).json()
         assert r3["context_fingerprint"] != r1["context_fingerprint"]
+
+    def test_decisions_from_different_leagues_never_collide_or_contaminate(
+        self, con, client, monkeypatch
+    ):
+        """Phase 8 of the 2026-09-05 pre-draft verification: two reviews from two DIFFERENT
+        leagues must produce two distinct, independently-tagged rows in claude_decisions --
+        never an overwrite, and never one league's row read back under the other's identity."""
+        _seed_two_qbs(con)
+        decision = ClaudeDraftDecision(
+            decision="FOLLOW_ALPHA", selected_player_id="qb0", confidence=0.9
+        )
+        _patch_provider(monkeypatch, decision=decision)
+
+        r1 = client.post(
+            "/league/target_league/draft/claude-review",
+            json={"season": 2025, "available_player_ids": ["qb0", "qb1"]},
+        ).json()
+        r2 = client.post(
+            "/league/legacy_2qb_dynasty/draft/claude-review",
+            json={"season": 2025, "available_player_ids": ["qb0", "qb1"], "ecr_type": "ro"},
+        ).json()
+
+        assert r1["claude_decision_id"] != r2["claude_decision_id"]
+        assert r1["alpha"]["decision_id"] != r2["alpha"]["decision_id"]
+
+        rows = con.execute(
+            "SELECT claude_decision_id, league_id FROM claude_decisions "
+            "WHERE claude_decision_id IN (?, ?)",
+            [r1["claude_decision_id"], r2["claude_decision_id"]],
+        ).fetchall()
+        by_id = dict(rows)
+        assert len(by_id) == 2  # two distinct rows, not one overwriting the other
+        assert by_id[r1["claude_decision_id"]] == "target_league"
+        assert by_id[r2["claude_decision_id"]] == "legacy_2qb_dynasty"

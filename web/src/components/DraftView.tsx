@@ -236,6 +236,29 @@ export function DraftView() {
     wasUsersTurn.current = null;
   }, [leagueId, rosterId]);
 
+  // REGRESSION (2026-09-05 pre-draft verification): `<DraftView>` is not remounted on a league
+  // switch (no `key={leagueId}` in App.tsx), so without this reset a switch from League A to a
+  // DIFFERENT Sleeper league B left League A's `decision`/`claudeReview` cards fully populated
+  // and visible, and -- more seriously -- left `draftSync` holding League A's board (drafted
+  // picks, current/next pick, is_users_turn) until League B's first poll resolved. Both
+  // `runDraft`/`runClaudeReview` read `draftSync` to build the request, so a fast click in that
+  // window would compute League B's recommendation against League A's board. Worse, the
+  // staleness banners compare `decisionPickCount`/`claudeReviewPickCount` (captured under
+  // League A) against `draftSync.drafted_player_ids.length` -- two different leagues' pick
+  // counts can coincidentally match, so the stale recommendation could show with NO warning at
+  // all. Clearing everything the instant league/roster changes closes this: the board and any
+  // prior recommendation are gone before the new league's data can be misread as current.
+  useEffect(() => {
+    setDraftSync(null);
+    setDraftSyncError(null);
+    setDecision(null);
+    setDecisionError(null);
+    setDecisionPickCount(null);
+    setClaudeReview(null);
+    setClaudeReviewError(null);
+    setClaudeReviewPickCount(null);
+  }, [leagueId, rosterId]);
+
   useEffect(() => {
     if (!usingRealRoster || !draftSync || !pool) return;
     const isTurnNow = draftSync.is_users_turn === true;
@@ -360,10 +383,13 @@ export function DraftView() {
 
   // Same staleness check as Alpha's own recommendation, applied to the Claude review (Phase
   // 11: "a Claude decision must become invalid if the underlying draft context materially
-  // changes... do not blindly apply the old Claude response to the new board"). The board's
-  // `context_fingerprint` (echoed back from the server) is the authoritative identity check
-  // server-side; this pick-count comparison is the same cheap client-side proxy for it Alpha's
-  // own staleness banner already uses, so both banners behave identically to the user.
+  // changes... do not blindly apply the old Claude response to the new board"). During a live
+  // draft the pick count and the candidate pool always move together (the only way the board
+  // changes is a new pick landing), so this comparison is a faithful, cheap proxy for "has
+  // `context_fingerprint` changed" without a round trip -- `context_fingerprint` itself is
+  // returned by the API and persisted for replay, but nothing currently re-derives and compares
+  // it client-side; this pick-count check is the actual (and, for this use case, equivalent)
+  // staleness gate, matching Alpha's own banner above so both behave identically to the user.
   const claudeReviewIsStale =
     usingRealRoster &&
     claudeReview != null &&

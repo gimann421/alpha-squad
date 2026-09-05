@@ -419,3 +419,50 @@ class TestGetStrategicReview:
         assert model == "fake-claude-model"
         assert prompt_version == "draft_strategy_v1"
         assert json.loads(context_json)["context_fingerprint"] == context.context_fingerprint
+
+
+class TestStaleDecisionCannotBeAppliedToAChangedBoard:
+    """Case D of the 2026-09-05 pre-draft verification: a Claude decision computed against
+    one board must not be treated as valid once the board has materially changed (a real pick
+    landed) -- Phase 11's "do not blindly apply the old Claude response to the new board."
+
+    There is no server-side "apply this decision" endpoint at all (Stage 1 is recommend-only),
+    so the concrete, testable version of this requirement is: hard-validating an old decision
+    against a freshly-built context for the changed board must reject it, exactly the same as
+    a genuinely invalid player would be rejected."""
+
+    def test_fingerprint_changes_and_old_selection_is_rejected_against_the_new_board(self, con):
+        _seed_two_qbs(con)
+        league = load_league_context()
+
+        # Board 1: qb0 and qb1 both available. Claude follows Alpha's pick of qb0.
+        rec1 = recommend_draft_pick(
+            con, league, 2025, [], {"qb0", "qb1"}, next_pick_overall=25, current_pick_overall=10
+        )
+        context1 = build_decision_context(con, league, 2025, [], rec1, is_users_turn=True)
+        old_decision = ClaudeDraftDecision(
+            decision="FOLLOW_ALPHA", selected_player_id=rec1.recommendation, confidence=0.9
+        )
+        first_review = get_strategic_review(
+            con, FakeClaudeProvider(decision=old_decision), context1
+        )
+        assert first_review.status == STATUS_OK
+
+        # The board changes: qb0 gets drafted by someone else before the user acts. A fresh
+        # Alpha recommendation for the new board no longer has qb0 as a candidate at all.
+        rec2 = recommend_draft_pick(
+            con, league, 2025, [], {"qb1"}, next_pick_overall=25, current_pick_overall=11
+        )
+        context2 = build_decision_context(con, league, 2025, [], rec2, is_users_turn=True)
+
+        assert context2.context_fingerprint != context1.context_fingerprint
+        assert rec1.recommendation not in {c.player_id for c in context2.candidates}
+
+        # Attempting to apply the OLD (stale) Claude decision against the NEW board must be
+        # rejected -- it names a player who is no longer even a candidate, let alone available.
+        stale_review = get_strategic_review(
+            con, FakeClaudeProvider(decision=old_decision), context2
+        )
+        assert stale_review.status == STATUS_VALIDATION_FAILED
+        assert stale_review.decision is None
+        assert "not one of the" in (stale_review.error_message or "")

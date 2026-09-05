@@ -4446,3 +4446,73 @@ against a mocked `anthropic.Anthropic` client (12 tests covering every real SDK 
 `tsc -b && vite build` and `oxlint` clean (zero new warnings). Full diff touches zero files
 under `league/`, `models/`, `features/`, `evaluation/` — confirmed by `git diff --stat` against
 those paths returning empty.
+
+## D75 — Final pre-draft verification of D73/D74 (hardening + Claude Stage 1): one real bug found and fixed (league-switch state contamination), everything else confirmed working end to end. No scoring/strategy/methodology change.
+
+Verification pass, not a new build. Re-read `strategy/`, the router, and `DraftView.tsx` fresh
+(not from memory) and traced Sleeper -> roster -> Alpha -> `DraftDecisionTrace` ->
+`ClaudeDecisionContext` -> provider -> `ClaudeDraftDecision` -> hard validation -> API -> UI.
+
+**Real bug found and fixed: switching Sleeper leagues could show one league's Alpha/Claude
+recommendation as if it were current for a different league.** `<DraftView>` is not remounted
+on a league switch (no `key={leagueId}` in `App.tsx`), and neither `draftSync` nor
+`decision`/`claudeReview` were ever cleared when `leagueId`/`rosterId` changed. Switching from
+Sleeper league A to a different Sleeper league B left League A's fully-populated recommendation
+cards on screen, and left `draftSync` (drafted picks, current/next pick, `is_users_turn`)
+pointing at League A until League B's first poll resolved -- during which a click on either
+"Who should I take?" or "Get Claude's strategic review" would have built its request against
+the wrong league's board. The staleness banners made this worse rather than catching it: they
+compare `decisionPickCount`/`claudeReviewPickCount` (captured under League A) against
+`draftSync.drafted_player_ids.length`, and two unrelated leagues' pick counts can coincidentally
+match, so the wrong-league recommendation could show with no stale-warning at all. Fixed with
+one `useEffect` keyed on `[leagueId, rosterId]` that clears `draftSync`, `draftSyncError`,
+`decision`, `decisionError`, `decisionPickCount`, `claudeReview`, `claudeReviewError`, and
+`claudeReviewPickCount` the instant the connected league/roster changes -- the board and any
+prior recommendation are gone before the new league's data could ever be misread as current.
+
+**Also corrected a comment overclaim** (`DraftView.tsx`'s `claudeReviewIsStale`): it described
+`context_fingerprint` as "the authoritative identity check" performed "server-side," but nothing
+actually re-derives or compares it -- the pick-count comparison IS the real (and, for a live
+draft, equivalent) staleness gate. Comment-only; no behavior changed.
+
+**Verified working, end to end, with real evidence (not re-asserted from the prior session):**
+- Mocked-Claude cases A-E (agree, override, invalid-player-outside-pool, stale-decision-applied-
+  to-a-changed-board, provider-failure) — Case D added as a new test
+  (`test_fingerprint_changes_and_old_selection_is_rejected_against_the_new_board`): building a
+  second context after a real board change and re-validating the FIRST context's decision
+  against it correctly rejects it (`validation_failed`), proving a stale decision cannot survive
+  a material board change, not just that fingerprints differ.
+- Cross-league decision isolation: a new test
+  (`test_decisions_from_different_leagues_never_collide_or_contaminate`) confirms two reviews
+  from `target_league` and `legacy_2qb_dynasty` produce two distinct `claude_decisions` rows,
+  correctly tagged, never overwriting each other.
+- Real Sleeper, live: registered the real `dilworth` league fresh, confirmed real league
+  context/teams/rosters, a real 180-pick completed-draft reconstruction, and (new this pass) a
+  full `/draft/claude-review` call against a REAL Sleeper roster_id=1 -- seeding one synthetic
+  player mapped to a real rostered Sleeper player id (`11581`, genuinely on that roster) and
+  confirming the served roster correctly counted it as already-owned (`marginal_starter_value
+  +0.0`, the correct answer for "should I draft a player I already have"), the real live-picks
+  feed (`_augment_with_live_draft_picks`) executed with zero errors, and Claude correctly
+  reported `claude_unavailable` with the accurate `"no ANTHROPIC_API_KEY configured"` message
+  while Alpha's own recommendation was computed and persisted normally.
+- Real Anthropic credentials: still absent in this sandbox (re-verified: env grep, `which ant`,
+  `~/.config/anthropic/`) — real-call smoke test remains unverified, not faked, exactly as D74
+  already disclosed; nothing changed about that limitation this pass.
+- Security: grepped the full `web/src` tree for any Anthropic/credential reference (zero hits --
+  the key never reaches the browser), confirmed `anthropic_api_key` is read only in
+  `config/settings.py`/`strategy/provider.py`, confirmed no logging of settings/keys anywhere,
+  re-confirmed zero write/mutating HTTP calls to any external service anywhere in `src/
+  alpha_squad` (Claude cannot execute a Sleeper action because no such code path exists at all),
+  and confirmed `check_no_secrets.py` passes.
+- Cost/latency: re-measured against a realistic 150-player available pool (full-draft-board
+  scale) -- still exactly 5 candidates reach Claude regardless of pool size, ~1,220 total
+  tokens, zero secret-shaped strings in the serialized context.
+- Failure modes (Phase 6's 10 scenarios): all verified either by direct test, direct code
+  reading, or the real-Sleeper call above; the one genuine gap (league switching) is the bug
+  fixed above.
+
+**Verification summary:** 908 offline tests pass (up from 906: 2 new), `ruff`/`ruff format`/
+`check_no_secrets.py` clean, frontend `tsc -b && vite build` and `oxlint` clean (28 pre-existing
+warnings, zero new). No changes to `league/`, `models/`, `features/`, `evaluation/`, or the
+Claude prompt/schema/validation logic itself -- this pass found one real frontend state bug and
+fixed it; everything else already worked as D73/D74 described.
