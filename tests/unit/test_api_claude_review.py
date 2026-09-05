@@ -13,7 +13,11 @@ from alpha_squad.api.app import app
 from alpha_squad.api.deps import get_db
 from alpha_squad.storage.db import init_db
 from alpha_squad.strategy.contracts import ClaudeDraftDecision
-from alpha_squad.strategy.provider import ClaudeInvalidResponseError, ClaudeUnavailableError
+from alpha_squad.strategy.provider import (
+    PROMPT_VERSION,
+    ClaudeInvalidResponseError,
+    ClaudeUnavailableError,
+)
 
 
 @pytest.fixture
@@ -101,7 +105,7 @@ class TestClaudeReviewEndpoint:
         assert body["agrees_with_alpha"] is True
         assert body["decision"]["decision"] == "FOLLOW_ALPHA"
         assert body["model"] == "claude-opus-5"
-        assert body["prompt_version"] == "draft_strategy_v1"
+        assert body["prompt_version"] == PROMPT_VERSION
         assert body["alpha"]["decision_id"]  # a real decisions row was recorded
 
     def test_claude_overrides_alpha(self, con, client, monkeypatch):
