@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from pydantic import Field
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -33,7 +33,15 @@ class Settings(BaseSettings):
     # Claude strategic decision layer (Stage 1, docs/DECISIONS.md D74). Absent key means the
     # feature is simply unavailable -- strategy/provider.py degrades to a clear "unavailable"
     # status rather than erroring, the same discipline fantasypros/cfbd already follow above.
-    anthropic_api_key: str | None = Field(default=None, validation_alias="ANTHROPIC_API_KEY")
+    # ALPHA_SQUAD_ANTHROPIC_API_KEY takes priority over ANTHROPIC_API_KEY (D77): Claude Code on
+    # the Web reserves the ANTHROPIC_API_KEY/ANTHROPIC_AUTH_TOKEN names for its own subscription
+    # auth and never exposes them to a cloud session's process environment, so a value set under
+    # that name in a Claude Code cloud environment never reaches this app. ANTHROPIC_API_KEY is
+    # kept as a fallback for local/non-Claude-Code deployments where the name isn't reserved.
+    anthropic_api_key: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("ALPHA_SQUAD_ANTHROPIC_API_KEY", "ANTHROPIC_API_KEY"),
+    )
     anthropic_model: str = Field(default="claude-opus-5", validation_alias="ANTHROPIC_MODEL")
     anthropic_timeout_seconds: float = Field(
         default=20.0, validation_alias="ANTHROPIC_TIMEOUT_SECONDS"
