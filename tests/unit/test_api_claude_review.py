@@ -47,7 +47,7 @@ def _seed_two_qbs(con):
         con.execute(
             "INSERT INTO uncertainty_predictions (prediction_id, player_id, season, position, "
             "model_version, feature_version, point_prediction, confidence, calibration_season, "
-            "predicted_at) VALUES (?, ?, 2025, 'QB', 'uncertainty_catboost_v1', 'fv1', ?, 0.8, "
+            "predicted_at) VALUES (?, ?, 2025, 'QB', 'uncertainty_catboost_v2', 'fv1', ?, 0.8, "
             "2024, current_timestamp)",
             [f"pred_{player_id}", player_id, points],
         )

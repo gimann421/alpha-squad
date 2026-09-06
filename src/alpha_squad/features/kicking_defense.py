@@ -263,11 +263,41 @@ def build_dst_week_stats(
     return total_rows
 
 
+class MissingTeamScoresError(RuntimeError):
+    """`team_week_points` has no rows for a season a DST is being scored for.
+
+    Raised rather than returning zero rows, because a silent zero here is invisible all the
+    way to the draft: `build_dst_week_stats` joins `team_week_points` for points allowed, so
+    an empty table produces no DST rows, no DST `player_season_stats`, no DST projections, and
+    a league that starts a DEF quietly fills that slot with nothing and scores zero for it.
+    That is exactly the failure mode CLAUDE.md's D58 note warns about, and it is what the
+    documented pipeline actually did before D78 -- `make features` ran before
+    `make team-scores`, which is the wrong order."""
+
+
+def _assert_team_scores_present(con: duckdb.DuckDBPyConnection, seasons: list[int]) -> None:
+    missing = [
+        season
+        for season in seasons
+        if not con.execute(
+            "SELECT 1 FROM team_week_points WHERE season = ? LIMIT 1", [season]
+        ).fetchone()
+    ]
+    if missing:
+        raise MissingTeamScoresError(
+            f"team_week_points has no rows for season(s) {missing}; team defenses are scored "
+            "on the opponent's real final score, so they cannot be built without it. Run "
+            "`alpha-squad features build-team-scores` for these seasons first (or use "
+            "`make features`, which now does it in the right order)."
+        )
+
+
 def build_kicking_and_defense(
     con: duckdb.DuckDBPyConnection, settings: Settings, seasons: list[int]
 ) -> dict[str, int]:
     """Everything a league that starts a K and a DEF needs, in dependency order. Safe to
     re-run: each step upserts."""
+    _assert_team_scores_present(con, seasons)
     kicker_rows = build_kicker_week_points(con, settings, seasons)
     dst_entities = ensure_dst_entities(con, seasons)
     dst_rows = build_dst_week_stats(con, settings, seasons)

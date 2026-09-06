@@ -267,3 +267,164 @@ class TestUnplayedSeasonProjection:
             "SELECT count(*) FROM uncertainty_predictions WHERE season = 2026"
         ).fetchone()[0]
         assert n == 0
+
+
+# ---------------------------------------------------------------------------------------
+# D78: the point model and the conformal interval model are two different fits.
+# ---------------------------------------------------------------------------------------
+
+
+def _seed_panel(con, *, seasons, n_players=45, position="WR"):
+    """A panel dense enough for both MIN_TRAIN_ROWS and MIN_CALIB_ROWS at every season."""
+    for season in seasons:
+        for i in range(n_players):
+            _seed_season(con, f"p{i}", season, 40.0 + 4.0 * i, position=position)
+
+
+def test_d78_point_model_sees_the_calibration_season_and_the_interval_model_does_not(con):
+    """The whole D78 change in one assertion: `_fit_point_and_interval_models` must hand the
+    calibration season to the point fit and withhold it from the interval fit, so the
+    residuals stay out-of-sample."""
+    import pandas as pd
+
+    from alpha_squad.models.uncertainty.run import (
+        SPEC_D78,
+        SPEC_LEGACY,
+        _fit_point_and_interval_models,
+    )
+
+    seen: list[set[int]] = []
+
+    class _Spy:
+        def fit(self, x, y):
+            seen.append(set(x[:, 0].tolist()))
+            self._mean = float(y.mean())
+            return self
+
+        def predict(self, x):
+            import numpy as np
+
+            return np.full(len(x), self._mean)
+
+    proper_train = pd.DataFrame(
+        {
+            "prior_ppg": [1.0] * 10,
+            "prior_games": 15,
+            "prior_weighted_total": 100.0,
+            "preseason_ecr_rank": 50.0,
+            "target_points": 100.0,
+            "target_season": 2023,
+        }
+    )
+    calib = pd.DataFrame(
+        {
+            "prior_ppg": [2.0] * 10,
+            "prior_games": 15,
+            "prior_weighted_total": 200.0,
+            "preseason_ecr_rank": 20.0,
+            "target_points": 200.0,
+            "target_season": 2024,
+        }
+    )
+
+    import alpha_squad.models.uncertainty.run as run_module
+
+    original = run_module._new_model
+    run_module._new_model = _Spy
+    try:
+        seen.clear()
+        _fit_point_and_interval_models(proper_train, calib, SPEC_D78)
+        interval_seen, point_seen = seen
+        assert interval_seen == {1.0}, "interval model must not train on the calibration season"
+        assert point_seen == {1.0, 2.0}, "point model must train on the calibration season"
+
+        seen.clear()
+        _fit_point_and_interval_models(proper_train, calib, SPEC_LEGACY)
+        assert len(seen) == 1, "legacy must fit exactly one model"
+        assert seen[0] == {1.0}, "legacy point model must not see the calibration season"
+    finally:
+        run_module._new_model = original
+
+
+def test_d78_and_legacy_write_under_different_model_versions(con):
+    from alpha_squad.models.uncertainty.run import (
+        LEGACY_MODEL_VERSION,
+        SPEC_D78,
+        SPEC_LEGACY,
+        model_version_for,
+    )
+
+    assert model_version_for(SPEC_D78) == MODEL_VERSION
+    assert model_version_for(SPEC_LEGACY) == LEGACY_MODEL_VERSION
+    assert MODEL_VERSION != LEGACY_MODEL_VERSION
+
+    _seed_panel(con, seasons=range(2018, 2025))
+    run_uncertainty(con, 2024, 2024, min_train_season=2015, specification=SPEC_D78)
+    run_uncertainty(con, 2024, 2024, min_train_season=2015, specification=SPEC_LEGACY)
+
+    versions = {
+        row[0]
+        for row in con.execute(
+            "SELECT DISTINCT model_version FROM uncertainty_predictions"
+        ).fetchall()
+    }
+    assert versions == {MODEL_VERSION, LEGACY_MODEL_VERSION}, (
+        "a legacy run must not overwrite D78 rows, or historical backtests stop being reproducible"
+    )
+
+
+def test_unknown_specification_raises_rather_than_silently_defaulting(con):
+    from alpha_squad.models.uncertainty.run import model_version_for
+
+    with pytest.raises(ValueError, match="unknown specification"):
+        model_version_for("whatever")
+
+
+def test_d78_never_trains_either_model_on_the_target_season(con):
+    """Regression guard for the one way this change could have introduced leakage: the point
+    model's training window now extends one season later, and it must still stop short of the
+    season being predicted."""
+    import pandas as pd
+
+    from alpha_squad.models.uncertainty.run import SPEC_D78, _fit_point_and_interval_models
+
+    target_season = 2025
+    fitted_seasons: list[int] = []
+
+    class _Spy:
+        def __init__(self):
+            self._mean = 0.0
+
+        def fit(self, x, y):
+            fitted_seasons.extend(int(s) for s in x[:, 1].tolist())
+            self._mean = float(y.mean())
+            return self
+
+        def predict(self, x):
+            import numpy as np
+
+            return np.full(len(x), self._mean)
+
+    def frame(season, ppg):
+        return pd.DataFrame(
+            {
+                "prior_ppg": [ppg] * 20,
+                "prior_games": [season] * 20,
+                "prior_weighted_total": 100.0,
+                "preseason_ecr_rank": 50.0,
+                "target_points": 100.0,
+                "target_season": season,
+            }
+        )
+
+    import alpha_squad.models.uncertainty.run as run_module
+
+    original = run_module._new_model
+    run_module._new_model = _Spy
+    try:
+        _fit_point_and_interval_models(frame(2023, 1.0), frame(2024, 2.0), SPEC_D78)
+    finally:
+        run_module._new_model = original
+
+    assert fitted_seasons, "spy never saw a fit"
+    assert max(fitted_seasons) < target_season

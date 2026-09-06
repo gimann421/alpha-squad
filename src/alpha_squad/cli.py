@@ -77,6 +77,7 @@ from alpha_squad.identity.canonical import build_identity
 from alpha_squad.identity.exceptions import list_exceptions
 from alpha_squad.league.context import (
     DEFAULT_LEAGUE_ID,
+    SLOT_POSITION_ALIASES,
     list_registered_leagues,
     register_sleeper_league,
     resolve_league,
@@ -104,6 +105,8 @@ from alpha_squad.market.edge import (
     write_edge_backtest_report,
     write_edge_validation_report,
 )
+from alpha_squad.market.series import resolve_market_series
+from alpha_squad.models.baselines.kicking_defense import MODEL_NAME as KDST_MODEL_NAME
 from alpha_squad.models.baselines.kicking_defense import build_kdst_projections
 from alpha_squad.models.baselines.run import run_baselines
 from alpha_squad.models.established.season_level import (
@@ -134,6 +137,7 @@ from alpha_squad.models.uncertainty.run import (
     MODEL_VERSION as UNCERTAINTY_MODEL_VERSION,
 )
 from alpha_squad.models.uncertainty.run import (
+    SPEC_D78,
     project_uncertainty_season,
     run_uncertainty,
     score_with_persisted_model,
@@ -410,6 +414,21 @@ def features_build(
     )
     console.print(f"combine_results upserted: [green]{report.combine_results_upserted}[/green]")
     console.print(f"rookie_features upserted: [green]{report.rookie_features_upserted}[/green]")
+    # K/DST were built but never printed before D78, which is how a clean build could produce
+    # zero DST rows -- and therefore a DEF starting slot worth zero -- with nothing on screen
+    # to say so. A zero here is now visible, and flagged.
+    console.print(f"team_week_points upserted: [green]{report.team_week_points_upserted}[/green]")
+    console.print(f"kicker week rows scored: [green]{report.kicker_week_rows_scored}[/green]")
+    colour = "green" if report.dst_week_rows else "red"
+    console.print(
+        f"DST entities: [green]{report.dst_entities_created}[/green], "
+        f"DST week rows scored: [{colour}]{report.dst_week_rows}[/{colour}]"
+    )
+    if not report.dst_week_rows:
+        console.print(
+            "[red]no team-defense rows were scored -- a league that starts a DEF would have "
+            "an empty slot. Check that `team_week_points` covers these seasons.[/red]"
+        )
     con.close()
 
 
@@ -1169,6 +1188,12 @@ def train_uncertainty(
         "walk-forward evaluation run over many historical seasons (no need to write dozens of "
         "intermediate artifacts to disk just to compute historical metrics).",
     ),
+    specification: str = typer.Option(
+        SPEC_D78,
+        help="'d78' (default): the point model also trains on the calibration season, while "
+        "the conformal interval model does not. 'legacy': D67's single-model behaviour, "
+        "written under the pre-D78 model_version so older backtests stay reproducible.",
+    ),
 ) -> None:
     """Walk-forward split-conformal uncertainty: p10-p90 + top-12/24 probabilities per
     player/season/position, with out-of-sample calibration diagnostics (did the intervals
@@ -1177,7 +1202,14 @@ def train_uncertainty(
     con = get_connection(settings)
     init_db(con)
 
-    run_report = run_uncertainty(con, season_start, season_end, min_train_season, persist=persist)
+    run_report = run_uncertainty(
+        con,
+        season_start,
+        season_end,
+        min_train_season,
+        persist=persist,
+        specification=specification,
+    )
 
     table = Table(title="Calibration diagnostics (out-of-sample coverage)")
     for col in (
@@ -1240,6 +1272,9 @@ def train_uncertainty_project(
         help="Save the fitted model + calibration residuals, so `models rescore-uncertainty` "
         "can re-score without retraining.",
     ),
+    specification: str = typer.Option(
+        SPEC_D78, help="'d78' (default) or 'legacy' -- see `train uncertainty --help`."
+    ),
 ) -> None:
     """Project an UNPLAYED season for established (non-rookie) players -- the forward-looking
     counterpart to `train uncertainty`, which is a backtest over seasons whose outcomes are
@@ -1251,7 +1286,9 @@ def train_uncertainty_project(
     con = get_connection(settings)
     init_db(con)
 
-    report = project_uncertainty_season(con, season, min_train_season, persist=persist)
+    report = project_uncertainty_season(
+        con, season, min_train_season, persist=persist, specification=specification
+    )
 
     rows = con.execute(
         """
@@ -1405,6 +1442,133 @@ def train_rookie(
     console.print(table2)
     if run_report.skipped:
         console.print(f"[yellow]skipped: {run_report.skipped}[/yellow]")
+    con.close()
+
+
+@train_app.command("projection-status")
+def train_projection_status(
+    season: int = typer.Option(..., help="Season the projections are supposed to be FOR"),
+    league_id: str = typer.Option(DEFAULT_LEAGUE_ID, help="League whose board is checked"),
+    strict: bool = typer.Option(
+        True, help="Exit non-zero if any required projection component is missing or empty."
+    ),
+) -> None:
+    """Verify that a current-season projection set actually exists AND is what the application
+    reads — the gate `make project-current-season` ends on.
+
+    A pipeline that exits 0 proves nothing on its own: the jobs can succeed while writing
+    rows for the wrong season, under a superseded `model_version`, or into a table the draft
+    engine never reads. So this does not inspect the jobs' own return codes. It calls
+    `league/replacement.py::load_season_projections` — the exact function
+    `recommend_draft_pick`, the API and every evaluation path call — and reports what came
+    back, per position, for `season`.
+
+    It also reports rows written for the same season under a NON-production `model_version`.
+    Those are not read by anything (the loader filters on the shipped version) but they are
+    exactly the shape of a stale artifact that could be mistaken for live output, so they are
+    surfaced rather than hidden."""
+    settings = get_settings()
+    con = get_connection(settings)
+    init_db(con)
+    league = resolve_league(league_id, con=con, settings=settings)
+
+    problems: list[str] = []
+
+    m6 = con.execute(
+        "SELECT count(*) FROM uncertainty_predictions WHERE season = ? AND model_version = ?",
+        [season, UNCERTAINTY_MODEL_VERSION],
+    ).fetchone()[0]
+    other_versions = con.execute(
+        "SELECT model_version, count(*) FROM uncertainty_predictions "
+        "WHERE season = ? AND model_version <> ? GROUP BY 1 ORDER BY 1",
+        [season, UNCERTAINTY_MODEL_VERSION],
+    ).fetchall()
+    rookies = con.execute(
+        "SELECT count(*) FROM rookie_predictions WHERE draft_class = ? "
+        "AND predicted_rookie_points IS NOT NULL",
+        [season],
+    ).fetchone()[0]
+    kdst = con.execute(
+        "SELECT count(*) FROM projection_snapshot WHERE model_name = ? AND season = ?",
+        [KDST_MODEL_NAME, season],
+    ).fetchone()[0]
+    board = con.execute(
+        "SELECT count(*) FROM market_snapshot WHERE ecr_type = ? AND year(scrape_date) = ? "
+        "AND month(scrape_date) IN (7, 8)",
+        [resolve_market_series(league).ecr_type, season],
+    ).fetchone()[0]
+
+    components = Table(title=f"{season} projection components")
+    for col in ("component", "rows", "status"):
+        components.add_column(col)
+    for name, count, why in (
+        (f"M6 established ({UNCERTAINTY_MODEL_VERSION})", m6, "train uncertainty-project"),
+        ("M7 rookie class", rookies, "train rookie-project"),
+        ("K/DST baseline", kdst, "train kdst-projections"),
+        (f"preseason market board ({season})", board, "market build"),
+    ):
+        ok = count > 0
+        if not ok:
+            problems.append(f"{name} is empty — run `alpha-squad {why}`")
+        components.add_row(name, str(count), "[green]OK[/green]" if ok else "[red]EMPTY[/red]")
+    console.print(components)
+
+    for version, count in other_versions:
+        console.print(
+            f"[yellow]note: {count} row(s) for {season} under superseded model_version "
+            f"'{version}' — not read by the application (the loader filters on "
+            f"'{UNCERTAINTY_MODEL_VERSION}'), reported so a stale artifact cannot pass "
+            f"unnoticed[/yellow]"
+        )
+
+    # What the application ACTUALLY consumes, through its own loader.
+    projections, positions = load_season_projections(con, season)
+    if not projections:
+        problems.append(
+            f"load_season_projections({season}) returned nothing — the draft engine would "
+            "have no board at all"
+        )
+
+    by_pos: dict[str, list[float]] = {}
+    for player_id, points in projections.items():
+        by_pos.setdefault(positions.get(player_id, "?"), []).append(points)
+
+    consumed = Table(title=f"What load_season_projections({season}) returns — the live board")
+    for col in ("position", "players", "max", "p90", "median"):
+        consumed.add_column(col)
+    for pos in sorted(by_pos):
+        values = sorted(by_pos[pos], reverse=True)
+        p90 = values[max(0, int(len(values) * 0.10) - 1)]
+        consumed.add_row(
+            pos,
+            str(len(values)),
+            f"{values[0]:.1f}",
+            f"{p90:.1f}",
+            f"{values[len(values) // 2]:.1f}",
+        )
+    console.print(consumed)
+
+    for slot in league.dedicated_slots():
+        pos = SLOT_POSITION_ALIASES.get(slot, slot)
+        if pos not in by_pos:
+            problems.append(
+                f"league '{league.league_id}' starts a {slot} but the {season} board has no "
+                f"{pos} at all — that slot would score zero"
+            )
+
+    if problems:
+        for problem in problems:
+            console.print(f"[red]PROBLEM: {problem}[/red]")
+        console.print(f"[red]{season} projection set is NOT ready[/red]")
+        con.close()
+        if strict:
+            raise typer.Exit(code=1)
+        return
+
+    console.print(
+        f"[green]{season} projection set is present and is what the application reads "
+        f"({len(projections)} players across {len(by_pos)} positions)[/green]"
+    )
     con.close()
 
 

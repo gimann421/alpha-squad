@@ -23,6 +23,7 @@ from alpha_squad.features.team import (
     build_team_week_features,
     build_team_week_stats,
 )
+from alpha_squad.models.simulation.team_scores import build_team_week_points
 
 
 @dataclass
@@ -39,6 +40,7 @@ class FeatureBuildReport:
     kicker_week_rows_scored: int = 0
     dst_entities_created: int = 0
     dst_week_rows: int = 0
+    team_week_points_upserted: int = 0
 
 
 def build_features(
@@ -50,6 +52,15 @@ def build_features(
     report.player_week_stats_upserted = build_player_week_stats(con, settings, seasons)
     report.player_week_features_upserted = build_player_week_features(con)
     report.team_week_stats_upserted = build_team_week_stats(con, settings, seasons)
+
+    # `team_week_points` (real final scores) is what a DST's points-allowed tier is scored
+    # on, so it has to exist before the K/DEF step below. It used to be built only by the
+    # separate `features build-team-scores` command, which `make` ran AFTER this one -- so a
+    # clean build produced zero DST rows, zero DST projections, and a DEF starting slot that
+    # silently scored nothing (D78). Built here instead: it is idempotent, and a dependency
+    # this function has should not be something the caller has to remember to run first.
+    # `features build-team-scores` stays as a standalone command for refreshing it alone.
+    report.team_week_points_upserted = build_team_week_points(con, settings, seasons)
 
     # K/DEF scoring (D57) sits here deliberately: it needs `team_week_stats` (defensive
     # counting stats) and `team_week_points` (points allowed) to already exist, and it writes

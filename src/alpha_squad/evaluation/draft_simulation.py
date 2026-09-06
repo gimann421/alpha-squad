@@ -192,6 +192,7 @@ def simulate_draft(
     *,
     ecr_type: str | None = None,
     opponent_strategy: str = MARKET_CONSENSUS,
+    projection_model_version: str | None = None,
 ) -> DraftSimResult:
     """Simulate one full snake draft for `season`, with `draft_slot` (1..league.teams) drafting
     by `strategy` and every other slot drafting by `opponent_strategy` (D61 Stage 1.1: either
@@ -210,7 +211,7 @@ def simulate_draft(
     if ecr_type is None:
         ecr_type = resolve_market_series(league).ecr_type
 
-    projections, positions = load_season_projections(con, season)
+    projections, positions = load_season_projections(con, season, projection_model_version)
     available = set(projections)
     market_rank = _preseason_overall_market(con, ecr_type, season)
     prior_year_points = (
@@ -344,6 +345,7 @@ def run_draft_simulation(
     *,
     ecr_type: str | None = None,
     opponent_strategies: list[str] | None = None,
+    projection_model_version: str | None = None,
 ) -> list[DraftSimResult]:
     """Every (season, strategy, opponent_strategy, draft_slot) combination -- every real draft
     slot drafts under every strategy once per season, so no single lucky/unlucky slot drives a
@@ -371,6 +373,7 @@ def run_draft_simulation(
                             slot,
                             ecr_type=ecr_type,
                             opponent_strategy=opponent_strategy,
+                            projection_model_version=projection_model_version,
                         )
                     )
     return results

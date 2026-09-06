@@ -1,9 +1,30 @@
-"""Walk-forward uncertainty pipeline. For each target season S and position: train a point
-model on seasons strictly before S-1, calibrate conformal residual quantiles on season S-1
-(held out from training, never S itself), then produce p10-p90 + top-12/24 probabilities for
-season S. Finally measures whether those intervals were actually well-calibrated by checking
-empirical coverage against S's real outcomes — out-of-sample, since S was never used to fit
-or calibrate anything."""
+"""Walk-forward uncertainty pipeline. For each target season S and position: fit a point model
+and a conformal interval model, then produce p10-p90 + top-12/24 probabilities for season S.
+Finally measures whether those intervals were actually well-calibrated by checking empirical
+coverage against S's real outcomes — out-of-sample, since S was never used to fit or calibrate
+anything.
+
+Two models, not one (D78)
+-------------------------
+The interval model trains on target seasons strictly before S-1 and its residuals are measured
+on S-1, so those residuals are genuinely out-of-sample — that is the property split-conformal
+needs and it is unchanged from D67.
+
+The POINT model additionally trains on S-1 itself. D67's single-model version spent the most
+recent completed season entirely on calibration and never let the point model see it, which in
+a drifting positional environment discards the most relevant season available. D78 measured
+that as a real cost (walk-forward MAE 41.88 → 40.73 over 2022-2025, better at every position
+and in every season, paired p=0.026) and the pre-registered gates in
+`evaluation/projection_specification.py` selected this arm.
+
+The two fits are related in the safe direction: the interval model is trained on strictly less
+data than the point model, so its residual spread is an over-estimate of the point model's, and
+the resulting intervals are conservative rather than optimistic. `calibration_diagnostics`
+measures the real coverage either way and is the check that this stayed true.
+
+`SPEC_LEGACY` reproduces D67's exact single-model behaviour, writing under
+`LEGACY_MODEL_VERSION`, so every pre-D78 backtest (D68's residual universe in particular)
+stays reproducible rather than being silently redefined."""
 
 from __future__ import annotations
 
@@ -11,6 +32,7 @@ import hashlib
 from dataclasses import dataclass, field
 
 import duckdb
+import numpy as np
 import pandas as pd
 from catboost import CatBoostRegressor
 
@@ -34,12 +56,43 @@ from alpha_squad.models.uncertainty.conformal import (
 )
 from alpha_squad.sources.base import utcnow
 
-MODEL_VERSION = "uncertainty_catboost_v1"
+#: D78 specification: the point model also trains on the calibration season.
+SPEC_D78 = "d78"
+#: D67 specification: one model, trained strictly before the calibration season.
+SPEC_LEGACY = "legacy"
+
+MODEL_VERSION = "uncertainty_catboost_v2"
+#: What every pre-D78 run wrote. Kept so D67/D68-era rows stay addressable and reproducible.
+LEGACY_MODEL_VERSION = "uncertainty_catboost_v1"
 FEATURE_VERSION = "established_season_level_ml_v1"
 POSITIONS = ("QB", "RB", "WR", "TE")
 MIN_TRAIN_ROWS = 30
 MIN_CALIB_ROWS = 15
 ARTIFACT_MODEL_NAME = "uncertainty_catboost"
+
+
+def model_version_for(specification: str) -> str:
+    """Predictions from two different specifications must never share a key. `model_version` is
+    what `load_season_projections` filters on, so giving each specification its own value is
+    what stops a legacy backtest and a D78 projection from being read as one series."""
+    if specification == SPEC_D78:
+        return MODEL_VERSION
+    if specification == SPEC_LEGACY:
+        return LEGACY_MODEL_VERSION
+    raise ValueError(f"unknown specification {specification!r}")
+
+
+def _new_model() -> CatBoostRegressor:
+    """M6's estimator. Identical for the point and interval fits -- D78 varies the training
+    rows only, never the estimator, the features or the loss."""
+    return CatBoostRegressor(
+        iterations=150,
+        depth=3,
+        learning_rate=0.08,
+        loss_function="MAE",
+        verbose=False,
+        random_seed=42,
+    )
 
 
 def _prediction_id(player_id: str, season: int, model_version: str) -> str:
@@ -64,6 +117,7 @@ def _store_prediction(
     mc: dict[str, float],
     calib_season: int,
     now,
+    model_version: str = MODEL_VERSION,
 ) -> None:
     con.execute(
         """
@@ -81,11 +135,11 @@ def _store_prediction(
             predicted_at = excluded.predicted_at
         """,
         [
-            _prediction_id(player_id, season, MODEL_VERSION),
+            _prediction_id(player_id, season, model_version),
             player_id,
             season,
             position,
-            MODEL_VERSION,
+            model_version,
             FEATURE_VERSION,
             point_pred,
             quantiles["p10"],
@@ -108,6 +162,7 @@ def _record_calibration(
     position: str,
     predictions: dict[str, dict[str, float]],
     actual: dict[str, float],
+    model_version: str = MODEL_VERSION,
 ) -> dict:
     common = sorted(set(predictions) & set(actual))
     n = len(common)
@@ -135,7 +190,7 @@ def _record_calibration(
             mean_interval_width_10_90 = excluded.mean_interval_width_10_90,
             evaluated_at = excluded.evaluated_at
         """,
-        [MODEL_VERSION, season, position, n, coverage_10_90, coverage_25_75, mean_width, now],
+        [model_version, season, position, n, coverage_10_90, coverage_25_75, mean_width, now],
     )
     return {
         "season": season,
@@ -147,6 +202,29 @@ def _record_calibration(
     }
 
 
+def _fit_point_and_interval_models(
+    proper_train: pd.DataFrame, calib: pd.DataFrame, specification: str
+) -> tuple[CatBoostRegressor, np.ndarray]:
+    """Returns (point model, out-of-sample calibration residuals).
+
+    `proper_train` is strictly before the calibration season; `calib` is the calibration season.
+    Under `SPEC_LEGACY` there is one model and the point model IS the interval model (D67).
+    Under `SPEC_D78` the interval model still trains on `proper_train` alone -- so the residuals
+    it produces on `calib` remain genuinely out-of-sample -- while the point model additionally
+    trains on `calib`."""
+    interval_model = _new_model()
+    interval_model.fit(proper_train[FEATURES].to_numpy(), proper_train[TARGET_COLUMN].to_numpy())
+    residuals = calib[TARGET_COLUMN].to_numpy() - interval_model.predict(calib[FEATURES].to_numpy())
+
+    if specification == SPEC_LEGACY:
+        return interval_model, residuals
+
+    point_train = pd.concat([proper_train, calib], ignore_index=True)
+    point_model = _new_model()
+    point_model.fit(point_train[FEATURES].to_numpy(), point_train[TARGET_COLUMN].to_numpy())
+    return point_model, residuals
+
+
 def run_uncertainty(
     con: duckdb.DuckDBPyConnection,
     season_start: int,
@@ -154,6 +232,7 @@ def run_uncertainty(
     min_train_season: int = 2015,
     *,
     persist: bool = False,
+    specification: str = SPEC_D78,
 ) -> UncertaintyRunReport:
     """`persist=True` saves the fitted model (and the calibration residuals needed to
     reconstruct quantiles/probabilities) for every (position, target_season) processed, keyed
@@ -163,8 +242,14 @@ def run_uncertainty(
     servable production artifact `score_with_persisted_model` reads: whichever season this was
     most recently run through. Walk-forward *evaluation* callers (comparing many historical
     seasons against each other) should leave this False -- there is no reason to write dozens
-    of intermediate artifacts to disk just to compute historical metrics."""
+    of intermediate artifacts to disk just to compute historical metrics.
+
+    `specification` selects D78's two-model split (default) or D67's single-model behaviour;
+    see the module docstring. The two write under different `model_version` values, so a
+    legacy backtest and a D78 run can coexist in `uncertainty_predictions` without either
+    silently redefining the other."""
     report = UncertaintyRunReport()
+    model_version = model_version_for(specification)
 
     for target_season in range(season_start, season_end + 1):
         calib_season = target_season - 1
@@ -180,27 +265,16 @@ def run_uncertainty(
                 )
                 continue
 
-            model = CatBoostRegressor(
-                iterations=150,
-                depth=3,
-                learning_rate=0.08,
-                loss_function="MAE",
-                verbose=False,
-                random_seed=42,
-            )
-            model.fit(proper_train[FEATURES].to_numpy(), proper_train[TARGET_COLUMN].to_numpy())
-
-            calib_preds = model.predict(calib[FEATURES].to_numpy())
-            residuals = calib[TARGET_COLUMN].to_numpy() - calib_preds
+            model, residuals = _fit_point_and_interval_models(proper_train, calib, specification)
             quantile_offsets = fit_conformal_quantiles(residuals)
 
             if persist:
-                path = save_model(model, ARTIFACT_MODEL_NAME, position, MODEL_VERSION)
+                path = save_model(model, ARTIFACT_MODEL_NAME, position, model_version)
                 register_artifact(
                     con,
                     ARTIFACT_MODEL_NAME,
                     position,
-                    MODEL_VERSION,
+                    model_version,
                     FEATURE_VERSION,
                     min_train_season,
                     target_season,
@@ -232,6 +306,7 @@ def run_uncertainty(
                     mc_probs[player_id],
                     calib_season,
                     now,
+                    model_version,
                 )
                 report.predictions_written += 1
 
@@ -239,7 +314,7 @@ def run_uncertainty(
                 zip(target["player_id"].tolist(), target[TARGET_COLUMN].tolist(), strict=True)
             )
             calib_row = _record_calibration(
-                con, target_season, position, full_predictions, actual_target
+                con, target_season, position, full_predictions, actual_target, model_version
             )
             report.calibration_rows.append(calib_row)
 
@@ -260,6 +335,7 @@ def project_uncertainty_season(
     min_train_season: int = 2015,
     *,
     persist: bool = True,
+    specification: str = SPEC_D78,
 ) -> UncertaintyProjectionReport:
     """Score a season that has not been played yet -- the established-player counterpart to
     `project_rookie_class` (docs/DECISIONS.md D40).
@@ -271,15 +347,17 @@ def project_uncertainty_season(
     for walk-forward evaluation, but it structurally excludes a genuinely future season (an
     empty `target` DataFrame, silently skipped) -- the same shape of gap D25 found for rookies.
 
-    This trains and calibrates exactly the way `run_uncertainty` does -- proper_train strictly
-    before `calib_season = target_season - 1`, conformal residuals fit on `calib_season` (for a
-    real future `target_season` this is always a season that has already been played) -- then
-    scores `load_season_level_projection_data`'s LEFT-JOIN feature rows for `target_season`
-    instead of requiring its own actuals. It deliberately writes no `calibration_diagnostics`
-    row: there is no real outcome yet to check coverage against, and reporting one would be
-    fabricating a metric (same reasoning as `project_rookie_class`)."""
+    This trains and calibrates exactly the way `run_uncertainty` does -- the interval model
+    strictly before `calib_season = target_season - 1` and, under `SPEC_D78`, the point model
+    through `calib_season` itself (for a real future `target_season` that is always a season
+    which has already been played) -- then scores `load_season_level_projection_data`'s
+    LEFT-JOIN feature rows for `target_season` instead of requiring its own actuals. It
+    deliberately writes no `calibration_diagnostics` row: there is no real outcome yet to check
+    coverage against, and reporting one would be fabricating a metric (same reasoning as
+    `project_rookie_class`)."""
     calib_season = target_season - 1
     report = UncertaintyProjectionReport(target_season=target_season, trained_through=calib_season)
+    model_version = model_version_for(specification)
 
     for position in POSITIONS:
         train_calib = load_season_level_data(con, position, min_train_season, calib_season)
@@ -294,27 +372,16 @@ def project_uncertainty_season(
             )
             continue
 
-        model = CatBoostRegressor(
-            iterations=150,
-            depth=3,
-            learning_rate=0.08,
-            loss_function="MAE",
-            verbose=False,
-            random_seed=42,
-        )
-        model.fit(proper_train[FEATURES].to_numpy(), proper_train[TARGET_COLUMN].to_numpy())
-
-        calib_preds = model.predict(calib[FEATURES].to_numpy())
-        residuals = calib[TARGET_COLUMN].to_numpy() - calib_preds
+        model, residuals = _fit_point_and_interval_models(proper_train, calib, specification)
         quantile_offsets = fit_conformal_quantiles(residuals)
 
         if persist:
-            path = save_model(model, ARTIFACT_MODEL_NAME, position, MODEL_VERSION)
+            path = save_model(model, ARTIFACT_MODEL_NAME, position, model_version)
             register_artifact(
                 con,
                 ARTIFACT_MODEL_NAME,
                 position,
-                MODEL_VERSION,
+                model_version,
                 FEATURE_VERSION,
                 min_train_season,
                 target_season,
@@ -343,6 +410,7 @@ def project_uncertainty_season(
                 mc_probs[player_id],
                 calib_season,
                 now,
+                model_version,
             )
             report.predictions_written += 1
 
@@ -403,5 +471,6 @@ def score_with_persisted_model(
                 mc_probs[player_id],
                 calibration_season if calibration_season is not None else season - 1,
                 now,
+                model_version,
             )
     return full_predictions

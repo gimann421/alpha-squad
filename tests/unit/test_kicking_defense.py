@@ -359,3 +359,96 @@ class TestKickerWeekScoring:
         build_kicker_week_points(con, None, [2024])
         standard, ppr = self._points(con)
         assert standard == ppr == 10.0
+
+
+class TestTeamScoresDependency:
+    """D78 regression: `features build` used to run before `features build-team-scores`, so on
+    a clean database `build_dst_week_stats` joined an empty `team_week_points`, wrote zero
+    rows, and a league that starts a DEF silently got an empty slot. The dependency is now
+    enforced where it lives rather than left to the caller's running order."""
+
+    def _seed_snapshot(self, con, tmp_path):
+        import pandas as pd
+
+        path = tmp_path / "team_week.parquet"
+        pd.DataFrame(
+            [
+                {
+                    "team": "KC",
+                    "season": 2024,
+                    "week": 1,
+                    "game_id": "g1",
+                    "def_sacks": 0.0,
+                    "def_interceptions": 0,
+                    "def_fumbles": 0,
+                    "def_safeties": 0,
+                    "def_tds": 0,
+                    "special_teams_tds": 0,
+                    "def_punt_blocks": 0,
+                    "def_pat_blocks": 0,
+                    "def_fg_blocks": 0,
+                }
+            ]
+        ).to_parquet(path)
+        con.execute(
+            "INSERT INTO snapshot_registry (snapshot_id, source, dataset, captured_at, url, "
+            "local_path, sha256, params_json) VALUES ('s1', 'nflverse', 'stats_team_week', "
+            "current_timestamp, 'u', ?, 'x', ?)",
+            [str(path), '{"season": "2024"}'],
+        )
+
+    def test_missing_team_scores_raises_instead_of_writing_zero_dst_rows(self, con, tmp_path):
+        from alpha_squad.features.kicking_defense import (
+            MissingTeamScoresError,
+            build_kicking_and_defense,
+        )
+
+        con.execute(
+            "INSERT INTO games (game_id, season, week, game_type, game_date) "
+            "VALUES ('g1', 2024, 1, 'REG', DATE '2024-09-08')"
+        )
+        self._seed_snapshot(con, tmp_path)
+        # team_week_points deliberately left empty -- the exact clean-database state.
+        with pytest.raises(MissingTeamScoresError, match="team_week_points"):
+            build_kicking_and_defense(con, None, [2024])
+
+    def test_the_error_names_every_missing_season_and_the_command_that_fixes_it(self, con):
+        from alpha_squad.features.kicking_defense import (
+            MissingTeamScoresError,
+            _assert_team_scores_present,
+        )
+
+        con.execute(
+            "INSERT INTO team_week_points (team, season, week, game_id, points, opponent_points) "
+            "VALUES ('KC', 2023, 1, 'g0', 27, 20)"
+        )
+        with pytest.raises(MissingTeamScoresError) as excinfo:
+            _assert_team_scores_present(con, [2023, 2024, 2025])
+        message = str(excinfo.value)
+        assert "2024" in message and "2025" in message
+        assert "2023" not in message.split("season(s)")[1].split(";")[0]
+        assert "build-team-scores" in message
+
+    def test_present_team_scores_pass_the_check(self, con):
+        from alpha_squad.features.kicking_defense import _assert_team_scores_present
+
+        con.execute(
+            "INSERT INTO team_week_points (team, season, week, game_id, points, opponent_points) "
+            "VALUES ('KC', 2024, 1, 'g1', 27, 20)"
+        )
+        _assert_team_scores_present(con, [2024])  # must not raise
+
+
+class TestFeatureBuildOrdering:
+    def test_build_features_builds_team_scores_before_the_kdst_step(self):
+        """Reads the real call order out of `build_features` rather than asserting on a
+        comment: `build_team_week_points` must be invoked before `build_kicking_and_defense`,
+        or the DST step has nothing to join points-allowed against."""
+        import inspect
+
+        from alpha_squad.features import build as build_module
+
+        source = inspect.getsource(build_module.build_features)
+        team_scores_at = source.index("build_team_week_points(")
+        kdst_at = source.index("build_kicking_and_defense(")
+        assert team_scores_at < kdst_at

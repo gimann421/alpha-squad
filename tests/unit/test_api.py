@@ -86,7 +86,7 @@ class TestPlayerDetail:
             "INSERT INTO uncertainty_predictions (prediction_id, player_id, season, position, "
             "model_version, feature_version, point_prediction, p10, p90, confidence, top24_prob, "
             "calibration_season, predicted_at) VALUES "
-            "('pred1', 'p1', 2025, 'WR', 'uncertainty_catboost_v1', 'fv1', 200.0, 160.0, 250.0, "
+            "('pred1', 'p1', 2025, 'WR', 'uncertainty_catboost_v2', 'fv1', 200.0, 160.0, 250.0, "
             "0.8, 0.6, 2024, current_timestamp)"
         )
         con.execute(
@@ -220,7 +220,7 @@ class TestRankingsAreADirectProjection:
             INSERT INTO uncertainty_predictions
                 (prediction_id, player_id, season, position, model_version, feature_version,
                  point_prediction, p10, p90, top24_prob, confidence, calibration_season, predicted_at)
-            VALUES ('pred1', 'p1', 2025, 'WR', 'uncertainty_catboost_v1', 'fv1', 123.456, 90.0, 160.0, 0.42, 0.81, 2024, current_timestamp)
+            VALUES ('pred1', 'p1', 2025, 'WR', 'uncertainty_catboost_v2', 'fv1', 123.456, 90.0, 160.0, 0.42, 0.81, 2024, current_timestamp)
             """
         )
         r = client.get("/rankings", params={"season": 2025})
@@ -238,7 +238,7 @@ class TestRankingsAreADirectProjection:
             con.execute(
                 "INSERT INTO uncertainty_predictions (prediction_id, player_id, season, position, "
                 "model_version, feature_version, point_prediction, calibration_season, predicted_at) "
-                "VALUES (?, ?, 2025, 'RB', 'uncertainty_catboost_v1', 'fv1', ?, 2024, current_timestamp)",
+                "VALUES (?, ?, 2025, 'RB', 'uncertainty_catboost_v2', 'fv1', ?, 2024, current_timestamp)",
                 [f"pred_{pid}", pid, pts],
             )
         r = client.get("/rankings", params={"season": 2025})
@@ -559,7 +559,7 @@ class TestLeague:
                 "INSERT INTO uncertainty_predictions (prediction_id, player_id, season, "
                 "position, model_version, feature_version, point_prediction, top24_prob, "
                 "calibration_season, predicted_at) VALUES "
-                "(?, ?, 2025, 'WR', 'uncertainty_catboost_v1', 'fv1', ?, 0.3, 2024, current_timestamp)",
+                "(?, ?, 2025, 'WR', 'uncertainty_catboost_v2', 'fv1', ?, 0.3, 2024, current_timestamp)",
                 [f"pred_{pid}", pid, pts],
             )
         con.execute(
@@ -623,7 +623,7 @@ class TestLeague:
                 "INSERT INTO uncertainty_predictions (prediction_id, player_id, season, "
                 "position, model_version, feature_version, point_prediction, top24_prob, "
                 "calibration_season, predicted_at) VALUES "
-                "(?, ?, 2025, 'WR', 'uncertainty_catboost_v1', 'fv1', ?, 0.1, 2024, current_timestamp)",
+                "(?, ?, 2025, 'WR', 'uncertainty_catboost_v2', 'fv1', ?, 0.1, 2024, current_timestamp)",
                 [f"pred_{pid}", pid, pts],
             )
         con.execute(
@@ -669,7 +669,7 @@ class TestLeague:
         con.execute(
             "INSERT INTO uncertainty_predictions (prediction_id, player_id, season, position, "
             "model_version, feature_version, point_prediction, calibration_season, predicted_at) "
-            "VALUES ('pred1', 'p1', 2025, 'QB', 'uncertainty_catboost_v1', 'fv1', 300.0, 2024, current_timestamp)"
+            "VALUES ('pred1', 'p1', 2025, 'QB', 'uncertainty_catboost_v2', 'fv1', 300.0, 2024, current_timestamp)"
         )
         r = client.post(
             "/league/target_league/draft",
@@ -1114,7 +1114,7 @@ class TestDraftCallSiteRosterParity:
         con.execute(
             "INSERT INTO uncertainty_predictions (prediction_id, player_id, season, position, "
             "model_version, feature_version, point_prediction, confidence, calibration_season, "
-            "predicted_at) VALUES (?, ?, 2025, ?, 'uncertainty_catboost_v1', 'fv1', ?, 0.8, "
+            "predicted_at) VALUES (?, ?, 2025, ?, 'uncertainty_catboost_v2', 'fv1', ?, 0.8, "
             "2024, current_timestamp)",
             [f"pred_{player_id}", player_id, position, points],
         )
@@ -1420,7 +1420,7 @@ class TestDraftDecisionTraceEndpoint:
         con.execute(
             "INSERT INTO uncertainty_predictions (prediction_id, player_id, season, position, "
             "model_version, feature_version, point_prediction, confidence, calibration_season, "
-            "predicted_at) VALUES (?, ?, 2025, ?, 'uncertainty_catboost_v1', 'fv1', ?, 0.8, "
+            "predicted_at) VALUES (?, ?, 2025, ?, 'uncertainty_catboost_v2', 'fv1', ?, 0.8, "
             "2024, current_timestamp)",
             [f"pred_{player_id}", player_id, position, points],
         )
