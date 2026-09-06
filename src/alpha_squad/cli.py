@@ -44,6 +44,11 @@ from alpha_squad.evaluation.projection_calibration import (
     render_report,
     sign_stability,
 )
+from alpha_squad.evaluation.projection_specification import (
+    Y_ARMS,
+    render_specification_report,
+    run_specification_experiment,
+)
 from alpha_squad.evaluation.rb_availability_experiment import (
     PRACTICAL_SIGNIFICANCE_FLOOR,
 )
@@ -829,6 +834,80 @@ def evaluate_projection_calibration(
     console.print(table)
     console.print(f"treated seasons: {result['treated_seasons']}")
     console.print(f"arms clearing G1-G4: [green]{result['survivors'] or 'none'}[/green]")
+    console.print(f"report written to [green]{report_path}[/green]")
+    con.close()
+
+
+@evaluate_app.command("projection-specification")
+def evaluate_projection_specification(
+    season_start: int = typer.Option(2022, help="First target season (Y2's earliest eligible)"),
+    season_end: int = typer.Option(2025, help="Last season with realized outcomes"),
+    report_path: str = typer.Option(
+        "reports/projection_specification.md", help="Markdown report output path"
+    ),
+    json_path: str = typer.Option(
+        "reports/projection_specification.json", help="Raw per-arm per-season measurements"
+    ),
+) -> None:
+    """D78: walk-forward test of M6's TRAINING SPECIFICATION (which rows it may train on),
+    with pre-registered gates G1-G7.
+
+    Distinct from `evaluate projection-calibration` (D68), which tested post-hoc adjustments
+    to the model's OUTPUT. No arm here has a positional parameter of any kind, so no arm can
+    improve one position at another's expense -- G3 rejects it structurally if it tries.
+    Measurement only: this command changes no production behavior."""
+    settings = get_settings()
+    con = get_connection(settings)
+    init_db(con)
+
+    seasons = tuple(range(season_start, season_end + 1))
+    report = run_specification_experiment(con, seasons)
+    frame = report.frame()
+
+    table = Table(title=f"D78 projection specification ({season_start}-{season_end})")
+    for col in ("arm", "MAE", "RMSE", "spearman", "top-decile bias", "verdict"):
+        table.add_column(col)
+    for arm in Y_ARMS:
+        sub = frame[frame.arm == arm]
+        if sub.empty:
+            continue
+        verdict = next((v for v in report.verdicts if v.arm == arm), None)
+        table.add_row(
+            arm,
+            f"{sub.mae.mean():.3f}",
+            f"{sub.rmse.mean():.3f}",
+            f"{sub.spearman.mean():.4f}",
+            f"{sub.top_decile_bias.mean():+.2f}",
+            "control" if verdict is None else ("PASSES" if verdict.passed else "rejected"),
+        )
+    console.print(table)
+
+    for verdict in report.verdicts:
+        console.print(f"\n[bold]{verdict.arm}[/bold]")
+        for gate in verdict.gates:
+            mark = "[green]PASS[/green]" if gate.passed else "[red]FAIL[/red]"
+            console.print(f"  {mark} {gate.name}: {gate.detail}")
+
+    console.print(f"\nselected arm: [green]{report.selected or 'none -- nothing ships'}[/green]")
+
+    out = Path(json_path)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(
+        json.dumps(
+            {
+                "measurements": [m.__dict__ for m in report.measurements],
+                "gates": {
+                    v.arm: {g.name: {"passed": g.passed, "detail": g.detail} for g in v.gates}
+                    for v in report.verdicts
+                },
+                "selected": report.selected,
+            },
+            indent=2,
+            sort_keys=True,
+            default=str,
+        )
+    )
+    Path(report_path).write_text(render_specification_report(report))
     console.print(f"report written to [green]{report_path}[/green]")
     con.close()
 
