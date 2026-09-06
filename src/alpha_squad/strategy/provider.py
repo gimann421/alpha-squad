@@ -85,6 +85,25 @@ class ClaudeInvalidResponseError(ClaudeProviderError):
     caller -- never silently repaired (Phase 5)."""
 
 
+# Anthropic's structured-output schema does not support the JSON-schema numeric `minimum`/
+# `maximum` keywords (HTTP 400 "For 'number' type, properties maximum, minimum are not
+# supported"), which `Field(ge=0.0, le=1.0)` on `ClaudeDraftDecision.confidence` emits into
+# `model_json_schema()`. Stripping them here only changes what we tell Anthropic to constrain
+# the output to -- `ClaudeDraftDecision`'s own pydantic validation (`model_validate` in
+# `review()` below) still enforces 0.0-1.0 on every response regardless of what schema was
+# sent, so the confidence range is never actually unenforced.
+def _anthropic_compatible_schema(schema: dict) -> dict:
+    if isinstance(schema, dict):
+        return {
+            key: _anthropic_compatible_schema(value)
+            for key, value in schema.items()
+            if key not in ("minimum", "maximum")
+        }
+    if isinstance(schema, list):
+        return [_anthropic_compatible_schema(item) for item in schema]
+    return schema
+
+
 def render_user_message(context: ClaudeDecisionContext) -> str:
     return (
         "Review this draft pick. Respond with a single structured decision.\n\n"
@@ -133,7 +152,9 @@ class AnthropicClaudeProvider(ClaudeProvider):
                 output_config={
                     "format": {
                         "type": "json_schema",
-                        "schema": ClaudeDraftDecision.model_json_schema(),
+                        "schema": _anthropic_compatible_schema(
+                            ClaudeDraftDecision.model_json_schema()
+                        ),
                     },
                     "effort": "medium",
                 },

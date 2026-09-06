@@ -9,6 +9,7 @@ from unittest.mock import MagicMock
 
 import anthropic
 import duckdb
+import pydantic
 import pytest
 
 from alpha_squad.league.context import load_league_context
@@ -23,6 +24,7 @@ from alpha_squad.strategy.provider import (
     ClaudeInvalidResponseError,
     ClaudeUnavailableError,
     FakeClaudeProvider,
+    _anthropic_compatible_schema,
 )
 from alpha_squad.strategy.review import (
     STATUS_INVALID_RESPONSE,
@@ -124,6 +126,143 @@ class TestClaudeDraftDecisionContract:
                     "extra_field": "nope",
                 }
             )
+
+
+def _find_keys(node, banned: set[str]) -> list[str]:
+    """Recursively collects any banned key names appearing anywhere in a JSON-schema tree."""
+    found: list[str] = []
+    if isinstance(node, dict):
+        found.extend(k for k in node if k in banned)
+        for v in node.values():
+            found.extend(_find_keys(v, banned))
+    elif isinstance(node, list):
+        for item in node:
+            found.extend(_find_keys(item, banned))
+    return found
+
+
+class TestAnthropicSchemaCompatibility:
+    """Anthropic's structured-output schema rejects the JSON-schema numeric `minimum`/`maximum`
+    keywords (HTTP 400 "For 'number' type, properties maximum, minimum are not supported"),
+    which `Field(ge=0.0, le=1.0)` on `confidence` puts into `model_json_schema()`. The fix must
+    strip those from what is sent to Anthropic while `ClaudeDraftDecision`'s own pydantic
+    validation keeps enforcing the 0.0-1.0 range on every response we actually accept."""
+
+    def test_transformed_schema_has_no_minimum_or_maximum_anywhere(self):
+        """Exercises the actual transformation function `AnthropicClaudeProvider` applies to
+        `ClaudeDraftDecision.model_json_schema()`, not a mocked Anthropic client."""
+        raw_schema = ClaudeDraftDecision.model_json_schema()
+        assert _find_keys(raw_schema, {"minimum", "maximum"}) == ["maximum", "minimum"], (
+            "test fixture assumption broken: confidence's Field(ge=0.0, le=1.0) should still "
+            "emit minimum/maximum into the raw pydantic schema"
+        )
+
+        sanitized_schema = _anthropic_compatible_schema(raw_schema)
+        assert _find_keys(sanitized_schema, {"minimum", "maximum"}) == []
+
+    def test_transformed_schema_still_describes_confidence_as_a_number(self):
+        """The strip must remove only the unsupported constraint keywords, not the field."""
+        sanitized_schema = _anthropic_compatible_schema(ClaudeDraftDecision.model_json_schema())
+        confidence_schema = sanitized_schema["properties"]["confidence"]
+        assert confidence_schema["type"] == "number"
+        assert "minimum" not in confidence_schema
+        assert "maximum" not in confidence_schema
+
+    def test_schema_actually_sent_to_anthropic_has_no_minimum_or_maximum(self, con, monkeypatch):
+        """End-to-end through `AnthropicClaudeProvider.review()`'s real request-building code
+        (mocking only the SDK client call itself, per this file's existing convention) --
+        confirms the fix is wired into the actual `messages.create(...)` call, not just proven
+        in isolation against the transformation function."""
+        from alpha_squad.config.settings import Settings
+
+        _seed_two_qbs(con)
+        context, rec = _context(con)
+        settings = Settings(anthropic_api_key="sk-ant-test-fake", anthropic_model="claude-opus-5")
+        provider = AnthropicClaudeProvider(settings)
+        mock_client = MagicMock()
+        provider._client = mock_client
+
+        response = MagicMock()
+        response.stop_reason = "end_turn"
+        response.model = "claude-opus-5"
+        block = MagicMock()
+        block.type = "text"
+        block.text = json.dumps(
+            {
+                "decision": "FOLLOW_ALPHA",
+                "selected_player_id": rec.recommendation,
+                "confidence": 0.85,
+                "key_factors": [],
+                "risk_flags": [],
+                "missing_information": [],
+            }
+        )
+        response.content = [block]
+        mock_client.messages.create.return_value = response
+
+        provider.review(context)
+
+        sent_schema = mock_client.messages.create.call_args.kwargs["output_config"]["format"][
+            "schema"
+        ]
+        assert _find_keys(sent_schema, {"minimum", "maximum"}) == []
+        assert sent_schema["properties"]["confidence"]["type"] == "number"
+
+    def test_out_of_range_confidence_still_rejected_by_application_hard_validation(self):
+        """Anthropic's own schema no longer bounds confidence, so a malformed/adversarial
+        response could carry an out-of-range value. `ClaudeDraftDecision.model_validate` --
+        the same path `AnthropicClaudeProvider.review()` calls on every response -- must still
+        reject it; this is the app-side hard validation the schema constraint used to duplicate."""
+        with pytest.raises(pydantic.ValidationError):
+            ClaudeDraftDecision.model_validate(
+                {
+                    "decision": "FOLLOW_ALPHA",
+                    "selected_player_id": "qb0",
+                    "confidence": 1.5,
+                }
+            )
+        with pytest.raises(pydantic.ValidationError):
+            ClaudeDraftDecision.model_validate(
+                {
+                    "decision": "FOLLOW_ALPHA",
+                    "selected_player_id": "qb0",
+                    "confidence": -0.1,
+                }
+            )
+
+    def test_out_of_range_confidence_from_anthropic_raises_invalid_response(self, con, monkeypatch):
+        """The full `AnthropicClaudeProvider.review()` path: even though the schema we now send
+        to Anthropic cannot constrain the number, a response with an out-of-range confidence is
+        still turned into `ClaudeInvalidResponseError`, not accepted."""
+        from alpha_squad.config.settings import Settings
+
+        _seed_two_qbs(con)
+        context, rec = _context(con)
+        settings = Settings(anthropic_api_key="sk-ant-test-fake", anthropic_model="claude-opus-5")
+        provider = AnthropicClaudeProvider(settings)
+        mock_client = MagicMock()
+        provider._client = mock_client
+
+        response = MagicMock()
+        response.stop_reason = "end_turn"
+        response.model = "claude-opus-5"
+        block = MagicMock()
+        block.type = "text"
+        block.text = json.dumps(
+            {
+                "decision": "FOLLOW_ALPHA",
+                "selected_player_id": rec.recommendation,
+                "confidence": 1.5,
+                "key_factors": [],
+                "risk_flags": [],
+                "missing_information": [],
+            }
+        )
+        response.content = [block]
+        mock_client.messages.create.return_value = response
+
+        with pytest.raises(ClaudeInvalidResponseError, match="schema validation"):
+            provider.review(context)
 
 
 class TestContextBuilder:
