@@ -4550,3 +4550,39 @@ constant instead, so they can't silently drift from the source of truth on the n
 present in `SYSTEM_PROMPT` and that `PROMPT_VERSION == "draft_strategy_v2"`. Whether the guard
 changes real model behavior is not unit-testable and was not claimed -- that needs a real Claude
 call, which this change deliberately does not make.
+
+## D77 — `ANTHROPIC_API_KEY` cannot reach a Claude Code on the Web cloud environment; the Stage 1 layer now also reads `ALPHA_SQUAD_ANTHROPIC_API_KEY`
+
+Investigating why an `ANTHROPIC_API_KEY` added to a Claude Code on the Web environment's
+"Environment variables" never appeared in that environment's cloud sessions -- confirmed by
+diagnosing a real live session end to end: the key was absent from `env`, from `/proc/1/environ`,
+and from every freshly-created session on the same environment, while sibling variables set the
+same way (`CFBD_API_KEY`, `FANTASYPROS_API_KEY`) came through correctly. That isolated the gap to
+the variable name, not the mechanism, and ruled out session staleness, wrong environment, and the
+separate (Pro/Max-only) API-credentials feature.
+
+Anthropic's own docs confirm this is deliberate, not a bug: Claude Code on the Web "always uses
+your subscription credentials. If you set `ANTHROPIC_API_KEY` or `ANTHROPIC_AUTH_TOKEN` in the
+sandbox environment, it doesn't override your subscription credentials," and cloud sessions "do
+not... read these environment variables: they use OAuth" (`code.claude.com/docs/en/authentication`).
+Both names are reserved by the harness for its own login and are never exposed to a cloud
+session's process environment -- in *any* Claude Code cloud session, permanently, not something
+that starts working with a fresh session or more retries. This has nothing to do with Alpha's
+own methodology, scoring, or the Stage 1 Claude layer's design (D74); it is purely a deployment
+constraint on how a hosting-environment secret reaches this specific app's process environment
+when that hosting environment is Claude Code on the Web.
+
+Fix: `Settings.anthropic_api_key` (`config/settings.py`) now resolves via
+`AliasChoices("ALPHA_SQUAD_ANTHROPIC_API_KEY", "ANTHROPIC_API_KEY")` -- an unreserved name takes
+priority when set, with plain `ANTHROPIC_API_KEY` kept as a fallback for local dev and any other
+deployment target where the name isn't reserved. `.env.example` documents both, with the reason.
+No change to `strategy/provider.py`, `AnthropicClaudeProvider`, the system prompt, or any
+scoring/methodology; this is config-resolution only, and the "absent key means unavailable,
+Alpha's own recommendation is unaffected" behavior from D74 is unchanged.
+
+Test added: `test_settings_reads_anthropic_key_from_either_alias`
+(`tests/unit/test_settings.py`) asserts both env var names independently populate
+`anthropic_api_key`. Not tested here (and not testable without a real Claude Code cloud
+environment): that the fix actually resolves the deployment issue end to end -- that needs
+verifying `ALPHA_SQUAD_ANTHROPIC_API_KEY` set in the real cloud environment reaches a real
+session, which is a manual follow-up, not a unit test.

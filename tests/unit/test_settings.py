@@ -26,3 +26,17 @@ def test_settings_defaults_are_relative_paths_under_data():
     s = Settings(_env_file=None)
     assert s.data_dir == Path("data")
     assert s.raw_dir == Path("data") / "raw"
+
+
+def test_settings_reads_anthropic_key_from_either_alias(monkeypatch):
+    """D77: Claude Code on the Web reserves ANTHROPIC_API_KEY for its own subscription auth and
+    never exposes it to a cloud session, so ALPHA_SQUAD_ANTHROPIC_API_KEY must work as an
+    independent source, and plain ANTHROPIC_API_KEY must still work outside Claude Code."""
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("ALPHA_SQUAD_ANTHROPIC_API_KEY", raising=False)
+
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "legacy-key")
+    assert Settings(_env_file=None).anthropic_api_key == "legacy-key"
+
+    monkeypatch.setenv("ALPHA_SQUAD_ANTHROPIC_API_KEY", "cloud-key")
+    assert Settings(_env_file=None).anthropic_api_key == "cloud-key"
