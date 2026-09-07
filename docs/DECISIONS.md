@@ -4586,3 +4586,221 @@ Test added: `test_settings_reads_anthropic_key_from_either_alias`
 environment): that the fix actually resolves the deployment issue end to end -- that needs
 verifying `ALPHA_SQUAD_ANTHROPIC_API_KEY` set in the real cloud environment reaches a real
 session, which is a manual follow-up, not a unit test.
+
+## D78 — The reported "compression" is mostly correct behaviour; the real defects were in M6's training specification and in a DST scoring order that silently produced no team defenses at all
+
+Response to a pre-draft report that the 2026 projections were "materially miscalibrated,
+particularly at RB" — top projected WR ~316 against ~3–4 real 2025 WRs above that, top projected
+RB ~251 against ~10–11 real 2025 RBs above it, and RB visibly more compressed than WR.
+
+Both observations reproduce exactly. **Their interpretation does not survive measurement.** What
+did survive is a different, smaller, and genuinely fixable set of defects, plus one
+production-blocking bug that had nothing to do with the projections and would have cost a real
+draft its DEF slot.
+
+### 1. The pipeline, traced end to end
+
+    player_season_stats (nflverse, real outcomes)
+      -> models/established/season_level.py::load_season_level_data
+           4 features: prior_ppg, prior_games, prior_weighted_total (0.65/0.35 two-season
+           blend), preseason_ecr_rank; target = season S total PPR
+      -> models/uncertainty/run.py  CatBoost, 150 iters, depth 3, lr 0.08, MAE loss, per position
+           train on target seasons <= S-2 | calibrate conformal quantiles on S-1 | predict S
+      -> uncertainty_predictions.point_prediction
+      -> league/replacement.py::load_season_projections   (+ M7 rookies, + D57 K/DST baselines)
+      -> recommend_draft_pick / API /rankings / the UI
+
+Confirmed, as D68 also found: `point_prediction` reaches the draft engine **untransformed**.
+There is no post-processing, clipping, normalisation or blending anywhere on that path, and the
+`median` the conformal step computes is read by no decision path. **The number shown in the UI is
+byte-identical to the number Alpha drafts on** — verified live through `train projection-status`,
+which calls the application's own loader rather than re-querying.
+
+### 2. "N real players beat the top projection" is not evidence of a defect
+
+`E[max Y] > max E[Y]` for any noisy outcome: the realised leaderboard is the maximum of draws,
+the projection is a conditional expectation, and the top projection *should* be exceeded by
+several players. The question is by how many.
+
+Using the model's own out-of-sample residual distribution (residuals measured on season S-1,
+exactly as the production conformal step does — no target-season information), bootstrapped 4,000
+times per position-season over 2021–2025:
+
+| | observed exceedances | model-implied | 90% band |
+|---|---|---|---|
+| 2024 RB | 16 | 8.7 | [5, 13] |
+| **2025 RB** | **11** | **13.0** | **[9, 17]** |
+| 2024 WR | 3 | 5.6 | [2, 9] |
+| 2025 WR | 5 | 5.6 | [2, 9] |
+
+**The observed count sits inside the model's own 90% predictive band in 18 of 20 position-seasons**
+(homoskedastic resampling), and the 2025 RB figure that prompted the report is one the model
+expected to be *larger* than it was. The single genuine outlier in the whole window is 2024 RB.
+The realised positional maximum is inside the band in 16 of 20.
+
+So the headline symptom is expected behaviour of a projection with this signal-to-noise ratio, and
+"raise the top of the board until it looks like last season's leaderboard" is a change toward a
+worse model, not a better one. Measured directly: the un-shrunk `prior_weighted_total` reaches the
+largest top-of-board values of anything tested (RB max 345 vs M6's 257) and is the **worst**
+projection in the comparison — MAE 49.4 vs 45.3, RMSE 69.0 vs 64.1, and a top-decile bias of −37.5
+(it over-projects the top by 37 points).
+
+### 3. The cross-positional part is real, and the market has exactly the same miss
+
+Within-position top-decile signed bias (realised − projected), production model, 2019–2025:
+
+    QB  -50.1  +36.8  +41.6  -43.6  -139.7  -53.5  -49.0     sign NOT stable
+    RB   -4.3  -19.8  -33.8  +37.2    +2.8  +52.6  +64.2     sign NOT stable; TRENDING
+    TE   -4.9   +8.8  +16.1  -20.8    -3.8  -10.1   -4.5     sign NOT stable
+    WR  -15.1  -12.8  -18.9   +4.7    +2.1  -46.2  -59.1     negative in 5 of 7
+
+The RB-minus-WR gap at the top of the board is +98.8 in 2024 and +123.3 in 2025 — large enough to
+matter to a draft — but it was −14.9 in 2021 and +0.7 in 2023. This is a trend, not a stationary
+bias, which is the same conclusion D68/D69/D70 reached by three other routes.
+
+**The decisive measurement: the FantasyPros consensus makes the identical error.** Scoring the ECR
+rank-to-points isotonic baseline over the same 2022–2025 window, RB top-decile bias is **+38.96**
+against the model's **+39.21** — a difference of 0.25 points — and WR is −12.5 against −24.6, same
+sign. Thousands of human experts, pricing the same players from far more information, under-shot
+elite RBs in 2024–2025 by the same amount Alpha did. That is not an Alpha modelling defect; it is
+a league-environment shift that the market did not price either, and a backward-looking estimator
+cannot be blamed for missing what the forward-looking market also missed.
+
+### 4. What was measured and rejected
+
+All walk-forward, production's exact split, paired over 16 position-seasons (2022–2025 × QB/RB/WR/TE).
+ΔMAE versus control; negative is better:
+
+| candidate | ΔMAE | verdict |
+|---|---|---|
+| RMSE loss instead of MAE | **+2.29** | rejected — improves top-decile calibration, costs accuracy everywhere |
+| Huber(δ=50) loss | +0.61 | rejected |
+| more capacity (600 iters, depth 4, RMSE) | +2.81 | rejected |
+| Ridge (linear, extrapolates) | +3.92 | rejected |
+| predict ppg × games separately | +0.69 | rejected |
+| recency SAMPLE WEIGHTS (half-life 2 / 4 seasons) | +0.16 / +0.31 | rejected |
+| drop `preseason_ecr_rank` | +1.83 | rejected — ECR is the model's most valuable feature |
+| ECR encoded as NaN rather than the 999 sentinel | −0.48 | not carried forward (weaker than Y2) |
+| ECR-availability indicator feature | +0.00 | rejected |
+
+No positional calibration was fitted, and no RB term of any kind exists in anything shipped.
+D68/D69/D70 closed that avenue with pre-registered gates and nothing here reopens it.
+
+### 5. What DID hold up: two defects in the training specification
+
+Pre-registered in `evaluation/projection_specification.py`, committed to git (`d976622`) before
+the confirmatory run — arms, gates and selection rule fixed in advance. This is a
+**diagnostic-informed** pre-registration, not a blind one, and that is stated in the module: the
+arms came from the exploratory work above. What the pre-registration buys is the decision rule.
+
+**Defect 1 — the ECR sentinel does two different jobs.** `preseason_ecr_rank` is imputed to 999
+for a missing rank. That is right for a player absent from a board that exists; it is wrong for a
+season with no board at all. `market_snapshot` has no Jul/Aug `ro` rows before 2020, so every
+training row with target season 2016–2019 carries 999 regardless of who the player was — ~44% of
+the RB rows behind a 2026 projection — teaching the model that a bottom-of-board consensus rank is
+compatible with an elite outcome, because in those rows it always is.
+
+**Defect 2 — the most recent completed season never reaches the point model.** `proper_train` is
+`target_season < calib_season`, so S-1 is spent entirely on conformal calibration. For a 2026
+projection that discards 2025 outright. Split-conformal needs S-1 held out from the model whose
+residuals it measures; it does not need S-1 held out from the model that produces the point
+prediction, and those can be two different fits.
+
+Arms: Y0 control, Y1 (defect 2), Y2 (defect 1), Y3 (both). Seven gates: accuracy improves; not one
+season; **no position sacrificed**; ordering intact; not noise (paired t-test); top-of-board
+calibration not worse; leave-one-season-out. G3 is the gate that makes a disguised positional bonus
+impossible — an arm buying RB accuracy with WR accuracy fails regardless of its pooled score.
+
+| arm | MAE | RMSE | Spearman | verdict |
+|---|---|---|---|---|
+| Y0 control | 41.879 | 58.288 | 0.7656 | — |
+| **Y1** | **40.725** | **56.723** | **0.7749** | **PASSES all seven** |
+| Y2 | 40.495 | 56.946 | 0.7713 | **FAILS G6** (top-of-board worse at RB and WR) |
+| Y3 | 39.687 | 55.892 | 0.7804 | PASSES all seven |
+
+**Y1 shipped**, by the pre-registered rule (lowest-numbered arm clearing every gate). Y3 scores
+better and it was not taken: the rule was fixed before the run, and Y2 — the component Y3 adds —
+fails a gate on its own, so Y3's advantage rests on an interaction rather than on a component that
+stands up alone. Y3 is recorded as a candidate for a future phase with its own pre-registration.
+
+Y1: ΔMAE −1.154 (paired p=0.026), better in **4 of 4** seasons, better at **all four** positions,
+leave-one-season-out negative in all four folds.
+
+### 6. Y1 in production, re-measured on the real backtest
+
+`train uncertainty` re-run end to end, 2021–2025, both specifications:
+
+| | v1 (D67 spec) | v2 (D78 spec) |
+|---|---|---|
+| MAE | 42.31 | **40.88** |
+| RMSE | 59.09 | **57.09** |
+| Spearman | 0.757 | **0.770** |
+| MAE by season | 44.0 / 40.5 / 43.9 / 42.4 / 40.7 | **41.4 / 39.3 / 42.5 / 41.0 / 40.3** |
+| conformal coverage_10_90 (target 0.80) | 0.7901 | **0.7971** |
+| mean interval width | 137.04 | 137.04 |
+| realised points captured by the projected starters | — | better in 4 of 5 seasons |
+
+The uncertainty layer is intact and slightly better centred. The interval model still trains
+strictly before the calibration season, so its residuals stay genuinely out-of-sample; it is
+trained on less data than the point model, so the intervals are conservative rather than
+optimistic — the safe direction, and `calibration_diagnostics` is what checks it rather than the
+argument.
+
+`model_version` bumps to `uncertainty_catboost_v2` so two specifications can never be read as one
+series, and `--specification legacy` reproduces D67's exact behaviour under the old version, so
+every pre-D78 backtest stays reproducible rather than silently redefined.
+
+**Effect on the reported symptom, 2026 board, top-12 mean by position:**
+
+| | v1 | v2 |
+|---|---|---|
+| RB | 206.3 | **222.4** |
+| WR | 253.1 | **242.0** |
+| QB | 283.2 | 284.0 |
+| TE | 146.2 | 148.1 |
+
+The RB−WR gap at the top of the board narrows by 27 points, in the direction the diagnostics
+predicted, **from a change containing no positional term whatsoever**. It does not, and should
+not, lift the RB board to last season's leaderboard: RB1 goes 238.8 → 265.6 while WR1 goes
+320.6 → 276.6.
+
+### 7. A production-blocking bug that had nothing to do with projections
+
+The new `train projection-status` gate — which calls `load_season_projections` rather than
+inspecting job exit codes — immediately reported that the 2026 board contained **zero team
+defenses**, and that this was true of every season.
+
+`features build` runs the K/DST scoring step, which joins `team_week_points` for points allowed.
+`make` ran `features` **before** `team-scores`, so on a clean database that table was empty,
+`build_dst_week_stats` wrote zero rows, and the counts were collected but never printed. A league
+starting a DEF would have filled that slot with nothing and scored zero for it, in silence — the
+exact failure CLAUDE.md's D58 note warns about, and one that no test caught because no test built
+the pipeline in the documented order.
+
+Fixed at the dependency rather than in the running order: `build_features` builds
+`team_week_points` itself before the K/DST step, `build_kicking_and_defense` raises
+`MissingTeamScoresError` instead of writing zero, and the CLI prints the counts and flags a zero.
+Rebuilt: 5,790 DST week rows, 352 DST season rows, 813 K/DST projections, 32 DSTs on the 2026
+board.
+
+### 8. Current-season pipeline
+
+`make project-current-season` (`CURRENT_SEASON`, default 2026) ends on `train projection-status`,
+which is a gate, not a summary: it exits non-zero if the board is missing, empty, or missing a
+position the league must start, and it reports rows written under a superseded `model_version` so
+a stale artifact cannot pass unnoticed. Executed for real: 610 established + 150 rookie + 74 K/DST
+rows; the application's own loader returns **834 players across all 6 positions**.
+
+### 9. What remains UNKNOWN
+
+- **Whether the 2024–2025 RB regime persists into 2026.** Nothing here forecasts it, and the fact
+  that the expert market missed it too is evidence that it is not forecastable from preseason
+  information. If it persists, Alpha will under-project elite RBs again — as will the market.
+- **Whether QB projections are usable at the top of the board.** QB's top-decile bias is the
+  largest single miscalibration in the system (−45 even after Y1) and it is sign-unstable. D68
+  flagged this and it remains unexamined.
+- **Whether Y3 is better than Y1.** It scores better on every metric and clears every gate, but
+  its ECR component fails G6 alone. Untested as a shipped configuration.
+- **Whether any of this changes drafting.** Measured separately — see the paired benchmark
+  contrast below — but the season universe is n=5 and D71's power analysis applies unchanged.
+- **Scoring format.** Every projection is full PPR (D72). Unchanged by this phase.
