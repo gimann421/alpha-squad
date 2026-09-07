@@ -244,6 +244,40 @@ class TestRankingsAreADirectProjection:
         r = client.get("/rankings", params={"season": 2025})
         assert [row["player_id"] for row in r.json()] == ["p2", "p3", "p1"]
 
+    def test_rankings_serves_only_the_shipped_model_version(self, con, client):
+        """D78 regression. `uncertainty_predictions` is keyed by
+        (player_id, season, model_version), so a second specification in the table used to make
+        this endpoint return EVERY player twice with different projections, interleaved by
+        point_prediction. Reproduced on real 2026 data: 610 duplicated players. The draft engine
+        was never affected -- it has always pinned the version -- which is precisely why this
+        was the hardest place for a stale projection to be noticed."""
+        from alpha_squad.models.uncertainty.run import (
+            LEGACY_MODEL_VERSION,
+        )
+        from alpha_squad.models.uncertainty.run import (
+            MODEL_VERSION as UNCERTAINTY_MODEL_VERSION,
+        )
+
+        _seed_player(con, "p1", "Two Versions", "WR")
+        for version, points, pred_id in (
+            (UNCERTAINTY_MODEL_VERSION, 200.0, "pred_current"),
+            (LEGACY_MODEL_VERSION, 999.0, "pred_superseded"),
+        ):
+            con.execute(
+                "INSERT INTO uncertainty_predictions (prediction_id, player_id, season, "
+                "position, model_version, feature_version, point_prediction, "
+                "calibration_season, predicted_at) VALUES (?, 'p1', 2025, 'WR', ?, 'fv1', ?, "
+                "2024, current_timestamp)",
+                [pred_id, version, points],
+            )
+
+        body = client.get("/rankings", params={"season": 2025}).json()
+        assert len(body) == 1, "a superseded model_version must not add a second row"
+        assert body[0]["model_version"] == UNCERTAINTY_MODEL_VERSION
+        # The superseded row deliberately carries the LARGER projection, so an unfiltered
+        # ORDER BY point_prediction would have surfaced it first.
+        assert body[0]["point_prediction"] == pytest.approx(200.0)
+
 
 class TestWeeklyRankingsSurfaceEvidenceAdjustment:
     """D46: `/rankings/weekly` is the closed loop the audit found missing -- evidence

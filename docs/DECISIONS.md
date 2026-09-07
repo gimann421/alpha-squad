@@ -4791,6 +4791,21 @@ position the league must start, and it reports rows written under a superseded `
 a stale artifact cannot pass unnoticed. Executed for real: 610 established + 150 rookie + 74 K/DST
 rows; the application's own loader returns **834 players across all 6 positions**.
 
+### 8b. Effect on the earlier D68/D69/D70 commands, stated explicitly
+
+`evaluation/projection_calibration.py` (D68) and `evaluation/rb_availability_experiment.py`
+(D70) read `uncertainty_predictions` at the imported `UNCERTAINTY_MODEL_VERSION` constant, so
+**re-running those commands now measures the v2 model and will not reproduce the numbers recorded
+in D68/D70.** That is a different experiment, not a correction of theirs. Their modules were
+committed before their own arms were fitted and are deliberately left untouched here — editing a
+frozen pre-registration after the fact would be worse than the inconvenience.
+
+D68's and D70's recorded results stand as recorded, and remain reproducible: the v1 rows are
+still in `uncertainty_predictions` (nothing deletes them), and
+`alpha-squad train uncertainty --specification legacy` regenerates them from scratch under
+`uncertainty_catboost_v1`. A future phase wanting to re-run those experiments against v2 should
+say so explicitly and report it as a new measurement.
+
 ### 9. What remains UNKNOWN
 
 - **Whether the 2024–2025 RB regime persists into 2026.** Nothing here forecasts it, and the fact

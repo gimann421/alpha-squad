@@ -18,6 +18,7 @@ from fastapi import APIRouter, Depends, Query
 from alpha_squad.api.deps import get_db
 from alpha_squad.api.schemas import RankingRow, WeeklyRankingRow
 from alpha_squad.models.established.train import WEEKLY_PROJECTION_BASE_MODEL
+from alpha_squad.models.uncertainty.run import MODEL_VERSION as UNCERTAINTY_MODEL_VERSION
 
 router = APIRouter(prefix="/rankings", tags=["rankings"])
 
@@ -29,8 +30,15 @@ def get_rankings(
     limit: int = Query(50, le=500),
     con: duckdb.DuckDBPyConnection = Depends(get_db),
 ) -> list[RankingRow]:
-    where = ["u.season = ?"]
-    params: list = [season]
+    # D78: pin the shipped model version. `uncertainty_predictions` is keyed by
+    # (player_id, season, model_version), so once a second specification exists this query
+    # returns EVERY player twice -- once per version, with different point predictions, ordered
+    # against each other. Verified on real 2026 data before the fix: 610 duplicated players, and
+    # a top-of-board that interleaved v1 and v2 rows. The draft engine was never affected
+    # (`load_season_projections` has always pinned the version); this is the served ranking list
+    # the UI reads, which is exactly where a stale projection would be hardest to notice.
+    where = ["u.season = ?", "u.model_version = ?"]
+    params: list = [season, UNCERTAINTY_MODEL_VERSION]
     if position:
         where.append("u.position = ?")
         params.append(position)
