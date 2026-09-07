@@ -204,10 +204,16 @@ export function DraftView() {
     pickedNames,
   ]);
 
+  // The WHOLE board, not a top-N slice (D79). `pool` is what `available_player_ids` is built
+  // from, so anything missing here is a player Alpha can never recommend. At limit 500 that
+  // silently excluded every kicker, every team defense and every rookie -- 163-179 players per
+  // real season -- and it also broke the engine's draft-aware replacement level, which reads a
+  // short pool as "everyone else is already drafted". Real boards run ~600-650 players;
+  // MAX_RANKING_ROWS (api/routers/rankings.py) is the server-side cap.
   async function loadPool() {
     setPoolError(null);
     try {
-      const rows = await api.getRankings({ season, limit: 500 });
+      const rows = await api.getRankings({ season, limit: 2000 });
       setPool(rows);
     } catch (e) {
       setPoolError(String(e));

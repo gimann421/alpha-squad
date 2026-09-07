@@ -279,6 +279,113 @@ class TestRankingsAreADirectProjection:
         assert body[0]["point_prediction"] == pytest.approx(200.0)
 
 
+class TestRankingsServeTheEngineBoard:
+    """D79 regression. `GET /rankings` used to read `uncertainty_predictions` alone, while the
+    draft engine drafts from `load_season_projections` (uncertainty + rookies + K/DST). The web
+    Draft view builds `available_player_ids` from this endpoint, so the difference was the set of
+    players Alpha could never recommend -- measured at 163-179 per real season, including every
+    kicker and every team defense in a league that starts one of each.
+
+    The invariant these tests pin is that the two universes are the SAME. Anything less specific
+    (e.g. "kickers appear") would pass again the moment a fourth projection source is added and
+    only this endpoint forgets about it."""
+
+    @staticmethod
+    def _seed_three_sources(con, season=2025):
+        from alpha_squad.models.baselines.kicking_defense import MODEL_NAME as KDST_MODEL_NAME
+        from alpha_squad.models.uncertainty.run import (
+            MODEL_VERSION as UNCERTAINTY_MODEL_VERSION,
+        )
+
+        _seed_player(con, "asq_wr", "Established Receiver", "WR")
+        con.execute(
+            "INSERT INTO uncertainty_predictions (prediction_id, player_id, season, position, "
+            "model_version, feature_version, point_prediction, p10, p90, confidence, "
+            "calibration_season, predicted_at) VALUES ('pred_wr', 'asq_wr', ?, 'WR', ?, 'fv1', "
+            "250.0, 190.0, 310.0, 0.8, ?, current_timestamp)",
+            [season, UNCERTAINTY_MODEL_VERSION, season - 1],
+        )
+        _seed_player(con, "asq_rookie_rb", "Rookie Back", "RB")
+        con.execute(
+            "INSERT INTO rookie_predictions (prediction_id, player_id, draft_class, "
+            "position, predicted_rookie_points, model_version, predicted_at) "
+            "VALUES ('rpred_1', 'asq_rookie_rb', ?, 'RB', 240.0, 'rookie_v1', "
+            "current_timestamp)",
+            [season],
+        )
+        _seed_player(con, "asq_dst_KC", "Kansas City", "DST")
+        con.execute(
+            "INSERT INTO projection_snapshot (model_name, player_id, season, position, "
+            "predicted_points, built_at) VALUES (?, 'asq_dst_KC', ?, 'DST', 95.0, "
+            "current_timestamp)",
+            [KDST_MODEL_NAME, season],
+        )
+        _seed_player(con, "asq_k_1", "A Kicker", "K")
+        con.execute(
+            "INSERT INTO projection_snapshot (model_name, player_id, season, position, "
+            "predicted_points, built_at) VALUES (?, 'asq_k_1', ?, 'K', 140.0, current_timestamp)",
+            [KDST_MODEL_NAME, season],
+        )
+
+    def test_the_served_board_is_exactly_the_engine_board(self, con, client):
+        from alpha_squad.league.replacement import load_season_projections
+
+        self._seed_three_sources(con)
+        projections, _ = load_season_projections(con, 2025)
+        body = client.get("/rankings", params={"season": 2025, "limit": 2000}).json()
+        assert {row["player_id"] for row in body} == set(projections)
+
+    def test_the_served_projection_is_the_engine_projection(self, con, client):
+        from alpha_squad.league.replacement import load_season_projections
+
+        self._seed_three_sources(con)
+        projections, _ = load_season_projections(con, 2025)
+        body = client.get("/rankings", params={"season": 2025, "limit": 2000}).json()
+        for row in body:
+            assert row["point_prediction"] == pytest.approx(projections[row["player_id"]])
+
+    def test_kickers_and_defenses_are_draftable(self, con, client):
+        """The league config starts a K and a DEF. A board that omits them cannot fill them."""
+        self._seed_three_sources(con)
+        body = client.get("/rankings", params={"season": 2025, "limit": 2000}).json()
+        assert {row["position"] for row in body} >= {"K", "DST"}
+
+    def test_a_rookie_reaches_the_board(self, con, client):
+        self._seed_three_sources(con)
+        body = client.get("/rankings", params={"season": 2025, "limit": 2000}).json()
+        assert "asq_rookie_rb" in {row["player_id"] for row in body}
+
+    def test_rows_without_a_conformal_interval_report_null_rather_than_a_fabricated_one(
+        self, con, client
+    ):
+        """K/DST are deliberately baselines, not models (D57), and M7 rookie projections carry
+        no conformal interval either. Reporting a made-up interval for them would be exactly the
+        fabrication the project forbids."""
+        self._seed_three_sources(con)
+        body = client.get("/rankings", params={"season": 2025, "limit": 2000}).json()
+        by_id = {row["player_id"]: row for row in body}
+        for player_id in ("asq_k_1", "asq_dst_KC", "asq_rookie_rb"):
+            row = by_id[player_id]
+            assert row["p10"] is None and row["p90"] is None
+            assert row["confidence"] is None
+            assert row["top12_prob"] is None and row["top24_prob"] is None
+        assert by_id["asq_wr"]["confidence"] == pytest.approx(0.8)
+
+    def test_the_position_filter_still_works_across_every_source(self, con, client):
+        self._seed_three_sources(con)
+        body = client.get(
+            "/rankings", params={"season": 2025, "position": "K", "limit": 2000}
+        ).json()
+        assert [row["player_id"] for row in body] == ["asq_k_1"]
+
+    def test_the_whole_board_fits_in_one_request(self, con, client):
+        """The Draft view fetches the board in a single call; a cap below a real season's size
+        would silently reintroduce the truncation this endpoint was fixed for."""
+        from alpha_squad.api.routers.rankings import MAX_RANKING_ROWS
+
+        assert MAX_RANKING_ROWS >= 1000  # real 2021-2026 boards run 602-651
+
+
 class TestWeeklyRankingsSurfaceEvidenceAdjustment:
     """D46: `/rankings/weekly` is the closed loop the audit found missing -- evidence
     computed a bounded adjustment (M9) but nothing served it. This must return the real

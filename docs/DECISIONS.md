@@ -4893,3 +4893,133 @@ afterward.
 - **Whether any of this changes drafting.** Measured separately — see the paired benchmark
   contrast below — but the season universe is n=5 and D71's power analysis applies unchanged.
 - **Scoring format.** Every projection is full PPR (D72). Unchanged by this phase.
+
+## D79 — The draft engine's value base is re-measured under the corrected replacement level and SURVIVES; the real defects were that the product's board was never the engine's board
+
+Second-pass draft-decision investigation, following D78/Y1. Full working document:
+`docs/DRAFT_DECISION_ENGINE_INVESTIGATION.md`. **`league/draft.py` is byte-identical to its D67
+state** — no scoring, VORP, MSV, replacement, survival or roster-fit change. What shipped is a
+board/plumbing fix that restores already-benchmarked behaviour, plus a controlled-test suite.
+
+### The reported symptom is real, and larger than reported
+
+Ranking the real 2021–2025 board with the production score at pick 1.01 and comparing the top-24
+positional composition against a **hindsight answer key** (realized points over the *realized*
+demand-boundary replacement level — the quantity the engine is actually estimating, not raw
+realized points):
+
+| source | QB | RB | WR | TE |
+|---|---|---|---|---|
+| Alpha (production score) | 28 | **24** | **63** | 5 |
+| consensus ECR | 4 | 49 | 60 | 7 |
+| **hindsight draft value** | 23 | **51** | **42** | 4 |
+
+Alpha puts less than half as many running backs in its top 24 as the hindsight-optimal ranking,
+in **all five seasons**. Its rank correlation with that key (+0.670) is **worse than plain
+consensus ECR (+0.712), in 5 of 5 seasons**.
+
+### Mechanism, isolated by layer
+
+Pooled top-24 composition by successive layer of the score:
+
+| layer | QB | RB | WR | TE |
+|---|---|---|---|---|
+| raw projection (BPA) | 72 | 5 | 42 | 1 |
+| **`daVORP` alone** | **23** | **30** | 65 | 2 |
+| `msv + daVORP` (shipped base) | 49 | **16** | 54 | 1 |
+| + opportunity cost | 38 | 19 | 62 | 1 |
+| full production score | 28 | 24 | 63 | 5 |
+| hindsight key | 23 | 51 | 42 | 4 |
+
+The draft-aware VORP transform **alone** is the layer closest to the key (QB exactly right).
+Adding `msv` moves it away, because on an empty roster `marginal_starter_value` is identically
+the candidate's own projection — so early in a draft the value base is `2·projection −
+replacement`, raw points at double weight and scarcity at single weight.
+
+### The pre-registered test of that mechanism: REFUTED
+
+Z-tiers (`evaluation/draft_forensics.py`, rule committed before the run; `Z0` asserted
+byte-identical to the shipped `X0`/`W1`). D63 selected `msv + VORP` against the **static**
+replacement level, and its stated reason for the sum winning is a property of that level which
+D67 removed — so the value base was re-measured on top of D67's draft-aware level. 400 drafts
+per format, fair opponent.
+
+| tier | value base | target format | `legacy_2qb_dynasty` |
+|---|---|---|---|
+| **Z0** | **msv + 1.0·daVORP (shipped)** | **2055.9** | **2114.5** |
+| Z1 | daVORP alone | −34.6 | −58.5 |
+| Z2 | msv over draft-aware replacement | −44.4 | −75.8 |
+| Z3 | min(daVORP, msv) | −39.4 | −31.3 |
+| ZW0 / ZW05 / ZW2 / ZW3 *(sweep, never ships)* | w = 0 / 0.5 / 2 / 3 | −81.1 / −22.8 / −28.5 / −22.1 | −99.0 / −5.7 / −21.2 / −34.6 |
+
+**Every alternative loses, in both formats. Nothing ships.** The alternatives do exactly what the
+mechanism predicts to the *board* — Z1 drafts 3.14 RB vs the control's 2.88, ZW0 the fewest at
+2.42 and the most WR at 6.24 — and every one of those rosters is worse on realized starter points.
+**More running backs did not mean better teams.** Board-ordering accuracy is not the objective; a
+draft is sequential, and the hindsight key also rewards realized variance an expectation-maximising
+drafter is right not to chase.
+
+D63's finding therefore survives re-measurement under the corrected level, in two formats, and
+`w = 1.0` sits at the maximum of a **broad plateau** rather than a narrow spike. The incumbent has
+positive evidence it did not previously have.
+
+**Gate 8 (new, D71's correction).** Season-clustered paired CIs (t, df=4) rather than the naive
+n=50 i.i.d. interval every phase through D70 quoted. No margin here is resolvable — every CI
+contains zero. Reported as such. A corollary worth recording: D63's own +48.6/+62.6 margins are
+below the instrument's ~128-point MDE too, so the shipped value base was never *established* to
+beat its alternatives — it won an underpowered comparison, and now has a second one.
+
+### What actually shipped: the product's board was never the engine's board
+
+`GET /rankings` read `uncertainty_predictions` alone (established QB/RB/WR/TE). The engine drafts
+from `load_season_projections` = uncertainty **+ rookies (M7) + K/DST (D57)**. The web Draft view
+builds `available_player_ids` from that endpoint, so per real season **163–179 players were
+invisible to every recommendation the product ever made**, including *every kicker and every team
+defense* in a league that starts one of each, and 6–13 of the engine's own top 100 (2025's
+highest-projected running back among them).
+
+Second-order, and worse: `recommend_draft_pick` gates D67's draft-aware replacement behind
+`len(projections) − len(available) <= teams × roster_size`, whose premise is that everything
+missing from `available` was *drafted*. With 163–179 players never in the pool, **that guard
+failed from the first pick of every season**, and production silently fell back to the static
+replacement level — the D65 defect D67 was shipped to remove. Measured at pick 1, 2025: the
+RB-vs-WR replacement gap is **−0.4 static vs +31.1 draft-aware**, i.e. the fallback removes a
+~31-point structural advantage for running backs. The benchmark passes the full universe, so
+every published D67 number was measured with the mechanism *on*.
+
+Fixed by serving one universe: `GET /rankings` now returns `load_season_projections`' board, and
+the Draft view fetches all of it. Verified on real 2021–2025 data — served universe now
+**identical** to the engine's in every season, guard passes from pick 1, K/DST/rookies
+recommendable. `tests/unit/test_api.py::TestRankingsServeTheEngineBoard` pins the two universes as
+equal. Rookie and K/DST rows report null intervals rather than fabricated ones.
+
+**Honestly bounded:** this does *not* change the pick-1.01 recommendation on the real 2024 or 2025
+boards — the guard defect moved scores without reordering the top there. What it changes is that
+the engine runs the replacement level it was benchmarked with, and can fill the two mandatory
+slots it previously could not see.
+
+### Controlled decision tests (new)
+
+`tests/unit/test_draft_decision_behaviour.py`, 16 tests over synthetic boards that isolate one
+factor each. Result: **the scarcity machinery is wired up and points the right way.** With timing
+neutralised, the engine prefers a *lower-projected* player at a position with a steep drop-off
+over a higher-projected one at a flat position — in **both** directions, so it is responding to
+the data and not carrying a positional lean. It also correctly defers a scarce player who will
+survive to the next turn, responds to board depletion and to roster state, and prices a
+back-to-back snake turn at exactly zero opportunity cost.
+
+### Open, not acted on
+
+- **`survival_mult`'s `0.3` coefficient has never been measured by any phase.** It is a
+  multiplicative bonus of up to 1.3× on the whole score and, in a controlled test, overturns an
+  81-point surplus gap by itself — a larger swing than any value-base change measured here. D55
+  added the *positional* opportunity-cost term precisely because single-player survival is the
+  wrong instrument for positional scarcity, yet the single-player term is still the larger of the
+  two. Its behaviour is defensible, so this is "never measured", not "known wrong". Best candidate
+  for the next pre-registered phase.
+- **Rookies and K/DST take a flat `risk_mult` of 0.7** (no `confidence` outside M6) against
+  ~0.71–0.81 for established players — a structural penalty set by data availability. Only became
+  reachable with this phase's board fix; never measured in a draft.
+- **Projection-layer RB bias**: among the hindsight top-60, RB is under-projected by 24 points
+  more than WR (−86.2 vs −62.2). Consistent with D68's sign-stable RB residual. D68/D69/D70 each
+  tried a treatment and each failed its gates; not re-opened here.

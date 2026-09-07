@@ -140,6 +140,14 @@ Tier = Literal[
     "X3",
     "X4",
     "Y1",
+    "Z0",
+    "Z1",
+    "Z2",
+    "Z3",
+    "ZW0",
+    "ZW05",
+    "ZW2",
+    "ZW3",
 ]
 ALL_TIERS: tuple[Tier, ...] = ("A", "B", "C", "D", "E", "F", "G", "H")
 
@@ -487,10 +495,114 @@ Y_TIERS: tuple[Tier, ...] = ("Y1",)
 PREREGISTERED_Y_CONTROL: Tier = "X0"
 
 
+# --------------------------------------------------------------------------------------------
+# D79 -- the VALUE BASE, re-measured on top of D67's draft-aware replacement level.
+#
+# WHY THIS IS NOT A RE-RUN OF D63. The N-tier ablation that selected `msv + 1.0*VORP` was run
+# against the STATIC, full-season replacement level. D65 then measured that level to be wrong by
+# +178.2 (QB) and +69.1 (WR) at round 13, and D64 traced N4's kicker hoarding to the same cause:
+# after round 11 MSV is 0.0 for every candidate, the value base collapses to VORP alone, and a
+# STATIC VORP systematically prefers kickers because ten teams strip the skill pools while barely
+# touching K. That is a defect of the static level, and D67 removed it.
+#
+# So D63's central finding -- "summing the two signals wins; choosing between them per-candidate
+# loses" -- was measured under conditions where one of the two signals was known to be defective
+# in exactly the regime (rounds 11-16) where it governed the pick alone. The bases that lean
+# HARDER on VORP (N1 `vorp`, N3 `msv over replacement`) were the ones most exposed to that
+# defect, and they are the two that lost. Neither has been re-measured since D67 fixed it.
+#
+# WHAT MOTIVATED RE-OPENING IT (docs/DRAFT_DECISION_ENGINE_INVESTIGATION.md §3). Ranking the real
+# 2021-2025 board by each layer of the production score and comparing the top-24 positional
+# composition against a hindsight answer key (realized points over the REALIZED demand-boundary
+# replacement level) shows the draft-aware VORP transform alone is the layer closest to the key
+# (QB 23 vs the key's 23; RB 30), and that adding `msv` moves it AWAY (RB 30 -> 16, QB 23 -> 49).
+# The reason is arithmetic, not incidental: on an empty roster `marginal_starter_value` is
+# identically the candidate's own projection, so early in a draft the shipped value base is
+# `2*projection - replacement` -- raw points at double weight, scarcity at single weight -- and
+# `msv` contributes no roster information at all until slots start filling.
+#
+# THE HONEST BAR. D71 established that this benchmark's true experimental unit is the SEASON
+# (ICC 0.0995, design effect 1.90, F(9,36)=0.54 for slot), giving a minimum detectable effect of
+# ~128 starter points at n=5 seasons. D63's own margins (+48.6 over N3, +62.6 over N1) sit below
+# that, quoted with naive i.i.d. intervals -- so the incumbent value base is not ESTABLISHED to
+# beat the alternatives it beat, it merely won an underpowered comparison. That cuts both ways,
+# and Gate 8 below is what stops this phase from repeating the error in the other direction.
+Z_TIERS: tuple[Tier, ...] = ("Z0", "Z1", "Z2", "Z3")
+
+# A labelled SENSITIVITY SWEEP on the VORP weight `w` in `msv + w*daVORP`, following the D66/D67
+# precedent. These are a stress test of the incumbent's shape, NOT candidates: selecting a `w`
+# post-hoc off a sweep is exactly what D67 rejected about D66's uniform x2.5, and no ZW tier may
+# ship whatever it scores. What they answer is whether performance sits on a broad plateau in `w`
+# (evidence the exact weight does not matter) or a narrow spike at 1.0 (evidence it was lucky).
+# w = 1.0 is Z0 itself and is not repeated here.
+Z_SWEEP_TIERS: tuple[Tier, ...] = ("ZW0", "ZW05", "ZW2", "ZW3")
+
+ALL_Z_TIERS: tuple[Tier, ...] = (*Z_TIERS, *Z_SWEEP_TIERS)
+
+#: {tier: (value base, VORP weight)}. Every Z-tier measures its surplus term against D67's
+#: draft-aware demand-boundary replacement level -- that is the whole point of the phase -- and
+#: shares every other term (opportunity cost, roster fit, confidence, survival, feasibility cap)
+#: with the shipped engine, so a difference between Z-tiers is attributable to the value base and
+#: nothing else. `Z0` is the shipped engine and is byte-identical to `X0`/`W1` by construction; a
+#: test asserts it, exactly as D68 asserted X0 == W1.
+Z_TIER_SPEC: dict[Tier, tuple[str, float]] = {
+    "Z0": ("msv_plus_weighted_vorp", 1.0),  # control: the shipped D63/D67 engine
+    "Z1": ("vorp", 0.0),  # pure draft-aware VBD (N1, re-measured)
+    "Z2": ("msv_over_replacement", 0.0),  # the principled unification (N3, re-measured)
+    "Z3": ("min_vorp_msv", 0.0),  # clamp (N2, re-measured)
+    "ZW0": ("msv_plus_weighted_vorp", 0.0),  # sweep: msv alone (N0, re-measured)
+    "ZW05": ("msv_plus_weighted_vorp", 0.5),
+    "ZW2": ("msv_plus_weighted_vorp", 2.0),
+    "ZW3": ("msv_plus_weighted_vorp", 3.0),
+}
+
+# PRE-REGISTERED DECISION RULE for the Z-tiers -- committed to source BEFORE any Z-tier was run
+# against real data, same discipline as the N-, R-, V-, W- and X-tiers above.
+#
+#   Control        : Z0 (= the shipped engine: msv + 1.0*daVORP + opp_cost), fair opponent
+#                    (`market_consensus_roster_aware`), production's real feasibility caps.
+#   Primary metric : mean realized starter points vs the fair opponent.
+#   Gates 1-4      : unchanged, reused VERBATIM via `evaluate_preregistered_gates`
+#                    (zero-rate by position, roster infeasibility, <=1 season worse than control,
+#                    no position drafted >2 rounds earlier than control).
+#   Gate 5         : must not increase cap breaches at any position vs the control (D64).
+#   Gate 6         : leave-one-season-out -- the margin must survive removing ANY single season.
+#   Gate 7         : rerun unchanged on `legacy_2qb_dynasty`; report the sign either way. A value
+#                    base that only helps in the target format is a format artifact, not a fix.
+#   Gate 8 (NEW)   : the SEASON-CLUSTERED 95% CI must exclude zero -- paired per-slot differences
+#                    against the control, averaged within season, then a t-interval on the 5
+#                    season means (df=4). This is D71's correction, and it is the gate that makes
+#                    this phase honest: the naive n=50 i.i.d. interval every prior phase quoted is
+#                    anticonservative, and using it here would let this phase ship on exactly the
+#                    kind of margin D71 showed the instrument cannot resolve.
+#   Ship           : the LOWEST-NUMBERED Z-tier clearing EVERY gate. If none clears them,
+#                    production's value base stays as it is and this phase reports that.
+#   Never ships    : any ZW sweep tier, whatever it scores (see above).
+#
+# Recorded before running so the outcome cannot be reinterpreted afterwards. Two results are
+# explicitly anticipated and are NOT grounds for re-tuning:
+#   * A Z-tier wins the pooled mean but fails Gate 8. That is the expected outcome given D71's
+#     power analysis, and the correct response is to report an unresolvable difference and ship
+#     nothing -- not to fall back to the naive interval.
+#   * Z0 wins outright. That would be positive evidence for the incumbent that D63 never had,
+#     since D63 measured it under a replacement level since shown to be defective.
+#
+# Explicitly NOT goals, and not grounds to ship anything: more running backs, fewer quarterbacks,
+# a board that agrees with consensus, or a top-24 composition closer to the hindsight key. The
+# composition analysis is what generated the hypothesis; realized starter points is what tests it.
+PREREGISTERED_Z_CONTROL: Tier = "Z0"
+
+
 #: Every tier scored as "N4, except VORP may use a draft-aware replacement level". V- and
 #: W-tiers share the scoring branch verbatim so a difference between them is attributable to the
 #: demand target (and, for W2/W3, the legality constraint) and nothing else.
-DRAFT_AWARE_REPLACEMENT_TIERS: tuple[Tier, ...] = (*ALL_V_TIERS, *W_TIERS, *X_TIERS, *Y_TIERS)
+DRAFT_AWARE_REPLACEMENT_TIERS: tuple[Tier, ...] = (
+    *ALL_V_TIERS,
+    *W_TIERS,
+    *X_TIERS,
+    *Y_TIERS,
+    *ALL_Z_TIERS,
+)
 
 #: W-tiers that enforce the endgame mandatory-slot reservation, as a hard restriction on the
 #: candidate pool rather than a score adjustment -- roster legality is a constraint, not a value.
@@ -643,6 +755,19 @@ TIER_DESCRIPTIONS: dict[Tier, str] = {
     "Bayes when the evidence is weak",
     "Y1": "D70: W1 with RB projections from a walk-forward refit adding preseason-knowable "
     "availability features (F1-F4); QB/WR/TE/K/DST unchanged from control",
+    # Z-tiers (D79): D67's draft-aware replacement held FIXED, only the value base varies.
+    "Z0": "D79 control: the shipped engine -- msv + 1.0*daVORP + opp_cost. Byte-identical to "
+    "X0/W1 by construction",
+    "Z1": "D79: value base = daVORP alone -- pure value-based drafting at the shipped "
+    "draft-aware replacement level (N1, re-measured now that the level is no longer static)",
+    "Z2": "D79: value base = marginal starter value OVER the DRAFT-AWARE replacement level. "
+    "Reduces to daVORP on an empty roster and to 0 at a saturated position, by construction "
+    "(N3, re-measured)",
+    "Z3": "D79: value base = min(daVORP, msv) (N2, re-measured)",
+    "ZW0": "D79 sweep (never ships): msv alone, w=0 (N0, re-measured)",
+    "ZW05": "D79 sweep (never ships): msv + 0.5*daVORP",
+    "ZW2": "D79 sweep (never ships): msv + 2.0*daVORP",
+    "ZW3": "D79 sweep (never ships): msv + 3.0*daVORP",
 }
 
 
@@ -906,7 +1031,42 @@ def score_candidate(
                 f"(static {level:.1f}) -> vorp {vorp_term:+.1f} (static {vorp:+.1f})"
             )
 
-        score = (msv + N4_VORP_WEIGHT * vorp_term + opp_cost) * fit_mult * risk_mult * survival_mult
+        # D79: only the Z-tiers vary the value base here; every other draft-aware tier keeps the
+        # shipped N4 form, so V/W/X/Y results stay byte-identical to what they were measured at.
+        # `Z0` resolves to `msv + 1.0*vorp_term`, which is that same expression -- which is what
+        # makes Z0 == X0 == W1 by construction rather than by coincidence.
+        if tier in ALL_Z_TIERS:
+            base_name, weight = Z_TIER_SPEC[tier]
+            if base_name == "vorp":
+                value_base = vorp_term
+            elif base_name == "min_vorp_msv":
+                value_base = min(vorp_term, msv)
+            elif base_name == "msv_over_replacement":
+                # The subtrahend is computed against the DRAFT-AWARE levels (see `_pick_by_tier`),
+                # so this reduces to `vorp_term` on an empty roster and to 0.0 at a saturated
+                # position -- the identity `replacement_marginal_starter_values` documents, now
+                # anchored to the replacement level D67 actually shipped rather than the static
+                # one D63 measured it against.
+                #
+                # RAISE rather than default the subtrahend to 0.0. Without the hoisted map this
+                # value base silently collapses to `msv`, i.e. it quietly becomes a DIFFERENT
+                # tier (ZW0) while still reporting itself as Z2 -- the same class of silent
+                # no-op D78 found in the paired-benchmark instrument, where both arms scored
+                # identically and it looked like a null result rather than a harness defect.
+                if replacement_msv is None:
+                    raise RuntimeError(
+                        f"tier {tier} needs `replacement_msv` (the per-position marginal starter "
+                        "value of a draft-aware replacement body); without it the value base "
+                        "silently degrades to `msv` and the tier measures something else"
+                    )
+                value_base = msv - replacement_msv.get(position, 0.0)
+            else:  # msv_plus_weighted_vorp
+                value_base = msv + weight * vorp_term
+            reasons.append(f"value_base={base_name}(w={weight:g}) {value_base:+.1f} pts")
+        else:
+            value_base = msv + N4_VORP_WEIGHT * vorp_term
+
+        score = (value_base + opp_cost) * fit_mult * risk_mult * survival_mult
         cap = positional_feasibility_cap(league, position)
         have = sum(1 for p in roster_positions if p == position)
         if have >= cap:
@@ -1400,9 +1560,12 @@ def _pick_by_tier(
             else REPLACEMENT_VARIANTS[target]
         )
         dynamic_levels = variant(league, available, static.projections, static.positions)
-    elif tier in X_TIERS or tier in Y_TIERS:
+    elif tier in X_TIERS or tier in Y_TIERS or tier in ALL_Z_TIERS:
         # D68/D70: identical to W1. The projections `static` carries are the treatment; the
         # replacement rule they are measured against is the shipped one, unchanged.
+        # D79: the Z-tiers hold that same shipped replacement rule fixed and vary the VALUE BASE
+        # instead -- the mirror image of D65-D67, which held the value base fixed and varied the
+        # replacement rule.
         dynamic_levels = consumption_replacement(static.consumption_demand)(
             league, available, static.projections, static.positions
         )
@@ -1429,6 +1592,19 @@ def _pick_by_tier(
             static.projections,
             static.positions,
             static.replacement_levels,
+            base_points=base_lineup_points,
+        )
+    elif tier in ALL_Z_TIERS and Z_TIER_SPEC[tier][0] == "msv_over_replacement":
+        # D79: same quantity as N3's, but the replacement body is drawn at the DRAFT-AWARE level
+        # rather than the static one. Falling back to the static level for a position the demand
+        # model does not cover mirrors what `score_candidate`'s `vorp_term` already does, so the
+        # minuend and the subtrahend are always measured against the same level.
+        replacement_msv = replacement_marginal_starter_values(
+            league,
+            roster_player_ids or [],
+            static.projections,
+            static.positions,
+            {**static.replacement_levels, **(dynamic_levels or {})},
             base_points=base_lineup_points,
         )
 
@@ -2010,6 +2186,94 @@ def leave_one_season_out_margins(
             continue
         margins[excluded] = sum(tier_pts) / len(tier_pts) - sum(ctrl_pts) / len(ctrl_pts)
     return margins
+
+
+# Two-sided 95% t critical values, df = n_seasons - 1. Hardcoded for the season counts this
+# benchmark can actually have (D71: additional history is unavailable before 2021, and new
+# seasons arrive at one per year), so the clustered interval needs no scipy dependency.
+_T_CRITICAL_95: dict[int, float] = {
+    1: 12.706,
+    2: 4.303,
+    3: 3.182,
+    4: 2.776,
+    5: 2.571,
+    6: 2.447,
+    7: 2.365,
+    8: 2.306,
+    9: 2.262,
+    10: 2.228,
+    11: 2.201,
+    12: 2.179,
+    13: 2.160,
+    14: 2.145,
+    15: 2.131,
+}
+
+
+def season_clustered_margin(rows: list[dict], tier: str, control_tier: str) -> dict:
+    """Gate 8 (D79): the paired margin over `control_tier` with a SEASON-CLUSTERED interval.
+
+    D71 established that this benchmark's 50 rows are not 50 independent observations -- one
+    season's ten slots share one projection set, one market board and one set of realized
+    outcomes, and Alpha's ten rosters within a season share 53-73% of their players. The naive
+    i.i.d. interval over 50 rows that every phase through D70 quoted is therefore
+    anticonservative. The honest unit is the season.
+
+    Computed the paired way, which is what the deterministic cross-product design allows: take
+    the per-(season, slot) difference against the control, average those within each season, then
+    put a t-interval (df = n_seasons - 1) on the resulting season means. Pairing removes the
+    between-slot and between-season variation that is common to both arms, so this is tighter
+    than an unpaired season-level interval while still respecting the real unit.
+
+    Returns the mean margin, the per-season means, and the 95% interval. `ci_excludes_zero` is
+    the gate; it is deliberately the ONLY interval this phase is allowed to quote as evidence."""
+    by_key: dict[tuple[int, int], dict[str, float]] = {}
+    for r in rows:
+        if r["tier"] in (tier, control_tier):
+            by_key.setdefault((r["season"], r["draft_slot"]), {})[r["tier"]] = r["starter_points"]
+
+    per_season: dict[int, list[float]] = {}
+    for (season, _slot), pair in by_key.items():
+        if tier in pair and control_tier in pair:
+            per_season.setdefault(season, []).append(pair[tier] - pair[control_tier])
+
+    season_means = {s: sum(d) / len(d) for s, d in sorted(per_season.items()) if d}
+    n = len(season_means)
+    if n == 0:
+        return {
+            "tier": tier,
+            "n_seasons": 0,
+            "mean_margin": float("nan"),
+            "ci_excludes_zero": False,
+        }
+    values = list(season_means.values())
+    mean = sum(values) / n
+    if n < 2:
+        return {
+            "tier": tier,
+            "n_seasons": n,
+            "mean_margin": mean,
+            "season_means": season_means,
+            "ci_low": float("nan"),
+            "ci_high": float("nan"),
+            "ci_excludes_zero": False,
+        }
+    sd = _stdev(values)
+    se = sd / (n**0.5)
+    t = _T_CRITICAL_95.get(n - 1, 1.96)
+    lo, hi = mean - t * se, mean + t * se
+    return {
+        "tier": tier,
+        "n_seasons": n,
+        "mean_margin": mean,
+        "season_means": season_means,
+        "sd_of_season_means": sd,
+        "se": se,
+        "ci_low": lo,
+        "ci_high": hi,
+        "ci_excludes_zero": (lo > 0) or (hi < 0),
+        "n_wins": sum(1 for v in values if v > 0),
+    }
 
 
 def evaluate_preregistered_gates(
