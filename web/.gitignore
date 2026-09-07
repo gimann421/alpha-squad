@@ -22,3 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Screenshot produced by draft-rehearsal.mjs
+draft-rehearsal.png

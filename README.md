@@ -82,6 +82,23 @@ API as its own provenance-tagged series. It is deliberately not part of the targ
 historical measurement was made against the DynastyProcess-sourced board, and a draft should run
 against the series the model was validated on.
 
+### Rehearsing a draft end to end
+
+`web/draft-rehearsal.mjs` drives a real Chromium through a full manual draft against the real
+API and the real current-season projections — pick numbers, correcting one, marking your own
+pick, the roster staying synchronized, a fresh recommendation, undo, and a reload with
+everything still correct afterward. Run it after any change to the draft path:
+
+```bash
+make serve      # FastAPI on :8000, in one shell
+make serve-web  # Vite on :5173, in another
+cd web && node draft-rehearsal.mjs
+```
+
+It has caught four real bugs that code review did not (D78), including the Draft view sitting on
+last season while current-season projections existed. `CHROMIUM_PATH` overrides the browser
+location.
+
 `alpha-squad --help` (or `--help` on any subcommand) is the source of truth for every CLI
 command and flag — the tree is `sources`, `identity`, `features`, `market`, `evaluate`,
 `train`, `edge`, `evidence`, `league`, `orchestrate`, `simulate`.
