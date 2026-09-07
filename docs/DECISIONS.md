@@ -4806,6 +4806,30 @@ still in `uncertainty_predictions` (nothing deletes them), and
 `uncertainty_catboost_v1`. A future phase wanting to re-run those experiments against v2 should
 say so explicitly and report it as a new measurement.
 
+### 8c. The draft-layer contrast, and a harness defect that produced a convincing null
+
+D71 recommends evaluating an engine change as a paired variant-vs-control contrast on identical
+trials rather than against the absolute benchmark, whose season universe is n=5. That is the
+instrument used here: `alpha_league_aware` from every draft slot in every season 2021-2025,
+against the fair `market_consensus_roster_aware` opponent, once on v1 projections and once on
+v2, nothing else varying.
+
+**The first run of it measured nothing, and looked like a clean null while doing so.**
+`simulate_draft` was threading `projection_model_version` into its own `load_season_projections`
+call, but `recommend_draft_pick` reloads the board itself and pinned the shipped constant. Both
+arms therefore scored on v2 and produced byte-identical drafts: mean +0.0, 50/50 ties, CI
+[+0.0, +0.0]. A result that tidy is a red flag rather than a finding, and it is recorded here
+because "the change has no draft-layer effect" is exactly what it would have been mistaken for.
+
+`recommend_draft_pick` now takes the same optional parameter. Verified the arms actually diverge
+before trusting any number from it: 2024 slot 3 gives 1947.8 (v1) against 1902.3 (v2) with 8 of
+16 roster players differing. Production callers pass nothing and are unchanged.
+
+**Lesson worth keeping:** an evaluation harness that reports a perfect null across every trial is
+more likely to be measuring nothing than to have found nothing. The check that caught it was
+asserting the two arms differ *before* interpreting the contrast, which any future variant-vs-
+control run here should do first.
+
 ### 9. What remains UNKNOWN
 
 - **Whether the 2024–2025 RB regime persists into 2026.** Nothing here forecasts it, and the fact
