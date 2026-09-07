@@ -9,11 +9,16 @@ import duckdb
 import pytest
 
 from alpha_squad.evaluation.draft_forensics import (
+    ALL_S_TIERS,
     ALL_TIERS,
     ALL_Z_TIERS,
     DRAFT_AWARE_REPLACEMENT_TIERS,
+    PREREGISTERED_S_CONTROL,
     PREREGISTERED_W_CONTROL,
     PREREGISTERED_Z_CONTROL,
+    S_SWEEP_TIERS,
+    S_TIER_SPEC,
+    S_TIERS,
     TIER_DESCRIPTIONS,
     W_TIER_SPEC,
     W_TIERS,
@@ -25,6 +30,7 @@ from alpha_squad.evaluation.draft_forensics import (
     Z_TIER_SPEC,
     Z_TIERS,
     _pick_by_tier,
+    _survival_probability,
     homogeneous_league_draft,
     load_season_static,
     roster_feasibility_metrics,
@@ -716,3 +722,132 @@ class TestSeasonClusteredMargin:
             sum((d - sum(diffs) / len(diffs)) ** 2 for d in diffs) / (len(diffs) - 1)
         ) ** 0.5 / len(diffs) ** 0.5
         assert out["se"] >= naive_se or out["n_seasons"] < len(diffs)
+
+
+class TestD79STiers:
+    """D79 phase 2: the survival multiplier's coefficient -- the one term in the production
+    score no phase has ever measured. Same self-check discipline as the Z-tiers: S0 must
+    reproduce the shipped engine exactly, or every S-tier margin measures the harness."""
+
+    def test_the_control_carries_the_shipped_coefficient(self):
+        assert PREREGISTERED_S_CONTROL == "S0"
+        assert S_TIERS[0] == "S0"
+        assert S_TIER_SPEC["S0"] == 0.3
+
+    def test_the_only_candidate_is_the_parameter_free_one(self):
+        """S1 removes the term. Every other arm is a swept coefficient and must not be
+        shippable -- replacing an unmeasured constant with a fitted one is strictly worse."""
+        assert S_TIERS == ("S0", "S1")
+        assert S_TIER_SPEC["S1"] == 0.0
+        assert not set(S_TIERS) & set(S_SWEEP_TIERS)
+
+    def test_every_s_tier_scores_through_the_draft_aware_branch(self):
+        for tier in ALL_S_TIERS:
+            assert tier in DRAFT_AWARE_REPLACEMENT_TIERS
+
+    def test_every_s_tier_is_described_and_specified(self):
+        assert set(S_TIER_SPEC) == set(ALL_S_TIERS)
+        for tier in ALL_S_TIERS:
+            assert TIER_DESCRIPTIONS[tier]
+
+    def test_s_tiers_do_not_collide_with_earlier_letters(self):
+        assert not set(ALL_S_TIERS) & (
+            set(ALL_Z_TIERS) | set(X_TIERS) | set(Y_TIERS) | set(W_TIERS)
+        )
+
+    def test_s0_scores_identically_to_z0_on_real_shaped_data(self, con):
+        _seed_league_season(con, 2023)
+        league = _small_league()
+        static = load_season_static(con, league, 2023)
+        available = set(static.projections)
+        for player_id in sorted(available):
+            s0 = score_candidate(
+                static,
+                player_id,
+                league,
+                [],
+                "S0",
+                available=available,
+                current_pick_overall=1,
+                next_pick_overall=5,
+                roster_player_ids=[],
+            )
+            z0 = score_candidate(
+                static,
+                player_id,
+                league,
+                [],
+                "Z0",
+                available=available,
+                current_pick_overall=1,
+                next_pick_overall=5,
+                roster_player_ids=[],
+            )
+            assert s0.score == pytest.approx(z0.score, abs=1e-9), player_id
+
+    def test_switching_the_term_off_removes_the_bonus_for_a_player_who_will_be_gone(self, con):
+        """A candidate certain to be taken before the next turn carries the full 1.3x under the
+        control and exactly 1.0x under S1, so the ratio is the coefficient and nothing else."""
+        _seed_league_season(con, 2023)
+        league = _small_league()
+        static = load_season_static(con, league, 2023)
+        available = set(static.projections)
+        doomed = [p for p in sorted(available) if _survival_probability(static, p, 20) == 0.0]
+        assert doomed, "fixture must contain a player who cannot survive to pick 20"
+        for player_id in doomed:
+            s0 = score_candidate(
+                static,
+                player_id,
+                league,
+                [],
+                "S0",
+                available=available,
+                current_pick_overall=1,
+                next_pick_overall=20,
+                roster_player_ids=[],
+            )
+            s1 = score_candidate(
+                static,
+                player_id,
+                league,
+                [],
+                "S1",
+                available=available,
+                current_pick_overall=1,
+                next_pick_overall=20,
+                roster_player_ids=[],
+            )
+            assert s0.score == pytest.approx(s1.score * 1.3, rel=1e-9), player_id
+
+    def test_an_unknown_next_pick_is_unaffected_by_the_coefficient(self, con):
+        """With no next pick there is no survival probability, so every arm must agree -- the
+        coefficient can only act through a real availability estimate."""
+        _seed_league_season(con, 2023)
+        league = _small_league()
+        static = load_season_static(con, league, 2023)
+        available = set(static.projections)
+        best = max(available, key=lambda p: static.projections[p])
+        scores = {
+            tier: score_candidate(
+                static,
+                best,
+                league,
+                [],
+                tier,
+                available=available,
+                current_pick_overall=None,
+                next_pick_overall=None,
+                roster_player_ids=[],
+            ).score
+            for tier in ALL_S_TIERS
+        }
+        assert len(set(round(v, 9) for v in scores.values())) == 1
+
+    @pytest.mark.parametrize("tier", ["S0", "S1", "SS15", "SS60", "SS100"])
+    def test_every_s_tier_drafts_a_full_roster(self, con, tier):
+        _seed_league_season(con, 2023)
+        league = _small_league()
+        static = load_season_static(con, league, 2023)
+        result = simulate_forensic_draft(con, league, 2023, tier, draft_slot=1, static=static)
+        assert len(result.drafted_player_ids) == 5
+        assert len(set(result.drafted_player_ids)) == 5

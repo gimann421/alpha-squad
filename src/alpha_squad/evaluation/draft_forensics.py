@@ -148,6 +148,11 @@ Tier = Literal[
     "ZW05",
     "ZW2",
     "ZW3",
+    "S0",
+    "S1",
+    "SS15",
+    "SS60",
+    "SS100",
 ]
 ALL_TIERS: tuple[Tier, ...] = ("A", "B", "C", "D", "E", "F", "G", "H")
 
@@ -593,6 +598,76 @@ Z_TIER_SPEC: dict[Tier, tuple[str, float]] = {
 PREREGISTERED_Z_CONTROL: Tier = "Z0"
 
 
+# --------------------------------------------------------------------------------------------
+# D79 phase 2 -- the SURVIVAL multiplier, the one term in the production score that no phase has
+# ever measured.
+#
+#   survival_mult = 1.0 + SURVIVAL_BONUS * (1 - P(this player lasts to my next pick))
+#
+# with `SURVIVAL_BONUS = 0.3` as a bare literal in `league/draft.py`, present since M10 and never
+# ablated, swept or justified in any decision entry. Every other term in the score has been
+# measured against an alternative: the value base by D63 and again by the Z-tiers, the replacement
+# level by D65/D66/D67, the opportunity-cost term by D55 and re-measured by D63, the over-cap
+# multiplier by D64, roster fit and the feasibility cap by D55's P-tiers. This one has not.
+#
+# WHY IT MATTERS ENOUGH TO MEASURE. It is MULTIPLICATIVE on the whole score, so its effect scales
+# with the candidate's total value rather than with what is actually at stake in losing him: a
+# 1.3x bonus is worth ~+150 points to a 500-point candidate and ~+30 to a 100-point one. In a
+# controlled test (`tests/unit/test_draft_decision_behaviour.py`) it reverses an 81-point
+# surplus gap on its own -- a larger swing than ANY value-base change the Z-tiers measured.
+#
+# There is also a design tension worth stating: D55 introduced the POSITIONAL opportunity-cost
+# term precisely because single-player survival is the wrong instrument for positional scarcity
+# ("will THIS player be there" is not "will a player THIS GOOD AT THIS POSITION be there" --
+# docs/DRAFT_ENGINE_FORENSIC_AUDIT.md §6). That term is additive and denominated in real VORP
+# points. The single-player term it was meant to supplement is multiplicative and unbounded by
+# anything at stake, and is the larger of the two in practice.
+#
+# NOT A CLAIM THAT IT IS WRONG. The controlled tests show it behaving sensibly -- it correctly
+# defers a scarce player who will still be on the board next turn, which is real draft skill. The
+# claim is only that 0.3 was never chosen by evidence, and a term this large should be.
+S_TIERS: tuple[Tier, ...] = ("S0", "S1")
+
+#: Labelled sensitivity sweep, never ships -- same rule and same reason as `Z_SWEEP_TIERS`.
+#: 0.3 is S0 itself and is not repeated here.
+S_SWEEP_TIERS: tuple[Tier, ...] = ("SS15", "SS60", "SS100")
+
+ALL_S_TIERS: tuple[Tier, ...] = (*S_TIERS, *S_SWEEP_TIERS)
+
+#: {tier: survival bonus coefficient}. Everything else -- value base, draft-aware replacement,
+#: opportunity cost, roster fit, confidence, feasibility cap -- is the shipped engine, so a
+#: difference between S-tiers is attributable to this coefficient and nothing else. `S0` carries
+#: the shipped 0.3 and is therefore byte-identical to `Z0`/`X0`/`W1`; a test asserts it.
+S_TIER_SPEC: dict[Tier, float] = {
+    "S0": 0.3,  # control: the shipped engine
+    "S1": 0.0,  # the term switched OFF -- the parameter-free candidate
+    "SS15": 0.15,
+    "SS60": 0.6,
+    "SS100": 1.0,
+}
+
+# PRE-REGISTERED DECISION RULE for the S-tiers -- committed to source BEFORE any S-tier was run
+# against real data, same discipline and the SAME gates as the Z-tiers (Gates 1-8, including
+# D71's season-clustered Gate 8 and the `legacy_2qb_dynasty` cross-format Gate 7).
+#
+#   Control        : S0 (= the shipped engine), fair opponent, production's real caps.
+#   Primary metric : mean realized starter points vs the fair opponent.
+#   Ship           : the LOWEST-NUMBERED S-tier clearing every gate. Only S1 is a candidate, and
+#                    it is the parameter-free one (remove the term). If S1 does not clear them,
+#                    the term stays exactly as shipped.
+#   Never ships    : any SS sweep tier, whatever it scores. Selecting a coefficient post-hoc off
+#                    a sweep is what D67 rejected about D66's uniform x2.5, and it would replace
+#                    an unmeasured constant with a fitted one -- strictly worse, since a fitted
+#                    constant carries an overfitting claim an unmeasured one does not.
+#
+# Anticipated and NOT grounds for re-tuning: S0 wins and the sweep shows a broad plateau. That is
+# positive evidence for a constant that currently has none, and the correct outcome is to record
+# it and change nothing. The sweep exists to distinguish "0.3 is fine anywhere in a wide range"
+# from "0.3 happens to sit on a spike", which are very different states of knowledge about a
+# number nobody chose deliberately.
+PREREGISTERED_S_CONTROL: Tier = "S0"
+
+
 #: Every tier scored as "N4, except VORP may use a draft-aware replacement level". V- and
 #: W-tiers share the scoring branch verbatim so a difference between them is attributable to the
 #: demand target (and, for W2/W3, the legality constraint) and nothing else.
@@ -602,6 +677,7 @@ DRAFT_AWARE_REPLACEMENT_TIERS: tuple[Tier, ...] = (
     *X_TIERS,
     *Y_TIERS,
     *ALL_Z_TIERS,
+    *ALL_S_TIERS,
 )
 
 #: W-tiers that enforce the endgame mandatory-slot reservation, as a hard restriction on the
@@ -768,6 +844,13 @@ TIER_DESCRIPTIONS: dict[Tier, str] = {
     "ZW05": "D79 sweep (never ships): msv + 0.5*daVORP",
     "ZW2": "D79 sweep (never ships): msv + 2.0*daVORP",
     "ZW3": "D79 sweep (never ships): msv + 3.0*daVORP",
+    # S-tiers (D79 phase 2): the shipped engine throughout, only the survival coefficient varies.
+    "S0": "D79 control: the shipped engine, survival bonus 0.3. Byte-identical to Z0/X0/W1",
+    "S1": "D79: the single-player survival multiplier switched OFF (bonus 0.0) -- the "
+    "parameter-free candidate",
+    "SS15": "D79 sweep (never ships): survival bonus 0.15",
+    "SS60": "D79 sweep (never ships): survival bonus 0.6",
+    "SS100": "D79 sweep (never ships): survival bonus 1.0",
 }
 
 
@@ -1005,7 +1088,11 @@ def score_candidate(
         # legality constraint is applied in `_pick_by_tier`, not here -- it restricts which
         # candidates are eligible, it does not change any candidate's value.
         risk_mult = confidence if confidence is not None else 0.7
-        survival_mult = 1.0 if survival is None else (1.0 + 0.3 * (1.0 - survival))
+        # D79 phase 2: only the S-tiers vary this coefficient; every other draft-aware tier keeps
+        # the shipped 0.3, so V/W/X/Y/Z results stay byte-identical to what they were measured
+        # at. `S0` resolves to 0.3, which is what makes S0 == Z0 == X0 == W1 by construction.
+        survival_bonus = S_TIER_SPEC[tier] if tier in ALL_S_TIERS else 0.3
+        survival_mult = 1.0 if survival is None else (1.0 + survival_bonus * (1.0 - survival))
         opp_cost = _opportunity_cost_for(
             static,
             position,
@@ -1560,7 +1647,7 @@ def _pick_by_tier(
             else REPLACEMENT_VARIANTS[target]
         )
         dynamic_levels = variant(league, available, static.projections, static.positions)
-    elif tier in X_TIERS or tier in Y_TIERS or tier in ALL_Z_TIERS:
+    elif tier in X_TIERS or tier in Y_TIERS or tier in ALL_Z_TIERS or tier in ALL_S_TIERS:
         # D68/D70: identical to W1. The projections `static` carries are the treatment; the
         # replacement rule they are measured against is the shipped one, unchanged.
         # D79: the Z-tiers hold that same shipped replacement rule fixed and vary the VALUE BASE
