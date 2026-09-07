@@ -4830,6 +4830,56 @@ more likely to be measuring nothing than to have found nothing. The check that c
 asserting the two arms differ *before* interpreting the contrast, which any future variant-vs-
 control run here should do first.
 
+### 8d. The corrected draft-layer result: Y1 improves the projections and does NOT improve the draft
+
+Re-run with the instrument working. Five seasons (2021-2025) x four evenly-spread draft slots
+(1, 4, 7, 10) x two arms = 40 drafts per arm, `alpha_league_aware` against the fair
+`market_consensus_roster_aware` opponent, nothing varying but the projection specification.
+Four slots rather than ten because D71 established the honest experimental unit is the SEASON --
+within a season every slot shares one projection set and one market board (ICC 0.0995) -- so
+slots past the first few add little independent information, and keeping all five seasons at a
+run size that actually completes was the better trade.
+
+| paired contrast (v2 minus v1, identical trials) | value |
+|---|---|
+| mean | **-15.8 starter points** |
+| W/L | **10 / 10** (zero ties -- the arms genuinely diverge) |
+| season-clustered 95% CI | **[-89.2, +57.6]** |
+| per season | 2021 -52.2, 2022 +11.7, 2023 +26.4, 2024 -101.6, 2025 +36.6 |
+
+Structural validity holds in both arms: 0 unfilled mandatory slots across all 40 drafts, every
+roster exactly 16.
+
+**This is a null, and its point estimate is negative.** Three of five seasons are positive and
+two negative, with 2024 (-101.6) dominating; the interval comfortably includes zero. The honest
+statement is that **a measurable projection-accuracy gain did not translate into a measurable
+drafting gain, and may have cost a little.**
+
+That is not a contradiction. More accurate projections do not mechanically draft better -- the
+engine consumes them through VORP/MSV, replacement levels and a demand target, and D71 already
+established this benchmark cannot resolve effects of this size at n=5 seasons. The paired
+contrast is the more sensitive instrument (D65's Candidate C reached CI [+2.3, +44.1] on it) and
+it still cannot separate -15.8 from zero.
+
+**Y1 stays shipped, and the reason is the protocol rather than the result.** D78's
+pre-registration fixed *projection-layer* gates G1-G7 and explicitly scoped the uncertainty layer
+as a separate check; unlike D68, it registered no draft-layer gate. Y1 cleared every gate it was
+measured against, and reverting it now on a post-hoc, non-pre-registered, non-significant negative
+would be the same after-the-fact selection this project has refused six times (D39, D51, D63,
+D66, D68, D70). The change is also not draft-only in scope: `uncertainty_predictions` is what
+`/rankings`, player detail, waiver, trade and EDGE all read, and it is more accurate at every
+position and in every season.
+
+**But the claim must be stated narrowly.** Y1's demonstrated benefit is projection accuracy and
+better-centred uncertainty. It is NOT demonstrated to draft better, and anyone citing D78 as a
+draft improvement is over-reading it. Reverting is one constant away
+(`models/uncertainty/run.py::MODEL_VERSION`) plus `train uncertainty --specification legacy`,
+and the v1 rows are still in the table, so the decision stays cheap to revisit.
+
+**Pre-registration for any future phase here:** if a subsequent change wants to claim a draft
+improvement, it needs draft-layer gates fixed in advance -- as D68 had -- not a contrast run
+afterward.
+
 ### 9. What remains UNKNOWN
 
 - **Whether the 2024–2025 RB regime persists into 2026.** Nothing here forecasts it, and the fact
