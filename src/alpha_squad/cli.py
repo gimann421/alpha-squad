@@ -1492,10 +1492,14 @@ def train_projection_status(
         "SELECT count(*) FROM projection_snapshot WHERE model_name = ? AND season = ?",
         [KDST_MODEL_NAME, season],
     ).fetchone()[0]
+    # D56: a market series is the PAIR (ecr_type, page_type). `ro` alone also matches the
+    # independently-ranked `redraft-idp` board, so counting on ecr_type would report a board
+    # as present on the strength of rows the draft never reads.
+    series = resolve_market_series(league)
     board = con.execute(
-        "SELECT count(*) FROM market_snapshot WHERE ecr_type = ? AND year(scrape_date) = ? "
-        "AND month(scrape_date) IN (7, 8)",
-        [resolve_market_series(league).ecr_type, season],
+        "SELECT count(*) FROM market_snapshot WHERE ecr_type = ? AND page_type = ? "
+        "AND year(scrape_date) = ? AND month(scrape_date) IN (7, 8)",
+        [series.ecr_type, series.page_type, season],
     ).fetchone()[0]
 
     components = Table(title=f"{season} projection components")
@@ -1505,7 +1509,7 @@ def train_projection_status(
         (f"M6 established ({UNCERTAINTY_MODEL_VERSION})", m6, "train uncertainty-project"),
         ("M7 rookie class", rookies, "train rookie-project"),
         ("K/DST baseline", kdst, "train kdst-projections"),
-        (f"preseason market board ({season})", board, "market build"),
+        (f"preseason market board ({season}, {series})", board, "market build"),
     ):
         ok = count > 0
         if not ok:
