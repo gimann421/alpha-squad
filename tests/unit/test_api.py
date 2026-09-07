@@ -692,6 +692,75 @@ class TestLeague:
         )
         assert r.status_code == 422
 
+    def _seed_manual_draft_board(self, con):
+        for player_id, name, position, points in (
+            ("p_qb", "Some QB", "QB", 300.0),
+            ("p_rb", "Some RB", "RB", 250.0),
+            ("p_wr", "Some WR", "WR", 240.0),
+        ):
+            _seed_player(con, player_id, name, position)
+            con.execute(
+                "INSERT INTO uncertainty_predictions (prediction_id, player_id, season, "
+                "position, model_version, feature_version, point_prediction, "
+                "calibration_season, predicted_at) VALUES (?, ?, 2025, ?, "
+                "'uncertainty_catboost_v2', 'fv1', ?, 2024, current_timestamp)",
+                [f"pred_{player_id}", player_id, position, points],
+            )
+
+    def test_manual_draft_derives_roster_positions_from_the_marked_picks(self, con, client):
+        """D78 (#3): a manual draft used to send two independent pictures of the same team --
+        a hand-typed `roster_positions` and the marked `roster_player_ids` -- and marking a
+        pick moved only the second. The ids now win and positions are derived from them, so
+        the two cannot describe different rosters."""
+        self._seed_manual_draft_board(con)
+        r = client.post(
+            "/league/target_league/draft",
+            json={
+                "season": 2025,
+                # Deliberately WRONG and stale, exactly the drift being fixed.
+                "roster_positions": ["TE", "TE", "TE"],
+                "roster_player_ids": ["p_rb", "p_wr"],
+                "available_player_ids": ["p_qb"],
+            },
+        )
+        assert r.status_code == 200
+        body = r.json()
+        assert sorted(body["roster_positions_used"]) == ["RB", "WR"]
+        assert body["unresolved_roster_player_ids"] == []
+
+    def test_manual_draft_still_honours_roster_positions_when_no_ids_are_sent(self, con, client):
+        """Ids win only when there are ids. A caller describing positions alone -- with no
+        claim about which players it holds -- must keep the behaviour it had."""
+        self._seed_manual_draft_board(con)
+        r = client.post(
+            "/league/target_league/draft",
+            json={
+                "season": 2025,
+                "roster_positions": ["TE", "TE"],
+                "available_player_ids": ["p_qb"],
+            },
+        )
+        assert r.status_code == 200
+        assert r.json()["roster_positions_used"] == ["TE", "TE"]
+
+    def test_a_marked_pick_missing_from_the_board_is_reported_not_swallowed(self, con, client):
+        """Roster need computed against fewer players than the caller believes it holds is
+        exactly the silent disagreement this change exists to end, so an id the season's board
+        cannot place is named in the response rather than dropped."""
+        self._seed_manual_draft_board(con)
+        r = client.post(
+            "/league/target_league/draft",
+            json={
+                "season": 2025,
+                "roster_player_ids": ["p_rb", "ghost_player"],
+                "available_player_ids": ["p_qb"],
+            },
+        )
+        assert r.status_code == 200
+        body = r.json()
+        assert body["roster_positions_used"] == ["RB"]
+        assert body["unresolved_roster_player_ids"] == ["ghost_player"]
+
     def test_trade_endpoint_returns_the_real_action(self, con, client):
         con.execute(
             "INSERT INTO dynasty_values (player_id, scrape_date, age, value_2qb, updated_at) "

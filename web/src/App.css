@@ -214,3 +214,21 @@ tr:hover {
   font: inherit;
   text-decoration: underline;
 }
+
+/* #2 pick numbers: an editable overall pick number sits inline in the "already drafted" list,
+   narrow enough not to dominate the row but wide enough for a three-digit pick. */
+.pick-number {
+  width: 3.6rem;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Read-only counterpart in "my picks" -- same tabular alignment so a column of pick numbers
+   scans vertically. */
+.pick-number-badge {
+  display: inline-block;
+  min-width: 3rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: #57606a;
+}
