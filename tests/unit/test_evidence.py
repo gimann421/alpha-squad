@@ -6,6 +6,7 @@ and are covered by the live network test instead, per the codebase's existing co
 from __future__ import annotations
 
 import json
+from datetime import date
 
 import duckdb
 import pytest
@@ -13,9 +14,11 @@ import pytest
 from alpha_squad.evidence.events import record_event
 from alpha_squad.evidence.prior_update import (
     MAX_ADJUSTMENT_PCT,
+    _season_evidence_cutoff,
     aggregate_evidence,
     apply_evidence_adjustment,
     evidence_score_for_action,
+    nfl_week1_date,
     run_prior_update,
 )
 from alpha_squad.evidence.taxonomy import MEDIUM, STRONG, WEAK, strength_for
@@ -307,8 +310,8 @@ class TestEvidenceScoreForAction:
         August 1st despite this function's own docstring promising "before that season's own
         Week 1" -- real NFL Week 1 dates fall in early September (2023-09-07, 2024-09-05,
         2025-09-04), so real August evidence (the entire preseason/training-camp window) was
-        being silently excluded. With no `games` row for the season (as here), the fallback
-        cutoff is now September 1st, not August 1st."""
+        being silently excluded. With no `games` row for the season (as here), the cutoff is
+        now estimated from the ingested Week 1 history rather than hardcoded (D78)."""
         record_event(
             con,
             player_id="p1",
@@ -358,3 +361,91 @@ class TestEvidenceScoreForAction:
         )
         assert evidence_score_for_action(con, "p1", 2024, action_sign=1) > 0.5
         assert evidence_score_for_action(con, "p2", 2024, action_sign=1) == pytest.approx(0.5)
+
+
+class TestSeasonEvidenceCutoff:
+    """D78 regression. D32 replaced a hardcoded August 1st cutoff with a hardcoded September
+    1st one, which has the same defect three weeks later: the NFL opens on the Thursday after
+    Labor Day (4-11 September), so every real preseason event in the week most redraft leagues
+    actually draft in fell after the cutoff and was silently dropped. Caught on 7 September
+    2026 by a live test that had been failing since 1 September. A third hand-picked constant
+    would fail the same way again, so the unplayed case uses the scheduling rule instead."""
+
+    #: Every real NFL Week 1 date in the ingested history (2015-2025), from `games`.
+    REAL_WEEK1_DATES = {
+        2015: date(2015, 9, 10),
+        2016: date(2016, 9, 8),
+        2017: date(2017, 9, 7),
+        2018: date(2018, 9, 6),
+        2019: date(2019, 9, 5),
+        2020: date(2020, 9, 10),
+        2021: date(2021, 9, 9),
+        2022: date(2022, 9, 8),
+        2023: date(2023, 9, 7),
+        2024: date(2024, 9, 5),
+        2025: date(2025, 9, 4),
+    }
+
+    def _seed_week1(self, con, season, day):
+        con.execute(
+            "INSERT INTO games (game_id, season, week, game_type, game_date, home_team, "
+            "away_team) VALUES (?, ?, 1, 'REG', ?, 'AAA', 'BBB')",
+            [f"{season}_01_AAA_BBB", season, day],
+        )
+
+    def test_the_rule_reproduces_every_real_week1_date_on_record(self):
+        """The estimate is the league's own scheduling rule, not a guess, and this is the
+        evidence for that claim: it must reproduce all eleven real dates exactly. A rule that
+        only *approximately* matched would silently mis-cut evidence by a day or two."""
+        for season, expected in self.REAL_WEEK1_DATES.items():
+            assert nfl_week1_date(season) == expected, season
+
+    def test_a_played_season_uses_its_own_real_week1_date_over_the_rule(self, con):
+        """Real data always wins: seed a Week 1 that deliberately contradicts the rule and the
+        real date must be what the cutoff uses."""
+        self._seed_week1(con, 2024, "2024-09-12")
+        assert _season_evidence_cutoff(con, 2024) == "2024-09-12"
+        assert nfl_week1_date(2024) == date(2024, 9, 5)
+
+    def test_an_unplayed_season_uses_the_rule(self, con):
+        assert _season_evidence_cutoff(con, 2026) == "2026-09-10"
+
+    def test_the_cutoff_never_depends_on_another_season_s_games(self, con):
+        """Leakage guard: seeding a different season must not move this season's cutoff."""
+        self._seed_week1(con, 2025, "2025-09-04")
+        self._seed_week1(con, 2027, "2027-09-09")
+        assert _season_evidence_cutoff(con, 2026) == "2026-09-10"
+
+    def test_early_september_evidence_counts_for_an_unplayed_season(self, con):
+        """The end-to-end symptom: a real trending/depth-chart event on draft weekend must
+        move the evidence score. Under the old September 1st cutoff this scored a flat 0.5."""
+        record_event(
+            con,
+            player_id="p1",
+            season=2026,
+            week=1,
+            event_date="2026-09-07",
+            event_type="roster_transaction",
+            source="t",
+            direction=1,
+            structured_impact={},
+            summary="named starter three days before the draft",
+        )
+        assert evidence_score_for_action(con, "p1", 2026, action_sign=1) > 0.5
+
+    def test_evidence_on_or_after_kickoff_still_does_not_count(self, con):
+        """The cutoff moved later, it did not disappear: an event on the real opener is
+        in-season and must stay excluded from the preseason score."""
+        record_event(
+            con,
+            player_id="p2",
+            season=2026,
+            week=1,
+            event_date="2026-09-10",
+            event_type="roster_transaction",
+            source="t",
+            direction=1,
+            structured_impact={},
+            summary="on kickoff day itself",
+        )
+        assert evidence_score_for_action(con, "p2", 2026, action_sign=1) == pytest.approx(0.5)

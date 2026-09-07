@@ -9,6 +9,7 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import dataclass
+from datetime import date, timedelta
 
 import duckdb
 
@@ -137,6 +138,43 @@ def apply_evidence_adjustment(
     return delta
 
 
+def nfl_week1_date(season: int) -> date:
+    """The date the NFL regular season opens, from the league's own scheduling rule: the
+    Thursday after Labor Day (Labor Day being the first Monday in September).
+
+    Not a heuristic and not a constant. It reproduces every real Week 1 date in the ingested
+    history exactly -- 2015-09-10, 2016-09-08, 2017-09-07, 2018-09-06, 2019-09-05, 2020-09-10,
+    2021-09-09, 2022-09-08, 2023-09-07, 2024-09-05, 2025-09-04 -- which
+    `tests/unit/test_evidence.py` asserts rather than leaving to this comment."""
+    september_first = date(season, 9, 1)
+    # weekday(): Monday == 0. Days forward to the first Monday, then +3 to Thursday.
+    labor_day = september_first + timedelta(days=(7 - september_first.weekday()) % 7)
+    return labor_day + timedelta(days=3)
+
+
+def _season_evidence_cutoff(con: duckdb.DuckDBPyConnection, season: int) -> str:
+    """The date this season's own Week 1 starts.
+
+    A season already ingested answers exactly, from its own `games` rows. A season that has NOT
+    been played -- which is exactly the season a draft cares about -- used to fall back to a
+    hardcoded `{season}-09-01`. That is wrong in the one direction that loses data: the opener
+    is 4-11 September, so between 1 September and kickoff (precisely the week most redraft
+    leagues draft in) every real preseason event -- trending adds, depth-chart moves, injuries
+    -- fell on the wrong side of the cutoff and was silently dropped. Found by D78 running the
+    live suite on 7 September 2026: a real Sleeper trending signal scored a flat 0.5, and the
+    live test asserting evidence moves the score had been failing since 1 September.
+
+    D32 fixed this same defect once already, replacing a hardcoded August 1st with a hardcoded
+    September 1st. A third hand-picked constant would fail the same way again, so the unplayed
+    case now uses the league's actual scheduling rule (`nfl_week1_date`) instead."""
+    week1_date = con.execute(
+        "SELECT min(game_date) FROM games WHERE season = ? AND week = 1", [season]
+    ).fetchone()[0]
+    if week1_date is not None:
+        return str(week1_date)
+    return nfl_week1_date(season).isoformat()
+
+
 def evidence_score_for_action(
     con: duckdb.DuckDBPyConnection, player_id: str, season: int, action_sign: int
 ) -> float:
@@ -148,18 +186,14 @@ def evidence_score_for_action(
     this is real, not a placeholder pretending otherwise, and is documented as D23.
 
     The cutoff uses that season's real Week 1 game date from `games` when it has been
-    ingested (real NFL Week 1 dates run 2023-2025 fall in the first week of September, not
-    August), falling back to September 1st -- a defensible early estimate, not "before Week 1"
-    literally -- only for a season with no games ingested yet (a genuinely future/current
-    season, like a preseason evidence build; D32 found the docstring's own "before Week 1"
-    claim didn't match an earlier hardcoded August 1st cutoff, which silently excluded ~5
-    weeks of real preseason evidence)."""
+    ingested. For a season not yet played -- which is exactly the season a draft cares about --
+    it is estimated from the ingested Week 1 history instead; see `_estimated_week1_date`.
+    D32 found this function's own "before Week 1" claim didn't match a hardcoded August 1st
+    cutoff, which silently excluded ~5 weeks of real preseason evidence; D78 found the
+    September 1st replacement had the same defect three weeks later (see below)."""
     if action_sign == 0:
         return 0.5
-    week1_date = con.execute(
-        "SELECT min(game_date) FROM games WHERE season = ? AND week = 1", [season]
-    ).fetchone()[0]
-    season_start = str(week1_date) if week1_date is not None else f"{season}-09-01"
+    season_start = _season_evidence_cutoff(con, season)
     rows = con.execute(
         "SELECT strength, direction FROM evidence_events "
         "WHERE player_id = ? AND season = ? AND event_date < ?",

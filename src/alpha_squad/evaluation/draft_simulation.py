@@ -275,6 +275,10 @@ def simulate_draft(
                         # engine can score candidates by marginal starter value rather than
                         # falling back to VORP.
                         roster_player_ids=drafted,
+                        # Without this the engine reloads the board at the SHIPPED version and
+                        # both arms of a paired contrast score identically -- see the note in
+                        # `league/draft.py::recommend_draft_pick` (D78).
+                        projection_model_version=projection_model_version,
                     )
                     pick = rec.recommendation
                 drafted.append(pick)

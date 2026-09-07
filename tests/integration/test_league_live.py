@@ -11,7 +11,7 @@ import pytest
 from alpha_squad.config.settings import Settings
 from alpha_squad.features.build import build_features
 from alpha_squad.identity.canonical import build_identity
-from alpha_squad.league.context import load_league_context
+from alpha_squad.league.context import FLEX_ELIGIBILITY, load_league_context
 from alpha_squad.league.draft import recommend_draft_pick
 from alpha_squad.league.replacement import (
     load_season_projections,
@@ -75,7 +75,18 @@ def con_ready(settings):
     con.close()
 
 
-def test_replacement_level_reflects_the_real_2qb_target_league(con_ready):
+def test_replacement_level_covers_exactly_the_positions_the_league_starts(con_ready):
+    """Replacement levels must be derived from the league's own lineup, not a fixed list.
+
+    This assertion used to hardcode {QB, RB, WR, TE}, which was correct while the default
+    target league was the 2QB dynasty format. D58 retargeted it to a 1-QB redraft league that
+    also starts a K and a DEF, and the assertion was never updated -- so it has been failing
+    since that retarget, unnoticed because the network suite is not in CI (the open P2-3
+    backlog item). Found by D78's pre-draft run of `make test-network`.
+
+    Re-derived from the config rather than re-hardcoded to the new format, so it tracks the
+    league instead of rotting again the next time the format changes.
+    """
     con = con_ready
     league = load_league_context()
     projections, positions = load_season_projections(con, TARGET_SEASON)
@@ -83,13 +94,17 @@ def test_replacement_level_reflects_the_real_2qb_target_league(con_ready):
 
     levels = replacement_level(league, projections, positions)
     scarcity = positional_scarcity(league, projections, positions)
-    assert set(levels) == {"QB", "RB", "WR", "TE"}
+
+    flex_eligible: set[str] = set()
+    for flex_name in league.flex_slots():
+        flex_eligible.update(FLEX_ELIGIBILITY.get(flex_name, ()))
+    expected = set(league.dedicated_slots()) | flex_eligible
+    assert set(levels) == expected
     assert all(v >= 0 for v in scarcity.values())
 
-    # Real structural check: with 10 teams x 2 dedicated QB slots and QB not flex-eligible,
-    # the QB replacement level sits at real rank ~20 -- deep enough that it should not be
-    # trivially zero (there are enough real starting-caliber NFL QBs), unlike a tiny
-    # synthetic pool.
+    # Real structural check: QB is not flex-eligible in any shipped format, so its replacement
+    # level sits at `teams x dedicated QB slots` deep -- far enough into the real NFL starter
+    # pool that it must not be trivially zero, unlike a tiny synthetic pool.
     assert levels["QB"] > 0
 
 
