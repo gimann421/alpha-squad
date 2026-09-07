@@ -351,21 +351,146 @@ cleared, in either format. Per §6 that is the correct outcome, not a failure of
 
 ---
 
-## 9. Open, and deliberately not acted on
+## 9. Phase 2 — the survival term, measured for the first time
 
-* **`survival_mult`'s 0.3 coefficient is the one free parameter in the production score that no
-  phase has ever measured.** It is a multiplicative bonus of up to 1.3× on the whole score, and
-  in a controlled test (`tests/unit/test_draft_decision_behaviour.py`) it overturns an 81-point
-  surplus gap on its own — a larger swing than any value-base change measured above. D55 added
-  the *positional* opportunity-cost term precisely because single-player survival is the wrong
-  instrument for positional scarcity, yet the single-player term remains the larger of the two.
-  Its behaviour in that test is defensible (it correctly defers a scarce player who will still be
-  there next turn), so this is a "never measured", not a "known wrong". It is the most obvious
-  candidate for the next pre-registered phase, and it was left alone here rather than tuned.
+`survival_mult = 1 + 0.3·(1 − P(survives to my next pick))` had been in `league/draft.py` since
+M10 as a bare literal, never ablated, swept or justified in any decision entry — the only term in
+the score with no evidence behind it, and large enough (up to 1.3× on the whole score,
+multiplicative) to reverse an 81-point surplus gap in a controlled test. S-tiers hold the shipped
+engine fixed and vary only that coefficient; rule and gates committed before the run, `S0`
+asserted byte-identical to `Z0`.
+
+| coefficient | target format | `legacy_2qb_dynasty` |
+|---|---|---|
+| 0.15 | −53.2 | −20.7 |
+| **0.3 (shipped)** | **2055.9** | **2114.5** |
+| 0.6 | −17.5 | **+27.0** |
+| 1.0 | −12.2 | **+42.1** |
+| **0.0 (term off)** | **−50.7** | **+14.4** |
+
+**The sign flips between formats.** In the target format the shipped 0.3 is the best of five
+values and removing the term costs −50.7; in the legacy format removing it *helps* (+14.4) and a
+larger coefficient helps more. Only one comparison anywhere is resolvable under the
+season-clustered interval (target-format 0.15, losing in 0/5 seasons, CI [−90.1, −16.3]).
+
+So the honest reading is **not** "0.3 is validated". It is that the coefficient's effect is
+format-dependent and unresolvable within either format. Gate 7 is what caught that — the
+target-format run alone would have read as confirmation. Nothing ships: there is no evidence to
+change the constant and none that it is right, and replacing an unmeasured constant with one
+fitted off a five-point sweep would be strictly worse.
+
+---
+
+## 10. Phase 3 — the actual root cause, and it is in the projections
+
+Found by verifying the **live 2026 board** rather than the historical ones. Full detail in
+`docs/DECISIONS.md` D79 phase 3; module `evaluation/projection_monotonicity.py`.
+
+**M6's fitted projection is non-monotone in its own features.** The estimator is a depth-3
+gradient-boosted tree, which cannot extrapolate, and the top of the RB feature space is sparse —
+22 of 1120 RB training rows carry `prior_weighted_total > 300`, with realized outcomes from 13.0
+to 471.2 (the elite repeats and the season-ending injuries in one leaf). Partial dependence on
+the real fitted 2026 RB model, sweeping one feature with the others held fixed:
+
+| `preseason_ecr_rank` | 1.0 | 2.5 | 5.0 | 10.0 | 20.0 | 40.0 | 80.0 | 150.0 |
+|---|---|---|---|---|---|---|---|---|
+| projection | **138.1** | 169.2 | **231.7** | 224.2 | 225.7 | 221.0 | 213.2 | 192.2 |
+
+A running back the market ranks **first overall** projects 93.6 points *below* one it ranks
+fifth. Over D78's four evaluation seasons the shipped model inverts on **18.0%** of
+partial-dependence steps and orders **272 of 2026** top-of-board dominated pairs backwards
+(worst gaps: RB 116.2, WR 116.0, QB 79.6, TE 20.2).
+
+**This is why the 2026 board looks the way it does.** Consensus RB1 Jahmyr Gibbs — 363 and 367
+PPR points in the two prior seasons — projects 169.2, board rank **80**. Consensus RB2 Bijan
+Robinson, rank 35. With the two best running backs mispriced by ~100 points each, the top of the
+board is receivers by default. The decision engine is not the cause.
+
+This is a correction to §2/§3's emphasis, not a contradiction of it: the layer decomposition
+still describes how the score is built, but the dominant error on the *live* board enters before
+the decision engine sees anything.
+
+**The obvious fix works and cannot be shipped.** Adding a priori monotonicity constraints
+(non-decreasing in prior production, non-increasing in ECR rank; `prior_games` left unconstrained
+because its direction is genuinely ambiguous) takes inversions 18.0% → 0.0% and dominated pairs
+272 → 65, and on the 2026 board moves Gibbs from rank 73 to **10** and Bijan from 55 to **9**
+while nobody else moves more than 14 points. A constraint cannot manufacture optimism — where
+the data really does fall it goes flat — so this is not board inflation.
+
+It fails six of the seven pre-registered gates: +3.20 MAE versus the shipped model at every
+position and in every season (+2.62 of that is the RMSE loss the constraint forces, +0.57 the
+constraint itself). **Nothing ships; `models/` is byte-identical.**
+
+An instrument defect was found and voided first, and is recorded rather than quietly fixed:
+CatBoost applies monotone constraints only under some losses, and under M6's `MAE` it *silently*
+falls back from `Exact` to `Gradient` leaf estimation and fits a **near-constant** model
+(prediction sd 3.1 against the shipped 69.9). Three arms constraining different features returned
+identical MAE — the tell. Published naively that would have read "constraints cost +29 MAE".
+`_new_model` now raises on the combination.
+
+**What blocks the fix is a metric mismatch, stated in the module before the run.** The gate is
+pool-wide mean MAE over ~150 players per position-season; the defect is in the twenty players a
+draft actually consumes. Gating on the first was chosen deliberately so the second could not be
+invented after seeing which arm it would favour. The next phase — pre-registered before running —
+should be one whose primary metric is top-of-board ordering. Per the D70 precedent, E2 was not
+carried to the draft benchmark.
+
+---
+
+## 10a. Where the shipped engine actually stands
+
+Measured on this session's freshly rebuilt 2021–2025 board (which carries D78/Y1's projections),
+10 draft slots × 5 seasons, fair `market_consensus_roster_aware` opponent field:
+
+| strategy | mean starter pts | unfilled mandatory slots |
+|---|---|---|
+| **Alpha (shipped engine)** | **2055.9** | 0.00 |
+| fair consensus (`market_consensus_roster_aware`) | 2034.8 | 0.00 |
+| `generic_prior_year` | 633.5 | 5.40 |
+| `alpha_bpa` (Alpha's points, no league context) | 449.3 | 6.62 |
+
+Alpha beats the fair consensus by **+21.2** starter points, paired on identical trials — winning
+**2 of 5 seasons**, season-clustered 95% CI **[−193.2, +235.6]**. The naive n=50 interval would
+report [−56.3, +98.6]; both contain zero, and per D71 the clustered one is the honest statement.
+
+**Alpha is not demonstrably better than the free consensus board at the roster-outcome level.**
+That is the same position D67/D71 established and this investigation did not move it. What the
+league-context layer *is* demonstrably worth is the gap to `alpha_bpa` (449.3, finishing with a
+mean 6.62 unfilled mandatory starting slots) — the same projections, ranked without VORP, roster
+fit, opportunity cost or feasibility caps. The decision layer is doing very large work; it is the
+*margin over consensus* that is unresolvable.
+
+## 10b. End-to-end verification after the board fix
+
+`web/draft-rehearsal.mjs` driven in real Chromium against the real API and the real 2026
+projections: **20/20 checks pass**, including the pick-number correction, persistence through a
+reload, roster-position sync, and the recommendation moving when the board moves.
+
+One process note worth recording, because it nearly became a false regression: the rehearsal's
+first run failed at step 3 against a cold API server, and the same failure did not reproduce
+against a warm one. Before concluding, the pre-D79 Draft view was checked out and re-run — it
+passed — which looked like proof the change had broken something. Re-running the *changed*
+version against the now-warm server passed 20/20. The diff is a request limit and comments; the
+first failure was a cold-start artifact of running the two versions in that order.
+
+---
+
+## 11. Open, and deliberately not acted on
+
+* **The monotonicity defect in §10 is unresolved.** It is measured, mechanistically explained and
+  has a working fix that fails the current gates. The next phase should pre-register a
+  top-of-board metric (ordering among the ~60 players a draft consumes) rather than pool-wide
+  MAE, and only then re-test. Until it is resolved, **Alpha's 2026 board should not be trusted on
+  the elite running backs it ranks far below consensus** — Gibbs (Alpha 80th, consensus 2nd) and
+  Bijan Robinson (Alpha 35th, consensus 4th). This is a measured defect, not a considered
+  disagreement with the market.
 * **Rookies and K/DST take a flat `risk_mult` of 0.7** because `confidence` only exists for M6
   rows, against ~0.71–0.81 for established players on the real board. That is a structural
   penalty applied by data availability rather than by evidence. It became reachable only with
   this phase's board fix (before it, those players could not be recommended at all), so its
   effect has never been measured in a draft.
 * **The projection-layer RB bias in §3a** (RB under-projected 24 points more than WR at the top
-  of the board). D68/D69/D70 each tried a treatment and each failed its gates; not re-opened.
+  of the board). D68/D69/D70 each tried a treatment and each failed its gates. §10 is the likely
+  mechanism behind it, so a successful monotonicity phase would be the thing to re-test it with.
+* **`survival_mult`'s 0.3 coefficient** — now measured (§9) rather than open, but resolved only
+  in the sense that there is no evidence for changing it. Its effect is format-dependent.
