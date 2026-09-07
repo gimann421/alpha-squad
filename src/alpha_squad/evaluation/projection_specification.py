@@ -298,10 +298,16 @@ class ArmVerdict:
         return bool(self.gates) and all(g.passed for g in self.gates)
 
 
-def _paired(frame: pd.DataFrame, arm: Arm, metric: str) -> pd.Series:
-    """Per (season, position) delta of `arm` minus control on `metric`."""
+def _paired(
+    frame: pd.DataFrame, arm: Arm, metric: str, control: Arm = PREREGISTERED_CONTROL
+) -> pd.Series:
+    """Per (season, position) delta of `arm` minus `control` on `metric`.
+
+    `control` defaults to this phase's own, so every D78 call site is unchanged. It is a
+    parameter so a LATER phase testing a different class of change can reuse these gates
+    verbatim rather than reimplementing them and risking a silent divergence (D79)."""
     wide = frame.pivot_table(index=["season", "position"], columns="arm", values=metric)
-    return (wide[arm] - wide[PREREGISTERED_CONTROL]).dropna()
+    return (wide[arm] - wide[control]).dropna()
 
 
 def _t_test_p(deltas: pd.Series) -> float:
@@ -320,15 +326,19 @@ def _t_test_p(deltas: pd.Series) -> float:
     return float(2.0 * stats.t.sf(abs(t), df=n - 1))
 
 
-def evaluate_gates(frame: pd.DataFrame, arm: Arm) -> ArmVerdict:
-    """Apply G1-G7 to an arm, given the full measurement frame."""
+def evaluate_gates(
+    frame: pd.DataFrame, arm: Arm, control: Arm = PREREGISTERED_CONTROL
+) -> ArmVerdict:
+    """Apply G1-G7 to an arm, given the full measurement frame.
+
+    `control` defaults to this phase's own -- see `_paired` for why it is a parameter."""
     verdict = ArmVerdict(arm=arm)
-    if arm == PREREGISTERED_CONTROL:
+    if arm == control:
         return verdict
 
-    d_mae = _paired(frame, arm, "mae")
-    d_rmse = _paired(frame, arm, "rmse")
-    d_sp = _paired(frame, arm, "spearman")
+    d_mae = _paired(frame, arm, "mae", control)
+    d_rmse = _paired(frame, arm, "rmse", control)
+    d_sp = _paired(frame, arm, "spearman", control)
 
     verdict.gates.append(
         GateResult(
@@ -350,11 +360,7 @@ def evaluate_gates(frame: pd.DataFrame, arm: Arm) -> ArmVerdict:
     )
 
     mae_by_pos = frame.pivot_table(index="position", columns="arm", values="mae")
-    worse_pos = [
-        p
-        for p in mae_by_pos.index
-        if mae_by_pos.loc[p, arm] > mae_by_pos.loc[p, PREREGISTERED_CONTROL]
-    ]
+    worse_pos = [p for p in mae_by_pos.index if mae_by_pos.loc[p, arm] > mae_by_pos.loc[p, control]]
     verdict.gates.append(
         GateResult(
             "G3 no position sacrificed",
@@ -364,10 +370,7 @@ def evaluate_gates(frame: pd.DataFrame, arm: Arm) -> ArmVerdict:
     )
 
     sp_by_pos = frame.pivot_table(index="position", columns="arm", values="spearman")
-    drops = {
-        p: float(sp_by_pos.loc[p, PREREGISTERED_CONTROL] - sp_by_pos.loc[p, arm])
-        for p in sp_by_pos.index
-    }
+    drops = {p: float(sp_by_pos.loc[p, control] - sp_by_pos.loc[p, arm]) for p in sp_by_pos.index}
     worst_drop = max(drops.values())
     verdict.gates.append(
         GateResult(
@@ -387,7 +390,7 @@ def evaluate_gates(frame: pd.DataFrame, arm: Arm) -> ArmVerdict:
     )
 
     tdb = frame.pivot_table(index="position", columns="arm", values="top_decile_bias").abs()
-    worse_top = [p for p in tdb.index if tdb.loc[p, arm] > tdb.loc[p, PREREGISTERED_CONTROL] + 1e-9]
+    worse_top = [p for p in tdb.index if tdb.loc[p, arm] > tdb.loc[p, control] + 1e-9]
     verdict.gates.append(
         GateResult(
             "G6 top-of-board not worse",

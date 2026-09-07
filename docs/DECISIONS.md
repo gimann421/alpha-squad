@@ -5023,3 +5023,93 @@ back-to-back snake turn at exactly zero opportunity cost.
 - **Projection-layer RB bias**: among the hindsight top-60, RB is under-projected by 24 points
   more than WR (−86.2 vs −62.2). Consistent with D68's sign-stable RB residual. D68/D69/D70 each
   tried a treatment and each failed its gates; not re-opened here.
+
+## D79 phase 3 — M6's fitted projection is non-monotone in its own features; the fix is real, targeted, and fails the gates. Nothing shipped.
+
+Follow-up to D79's draft-layer work, prompted by verifying the **live 2026 board**. The draft
+engine is a constant here; `models/` is byte-identical. Module:
+`evaluation/projection_monotonicity.py` (rule committed before the run).
+
+### The defect
+
+M6's estimator is a depth-3 gradient-boosted tree. It cannot extrapolate, and the top of the RB
+feature space is sparse — only **22 of 1120** RB training rows carry `prior_weighted_total > 300`,
+with realized outcomes from 13.0 to 471.2 (the elite repeats *and* the season-ending injuries in
+one leaf). The result is not "the expectation sits below the realized maximum", which is correct
+behaviour and what D78 concluded about the reported compression. **The fitted function inverts.**
+
+Partial dependence on the real fitted 2026 RB model, sweeping one feature, others held fixed:
+
+| `prior_weighted_total` | 150 | 250 | 300 | 320 | 340 | 360 | 380 | 420 |
+|---|---|---|---|---|---|---|---|---|
+| projection | 227.9 | 232.2 | 221.5 | 209.2 | 180.6 | 169.2 | 169.2 | 169.2 |
+
+| `preseason_ecr_rank` | 1.0 | 2.5 | 5.0 | 10.0 | 20.0 | 40.0 | 80.0 | 150.0 |
+|---|---|---|---|---|---|---|---|---|
+| projection | **138.1** | 169.2 | **231.7** | 224.2 | 225.7 | 221.0 | 213.2 | 192.2 |
+
+A running back the market ranks **first overall** projects 93.6 points BELOW one it ranks fifth,
+all else equal. Measured over the four D78 evaluation seasons on the shipped model: **18.0% of
+partial-dependence steps invert**, and **272 of 2026** top-of-board "dominated pairs" (one player
+at least as good on every direction-known feature, strictly better on one, projected lower) are
+ordered backwards — worst gaps 116.2 (RB), 116.0 (WR), 79.6 (QB), 20.2 (TE).
+
+**Live consequence, 2026 board:** consensus RB1 Jahmyr Gibbs (363 and 367 PPR in the two prior
+seasons) projects **169.2, board rank 80**; consensus RB2 Bijan Robinson rank 35. That, not the
+decision engine, is why the top of Alpha's 2026 board is receivers.
+
+### An instrument defect, found and voided before it became a result
+
+The first pre-registered arm set (constraints added to M6's estimator unchanged) **could not be
+executed**. CatBoost applies monotone constraints only under some losses; `MAE` requires
+`leaf_estimation_method="Exact"`, and the combination raises. With the method unset it *silently*
+falls back to `Gradient`, and MAE-with-Gradient fits a **near-constant** model: RB/2025 MAE 74.96,
+prediction sd **3.1** against the shipped model's 69.9. The tell — `MAE + Gradient` is equally
+degenerate with no constraint at all, and three arms constraining different features returned
+identical MAE. Reported naively this would have read "monotone constraints cost +29 MAE". The arm
+set is recorded as VOID, and `_new_model` now raises on the combination so it cannot recur.
+
+### The corrected phase
+
+Constraints are available under RMSE, so the loss change is made an explicit separate arm rather
+than bundled. All arms use the shipped D78 (`Y1`) training rows; gates G1–G7 are D78's, reused
+verbatim via `evaluate_gates`.
+
+| arm | | MAE | RMSE | Spearman | top-decile bias | ΔMAE | PD inversions | dominated pairs |
+|---|---|---|---|---|---|---|---|---|
+| **E0** | shipped: MAE, unconstrained | **40.61** | **56.74** | **0.774** | −12.82 | — | **18.0%** | **272** |
+| E1 | RMSE, unconstrained | 43.23 | 57.16 | 0.768 | −6.74 | +2.62 | 16.8% | 317 |
+| E2 | RMSE + 3 constraints | 43.80 | 57.59 | 0.759 | −9.63 | +3.20 | **0.0%** | **65** |
+
+**The constraint does exactly what it claims** — inversions 18.0% → 0.0%, dominated pairs 272 →
+65 (−76%), worst gap 116.2 → 60.9 — **and it fixes the reported case precisely**: on the 2026
+board Gibbs moves 170.7 (rank 73) → **270.8 (rank 10)** and Bijan 196.4 (rank 55) → **270.8 (rank
+9)**, while McCaffrey, Taylor, Chase and Nacua all move by less than 14 points. It does not
+inflate the board; a constraint cannot manufacture optimism, only refuse to invert.
+
+**And it fails six of the seven pre-registered gates.** E2 is +3.20 MAE worse than shipped at
+every position and in every one of the four seasons (G1, G2, G3, G7 all fail; G5 confirms the
+degradation is real, not noise). Decomposed: +2.62 is the RMSE loss, +0.57 the constraint itself.
+
+**Nothing ships. M6 is byte-identical.**
+
+### What this phase actually establishes
+
+The gate that blocks E2 is pool-wide mean MAE over ~150 players per position-season. The defect
+it fixes is concentrated in the ten or twenty players at the top of the board — the only ones a
+draft consumes. Those are different questions, and this phase was gated on the first one
+deliberately: inventing a top-of-board metric *after* seeing which arm it would favour is the
+failure mode pre-registration exists to prevent, and it is said so in the module before the run.
+
+So the honest statement is: **a real defect is now measured and named, the obvious instrument for
+it is blocked by a library limitation and by an accuracy cost that lands outside the draftable
+pool, and the next phase — pre-registered before running — should be one whose primary metric is
+top-of-board ordering.** Per the D70 precedent (a treatment failing the projection layer is not
+eligible for draft-layer measurement), E2 was **not** carried to the draft benchmark.
+
+### Immediate practical consequence
+
+Until this is resolved, **Alpha's 2026 board should not be trusted on the elite running backs it
+ranks far below consensus** — specifically Jahmyr Gibbs (Alpha 80th, consensus 2nd) and Bijan
+Robinson (Alpha 35th, consensus 4th). This is a measured model defect, not a considered
+disagreement with the market.
