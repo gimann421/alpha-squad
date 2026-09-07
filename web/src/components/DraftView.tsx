@@ -576,7 +576,9 @@ export function DraftView() {
             </span>
           ))}
           . {draftedIds.length} pick{draftedIds.length === 1 ? "" : "s"} logged, so you are next
-          at <strong>#{derivedNextPick ?? "—"}</strong>.
+          at <strong>#{derivedNextPick ?? "—"}</strong>. Assumes a standard snake order; if your
+          league drafts linearly or by auction, clear the draft slot and enter the next pick
+          number by hand instead.
         </p>
       )}
 
