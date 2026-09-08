@@ -5113,3 +5113,155 @@ Until this is resolved, **Alpha's 2026 board should not be trusted on the elite 
 ranks far below consensus** — specifically Jahmyr Gibbs (Alpha 80th, consensus 2nd) and Bijan
 Robinson (Alpha 35th, consensus 4th). This is a measured model defect, not a considered
 disagreement with the market.
+
+## D80 — The elite-RB under-projection is real, longstanding and quantified; four candidate fixes were pre-registered and all four fail. Y1 is kept.
+
+Final pre-draft projection investigation. **`models/` and `league/` are byte-identical to their
+Y1 state — nothing shipped.** Framework and gates: `evaluation/projection_topboard.py`, committed
+in `027f76f` **before any arm was run**.
+
+### 1. Architecture (traced, not inferred)
+
+M6 is **four independently-fitted models, one per position** — `run_uncertainty` loops
+`POSITIONS = (QB, RB, WR, TE)` and calls `_new_model()` separately for each, persisting artifacts
+keyed `(uncertainty_catboost, position, model_version)`. Shared across positions: the estimator
+(CatBoost, depth 3, 150 iterations, lr 0.08, **MAE loss**, seed 42), the four features
+(`prior_ppg`, `prior_games`, `prior_weighted_total`, `preseason_ecr_rank`), and the target
+(next-season PPR total). Position-specific: the training rows, the fit, **and the conformal
+residual quantiles** (fit per position per season). Rookies never touch M6 — they come from M7
+(`rookie_predictions`) and are merged only where M6 has no row; K/DST are D57 baselines. So RB,
+QB and WR can be diagnosed and fixed independently, and this entry does treat them separately.
+
+### 2. Diagnosis: why the elite RB projection collapses
+
+**It rests on n=3.** Sorted by `prior_weighted_total`, the tail of the RB training set is:
+
+| player | prior_weighted_total | ECR | realized | model (in-sample) |
+|---|---|---|---|---|
+| Alvin Kamara 2021 | 332.6 | 3.39 | 234.7 | 234.7 |
+| Austin Ekeler 2023 | 362.6 | 7.50 | **185.4** | 186.9 |
+| C. McCaffrey 2024 | 379.1 | 1.81 | **47.8** | 117.8 |
+| C. McCaffrey 2020 | 441.2 | 1.00 | **90.4** | 109.1 |
+
+The only three RBs in the window who entered a season above ~360 scored 185, 48 and 90. Gibbs's
+2026 row carries **365.5** — between Ekeler and McCaffrey — and prices at **170.7**. One-at-a-time
+perturbation isolates the feature: `prior_weighted_total` 330→245, **365.5→171**, 400→171.
+
+The ECR inversion is the same story at n=13: RB training rows with ECR in [1,5) have mean 227.8
+(sd 135.6, **5 of 13 are injury seasons and 4 of 13 are one player**) against [5,12)'s 263.8
+(sd 74.5). The difference is 36.0 ± 41.7 — noise.
+
+Three things this is **not**, each checked rather than assumed:
+- **Not a bug.** In-sample on the 12 RB rows with ECR≤12 and prior≥300 the model predicts mean
+  216.5 against a realized 210.3. It reproduces its own elite cell correctly.
+- **Not a CatBoost artifact.** An independent XGBoost fit learns the same non-monotone ECR shape.
+- **Not ECR contamination.** `load_season_level_data` joins `ecr_type='ro'` with no `page_type`
+  filter, and D56 established `ro` labels two independently-ranked pages. Measured across
+  2022–2026 × 4 positions: **zero** model rows draw from the IDP page (the player sets are
+  disjoint for offensive skill players). A latent hazard worth fixing someday; it changes no
+  projection today.
+
+Also ruled out before pre-registering, so they are not arms: `min_data_in_leaf` (**inert** under
+CatBoost's symmetric-tree grow policy — byte-identical at 10/20/30/50/80), monotone feature
+transforms (CatBoost bins by quantile, so it is invariant to them), and deeper trees (depth 4/5
+measured worse).
+
+### 3. Historical diagnosis — signed bias by tier and season (control = shipped Y1)
+
+Tiers cut by **preseason ECR rank within position**, which is exogenous to every arm, so all arms
+score the identical players. Positive = the model **under**-projects that tier.
+
+| position | tier | 2022 | 2023 | 2024 | 2025 | **mean** |
+|---|---|---|---|---|---|---|
+| **RB** | **top10** | +56.3 | +0.2 | +36.6 | +88.7 | **+45.5** |
+| RB | 11–24 | −2.2 | +37.5 | +77.7 | −8.8 | +26.1 |
+| RB | 25–60 | +9.0 | +33.7 | +9.8 | +1.1 | +13.4 |
+| **WR** | top10 | +49.9 | −6.0 | +26.5 | −39.4 | **+7.7** |
+| **WR** | **11–24** | −21.3 | −0.8 | −69.8 | −42.9 | **−33.7** |
+| WR | 25–60 | +4.4 | −5.0 | +9.8 | −3.0 | +1.5 |
+| **QB** | **top10** | −3.2 | −42.3 | +7.5 | −50.1 | **−22.0** |
+| QB | 11–24 | −38.5 | −19.8 | −10.8 | +22.4 | −11.7 |
+| **TE** | all | −3.1 | +1.8 | +5.1 | +3.6 | **+1.8** |
+
+The positions genuinely differ, which is why this entry does not propose one universal fix:
+
+- **RB — real, longstanding, monotone in tier.** Under-projected in **4 of 4** seasons at top10,
+  and the bias decays with tier exactly as the n=3 tail mechanism predicts (+45.5 → +26.1 →
+  +13.4). This is the defect.
+- **WR — the top is fine; the 11–24 band is over-projected** in **4 of 4** seasons (−33.7). A real
+  but *different* defect, and not the one the draft complaint was about.
+- **QB — over-projected at the top** (−22.0, negative in 3 of 4). The opposite sign to RB. This
+  compounds D79's finding that Alpha's board is QB-heavy.
+- **TE — unbiased and stable** (+1.8). Nothing to fix; preserved by construction.
+
+### 4–8. Candidates, and why every one fails
+
+Five arms; all use the shipped Y1 training rows so a difference is attributable to the estimator.
+H3 exists so H4 is attributable — D79 phase 3 could only obtain monotonicity by also switching
+CatBoost to RMSE, confounding the constraint with a +2.62 MAE loss penalty. XGBoost applies
+constraints under `reg:absoluteerror`, so **H4 − H3 isolates the constraint at the shipped loss**.
+
+MAE deltas vs control, pooled 2022–2025 (negative = better):
+
+| arm | RB top10 | RB 11–24 | RB 25–60 | RB 11–60 | WR pool | QB pool | TE pool | ALL pool | RB top10 bias |
+|---|---|---|---|---|---|---|---|---|---|
+| **H0** control | 79.22 | 67.19 | 56.01 | 59.14 | 37.62 | 54.67 | 26.37 | 39.11 | +45.5 |
+| H1 `l2_leaf_reg`=10 | −0.60 | −0.36 | −0.18 | −0.23 | −0.28 | +0.16 | −0.21 | **−0.18** | 42.2 |
+| H2 `l2_leaf_reg`=30 | +2.95 | +0.98 | −0.33 | +0.04 | −0.30 | +0.53 | −0.17 | −0.04 | 45.8 |
+| H3 XGB-MAE plain | −1.04 | +0.46 | +1.92 | +1.51 | +1.67 | +1.45 | +0.77 | +1.38 | 42.0 |
+| H4 XGB-MAE monotone | −0.88 | +1.69 | +2.17 | +2.04 | +1.77 | +1.95 | +0.77 | +1.59 | **32.7** |
+
+**No arm clears T1** (RB top10 must improve by ≥2.0 MAE). The best is H3 at −1.04.
+
+The most informative row is **H4**: the monotone constraint cuts the RB top-10 *bias* from +45.5
+to +32.7 — by far the largest correction of the actual defect — yet improves top-10 **MAE** by
+only 0.88, while damaging RB 11–60 (+2.04), every other position (+1.77 WR, +1.95 QB) and the
+pool (+1.59). That is precisely the trade the acceptance requirement forbids.
+
+**Why correcting the bias barely moves the error, stated plainly:** RB top-10 outcomes have a
+standard deviation around 80 points. Removing 13 points of systematic bias is real, but it is
+small against that noise, so it cannot produce a 2-point MAE gain. The defect is a *calibration*
+problem that the available instruments can only fix by *also* flattening the rest of the
+distribution.
+
+H1 deserves a note because it is the near-miss: it improves almost everything slightly (pool
+−0.18, overall top12 −2.43, top24 −1.85, WR top10 −2.40, RB 11–60 −0.23) and passes T2, T3, T4,
+T7 and T8. It fails T1 (−0.60, well under the 2.0 floor) and fails T5/T6 — its RB top-10 effect is
+positive in only 2 of 4 seasons (+0.9, −2.7, +3.0, −3.6), i.e. noise. **Selecting it now on its
+broad-but-untargeted gains would be exactly the post-hoc metric-shopping the pre-registration
+exists to prevent.** It is recorded as the most promising direction for a future phase, not
+shipped.
+
+### 9. Draft simulation
+
+**Not run, deliberately.** Per the D70 precedent — a treatment that fails the projection layer is
+not eligible for draft-layer measurement — no arm qualified. Running the draft benchmark on a
+failed arm and reporting whichever way it fell would be exactly the cherry-pick the brief forbids.
+
+### 10–11. Production changes / what was rejected
+
+**Changed: nothing in the model.** Added: the pre-registered framework and its regression tests
+(`tests/unit/test_projection_topboard.py`, 30 tests, including one that specifically fails an arm
+which buys the top ten with the next fifty).
+
+Rejected with evidence: `l2_leaf_reg` 10 and 30; XGBoost at the shipped MAE loss with and without
+monotone constraints; and (from the ruled-out list) `min_data_in_leaf`, ECR feature transforms,
+deeper trees, and the ECR `page_type` fix (measured to change nothing).
+
+### 12. Remaining risks, and what to do about them at the draft
+
+- **RB (largest).** Alpha under-projects consensus-elite RBs by ~45 points, in 4 of 4 seasons.
+  On the 2026 board that is Gibbs (Alpha 80th, consensus 2nd) and Bijan Robinson (35th vs 4th).
+  **Treat Alpha's ranking of elite-consensus RBs as a known model limitation, not a signal.**
+  Note the honest magnitude: the training data's own answer for players in Gibbs's cell is a mean
+  of ~210 and a median of ~215, not the ~280 consensus implies — a corrected model would still
+  rank him below the market, just not 80th.
+- **QB.** Over-projected at the top by ~22 points, which compounds D79's QB-heavy board. Alpha's
+  elite QB numbers are, if anything, too generous in a 1-QB league.
+- **WR.** The top 10 is fine; the **11–24 band is over-projected by ~34 points in 4 of 4 seasons**.
+  Be sceptical of Alpha's WR2/WR3-range enthusiasm specifically.
+- **TE.** Unbiased; no action.
+- **Rookies.** Still M7, outside this phase, and they carry no conformal interval, so they take
+  the flat 0.7 confidence multiplier in the draft engine (D79).
+- **Uncertainty/calibration.** Untouched — no arm shipped, so the conformal layer is unchanged and
+  its coverage remains as measured at D78.
