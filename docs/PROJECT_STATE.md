@@ -1174,6 +1174,14 @@ Answer: **the hypothesis as posed is refuted, and a sharper defect is now measur
 comparison — the margin has no stable sign, exactly as D71's power analysis predicted. The gap to
 `alpha_bpa` (417.8) is unambiguous: the league-context layer is doing very large work.
 
+**Confirmed end to end on the production path:** 60 full drafts (2021-2026 x 10 slots) through the
+real `recommend_draft_pick` return a mean 2021-2025 starter total of **2013.5**, identical to the
+counterfactual harness's control. Across seasons the opening is board-dependent (first pick WR
+46/60, RB 9/60, QB 5/60; 2021 opens `RB-TE-WR`), so the 2026 board's WR-first/QB-early figures do
+not generalise. **The early kicker does: a kicker is taken by round 10 in 60 of 60 drafts** (mean
+round 8.75), on every board and from every slot -- the engine's single most reproducible behaviour,
+and worth 0.0 by its own board.
+
 **Highest-value next step is a better objective, not another value base.** The one thing that would
 let the instrument see the defect it cannot currently price is a benchmark that models bench depth —
 injuries, byes, waiver leverage, weekly lineup decisions.

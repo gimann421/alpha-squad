@@ -5442,6 +5442,38 @@ exceptions are the worlds where the QB is gone (QB-heavy opponents) — i.e. the
 to the board, not to a lean. Across five formats the same behaviour generalises and adapts: the top
 opening in superflex is `QB-QB-QB` (15/50), which is correct there.
 
+### 2a. Independent confirmation on the production path (60 drafts, completed)
+
+The tables above are produced by `decision_counterfactuals.score_board` under
+`ScoringVariant.control()`. That control is asserted equal to `recommend_draft_pick` state by
+state, but the stronger check is end-to-end: **60 full drafts (2021-2026 x 10 slots) run through
+the real `recommend_draft_pick`** return a mean 2021-2025 starter total of **2013.5** -- identical
+to the control harness's 2013.5. The fast harness is the engine.
+
+| season | modal opening | 1st RB | 1st QB | 1st TE | 1st K | 1st DST | QB | RB | WR | TE | K | DST |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 2021 | `RB-TE-WR` (5) | 2.60 | 3.50 | 2.60 | 9.00 | 10.10 | 2.00 | 2.70 | 5.00 | 2.60 | 2.00 | 1.70 |
+| 2022 | `WR-QB-WR` (6) | 5.70 | 1.70 | 7.40 | 9.00 | 11.00 | 2.00 | 2.30 | 5.20 | 3.00 | 2.00 | 1.50 |
+| 2023 | `WR-QB-WR` (7) | 4.70 | 2.20 | 7.20 | 9.00 | 10.00 | 1.30 | 4.80 | 5.00 | 1.70 | 2.00 | 1.20 |
+| 2024 | `WR-QB-WR` (7) | **7.00** | 2.30 | 6.00 | 8.50 | 10.00 | 2.00 | 2.50 | 5.80 | 2.70 | 2.00 | 1.00 |
+| 2025 | `WR-QB-RB` (8) | 3.10 | 1.90 | 8.00 | 9.00 | 10.00 | 2.00 | 5.00 | 4.40 | 1.30 | 2.00 | 1.30 |
+| 2026 | `WR-RB-QB` (5) | 1.90 | 2.80 | 9.00 | 8.00 | 10.00 | 2.50 | 4.10 | 4.50 | 1.10 | 2.10 | 1.70 |
+| **all** | | **4.17** | **2.40** | **6.70** | **8.75** | **10.18** | 1.97 | 3.57 | 4.98 | 2.07 | 2.02 | 1.40 |
+
+Two refinements this adds to the 2026-board-only figures above, both worth recording because they
+cut against over-claiming:
+
+* **The WR-first and QB-early behaviours are board-dependent, not a hardcoded lean.** Across
+  seasons the first pick is WR in 46 of 60, RB in 9, QB in 5, and **2021 opens `RB-TE-WR` with the
+  first QB in round 3.50**. The 14-of-14 WR and 12-of-14 early-QB figures in section 2 are
+  properties of the *2026 board* under varying opponents, not of the engine in general.
+* **The early kicker is the one behaviour that is genuinely universal: a kicker is taken by round
+  10 in 60 of 60 drafts**, mean round 8.75, and a defense by round 10.18 -- in every season, from
+  every slot, on every board. It is the most reproducible thing the engine does, and (section 5) it
+  is worth 0.0 by the engine's own board.
+
+Zero unfilled mandatory starting slots in all 60.
+
 ### 3. The starter-vs-consumption hypothesis: REFUTED
 
 Formalised and measured on the real board (per team, target format, 2026):
