@@ -52,6 +52,38 @@ serious being the Draft view sitting on season 2025 while 2026 projections exist
 remains OPEN** as the standing measurement limitation D71 reclassified it to; nothing in this phase
 changes that, and the season universe is still n=5.
 
+### M36 (D79-D83) — the draft-decision and projection investigation. **Nothing shipped to the model.**
+
+One production defect was found and fixed (D79): `GET /rankings` served the wrong universe —
+163-179 players missing per season, including **every K and DST** — which also broke
+`league/draft.py`'s `pool_is_a_board` guard, so D67's draft-aware replacement never engaged in
+production (RB-vs-WR replacement gap −0.4 static against +31.1 draft-aware). The served universe
+is now verified identical to the engine's in every season 2021-2025.
+
+Everything else was measured and rejected. **Thirteen pre-registered candidate models across three
+phases** (D80 top-of-board arms, D82 feature addition, D83 seed ensembling) were tested against
+gates committed to git *before* any arm ran, walk-forward on 2022-2025. **Every one failed.** The
+closest — a 24-seed ensemble — confirmed its own pre-registered mechanism prediction (WR top5
+−7.62 MAE, gains scaling with seed count, 7 of 9 gates passed) and was then measured on realized
+starter points: **−7.9, season-clustered 95% CI [−101.9, +86.1]**, 2 of 4 seasons, median paired
+difference exactly zero.
+
+The common cause is now measured. Varying **nothing but CatBoost's random seed**, the shipped
+model's predictions move **9.66 points in the head of the board against 2.42 in the body** — the
+top is four times less determined by the data than the rest, before any change is made. It is
+**variance-limited, not information-limited**, which is why changing the estimator (D79/D80) and
+changing the information (D82) both failed.
+
+**The WR-heavy opening is a decision-engine property, not a projection-model property**, on three
+independent lines: elite RBs must project ~350 (about 140 points above the training data's own
+answer of 210.3) before one is taken at #1, and no value changes picks #20 or #21; no projection
+change clears the gates; and the one candidate that measurably improved top-of-board accuracy made
+the WR concentration *worse* (first-pick RB 8/40 → 0/40) at no gain. The open question is the
+decision layer's value base — `msv + daVORP` counts raw projection twice at an empty roster slot,
+and QB replacement is drawn at the *consumption* boundary (QB22) rather than what a 1-QB roster
+starts. Full report: `docs/PROJECTION_INVESTIGATION_FINAL.md` and
+`docs/OPENING_DRAFT_AUDIT.md`.
+
 Earlier milestone history (M0-M34) is unchanged and summarised in the table below.
 
 | Milestone | Status | Notes |
