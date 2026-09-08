@@ -5265,3 +5265,129 @@ deeper trees, and the ECR `page_type` fix (measured to change nothing).
   the flat 0.7 confidence multiplier in the draft engine (D79).
 - **Uncertainty/calibration.** Untouched — no arm shipped, so the conformal layer is unchanged and
   its coverage remains as measured at D78.
+
+---
+
+## D82 — Adding pre-season-knowable features to M6: all five arms fail, nothing ships
+
+**Context.** D79 and D80 both tried to fix the elite-tail behaviour by changing the *estimator*
+while holding M6's four features fixed, and every arm failed. D80's diagnosis said why: the elite
+tail is sparse (RB has 22 training rows above a prior weighted total of 300, from 14 distinct
+players), so no estimator change can manufacture information the features do not carry. D82 asks
+the other question — **is the information missing?**
+
+**Pre-registered before any arm was run** (commit `1553272`): five nested arms varying only which
+columns the model may see, with the CatBoost hyperparameters byte-identical to production.
+F0 control (Y1's four features), F1 `+age/career season/draft round`, F2 `+prior-season volume`
+(carries, targets, touches), F3 `+prior-season usage share` (target share, snap %), F4 `+all
+three`. Blocks are disjoint so a gain is attributable to one of them. Gates P1–P9; selection rule
+"lowest-numbered arm clearing every gate, else nothing ships".
+
+**Result: every arm failed, and the elite tail got WORSE, not better.**
+
+| arm | RB top10 ΔMAE | RB top5 ΔMAE | pooled ΔMAE | verdict |
+|---|---|---|---|---|
+| F1 age/career/draft | **+8.43** | +7.74 | +0.47 | fails P1–P4, P6–P8 |
+| F2 volume | **+6.28** | +6.90 | +0.74 | fails P1–P4, P6, P7 |
+| F3 usage share | −0.55 | −1.72 | −0.14 | fails P1, P2, P6, P7 |
+| F4 all three | **+6.28** | +7.71 | +0.61 | fails P1–P4, P6–P8 |
+
+F3 is the honest near-miss and worth recording: it improves **QB top5 by −7.69 (4/4 seasons)** and
+**WR top5 by −14.00 (3/4)** without damaging RB. It fails anyway — pooled gain −0.14 against a
+0.5-point floor at p=0.71, and it damages WR 11–24 by +3.58, RB 11–24 by +1.31 and TE top5 by
++2.45. It buys the head with the body, which is exactly what P2 exists to catch.
+
+**Process note.** P1 originally required only "improves AND p<0.05". The regression tests caught
+that zero-variance deltas would pass a *0.001-point* gain, so a `MIN_POOLED_GAIN = 0.5`
+effect-size floor was added **before** any arm ran. Significance alone is not a reason to change a
+production model.
+
+**Mechanism (Phase 8, the common-cause question).** Refitting the shipped model while varying
+nothing but CatBoost's random seed, averaged over 2022–2025 and positions:
+
+| tier | seed-to-seed prediction sd (points) |
+|---|---|
+| top10 | **9.66** |
+| 11_24 | 6.89 |
+| 25_60 | 5.72 |
+| 61_plus | 2.42 |
+
+The head of the board is **four times less determined by the data than the body, before any
+change is made**. Across 40 arm × position × tier cells, added seed instability and added error
+are positively associated (Pearson r=+0.376, p=0.017; slope +1.23 MAE points per point of added
+sd) — a real but *partial* channel: R²≈0.14, so variance inflation explains some of D82's damage,
+not all of it. The common cause is that the head is **variance-limited, not information-limited**,
+which is why changing the estimator (D79/D80) and changing the information (D82) both fail.
+
+**Decision: nothing ships. M6 stays byte-identical to Y1.**
+
+---
+
+## D83 — Seed-ensembling M6: the mechanism is confirmed, the effect is too small, nothing ships
+
+**Context.** D82's mechanism measurement implies a lever neither D79/D80 nor D82 tried. If the
+head is variance-limited, the response is neither more information nor a different estimator but
+**averaging** — the one lever that attacks prediction variance directly and cannot introduce bias
+of its own.
+
+**Pre-registered before any arm was run** (commit `67eaffb`): S0 control (single fit, seed 42,
+byte-identical to Y1), S1 4 seeds, S2 12 seeds, S3 24 seeds. Seed sets are **nested supersets of
+the production seed**, so each arm is "production plus more seeds" rather than "a different seed"
+and a win cannot be seed-cherry-picking. Gates are *imported* from D82 rather than restated, with
+a test asserting the identity, so a threshold cannot silently diverge. Selection rule: smallest
+clearing ensemble, since each extra seed is linear extra training cost.
+
+Registered in advance: averaging under an MAE objective is **not** guaranteed to help (the mean
+minimises squared error, not absolute error), so a null result is a real finding; and if it helps
+it should help **most in the head tiers**, so an arm improving only the body would be evidence
+against the mechanism story rather than something to ship.
+
+**Result: the mechanism prediction is confirmed, and every arm still fails.**
+
+| tier | ΔMAE S1 (4) | ΔMAE S2 (12) | ΔMAE S3 (24) |
+|---|---|---|---|
+| WR top5 | −3.87 | −5.88 | **−7.62** |
+| WR top10 | −1.42 | −2.21 | −3.53 |
+| QB top5 | −0.87 | −1.46 | −2.36 |
+| overall top12 | −1.74 | −1.30 | −1.92 |
+| overall top24 | −1.46 | −1.40 | −2.03 |
+| **QB 11_24** | **+2.60** | **+2.46** | **+2.70** |
+| pooled ALL | −0.13 | −0.20 | −0.23 |
+
+Gains land exactly where seed noise was largest — the head — and scale with seed count, which is
+what the pre-registered mechanism predicted. All three arms pass **7 of 9 gates** including
+consistency (S1 is better in 4/4 seasons; P6, P7, P8, P9 all pass). They fail **P1** (pooled gain
+0.04–0.12 against the 0.5-point floor, p=0.55–0.79) and **P2** (QB 11–24 damaged by +2.5 to +2.7,
+consistently across all three arms, so it is a real property of averaging rather than noise).
+
+**Phase 7 — draft-relevant validation (EXPLORATORY, non-confirmatory).** D83's tier results were
+read before this was designed, so it cannot license shipping; it was run because a null result
+here closes the line for good. Z0 engine, fair roster-aware opponent, 2022–2025 × 10 slots = 40
+paired drafts per arm, projections substituted through D68's `projections_override` insertion
+point with K/DST/rookie values carried through untouched.
+
+| | S0 (production Y1) | S3 (24-seed ensemble) |
+|---|---|---|
+| mean realized starter points | **2011.7** | 2003.8 |
+| paired margin, season-clustered (D71) | — | **−7.9, 95% CI [−101.9, +86.1]** |
+| seasons won | — | 2 of 4 |
+| slots won | — | 19 of 40 (median paired diff **+0.0**) |
+| first pick RB | **8 / 40** | **0 / 40** |
+| first pick WR | 28 / 40 | **34 / 40** |
+
+**A measurable top-of-board accuracy gain did not produce a single realized point — and it made
+the WR concentration worse.** The ensemble eliminates RB from the first pick entirely and removes
+the `RB,QB,WR` opening (7/40 → 0/40).
+
+**Decision: nothing ships. M6 stays byte-identical to Y1.** The interval model is likewise
+untouched, so the conformal coverage measured at D78 still stands.
+
+**What this settles.** Three independent lines now agree that the WR-heavy opening is a
+**decision-engine property, not a projection-model property**: D81's counterfactual (elite RBs
+need ~350, about 140 points above the training data's own answer of 210.3, before one is taken
+at #1, and *no* value changes picks #20 or #21); D82/D83 (no projection change clears the gates);
+and Phase 7 (the one candidate that measurably improved top-of-board accuracy made the WR
+concentration *worse* at no gain). Further projection work is not the productive direction. The
+open question is the decision layer's value base — `msv + daVORP` counts raw projection twice at
+an empty roster slot, and QB replacement is drawn at the *consumption* boundary (2.2 QB/team =
+QB22 at 193.8) rather than anything a 1-QB roster ever starts.
