@@ -143,15 +143,29 @@ PREREGISTERED_TARGET_SEASONS: tuple[int, ...] = (2022, 2023, 2024, 2025)
 # rank would let each arm choose its own top five and turn the metric into a selection effect.
 # --------------------------------------------------------------------------------------------
 PREREGISTERED_TIERS: dict[str, tuple[tuple[str, int, int], ...]] = {
-    "RB": (("top5", 1, 6), ("top10", 1, 11), ("11_24", 11, 25), ("25_60", 25, 61),
-           ("61_100", 61, 101), ("all", 1, 10_000)),
-    "WR": (("top5", 1, 6), ("top10", 1, 11), ("11_24", 11, 25), ("25_60", 25, 61),
-           ("all", 1, 10_000)),
+    "RB": (
+        ("top5", 1, 6),
+        ("top10", 1, 11),
+        ("11_24", 11, 25),
+        ("25_60", 25, 61),
+        ("61_100", 61, 101),
+        ("all", 1, 10_000),
+    ),
+    "WR": (
+        ("top5", 1, 6),
+        ("top10", 1, 11),
+        ("11_24", 11, 25),
+        ("25_60", 25, 61),
+        ("all", 1, 10_000),
+    ),
     "QB": (("top5", 1, 6), ("top10", 1, 11), ("11_24", 11, 25), ("all", 1, 10_000)),
     "TE": (("top5", 1, 6), ("top10", 1, 11), ("11_24", 11, 25), ("all", 1, 10_000)),
 }
 PREREGISTERED_OVERALL_TIERS: tuple[tuple[str, int, int], ...] = (
-    ("top12", 1, 13), ("top24", 1, 25), ("top50", 1, 51), ("top100", 1, 101),
+    ("top12", 1, 13),
+    ("top24", 1, 25),
+    ("top50", 1, 51),
+    ("top100", 1, 101),
     ("all", 1, 10_000),
 )
 
@@ -355,10 +369,18 @@ def measure_arm_season(
             if tier.empty:
                 continue
             a, p = tier[TARGET_COLUMN].to_numpy(), tier["predicted"].to_numpy()
-            rows.append(TierRow(arm, season, position, label, len(tier),
-                                float(np.abs(a - p).mean()),
-                                float(np.sqrt(((a - p) ** 2).mean())),
-                                float((a - p).mean())))
+            rows.append(
+                TierRow(
+                    arm,
+                    season,
+                    position,
+                    label,
+                    len(tier),
+                    float(np.abs(a - p).mean()),
+                    float(np.sqrt(((a - p) ** 2).mean())),
+                    float((a - p).mean()),
+                )
+            )
 
     if frames:
         board = pd.concat(frames, ignore_index=True)
@@ -371,10 +393,18 @@ def measure_arm_season(
             if tier.empty:
                 continue
             aa, pp = tier[TARGET_COLUMN].to_numpy(), tier["predicted"].to_numpy()
-            rows.append(TierRow(arm, season, "ALL", label, len(tier),
-                                float(np.abs(aa - pp).mean()),
-                                float(np.sqrt(((aa - pp) ** 2).mean())),
-                                float((aa - pp).mean())))
+            rows.append(
+                TierRow(
+                    arm,
+                    season,
+                    "ALL",
+                    label,
+                    len(tier),
+                    float(np.abs(aa - pp).mean()),
+                    float(np.sqrt(((aa - pp) ** 2).mean())),
+                    float((aa - pp).mean()),
+                )
+            )
     return rows, extras
 
 
@@ -422,10 +452,13 @@ def evaluate_gates(
     deltas = (wide[arm] - wide[control]).dropna().to_numpy()
     p_value = _t_test_p(deltas)
     verdict.gates.append(
-        GateResult("P1 accuracy improves",
-                   bool(deltas.mean() <= -MIN_POOLED_GAIN and p_value < PREREGISTERED_ALPHA),
-                   f"mean position-season dMAE {deltas.mean():+.3f} "
-                   f"(needs <= {-MIN_POOLED_GAIN:+.2f}), paired p={p_value:.4f}"))
+        GateResult(
+            "P1 accuracy improves",
+            bool(deltas.mean() <= -MIN_POOLED_GAIN and p_value < PREREGISTERED_ALPHA),
+            f"mean position-season dMAE {deltas.mean():+.3f} "
+            f"(needs <= {-MIN_POOLED_GAIN:+.2f}), paired p={p_value:.4f}",
+        )
+    )
 
     tier_piv = tiers.pivot_table(index=["position", "tier"], columns="arm", values="mae")
     damaged = {
@@ -434,73 +467,106 @@ def evaluate_gates(
         if tier_piv.loc[(pos, tier), arm] - tier_piv.loc[(pos, tier), control] > TOLERANCE
     }
     verdict.gates.append(
-        GateResult("P2 no tier damaged", not damaged,
-                   "all tiers within tolerance" if not damaged
-                   else ", ".join(f"{k} {v:+.1f}" for k, v in sorted(damaged.items()))))
+        GateResult(
+            "P2 no tier damaged",
+            not damaged,
+            "all tiers within tolerance"
+            if not damaged
+            else ", ".join(f"{k} {v:+.1f}" for k, v in sorted(damaged.items())),
+        )
+    )
 
     pos_damage = {}
     for position in POSITIONS:
         col = f"pool_mae_{position}"
         if col in extras.columns:
             d = float(extras[extras.arm == arm][col].mean()) - float(
-                extras[extras.arm == control][col].mean())
+                extras[extras.arm == control][col].mean()
+            )
             pos_damage[position] = d
     verdict.gates.append(
-        GateResult("P3 no position damaged",
-                   all(v <= TOLERANCE for v in pos_damage.values()),
-                   ", ".join(f"{k} {v:+.2f}" for k, v in pos_damage.items())))
+        GateResult(
+            "P3 no position damaged",
+            all(v <= TOLERANCE for v in pos_damage.values()),
+            ", ".join(f"{k} {v:+.2f}" for k, v in pos_damage.items()),
+        )
+    )
 
     d_rb_top = float(tier_piv.loc[("RB", "top10"), arm] - tier_piv.loc[("RB", "top10"), control])
     verdict.gates.append(
-        GateResult("P4 RB top10 not worse", bool(d_rb_top <= TOLERANCE),
-                   f"RB top10 dMAE {d_rb_top:+.2f}"))
+        GateResult(
+            "P4 RB top10 not worse", bool(d_rb_top <= TOLERANCE), f"RB top10 dMAE {d_rb_top:+.2f}"
+        )
+    )
 
     verdict.gates.append(
-        GateResult("P5 TE preserved", bool(pos_damage.get("TE", 0.0) <= TOLERANCE),
-                   f"TE pool dMAE {pos_damage.get('TE', float('nan')):+.2f}"))
+        GateResult(
+            "P5 TE preserved",
+            bool(pos_damage.get("TE", 0.0) <= TOLERANCE),
+            f"TE pool dMAE {pos_damage.get('TE', float('nan')):+.2f}",
+        )
+    )
 
     per_season = {}
     for season in sorted(extras.season.unique()):
         a = float(extras[(extras.arm == arm) & (extras.season == season)]["pool_mae_ALL"].mean())
-        c = float(extras[(extras.arm == control) & (extras.season == season)]["pool_mae_ALL"].mean())
+        c = float(
+            extras[(extras.arm == control) & (extras.season == season)]["pool_mae_ALL"].mean()
+        )
         per_season[int(season)] = a - c
     better = sum(1 for v in per_season.values() if v < 0)
     verdict.gates.append(
-        GateResult("P6 not one season", better >= PREREGISTERED_MIN_BETTER_SEASONS,
-                   f"{better}/{len(per_season)} better: "
-                   + ", ".join(f"{s}:{v:+.2f}" for s, v in per_season.items())))
+        GateResult(
+            "P6 not one season",
+            better >= PREREGISTERED_MIN_BETTER_SEASONS,
+            f"{better}/{len(per_season)} better: "
+            + ", ".join(f"{s}:{v:+.2f}" for s, v in per_season.items()),
+        )
+    )
 
     loso = {}
     for held in sorted(extras.season.unique()):
         kept = extras[extras.season != held]
         loso[int(held)] = float(kept[kept.arm == arm]["pool_mae_ALL"].mean()) - float(
-            kept[kept.arm == control]["pool_mae_ALL"].mean())
+            kept[kept.arm == control]["pool_mae_ALL"].mean()
+        )
     verdict.gates.append(
-        GateResult("P7 leave-one-season-out", all(v < 0 for v in loso.values()),
-                   ", ".join(f"drop {s}:{v:+.2f}" for s, v in loso.items())))
+        GateResult(
+            "P7 leave-one-season-out",
+            all(v < 0 for v in loso.values()),
+            ", ".join(f"drop {s}:{v:+.2f}" for s, v in loso.items()),
+        )
+    )
 
     drops = {}
     for position in POSITIONS:
         col = f"spearman_{position}"
         if col in extras.columns:
             drops[position] = float(extras[extras.arm == control][col].mean()) - float(
-                extras[extras.arm == arm][col].mean())
+                extras[extras.arm == arm][col].mean()
+            )
     verdict.gates.append(
-        GateResult("P8 ordering intact",
-                   bool(np.mean(list(drops.values())) <= 0 or
-                        max(drops.values()) <= MAX_SPEARMAN_DROP),
-                   ", ".join(f"{k} {-v:+.4f}" for k, v in drops.items())))
+        GateResult(
+            "P8 ordering intact",
+            bool(np.mean(list(drops.values())) <= 0 or max(drops.values()) <= MAX_SPEARMAN_DROP),
+            ", ".join(f"{k} {-v:+.4f}" for k, v in drops.items()),
+        )
+    )
 
     ecr_gain = {}
     for position in POSITIONS:
         col = f"ecr_spearman_{position}"
         if col in extras.columns:
             ecr_gain[position] = float(extras[extras.arm == arm][col].mean()) - float(
-                extras[extras.arm == control][col].mean())
+                extras[extras.arm == control][col].mean()
+            )
     verdict.gates.append(
-        GateResult("P9 not consensus-copying",
-                   all(v <= MAX_ECR_SPEARMAN_GAIN for v in ecr_gain.values()),
-                   ", ".join(f"{k} {v:+.3f}" for k, v in ecr_gain.items())))
+        GateResult(
+            "P9 not consensus-copying",
+            all(v <= MAX_ECR_SPEARMAN_GAIN for v in ecr_gain.values()),
+            ", ".join(f"{k} {v:+.3f}" for k, v in ecr_gain.items()),
+        )
+    )
     return verdict
 
 

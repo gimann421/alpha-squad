@@ -85,11 +85,13 @@ def test_gates_are_the_same_objects_as_d82() -> None:
 
 def test_ensemble_uses_only_the_shipped_features() -> None:
     """D83 varies the seed and nothing else; the feature set must stay Y1's four."""
-    train = pd.DataFrame({
-        **{f: np.linspace(1, 100, 60) + i for i, f in enumerate(FEATURES)},
-        TARGET_COLUMN: np.linspace(50, 300, 60),
-        "extra_column_that_must_be_ignored": np.random.default_rng(0).normal(size=60),
-    })
+    train = pd.DataFrame(
+        {
+            **{f: np.linspace(1, 100, 60) + i for i, f in enumerate(FEATURES)},
+            TARGET_COLUMN: np.linspace(50, 300, 60),
+            "extra_column_that_must_be_ignored": np.random.default_rng(0).normal(size=60),
+        }
+    )
     target = train.head(5)
     members = _fit_predict(train, target, (42, 43))
     assert members.shape == (2, 5)
@@ -97,10 +99,12 @@ def test_ensemble_uses_only_the_shipped_features() -> None:
 
 def test_prediction_is_the_mean_of_the_members() -> None:
     rng = np.random.default_rng(1)
-    train = pd.DataFrame({
-        **{f: rng.normal(size=80) * 50 + 100 for f in FEATURES},
-        TARGET_COLUMN: rng.normal(size=80) * 60 + 180,
-    })
+    train = pd.DataFrame(
+        {
+            **{f: rng.normal(size=80) * 50 + 100 for f in FEATURES},
+            TARGET_COLUMN: rng.normal(size=80) * 60 + 180,
+        }
+    )
     target = train.head(8)
     members = _fit_predict(train, target, (42, 43, 44))
     assert members.shape == (3, 8)
@@ -111,15 +115,19 @@ def test_a_single_seed_arm_reproduces_the_production_fit_exactly() -> None:
     """S0 must be Y1. If it drifts, every delta in the phase is measured against the wrong
     baseline."""
     rng = np.random.default_rng(2)
-    train = pd.DataFrame({
-        **{f: rng.normal(size=80) * 50 + 100 for f in FEATURES},
-        TARGET_COLUMN: rng.normal(size=80) * 60 + 180,
-    })
+    train = pd.DataFrame(
+        {
+            **{f: rng.normal(size=80) * 50 + 100 for f in FEATURES},
+            TARGET_COLUMN: rng.normal(size=80) * 60 + 180,
+        }
+    )
     target = train.head(6)
     ensemble = _fit_predict(train, target, seeds_for("S0"))[0]
-    direct = _new_model(PRODUCTION_SEED).fit(
-        train[list(FEATURES)].to_numpy(dtype=float), train[TARGET_COLUMN].to_numpy()
-    ).predict(target[list(FEATURES)].to_numpy(dtype=float))
+    direct = (
+        _new_model(PRODUCTION_SEED)
+        .fit(train[list(FEATURES)].to_numpy(dtype=float), train[TARGET_COLUMN].to_numpy())
+        .predict(target[list(FEATURES)].to_numpy(dtype=float))
+    )
     assert np.allclose(ensemble, direct)
 
 
@@ -127,10 +135,12 @@ def test_averaging_reduces_member_spread() -> None:
     """The mechanism this phase is built on: the mean of k fits is less seed-sensitive than any
     single fit. Verified numerically rather than assumed."""
     rng = np.random.default_rng(3)
-    train = pd.DataFrame({
-        **{f: rng.normal(size=120) * 50 + 100 for f in FEATURES},
-        TARGET_COLUMN: rng.normal(size=120) * 60 + 180,
-    })
+    train = pd.DataFrame(
+        {
+            **{f: rng.normal(size=120) * 50 + 100 for f in FEATURES},
+            TARGET_COLUMN: rng.normal(size=120) * 60 + 180,
+        }
+    )
     target = train.head(20)
     members = _fit_predict(train, target, tuple(range(42, 54)))
     singles = members.std(axis=0, ddof=1).mean()
@@ -159,9 +169,11 @@ def test_selection_is_none_when_no_arm_clears(monkeypatch) -> None:
 
     monkeypatch.setattr(ens, "measure_arm_season", lambda con, arm, season: ([], {}))
     monkeypatch.setattr(
-        ens, "evaluate_gates",
+        ens,
+        "evaluate_gates",
         lambda tiers, extras, arm, control=PREREGISTERED_CONTROL: feat.ArmVerdict(
-            arm=arm, gates=[feat.GateResult("P1", False, "")]),
+            arm=arm, gates=[feat.GateResult("P1", False, "")]
+        ),
     )
     assert ens.run_ensemble_experiment(con=None, seasons=(2022,)).selected is None
 

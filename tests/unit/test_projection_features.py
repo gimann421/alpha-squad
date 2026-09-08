@@ -132,8 +132,9 @@ def _leak_con(rows: list[tuple[str, int, float]]):
     import duckdb
 
     con = duckdb.connect(":memory:")
-    con.execute("CREATE TABLE player_season_stats (player_id VARCHAR, season INTEGER, "
-                "total_carries DOUBLE)")
+    con.execute(
+        "CREATE TABLE player_season_stats (player_id VARCHAR, season INTEGER, total_carries DOUBLE)"
+    )
     if rows:
         con.executemany("INSERT INTO player_season_stats VALUES (?, ?, ?)", rows)
     return con
@@ -180,14 +181,29 @@ def _tiers(control_mae: float, arm_mae: dict[tuple[str, str], float]) -> pd.Data
         for position in _POSITIONS:
             for label, _, _ in PREREGISTERED_TIERS[position]:
                 rows.append(TierRow("F0", season, position, label, 10, control_mae, 0.0, 0.0))
-                rows.append(TierRow("F1", season, position, label, 10,
-                                    arm_mae.get((position, label), control_mae - 2.0), 0.0, 0.0))
+                rows.append(
+                    TierRow(
+                        "F1",
+                        season,
+                        position,
+                        label,
+                        10,
+                        arm_mae.get((position, label), control_mae - 2.0),
+                        0.0,
+                        0.0,
+                    )
+                )
     return pd.DataFrame([r.__dict__ for r in rows])
 
 
-def _extras(arm_pool: dict[str, float] | None = None, control_pool: float = 50.0,
-            arm_spearman: float = 0.80, control_spearman: float = 0.80,
-            arm_ecr: float = 0.70, control_ecr: float = 0.70) -> pd.DataFrame:
+def _extras(
+    arm_pool: dict[str, float] | None = None,
+    control_pool: float = 50.0,
+    arm_spearman: float = 0.80,
+    control_spearman: float = 0.80,
+    arm_ecr: float = 0.70,
+    control_ecr: float = 0.70,
+) -> pd.DataFrame:
     arm_pool = arm_pool or {p: control_pool - 2.0 for p in _POSITIONS}
     rows = []
     for season in PREREGISTERED_TARGET_SEASONS:
@@ -195,8 +211,11 @@ def _extras(arm_pool: dict[str, float] | None = None, control_pool: float = 50.0
             ("F0", {p: control_pool for p in _POSITIONS}, control_spearman, control_ecr),
             ("F1", arm_pool, arm_spearman, arm_ecr),
         ):
-            row = {"arm": arm, "season": season,
-                   "pool_mae_ALL": float(np.mean(list(pool.values())))}
+            row = {
+                "arm": arm,
+                "season": season,
+                "pool_mae_ALL": float(np.mean(list(pool.values()))),
+            }
             for position in _POSITIONS:
                 row[f"pool_mae_{position}"] = pool[position]
                 row[f"spearman_{position}"] = sp
@@ -223,8 +242,9 @@ def test_a_uniformly_better_arm_passes_every_gate() -> None:
 def test_p2_rejects_buying_the_rb_head_with_the_rb_body() -> None:
     """The gate that matters most: an arm that trades one tier for another must fail even
     though its pooled mean improves."""
-    v = evaluate_gates(_tiers(50.0, {("RB", "top10"): 30.0, ("RB", "25_60"): 60.0}),
-                       _extras(), "F1")
+    v = evaluate_gates(
+        _tiers(50.0, {("RB", "top10"): 30.0, ("RB", "25_60"): 60.0}), _extras(), "F1"
+    )
     assert not _gate(v, "P2").passed
     assert "RB/25_60" in _gate(v, "P2").detail
 
@@ -271,8 +291,7 @@ def test_p8_rejects_a_damaged_ordering() -> None:
 
 
 def test_p9_rejects_an_arm_that_wins_by_copying_the_consensus() -> None:
-    v = evaluate_gates(_tiers(50.0, {}), _extras(arm_ecr=0.70 + MAX_ECR_SPEARMAN_GAIN + 0.01),
-                       "F1")
+    v = evaluate_gates(_tiers(50.0, {}), _extras(arm_ecr=0.70 + MAX_ECR_SPEARMAN_GAIN + 0.01), "F1")
     assert not _gate(v, "P9").passed
 
 

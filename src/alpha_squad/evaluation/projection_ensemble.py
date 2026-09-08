@@ -147,9 +147,7 @@ def _fit_predict(train: pd.DataFrame, target: pd.DataFrame, seeds: tuple[int, ..
     xt = train[list(FEATURES)].to_numpy(dtype=float)
     yt = train[TARGET_COLUMN].to_numpy()
     xe = target[list(FEATURES)].to_numpy(dtype=float)
-    members = [
-        np.asarray(_new_model(seed).fit(xt, yt).predict(xe), dtype=float) for seed in seeds
-    ]
+    members = [np.asarray(_new_model(seed).fit(xt, yt).predict(xe), dtype=float) for seed in seeds]
     return np.vstack(members)
 
 
@@ -209,10 +207,18 @@ def measure_arm_season(
             if tier.empty:
                 continue
             a, p = tier[TARGET_COLUMN].to_numpy(), tier["predicted"].to_numpy()
-            rows.append(TierRow(arm, season, position, label, len(tier),
-                                float(np.abs(a - p).mean()),
-                                float(np.sqrt(((a - p) ** 2).mean())),
-                                float((a - p).mean())))
+            rows.append(
+                TierRow(
+                    arm,
+                    season,
+                    position,
+                    label,
+                    len(tier),
+                    float(np.abs(a - p).mean()),
+                    float(np.sqrt(((a - p) ** 2).mean())),
+                    float((a - p).mean()),
+                )
+            )
 
     if frames:
         board = pd.concat(frames, ignore_index=True)
@@ -225,10 +231,18 @@ def measure_arm_season(
             if tier.empty:
                 continue
             aa, pp = tier[TARGET_COLUMN].to_numpy(), tier["predicted"].to_numpy()
-            rows.append(TierRow(arm, season, "ALL", label, len(tier),
-                                float(np.abs(aa - pp).mean()),
-                                float(np.sqrt(((aa - pp) ** 2).mean())),
-                                float((aa - pp).mean())))
+            rows.append(
+                TierRow(
+                    arm,
+                    season,
+                    "ALL",
+                    label,
+                    len(tier),
+                    float(np.abs(aa - pp).mean()),
+                    float(np.sqrt(((aa - pp) ** 2).mean())),
+                    float((aa - pp).mean()),
+                )
+            )
     return rows, extras
 
 
