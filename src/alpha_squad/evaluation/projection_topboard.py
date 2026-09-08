@@ -80,6 +80,7 @@ WHAT WAS RULED OUT FIRST, so this phase does not re-test it
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 
 import duckdb
@@ -258,6 +259,10 @@ def _new_model(arm: Arm):
     return XGBRegressor(**kwargs)
 
 
+#: The estimator signature `measure_arm_season` can be given instead of `_fit_predict`.
+PredictFn = Callable[[str, pd.DataFrame, pd.DataFrame, str], np.ndarray]
+
+
 def _fit_predict(arm: Arm, train: pd.DataFrame, target: pd.DataFrame) -> np.ndarray:
     model = _new_model(arm)
     model.fit(train[FEATURES].to_numpy(), train[TARGET_COLUMN].to_numpy())
@@ -288,11 +293,20 @@ def measure_arm_season(
     arm: Arm,
     season: int,
     min_train_season: int = 2015,
+    predict_fn: PredictFn | None = None,
 ) -> tuple[list[TierMeasurement], dict[str, float]]:
     """All tier measurements for one (arm, season), plus per-position diagnostics.
 
     One fit per position, exactly as production does -- see `run_uncertainty`, which loops
-    positions and trains a separate model for each with identical hyperparameters."""
+    positions and trains a separate model for each with identical hyperparameters.
+
+    `predict_fn` is an injection point for a LATER phase that needs the same tiers, the same
+    walk-forward split and the same gates but a different estimator family (the D80 arms are
+    all gradient-boosted trees; `evaluation/projection_shrinkage.py` adds linear, isotonic,
+    shrunk and hybrid estimators). It defaults to `_fit_predict`, so every D80 arm's number is
+    produced by exactly the code that produced it originally -- a regression test pins that.
+    It receives (arm, train_frame, target_frame, position) and returns predictions for the
+    target frame."""
     rows: list[TierMeasurement] = []
     extras: dict[str, float] = {}
     frames: list[pd.DataFrame] = []
@@ -303,7 +317,11 @@ def measure_arm_season(
         train = select_training_rows(SHIPPED_ROW_SPECIFICATION, all_data, season)
         if target.empty or len(train) < MIN_TRAIN_ROWS:
             continue
-        predicted = _fit_predict(arm, train, target)
+        predicted = (
+            _fit_predict(arm, train, target)
+            if predict_fn is None
+            else predict_fn(arm, train, target, position)
+        )
         frame = target.copy()
         frame["predicted"] = predicted
         frame["position"] = position

@@ -749,3 +749,50 @@ def simulate_variant_draft(
         total_roster_points=sum(actual.values()),
         n_unfilled_mandatory_slots=sum(unfilled_dedicated_slots(league, my_positions).values()),
     )
+
+
+def with_projection_override(
+    league: LeagueContext,
+    board: BoardConstants,
+    overrides: dict[str, float],
+) -> BoardConstants:
+    """A copy of `board` with some players' projections replaced, and every quantity derived
+    from projections recomputed.
+
+    This is the Phase 7 layer-isolation instrument: it lets the SAME decision engine be run on
+    a different projection layer while the market board, the opponent field and the realized
+    outcomes all stay exactly as they were, so a difference in drafted rosters is attributable
+    to the projection change alone.
+
+    Recomputing the derived quantities is the whole point and is easy to get wrong: static
+    VORP, the consumption-demand target and the starter-demand target are all functions of the
+    projections, so overriding projections without rebuilding them would score new projections
+    against old replacement levels -- a silent hybrid that is neither arm. D81 recorded the
+    same class of error (an override that never reached the engine at all).
+
+    `market_ranks` and `survival_dispersion` are deliberately NOT recomputed: they come from the
+    real consensus board, which does not change because Alpha's model changed. `confidences`
+    likewise stays as measured -- an override is a projection substitution, not a claim about
+    the interval model.
+
+    Never used by production; overrides live in memory and no database is written.
+    """
+    projections = {**board.projections, **overrides}
+    unknown = set(overrides) - set(board.projections)
+    if unknown:
+        raise ValueError(
+            f"projection override names {len(unknown)} players not on the board "
+            f"(e.g. {sorted(unknown)[:3]}); an override must replace a projection, not add one"
+        )
+    return BoardConstants(
+        projections=projections,
+        positions=board.positions,
+        static_vorp=marginal_value_over_replacement(league, projections, board.positions),
+        market_ranks=board.market_ranks,
+        consumption_demand=market_draft_demand(
+            league, board.market_ranks, projections, board.positions
+        ),
+        starter_demand=starter_demand_per_team(league, projections, board.positions),
+        survival_dispersion=board.survival_dispersion,
+        confidences=board.confidences,
+    )
