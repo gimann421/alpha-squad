@@ -122,6 +122,14 @@ class ScoringVariant:
     # Arm T3: at a zero-gap (back-to-back) turn, price opportunity cost against the next pick
     # that actually has opponents in front of it, instead of returning all-zero costs.
     opportunity_skip_zero_turn: bool = False
+    # DIAGNOSTIC ONLY, and never a shippable candidate: hold these positions off the board
+    # until `diagnostic_defer_until_pick`. This is a hardcoded positional rule -- exactly the
+    # kind of thing the project forbids shipping -- and it exists solely to MEASURE what the
+    # engine's early kicker/defense picks cost, by comparing against an arm that cannot make
+    # them. The deferral is skipped if it would leave nothing else to draft, so it can never
+    # produce an illegal roster.
+    diagnostic_defer_positions: tuple[str, ...] = ()
+    diagnostic_defer_until_pick: int = 0
 
     @staticmethod
     def control() -> ScoringVariant:
@@ -445,11 +453,23 @@ def score_board(
     survival_cache = survival_cache if survival_cache is not None else {}
     confidence_cache = confidence_cache if confidence_cache is not None else {}
 
+    deferred = (
+        set(variant.diagnostic_defer_positions)
+        if state.current_pick_overall < variant.diagnostic_defer_until_pick
+        else set()
+    )
+    if deferred and not any(
+        positions.get(p) not in deferred for p in state.available if p in board.static_vorp
+    ):
+        deferred = set()
+
     out: list[VariantScore] = []
     for player_id in state.available:
         if player_id not in board.static_vorp:
             continue
         pos = positions[player_id]
+        if pos in deferred:
+            continue
         da_vorp = (
             projections[player_id] - levels[pos] if pos in levels else board.static_vorp[player_id]
         )

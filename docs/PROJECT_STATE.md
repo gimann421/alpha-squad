@@ -1135,3 +1135,51 @@ the corrected benchmark, not chosen to hit the target.
 `features/kicking_defense.py`, `models/baselines/kicking_defense.py`,
 `evaluation/pick_attribution.py`, M-tiers in `evaluation/draft_forensics.py`,
 `docs/TARGET_FORMAT_1QB.md`, `docs/BENCHMARK_SPEC.md`, `docs/FORMAT_MIGRATION_DIAGNOSTIC.md`.
+
+---
+
+## D84 — Trust audit of the whole draft path (third pass). Nothing shipped.
+
+**Status: `league/` and `models/` byte-identical to Y1.** Full record: `docs/DECISIONS.md` D84.
+
+Opened on D83's closing question (is the value base drawing replacement at the wrong boundary?).
+Answer: **the hypothesis as posed is refuted, and a sharper defect is now measured and named.**
+
+* **The starter-vs-consumption question is settled and the answer is "neither".** Moving
+  replacement to the starter boundary *widens* the round-2 QB margin (+38.6 → +48.5), because it
+  raises RB's replacement more than QB's and so amplifies the raw-projection term. The
+  consumption/starter gap at QB is also larger in 2QB (145.4) and superflex (104.7) than in 1QB
+  (60.1), where the engine's early-QB behaviour is correct — so it is not a 1-QB pathology.
+* **The real defect is the double count, and it is provable at K.** The engine takes a kicker at
+  pick #80 valued at 224.5 (`2·182.4 − 140.4`) when its own board says the best kicker is still
+  free at pick **#141** — a true marginal value of 0.0. Four of the top five candidates at #80 are
+  kickers.
+* **Every fix loses.** Experiment T (pre-registered, `91c5ab9`) tested timing-aware (VONA)
+  replacement in three forms: −29.5, −163.3 and −0.1 starter points. That makes eight value-base
+  reformulations measured across D63/D79/D84, all losing.
+* **The benchmark cannot price the defect.** Bench players score zero realized starter points, so a
+  wasted bench slot is free by construction. Diagnostic arms that defer K/DST cost −16.7/−18.3
+  (unresolvable); deferring QB costs −79.7 at round 5 with a CI **excluding zero**.
+* **The elite-RB error is largely not Alpha's.** The free consensus market under-projects the same
+  players by +35.2 against Alpha's +42.3, and shares the sign of every other tier bias (WR 11–24
+  over-projected, QB top-10 over-projected — where the market is *twice* as biased). Correcting the
+  elite-RB cell to a market-grade projection changes **no decision Alpha makes** (verified as a real
+  null, not a silent no-op).
+* **Experiment N (pre-registered, `1ad9dfe`) refutes the model-family hypothesis.** Linear, isotonic,
+  shrinkage and hybrid estimators all make the RB elite tail worse (+19.5, +20.2, +0.7, +8.7 MAE);
+  a walk-forward blend given a free choice selects the tree outright.
+
+**Benchmark, re-measured on a from-source rebuild:** Alpha 2013.5 vs fair consensus 2034.8
+(**−21.3**, CI [−141.5, +99.0], 2/5 seasons). D79 §10a measured **+21.2** for the identical
+comparison — the margin has no stable sign, exactly as D71's power analysis predicted. The gap to
+`alpha_bpa` (417.8) is unambiguous: the league-context layer is doing very large work.
+
+**Highest-value next step is a better objective, not another value base.** The one thing that would
+let the instrument see the defect it cannot currently price is a benchmark that models bench depth —
+injuries, byes, waiver leverage, weekly lineup decisions.
+
+Also fixed this pass: `make train` never built historical K/DST projections (`train
+kdst-projections` is not one of its steps), so a from-source rebuild could not fill a K or DEF slot
+for 2021–2025. 1181 offline tests passing. New: `evaluation/opening_audit.py`,
+`evaluation/decision_counterfactuals.py`, `evaluation/timing_replacement.py`,
+`evaluation/projection_shrinkage.py`.

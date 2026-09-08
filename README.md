@@ -39,7 +39,9 @@ make features      # as-of feature store: games, player/team week stats, enginee
                    # real final team scores, and K/DST scoring (which depends on them)
 make team-scores  # refresh team_week_points alone (`make features` already builds it)
 make market      # FantasyPros ECR (via DynastyProcess) + dynasty market values
-make train       # walk-forward established-player ML, uncertainty/calibration, rookie models
+make train       # walk-forward established-player ML, uncertainty/calibration, rookie models,
+                 # and the historical K/DST baseline (without which past-season boards have no
+                 # kickers or defenses and a league starting one of each cannot fill the slots)
                  # -- a BACKTEST over already-played seasons; it writes nothing for the
                  # upcoming season (see "Projecting the upcoming season" below)
 make evaluate    # baseline evaluation report (reports/baseline_evaluation.md)

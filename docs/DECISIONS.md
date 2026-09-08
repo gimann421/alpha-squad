@@ -5391,3 +5391,276 @@ concentration *worse* at no gain). Further projection work is not the productive
 open question is the decision layer's value base — `msv + daVORP` counts raw projection twice at
 an empty roster slot, and QB replacement is drawn at the *consumption* boundary (2.2 QB/team =
 QB22 at 193.8) rather than anything a 1-QB roster ever starts.
+
+---
+
+## D84 — Trust audit of the whole draft path. The value base is provably incoherent at the board level and every fix measured makes rosters worse; the elite-RB error is shared with the market and is not a model-family problem. NOTHING SHIPS.
+
+Third-pass investigation, opened after D83 named the open question: "the decision layer's value base
+— `msv + daVORP` counts raw projection twice at an empty roster slot, and QB replacement is drawn
+at the *consumption* boundary rather than anything a 1-QB roster ever starts."
+
+**`league/` and `models/` are byte-identical to their Y1 state.** What shipped is investigation
+infrastructure and two pre-registrations, both committed before their arms were run.
+
+### 0. A finding about the repository itself, before any result
+
+The branch this session started on (`main`, `b046d99`) **did not contain Y1 or D78–D83 at all**.
+That work lives on `claude/alpha-draft-decision-engine-clmfn9`, unmerged, which is a strict
+superset of `main`. Every number below is measured against that branch's state, on a database
+rebuilt from source in this session (`sources ingest` → `identity` → `features` → `market` →
+`train` → `project-current-season`). Two gaps in that rebuild were found and closed before any
+measurement: historical K/DST projections existed for 2026 only (`train kdst-projections` is not
+part of `make train`), so 2021–2025 drafts could not fill a K or DEF slot. After the fix the board
+matches D79's recorded universe exactly in every season (2021: 636, 2022: 651, 2023: 610,
+2024: 602, 2025: 629).
+
+### 1. The opening, reproduced on the real production path (2026 board, slot 1)
+
+`evaluation/opening_audit.py` drives the real `recommend_draft_pick` through a full 16-round snake
+draft and decomposes every candidate. The decomposition **reassembles the terms and raises** if the
+product does not equal the engine's own score to 1e-6, so it cannot describe a formula the engine
+is not running.
+
+| pick | recommendation | proj | msv | daVORP | repl | oc | fit | risk | surv× | value base | score | gap |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| #1 | Amon-Ra St. Brown (WR) | 267.9 | 267.9 | 160.1 | 107.8 | **55.4** | 1.20 | 0.77 | 1.30 | 428.0 | 577.2 | +20.6 |
+| #20 | Josh Allen (QB) | 343.6 | 343.6 | 140.6 | 203.0 | **0.0** | 1.10 | 0.68 | 1.00 | 484.2 | 363.6 | +38.6 |
+| #21 | Jeremiyah Love (RB) | 243.9 | 243.9 | 143.0 | 100.9 | 0.0 | 1.20 | 0.70 | 1.10 | 387.0 | 358.4 | +14.2 |
+
+Draft state evolves correctly (pool 835 → 816 → 815; roster `[]` → `[WR]` → `[WR, QB]`).
+
+**At #20, `daVORP` alone would take the running back** — Love 143.0 against Allen 140.6. The QB wins
+only because `msv` adds each player's raw projection a second time: `2·343.6 − 203.0 = 484.2` against
+`2·243.9 − 100.9 = 387.0`. The double count is not a description; it is the arithmetic, verified.
+
+### 2. Opponent sensitivity: robust, and format-responsive
+
+Fourteen worlds (default, pure-ECR, WR/RB/TE/QB-biased, eight stochastic reach/slide seeds):
+**pick #1 is a WR in 14 of 14**; a QB is taken inside the first three picks in **12 of 14**. The two
+exceptions are the worlds where the QB is gone (QB-heavy opponents) — i.e. the engine is responding
+to the board, not to a lean. Across five formats the same behaviour generalises and adapts: the top
+opening in superflex is `QB-QB-QB` (15/50), which is correct there.
+
+### 3. The starter-vs-consumption hypothesis: REFUTED
+
+Formalised and measured on the real board (per team, target format, 2026):
+
+| | QB | RB | WR | TE | K | DST |
+|---|---|---|---|---|---|---|
+| starter demand (sums to lineup, 10) | 1.00 | 2.30 | 3.70 | 1.00 | 1.00 | 1.00 |
+| consumption demand (sums to roster_size, 16) | 2.20 | 4.20 | 5.80 | 1.80 | 1.00 | 1.00 |
+| replacement at starter boundary | 263.1 | 157.1 | 154.2 | 134.5 | 140.4 | 95.2 |
+| replacement at consumption boundary | 203.0 | 100.9 | 107.8 | 120.0 | 140.4 | 95.2 |
+
+Switching the value base to the starter boundary **does not remove the round-2 QB — it widens its
+margin, +38.6 → +48.5**. The reason is arithmetic and was not anticipated: moving to the shallower
+boundary raises *every* position's replacement, and it raises **RB's by more than QB's** (+56.2 vs
++60.1 at the full board, and more once the board thins), because the RB pool is flatter there. A
+shallower boundary shrinks every surplus toward zero, which *increases* the relative weight of the
+raw-projection term — the opposite of the intended effect.
+
+Two further facts kill the "1-QB league is the special case" framing: the consumption/starter gap at
+QB is **larger** in 2QB (145.4) and superflex (104.7) than in 1QB (60.1), and the engine's early-QB
+behaviour in those formats is *correct*. **The consumption boundary is not what makes QB win at #20.
+The raw-projection double count is.**
+
+### 4. Experiment T — timing-aware replacement. Pre-registered at `91c5ab9`. All arms fail.
+
+If the end-of-draft boundary is the wrong *horizon*, the right one is what you could still get at
+your next pick (value-over-next-available). On the 2026 board at #20 the two disagree enormously:
+end-of-draft QB 203.0 against 306.7 actually available at #40; RB 100.9 against 243.9. The board's
+real scarcity at that moment is **TE** (McBride 202.0 now, 146.5 at #40), not QB or RB — Love
+survives the turn, McBride does not.
+
+50 paired drafts per arm per format, fair roster-aware opponents, control asserted equal to
+`recommend_draft_pick`:
+
+| arm | target | margin | legacy | seasons won | slots won | unfilled | verdict |
+|---|---|---|---|---|---|---|---|
+| T0 control | 2013.5 | — | 2199.3 | — | — | 0.00 | — |
+| T1 `msv + VONA` | 1984.0 | −29.5 | −66.6 | 2/5 | 3/10 | 0.00 | FAIL G1,G2,G3,G5,G6,G7 |
+| T2 `VONA` alone | 1850.2 | **−163.3** | **−265.2** | 1/5 | 0/10 | **0.80** | FAIL all but none |
+| T3 oc horizon skips the zero-gap turn | 2013.4 | −0.1 | −3.2 | 2/5 | 0/10 | 0.00 | FAIL G1,G2,G3,G5,G6,G7 |
+
+T2's legacy-format CI is **[−428.3, −102.1]** — the first *resolvable* draft-layer result this
+project has produced, and it is a confirmed regression. Its 0.80 unfilled mandatory slots are the
+degeneracy registered in advance: once nothing at a position will be gone by the next pick, pure
+VONA is zero for everyone there and cannot fill the slot. T3 shows the back-to-back-turn blindness
+is **inert** — correcting it moves nothing (−0.1).
+
+This is now the eighth value-base reformulation measured (D63's five, D79's Z-tiers, these three)
+and every one loses on realized starter points.
+
+### 5. What the board-level defect provably costs, at the one position where timing is unambiguous
+
+The engine takes a **kicker at pick #80 (round 8)**, ahead of every remaining skill player, in every
+season and from every slot (first K round 8.0–9.0 across 2024/2025/2026 on the production path).
+The candidate slate at #80 is **four kickers in the top five**:
+
+| | pos | proj | msv | daVORP | repl | oc | value base | score |
+|---|---|---|---|---|---|---|---|---|
+| Brandon Aubrey | K | 182.4 | 182.5 | 42.0 | 140.4 | 0.0 | **224.5** | **172.8** |
+| Tucker Kraft | TE | 143.7 | 143.7 | 23.8 | 120.0 | 0.0 | 167.5 | 153.8 |
+
+And the engine's **own board** says what waiting costs: replaying the consensus room, the best
+kicker (182.4) and best defense (110.8) are still available at pick **#141**, and at #160 they are
+161.7 / 101.5. So Aubrey's true marginal value at #80 is **0.0**, and the engine prices him at
+224.5. The opportunity-cost term correctly returns 0.0 for K — but it is *added* to the value base,
+not the basis of it, so a zero timing cost cannot stop the pick.
+
+This is the defect in its purest form, and the general statement it licenses: **`msv` on an empty
+slot is the raw projection, and raw projected points are not commensurable across positions.** A
+kicker's 182 and a tight end's 144 are different currencies precisely because the kicker's 182 is
+free at pick 141. That is what a replacement level exists to express; the engine computes one and
+then adds the raw level back at equal weight.
+
+**And it does not cost measurable starter points.** Diagnostic arms (never candidates — a round rule
+is exactly what the brief forbids shipping) that hold K/DST off the board until round 13/15 free
+1.3 roster spots and score −16.7 / −18.3, both unresolvable, 2/5 seasons won. The reason is the
+objective: bench players contribute **zero** realized starter points, so a spot spent on a kicker
+who starts beats a spot spent on a receiver who does not. **The benchmark cannot see the cost of a
+wasted bench slot, because it does not model injuries, byes, waivers or lineup decisions** — the
+things a bench is for (`docs/EVALUATION_LIMITATIONS.md`).
+
+The same instrument answers the round-2 QB question, and answers it against conventional wisdom:
+
+| diagnostic arm | starter pts | margin | seasons won | clustered 95% CI |
+|---|---|---|---|---|
+| control (first QB round 2.32) | 2013.5 | — | — | — |
+| defer QB to round 3 | 2007.0 | −6.5 | 2/5 | [−58.1, +45.1] |
+| **defer QB to round 5** | **1933.8** | **−79.7** | **0/5** | **[−145.9, −13.5]** |
+| defer QB to round 7 | 1983.1 | −30.4 | 1/5 | [−140.7, +80.0] |
+| defer QB to round 9 | 1967.3 | −46.3 | 2/5 | [−150.6, +58.1] |
+
+Forcing the engine to wait on QB makes it worse at every horizon, and at round 5 the interval
+**excludes zero**. The mechanism behind the round-2 QB is incoherent; the behaviour it produces is
+not the thing costing points.
+
+### 6. RB layer isolation (same engine, different projection layer)
+
+`with_projection_override` rebuilds every projection-derived quantity (static VORP, both demand
+targets) in memory; no database is written. The ECR-implied baseline is walk-forward, so no arm
+uses a realized outcome as an input. 50 paired drafts per arm.
+
+| arm | starter pts | margin | RB count | WR count | 1st RB | clustered CI |
+|---|---|---|---|---|---|---|
+| R0 control (Y1) | 2013.5 | — | 3.46 | 5.08 | 4.62 | — |
+| R1 all RB → ECR-implied | 1945.7 | −67.8 | **2.00** | 5.70 | 5.90 | [−141.7, +6.1] |
+| R2 elite-RB cell (ECR≤12) → ECR-implied | 2013.5 | **+0.0** | 3.46 | 5.08 | 4.62 | [+0.0, +0.0] |
+| R3 all positions → ECR-implied | 2031.5 | +18.0 | 2.00 | 4.68 | 7.04 | [−120.1, +156.1] |
+
+**R2 changes nothing at all** — same starter points, same openings, same roster. Verified as a real
+null and not a silent no-op (the D81 failure mode): the override demonstrably reaches the engine
+(McCaffrey 2021 150.1 → 222.0, board rank 55 → 34; Bijan 2025 183.1 → 239.4, rank 34 → 18), it just
+never flips a pick. Correcting the elite-RB cell to a market-grade projection **does not change a
+single decision Alpha makes.** Those players are taken by opponents before Alpha's turn, or remain
+below Alpha's alternatives even corrected.
+
+R1 is reported but is a **weak instrument**: isotonic ECR→points is nearly flat across the elite
+band (every top-12 RB prices at ~222–242), which collapses RB surplus to near zero and is why RB
+count falls to exactly 2.00. It measures the flatness, not the decision layer.
+
+R3 is the sobering one: **Alpha's decision engine on pure market-implied projections scores +18.0
+over Alpha's own ML projections** (unresolvable). The projection layer is not measurably adding
+draft value over an ECR rank-to-points curve.
+
+### 7. Experiment N — is the elite RB tail a MODEL-FAMILY problem? Pre-registered at `1ad9dfe`. REFUTED.
+
+D79/D80/D82/D83 all varied regularisation, features or seeds; every arm was a gradient-boosted tree.
+This phase varied the family. Gates and tiers imported from D80 verbatim (test asserts identity);
+N0 delegates to D80's `H0`, so the control is provably the previous phase's control.
+
+ΔMAE vs N0, pooled 2022–2025 (negative = better):
+
+| arm | RB top10 | RB 11_24 | RB 25_60 | RB 11_60 | WR top10 | QB top10 | pool ALL | RB top10 bias |
+|---|---|---|---|---|---|---|---|---|
+| **N0 control** | **78.43** | 67.82 | 56.50 | 59.67 | 65.69 | 75.58 | 39.14 | **+42.3** |
+| N1 OLS | **+19.52** | −1.21 | +2.50 | +1.46 | +4.17 | −3.20 | +4.71 | +54.2 |
+| N2 isotonic (monotone) | **+20.19** | −4.55 | +4.00 | +1.60 | +1.09 | +0.85 | +4.65 | +52.2 |
+| N3 density-weighted shrinkage | +0.69 | +0.38 | −0.01 | +0.10 | +1.68 | +1.30 | +0.08 | +47.5 |
+| N4 hybrid 50/50 | +8.67 | −0.92 | +0.40 | +0.03 | −2.48 | −3.54 | +1.41 | +48.2 |
+| N5 hybrid, walk-forward weight | +0.00 | +0.00 | +0.00 | +0.00 | −0.79 | −1.22 | +0.31 | +42.3 |
+
+**Nothing ships.** Every arm makes the RB elite tail *worse*, and every arm makes the signed bias
+worse. The two arms built specifically to fix the diagnosed mechanism are the two worst: a model
+that extrapolates by construction (N1) costs +19.5 MAE there, and one that is monotone by
+construction (N2) costs +20.2. N5, given a free walk-forward choice between the tree and the linear
+model, **selects the tree outright (α = 1.0 in every season)**.
+
+So the tree's inability to extrapolate is **not** the cause of the elite-RB under-projection. That
+closes the last obvious family of interventions: regularisation (D80), information (D82), variance
+(D83) and now functional form all fail, in the same direction.
+
+### 8. Common cause — measured, and it is not Alpha
+
+The decisive test: does the free consensus market show the same tier-bias signature on the
+**identical players**? Signed bias (positive = under-projected), pooled 2022–2025:
+
+| position | tier | n | **Alpha bias** | **market bias** | Alpha slope | market slope | sd(pred) | sd(realized) |
+|---|---|---|---|---|---|---|---|---|
+| RB | top10 | 40 | **+42.3** | **+35.2** | 1.02 | 0.93 | 27.7 | **95.6** |
+| RB | 11_24 | 56 | +26.8 | +21.9 | 0.51 | 0.85 | 32.9 | 78.3 |
+| RB | 25_60 | 144 | +13.9 | +7.8 | 0.49 | 0.86 | 31.4 | 70.5 |
+| WR | top10 | 40 | +11.1 | +0.7 | 0.16 | 0.19 | 28.6 | 75.8 |
+| WR | **11_24** | 56 | **−35.0** | **−26.4** | 0.38 | 0.43 | 25.3 | 62.3 |
+| QB | top10 | 40 | **−26.5** | **−50.0** | 0.55 | 0.98 | 47.3 | 91.9 |
+| TE | top10 | 40 | +2.8 | −2.3 | 0.82 | 0.68 | 27.9 | 59.6 |
+
+**Every directional error this investigation has chased is present in the market too, with the same
+sign** — RB under-projected at every tier, WR 11–24 over-projected, QB top-10 over-projected, TE
+unbiased. At QB top-10 the market is **twice as biased as Alpha** (−50.0 vs −26.5).
+
+That is the common cause, and it is not a defect in M6: these are properties of the outcome
+distributions. Realized spread is 60–96 points per tier against a predicted spread of 22–47 — both
+predictors compress, because the predictable component is small. Removing 42 points of RB bias
+against 96 points of realized noise cannot produce the 2.0-point MAE gain D80's gate requires, which
+is exactly what five phases of arms have now demonstrated empirically.
+
+### 9. Where the shipped engine actually stands, re-measured
+
+50 paired drafts, fair roster-aware opponents, this session's rebuilt board:
+
+| strategy | starter points | vs consensus | unfilled | season-clustered 95% CI | seasons won |
+|---|---|---|---|---|---|
+| **Alpha (shipped)** | **2013.5** | **−21.3** | 0.00 | **[−141.5, +99.0]** | 2/5 |
+| fair consensus | 2034.8 | — | 0.00 | — | — |
+| `alpha_bpa` | 417.8 | −1616.9 | 6.80 | [−1676.8, −1557.1] | 0/5 |
+| `generic_prior_year` | 633.5 | −1401.3 | 5.40 | [−1645.4, −1157.2] | 0/5 |
+
+Per-season Alpha margin: 2021 −10.4, 2022 +49.2, 2023 +92.5, 2024 −103.8, 2025 −133.8.
+
+D79 §10a measured **+21.2** for the same comparison; this rebuild measures **−21.3**, on 2/5 seasons
+both times. **The point estimate is not stable enough to have a sign** — which is precisely what
+D71's power analysis predicted and is the honest headline. What *is* unambiguous is the gap to
+`alpha_bpa` (+1595.7): the league-context layer is doing very large work. It is the margin over the
+free consensus board that is unresolvable, and the two most recent seasons are the two worst.
+
+### 10. Production decision
+
+**NOTHING SHIPS. `league/` and `models/` are byte-identical to Y1.** Added: `evaluation/
+opening_audit.py`, `evaluation/decision_counterfactuals.py`, `evaluation/timing_replacement.py`
+(pre-registration), `evaluation/projection_shrinkage.py` (pre-registration), an additive
+`predict_fn` injection point on `projection_topboard.measure_arm_season` (default unchanged; D80's
+30 tests still pass), and 42 new tests.
+
+Y1 remains the best validated option. Every alternative measured in this session is worse on the
+point estimate, and the only two *resolvable* results in the whole project's draft-layer history
+both went against a proposed change (T2's −265.2 in the legacy format; deferring QB to round 5 at
+[−145.9, −13.5]).
+
+### 11. Open, and deliberately not acted on
+
+* **The value base is incoherent at the board level and the benchmark cannot price it.** The
+  round-8 kicker is worth 0.0 by the engine's own board and 224.5 by its own score. Every
+  reformulation loses on realized starter points, and the objective that says so ignores everything
+  a bench is for. Resolving this needs a **better objective**, not another value base — one that
+  prices bench depth (injury replacement, bye coverage, waiver leverage). That is a new instrument,
+  not a new arm, and it is the single highest-value next step.
+* **Alpha's margin over free consensus has no stable sign**, and its two worst seasons are the two
+  most recent. Worth watching rather than acting on: five seasons cannot separate a trend from noise.
+* **The projection layer may not be earning its place in the draft layer.** R3 (pure market-implied
+  projections through Alpha's engine) scored +18.0 over Y1, unresolvably. Not a reason to remove a
+  measured model; a reason to stop assuming projection accuracy is the binding constraint.
+* **The elite-RB error is now attributable and is mostly not Alpha's.** The market under-projects
+  the same players by +35.2 against Alpha's +42.3, and correcting the cell changes no decision.

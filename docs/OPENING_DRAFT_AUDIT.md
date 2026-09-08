@@ -1,5 +1,14 @@
 # Opening-draft behaviour audit (D81, Phases 1–4)
 
+> **Superseded in part by D84.** Every number below was measured on the 2026 board as it stood in
+> the D81 session. The live board has moved since (the market snapshot is refreshed on every
+> `market build`), so the recommendations differ: the current opening at slot 1 is
+> `WR (Amon-Ra St. Brown) → QB (Josh Allen) → RB (Jeremiyah Love)`, not `WR → QB → TE`. The
+> *mechanism* described here is unchanged and was re-verified. What D84 adds, and what corrects
+> this document's §5: the QB replacement boundary is **not** what produces the round-2 QB —
+> switching to a starter-demand boundary widens that margin rather than closing it. See
+> `docs/DECISIONS.md` D84 §3.
+
 What does Alpha actually tell you to do with picks **#1, #20 and #21** of a real 10-team,
 16-round snake draft, and *why*?
 

@@ -61,10 +61,18 @@ market:
 	uv run alpha-squad market build
 	uv run alpha-squad market build-dynasty-values
 
+# `train kdst-projections` is part of this target because `load_season_projections` -- the board
+# the draft engine, the benchmark and every evaluation path read -- merges K/DST from
+# `projection_snapshot`. Without it a from-source rebuild produces historical boards with no
+# kickers and no defenses at all, so a league that starts a K and a DEF cannot fill either slot
+# and every draft measured against that board is wrong by two forfeited starters (~-130 realized
+# points each, D67). Found by rebuilding from scratch in the D84 session: `make ingest ... train`
+# completed cleanly and still left 2021-2025 with zero K/DST rows, silently.
 train:
 	uv run alpha-squad train established-season
 	uv run alpha-squad train uncertainty
 	uv run alpha-squad train rookie
+	uv run alpha-squad train kdst-projections --season-start 2015 --season-end 2025
 
 # ------------------------------------------------------------------------------------------
 # Current-season projections (D78). Everything above this line is HISTORICAL: `train` is a
