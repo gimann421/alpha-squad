@@ -5394,7 +5394,47 @@ QB22 at 193.8) rather than anything a 1-QB roster ever starts.
 
 ---
 
-## D84 — Trust audit of the whole draft path. The value base is provably incoherent at the board level and every fix measured makes rosters worse; the elite-RB error is shared with the market and is not a model-family problem. NOTHING SHIPS.
+## D84 — The decision layer's value base is provably incoherent, the incoherence is nearly free, and it is load-bearing; the elite-RB error is shared with the market and is not a model-family problem. NOTHING SHIPS.
+
+**`league/` and `models/` are byte-identical to their Y1 state.** What shipped under D84 is
+investigation infrastructure, four pre-registrations and this record — nothing else.
+
+### How to read this entry: two parallel sessions, one decision
+
+D83 closed by naming a single open question — "the decision layer's value base — `msv + daVORP`
+counts raw projection twice at an empty roster slot, and QB replacement is drawn at the
+*consumption* boundary rather than anything a 1-QB roster ever starts." **Two Claude Code sessions
+then attacked that question in parallel, neither aware of the other**, both branching from
+`fb06611`:
+
+* **Part A** (`claude/alpha-squad-investigation-j8jsbh`, `91c5ab9..e7d6440`) audited the whole
+  draft path on the real production board and ran two pre-registered experiments — T
+  (timing-aware replacement) and N (model family).
+* **Part B** (`claude/alpha-draft-decision-engine-clmfn9`, `aa3c747..1fc3d58`) isolated the value
+  base algebraically, pre-registered four decision-layer arms as Q-tiers, and ran the
+  defer-K/DST-by-constraint probe.
+
+Both sessions wrote a section numbered `## D84`. They are **not duplicates**: they used different
+instruments (`evaluation/opening_audit.py` + `decision_counterfactuals.py` +
+`timing_replacement.py` + `projection_shrinkage.py` in A; `evaluation/decision_value_base.py` +
+`draft_forensics.py` Q-tiers in B) and each carries findings the other does not. They are joined
+here as one decision because they answer one question and **converge on the same mechanism** —
+`msv + daVORP = 2·proj − R_p` at an empty slot — and the same verdict: **nothing ships, Y1 stands.**
+
+That convergence is the strongest evidence in this entry. Two independent code paths, written
+without knowledge of each other, reproduce the control to the decimal (2055.9 / 2114.5, matching
+D79's published `Z0`) and derive the same amplification ranking.
+
+Joining them is a git-history operation, not a decision: it introduces no experimental result and
+changes no production file, so it takes no decision number of its own. **D85 remains unused and is
+the next investigation number.**
+
+---
+
+### Part A — Trust audit of the whole draft path
+
+*Source: `claude/alpha-squad-investigation-j8jsbh`, commits `91c5ab9`, `1ad9dfe`, `998b2f8`,
+`e7d6440`. Pre-registrations: experiment T at `91c5ab9`, experiment N at `1ad9dfe`.*
 
 Third-pass investigation, opened after D83 named the open question: "the decision layer's value base
 — `msv + daVORP` counts raw projection twice at an empty roster slot, and QB replacement is drawn
@@ -5403,7 +5443,7 @@ at the *consumption* boundary rather than anything a 1-QB roster ever starts."
 **`league/` and `models/` are byte-identical to their Y1 state.** What shipped is investigation
 infrastructure and two pre-registrations, both committed before their arms were run.
 
-### 0. A finding about the repository itself, before any result
+#### 0. A finding about the repository itself, before any result
 
 The branch this session started on (`main`, `b046d99`) **did not contain Y1 or D78–D83 at all**.
 That work lives on `claude/alpha-draft-decision-engine-clmfn9`, unmerged, which is a strict
@@ -5415,7 +5455,7 @@ part of `make train`), so 2021–2025 drafts could not fill a K or DEF slot. Aft
 matches D79's recorded universe exactly in every season (2021: 636, 2022: 651, 2023: 610,
 2024: 602, 2025: 629).
 
-### 1. The opening, reproduced on the real production path (2026 board, slot 1)
+#### 1. The opening, reproduced on the real production path (2026 board, slot 1)
 
 `evaluation/opening_audit.py` drives the real `recommend_draft_pick` through a full 16-round snake
 draft and decomposes every candidate. The decomposition **reassembles the terms and raises** if the
@@ -5434,7 +5474,7 @@ Draft state evolves correctly (pool 835 → 816 → 815; roster `[]` → `[WR]` 
 only because `msv` adds each player's raw projection a second time: `2·343.6 − 203.0 = 484.2` against
 `2·243.9 − 100.9 = 387.0`. The double count is not a description; it is the arithmetic, verified.
 
-### 2. Opponent sensitivity: robust, and format-responsive
+#### 2. Opponent sensitivity: robust, and format-responsive
 
 Fourteen worlds (default, pure-ECR, WR/RB/TE/QB-biased, eight stochastic reach/slide seeds):
 **pick #1 is a WR in 14 of 14**; a QB is taken inside the first three picks in **12 of 14**. The two
@@ -5442,7 +5482,7 @@ exceptions are the worlds where the QB is gone (QB-heavy opponents) — i.e. the
 to the board, not to a lean. Across five formats the same behaviour generalises and adapts: the top
 opening in superflex is `QB-QB-QB` (15/50), which is correct there.
 
-### 2a. Independent confirmation on the production path (60 drafts, completed)
+#### 2a. Independent confirmation on the production path (60 drafts, completed)
 
 The tables above are produced by `decision_counterfactuals.score_board` under
 `ScoringVariant.control()`. That control is asserted equal to `recommend_draft_pick` state by
@@ -5474,7 +5514,7 @@ cut against over-claiming:
 
 Zero unfilled mandatory starting slots in all 60.
 
-### 3. The starter-vs-consumption hypothesis: REFUTED
+#### 3. The starter-vs-consumption hypothesis: REFUTED
 
 Formalised and measured on the real board (per team, target format, 2026):
 
@@ -5497,7 +5537,7 @@ QB is **larger** in 2QB (145.4) and superflex (104.7) than in 1QB (60.1), and th
 behaviour in those formats is *correct*. **The consumption boundary is not what makes QB win at #20.
 The raw-projection double count is.**
 
-### 4. Experiment T — timing-aware replacement. Pre-registered at `91c5ab9`. All arms fail.
+#### 4. Experiment T — timing-aware replacement. Pre-registered at `91c5ab9`. All arms fail.
 
 If the end-of-draft boundary is the wrong *horizon*, the right one is what you could still get at
 your next pick (value-over-next-available). On the 2026 board at #20 the two disagree enormously:
@@ -5524,7 +5564,7 @@ is **inert** — correcting it moves nothing (−0.1).
 This is now the eighth value-base reformulation measured (D63's five, D79's Z-tiers, these three)
 and every one loses on realized starter points.
 
-### 5. What the board-level defect provably costs, at the one position where timing is unambiguous
+#### 5. What the board-level defect provably costs, at the one position where timing is unambiguous
 
 The engine takes a **kicker at pick #80 (round 8)**, ahead of every remaining skill player, in every
 season and from every slot (first K round 8.0–9.0 across 2024/2025/2026 on the production path).
@@ -5569,7 +5609,7 @@ Forcing the engine to wait on QB makes it worse at every horizon, and at round 5
 **excludes zero**. The mechanism behind the round-2 QB is incoherent; the behaviour it produces is
 not the thing costing points.
 
-### 6. RB layer isolation (same engine, different projection layer)
+#### 6. RB layer isolation (same engine, different projection layer)
 
 `with_projection_override` rebuilds every projection-derived quantity (static VORP, both demand
 targets) in memory; no database is written. The ECR-implied baseline is walk-forward, so no arm
@@ -5597,7 +5637,7 @@ R3 is the sobering one: **Alpha's decision engine on pure market-implied project
 over Alpha's own ML projections** (unresolvable). The projection layer is not measurably adding
 draft value over an ECR rank-to-points curve.
 
-### 7. Experiment N — is the elite RB tail a MODEL-FAMILY problem? Pre-registered at `1ad9dfe`. REFUTED.
+#### 7. Experiment N — is the elite RB tail a MODEL-FAMILY problem? Pre-registered at `1ad9dfe`. REFUTED.
 
 D79/D80/D82/D83 all varied regularisation, features or seeds; every arm was a gradient-boosted tree.
 This phase varied the family. Gates and tiers imported from D80 verbatim (test asserts identity);
@@ -5624,7 +5664,7 @@ So the tree's inability to extrapolate is **not** the cause of the elite-RB unde
 closes the last obvious family of interventions: regularisation (D80), information (D82), variance
 (D83) and now functional form all fail, in the same direction.
 
-### 8. Common cause — measured, and it is not Alpha
+#### 8. Common cause — measured, and it is not Alpha
 
 The decisive test: does the free consensus market show the same tier-bias signature on the
 **identical players**? Signed bias (positive = under-projected), pooled 2022–2025:
@@ -5649,7 +5689,7 @@ predictors compress, because the predictable component is small. Removing 42 poi
 against 96 points of realized noise cannot produce the 2.0-point MAE gain D80's gate requires, which
 is exactly what five phases of arms have now demonstrated empirically.
 
-### 9. Where the shipped engine actually stands, re-measured
+#### 9. Where the shipped engine actually stands, re-measured
 
 50 paired drafts, fair roster-aware opponents, this session's rebuilt board:
 
@@ -5668,7 +5708,7 @@ D71's power analysis predicted and is the honest headline. What *is* unambiguous
 `alpha_bpa` (+1595.7): the league-context layer is doing very large work. It is the margin over the
 free consensus board that is unresolvable, and the two most recent seasons are the two worst.
 
-### 10. Production decision
+#### 10. Production decision
 
 **NOTHING SHIPS. `league/` and `models/` are byte-identical to Y1.** Added: `evaluation/
 opening_audit.py`, `evaluation/decision_counterfactuals.py`, `evaluation/timing_replacement.py`
@@ -5681,7 +5721,7 @@ point estimate, and the only two *resolvable* results in the whole project's dra
 both went against a proposed change (T2's −265.2 in the legacy format; deferring QB to round 5 at
 [−145.9, −13.5]).
 
-### 11. Open, and deliberately not acted on
+#### 11. Open, and deliberately not acted on
 
 * **The value base is incoherent at the board level and the benchmark cannot price it.** The
   round-8 kicker is worth 0.0 by the engine's own board and 224.5 by its own score. Every
@@ -5696,3 +5736,112 @@ both went against a proposed change (T2's −265.2 in the legacy format; deferri
   measured model; a reason to stop assuming projection accuracy is the binding constraint.
 * **The elite-RB error is now attributable and is mostly not Alpha's.** The market under-projects
   the same players by +35.2 against Alpha's +42.3, and correcting the cell changes no decision.
+
+---
+
+### Part B — The value base isolated: incoherent, nearly free, and load-bearing
+
+*Source: `claude/alpha-draft-decision-engine-clmfn9`, commits `aa3c747`, `da2d9d2`, `d843120`,
+`6069721`, `bec7f8b`, `34a51cd`, `1fc3d58`. Pre-registration at `d843120`, wired at `6069721`.
+Working documents: `docs/DECISION_LAYER_INVESTIGATION.md`, `docs/DECISION_LAYER_FINAL_REPORT.md`.*
+
+**Context.** D79–D83 established that the WR-heavy opening is not a projection-model property.
+This phase asked the remaining question: what do "replacement level" and "marginal value"
+actually mean inside Alpha, and is the formulation economically sound? Full working documents:
+`docs/DECISION_LAYER_INVESTIGATION.md` and `docs/DECISION_LAYER_FINAL_REPORT.md`.
+**`league/draft.py` and `models/` are byte-identical to their Y1 state.**
+
+#### The mechanism, in one line
+
+`marginal_starter_value(c)` equals `proj(c)` **exactly** whenever `c` fills an empty lineup slot
+(measured: all six positions, four roster states). So the value base adds two surpluses measured
+against **two different baselines** — MSV's implicit 0 and daVORP's `R_p`:
+
+```
+msv + daVORP = proj + (proj − R_p) = 2·proj − R_p
+```
+
+Amplification over the principled `proj − R_p` is `1 + proj/(proj − R_p)`, which diverges as
+`R_p → proj`. **The flatter the position, the worse it is:** DST 8.10×, K 5.34×, TE 3.36×,
+QB 3.15×, WR 2.61×, RB 2.59×. That ranking reproduces the observed pathology ranking and was
+derived from the algebra, not fitted to it. At round 10 of a real draft, **all 60 of the top 60
+ranked candidates were kickers.**
+
+A second, independent defect: the value term's replacement level is drawn at the **consumption**
+boundary. Starter demand sums to the lineup size (10), consumption to `roster_size` (16); the
+ratio is 2.20× at QB and exactly 1.00× at K/DST — so D67's choice added **+71.4** to every
+quarterback's surplus and nothing at all to kickers. QB suffers both defects; K/DST suffer only
+the first, but extremely.
+
+The snake turn **unmasks** rather than causes: restoring an 18-pick opportunity cost at #20
+collapses the QB margin from +73.2 to +3.4 without reversing it.
+
+#### The candidates, pre-registered before any run (`d843120`, wired `6069721`)
+
+Arm **B** (starter-demand replacement) was **withdrawn before running**: it is essentially D67's
+`W0`, which consumption demand beat by +32.1 starter points, CI [+11.5, +52.7]. 400 drafts, fair
+opponent, both formats. The control reproduces D79's published `Z0` **to the decimal in both
+formats** (2055.9 / 2114.5), and a test asserts Q0 scores identically to Z0 per candidate.
+
+| arm | target_league | legacy_2qb_dynasty | verdict |
+|---|---|---|---|
+| A control | **2055.9** | **2114.5** | incumbent |
+| C `msv_over_replacement + daVORP` | +3.1, CI [−128.8, +134.9] | **−29.6** | FAIL |
+| D symmetric survival | −15.2 | **+50.8**, 4/5 seasons | FAIL |
+| E C + D | +4.1, CI [−182.4, +190.5] | −11.2 | FAIL |
+
+#### Three findings that decide it
+
+1. **The behavioural fix works and is worth nothing.** Arm C delivers exactly what was sought —
+   first QB 2.20 → 3.10, first RB 4.94 → **3.62**, first K 8.64 → 10.14, first DST 10.08 →
+   12.94 — for **+3.1 starter points**, an order of magnitude below the pre-registered 25-point
+   floor, with a CI spanning ±130.
+2. **The apparent win is one season.** Arm C is worse in **4 of 5** seasons; the entire margin is
+   2024. Dropping 2024 gives −41.0 (C) and −60.1 (E).
+3. **The over-valuation is load-bearing.** The arms that defer K/DST "correctly" produce rosters
+   that cannot field a legal lineup — C zeroes TE twice (2 infeasible), E zeroes DST three times
+   (4 infeasible), against **zero of both** for the control. Zero unfilled mandatory slots is not
+   independent of the over-valuation; **it is bought by it.**
+
+Both arms also **flip sign across formats**, which Gate 7 exists to detect and which is on its
+own disqualifying.
+
+#### RB layer isolation: both, interacting non-linearly
+
+`d(value_base)/d(proj) = 2.00` exactly (verified at Δ ∈ {0,+10,+20,+40,+80}), uniform across
+positions — so the known +45.5 RB top-10 bias carries roughly **91 points** of value-base error.
+Meanwhile the opportunity-cost term is **threshold-gated**: flat at 3.3 from a 169 cell through
+260, then slope 1.000 above 300. The decision layer **over-reacts by 2× and under-reacts by 0×
+simultaneously**. RB is both a projection and a decision problem, which is a good reason neither
+layer's fix has worked alone. **No RB projection was modified.**
+
+#### Decision: DO NOT SHIP
+
+Y1 remains correct not merely by default: its control figures are verified against D79 in both
+formats, its incoherence now has an exact algebraic form and a per-position severity ranking, and
+correcting that incoherence properly measures at approximately zero while breaking roster
+legality.
+
+#### The clean isolation that names the remaining direction
+
+Forcing the timing without touching any value -- run the production engine and simply decline
+K/DST before round 13 (a round read off the consensus board, not tuned) -- binds perfectly and
+costs **-7.6 starter points, 95% CI [-70.0, +54.8]**, with all ten starting slots still filled.
+Its control figure, 2055.9, comes from a third independent code path and again matches `Q0` and
+D79's `Z0`.
+
+| how K/DST is deferred | starter points | mandatory slots filled |
+|---|---|---|
+| by **constraint** (defer, but still draft them) | -7.6, CI includes 0 | **all 10** |
+| by **removing the valuation** (arms C/E) | +3.1 / +4.1, CI includes 0 | **2 and 4 infeasible rosters** |
+
+**Deferring K/DST is free and safe; removing their valuation is free and dangerous.** The early
+kicker is not itself costly -- what is costly is losing the only thing that guarantees a kicker
+gets drafted at all.
+
+**The single most promising remaining direction** follows directly: a roster-legality constraint
+as a *hard restriction on the candidate pool* rather than a valuation term (D67's `W2`/`W3`
+already prototype this), measured **jointly** with arm C. The double count and the legality
+guarantee are currently the same mechanism and must be separated before either can be fixed.
+This is a scheduling/constraint question, not a valuation question -- and the probe above is
+direct evidence that the constraint side is where the free lunch is.
