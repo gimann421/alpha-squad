@@ -1142,9 +1142,7 @@ def score_candidate(
         if tier in Q_TIERS and Q_TIER_SPEC[tier][1]:
             survival_mult = dvb_survival_multiplier(survival, symmetric=True)
         else:
-            survival_mult = (
-                1.0 if survival is None else (1.0 + survival_bonus * (1.0 - survival))
-            )
+            survival_mult = 1.0 if survival is None else (1.0 + survival_bonus * (1.0 - survival))
         opp_cost = _opportunity_cost_for(
             static,
             position,

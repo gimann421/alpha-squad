@@ -134,7 +134,8 @@ def test_both_forms_agree_when_the_player_is_certain_to_be_gone() -> None:
     """At survival 0 the two forms must coincide: the urgency end is unchanged, and only the
     ability to discount is added."""
     assert survival_multiplier(0.0, symmetric=True) == pytest.approx(
-        survival_multiplier(0.0, symmetric=False))
+        survival_multiplier(0.0, symmetric=False)
+    )
 
 
 def test_missing_market_dispersion_is_never_penalised() -> None:

@@ -938,10 +938,8 @@ class TestQTiersDecisionValueBase:
         # next_pick_overall=1 -> the player cannot be gone, so survival is 1.0.
         moved = 0
         for player_id in sorted(available):
-            q0 = score_candidate(
-                static, player_id, league, [], "Q0", next_pick_overall=1, **kwargs)
-            q2 = score_candidate(
-                static, player_id, league, [], "Q2", next_pick_overall=1, **kwargs)
+            q0 = score_candidate(static, player_id, league, [], "Q0", next_pick_overall=1, **kwargs)
+            q2 = score_candidate(static, player_id, league, [], "Q2", next_pick_overall=1, **kwargs)
             if q0 is None or q0.survival_probability is None:
                 continue
             if q0.survival_probability == pytest.approx(1.0):
