@@ -237,7 +237,94 @@ measurable without changing the value function — run the production engine and
 K/DST before round 13 — and it is the next thing to establish, because it decides whether the
 K/DST behaviour is a genuine defect or merely an odd-looking one.
 
-*(Result recorded in §11 once measured.)*
+*(Result recorded in §12 once measured.)*
+
+---
+
+## 11. Phases 5–6 — the pre-registered candidates, measured
+
+Arms, gates and selection rule were committed in `evaluation/decision_value_base.py` (`d843120`)
+and wired as Q-tiers (`6069721`) **before** any of this ran. 4 tiers × 5 seasons × 10 slots = 200
+drafts, fair roster-aware opponent.
+
+**The control is provably the shipped engine.** Q0 scores **2055.9**, which is D79's published
+`Z0` figure to the decimal, and a test asserts Q0 scores identically to Z0 for every candidate.
+
+| tier | arm | mean starter pts | margin | first QB | first RB | first K | first DST |
+|---|---|---|---|---|---|---|---|
+| Q3 | E | **2060.0** | **+4.1** | 3.86 | 3.86 | 10.78 | 13.45 |
+| Q1 | C | 2059.0 | +3.1 | 3.10 | **3.62** | 10.14 | 12.94 |
+| **Q0** | **A (control)** | **2055.9** | — | **2.20** | **4.94** | **8.64** | **10.08** |
+| Q2 | D | 2040.7 | −15.2 | 2.74 | 4.90 | 8.98 | 10.24 |
+
+### The behavioural fix works — and is worth nothing
+
+Arm C produces **exactly** the behaviour this investigation set out to find: the first
+quarterback moves from round 2.20 to 3.10, the first running back from 4.94 to **3.62**, the
+first kicker from 8.64 to 10.14 and the first defense from 10.08 to 12.94. Arm E moves them
+further still (QB 3.86, K 10.78, DST 13.45).
+
+It is worth **+3.1 starter points, 95% CI [−128.8, +134.9]**. Arm E is worth +4.1,
+CI [−182.4, +190.5]. Both are statistically indistinguishable from zero, and both are an order of
+magnitude below the pre-registered 25-point floor.
+
+### The apparent win is one season
+
+| margin vs control | 2021 | 2022 | 2023 | 2024 | 2025 |
+|---|---|---|---|---|---|
+| Q1 (arm C) | −20.8 | −33.6 | −2.4 | **+179.3** | −107.0 |
+| Q2 (arm D) | −48.8 | −40.9 | −115.4 | +181.8 | −53.0 |
+| Q3 (arm E) | −50.9 | +2.2 | −122.5 | **+260.6** | −69.1 |
+
+Arm C is **worse in four of the five seasons**. The entire +3.1 is 2024. This is precisely the
+failure mode Gate 3 exists to catch, and leave-one-season-out confirms it: dropping 2024 turns
+arm C's margin to **−41.0** and arm E's to **−60.1**.
+
+### The over-valuation is load-bearing
+
+| tier | TE zeroed | DST zeroed | infeasible rosters |
+|---|---|---|---|
+| **Q0 (control)** | **0** | **0** | **0** |
+| Q1 (arm C) | 2 | 0 | **2** |
+| Q3 (arm E) | 1 | **3** | **4** |
+
+The arms that defer K/DST "correctly" **produce rosters that cannot field a legal lineup**. The
+control's zero unfilled mandatory slots — the property noted as reassuring at the top of this
+investigation — is not independent of the over-valuation. **It is bought by it.** Pricing a
+kicker at 5.34× its surplus is what guarantees a kicker gets drafted at all.
+
+### Gate table
+
+| gate | Q1 (C) | Q2 (D) | Q3 (E) |
+|---|---|---|---|
+| G1 no position zeroed more than control | **FAIL** (TE 2) | pass | **FAIL** (TE 1, DST 3) |
+| G2 infeasibility no higher | **FAIL** (2) | pass | **FAIL** (4) |
+| G3 ≤1 season worse | **FAIL** (4) | **FAIL** (4) | **FAIL** (3) |
+| G4 no position >2 rounds earlier | pass | pass | pass |
+| G6 leave-one-season-out | **FAIL** | **FAIL** | **FAIL** |
+| G8 season-clustered CI excludes 0 | **FAIL** | **FAIL** | **FAIL** |
+| G9 margin ≥ 25 points | **FAIL** (+3.1) | **FAIL** (−15.2) | **FAIL** (+4.1) |
+
+### Gate 7 — cross-format, and the clincher
+
+Rerun unchanged on `legacy_2qb_dynasty`. **Q0 = 2114.5, again matching D79's published `Z0` for
+this format to the decimal** — the control is verified in both formats.
+
+| arm | target_league | legacy_2qb_dynasty | seasons won (2QB) | LOSO (2QB) |
+|---|---|---|---|---|
+| C | **+3.1** | **−29.6** | 2/5 | all negative |
+| D | **−15.2** | **+50.8** | 4/5 | all positive (+29.1 … +71.4) |
+| E | **+4.1** | **−11.2** | 1/5 | — |
+
+**Both arms flip sign across formats.** Arm C helps marginally in the target format and *hurts* in
+2QB; arm D hurts in the target format and is the best result anywhere in 2QB (+50.8, 4 of 5
+seasons, leave-one-season-out positive on every held-out season, clearing the 25-point floor) —
+yet still fails G8, its 95% CI being [−30.9, +132.5].
+
+A candidate whose sign depends on the format is a format artifact, not an economic principle.
+That is exactly what Gate 7 was written to detect, and it is the clinching evidence here.
+
+**No arm ships in either format. `league/draft.py` stays byte-identical.**
 
 ---
 
