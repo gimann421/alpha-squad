@@ -5391,3 +5391,90 @@ concentration *worse* at no gain). Further projection work is not the productive
 open question is the decision layer's value base — `msv + daVORP` counts raw projection twice at
 an empty roster slot, and QB replacement is drawn at the *consumption* boundary (2.2 QB/team =
 QB22 at 193.8) rather than anything a 1-QB roster ever starts.
+
+---
+
+## D84 — The decision layer's value base is incoherent, the incoherence is nearly free, and it is load-bearing. Nothing ships.
+
+**Context.** D79–D83 established that the WR-heavy opening is not a projection-model property.
+This phase asked the remaining question: what do "replacement level" and "marginal value"
+actually mean inside Alpha, and is the formulation economically sound? Full working documents:
+`docs/DECISION_LAYER_INVESTIGATION.md` and `docs/DECISION_LAYER_FINAL_REPORT.md`.
+**`league/draft.py` and `models/` are byte-identical to their Y1 state.**
+
+### The mechanism, in one line
+
+`marginal_starter_value(c)` equals `proj(c)` **exactly** whenever `c` fills an empty lineup slot
+(measured: all six positions, four roster states). So the value base adds two surpluses measured
+against **two different baselines** — MSV's implicit 0 and daVORP's `R_p`:
+
+```
+msv + daVORP = proj + (proj − R_p) = 2·proj − R_p
+```
+
+Amplification over the principled `proj − R_p` is `1 + proj/(proj − R_p)`, which diverges as
+`R_p → proj`. **The flatter the position, the worse it is:** DST 8.10×, K 5.34×, TE 3.36×,
+QB 3.15×, WR 2.61×, RB 2.59×. That ranking reproduces the observed pathology ranking and was
+derived from the algebra, not fitted to it. At round 10 of a real draft, **all 60 of the top 60
+ranked candidates were kickers.**
+
+A second, independent defect: the value term's replacement level is drawn at the **consumption**
+boundary. Starter demand sums to the lineup size (10), consumption to `roster_size` (16); the
+ratio is 2.20× at QB and exactly 1.00× at K/DST — so D67's choice added **+71.4** to every
+quarterback's surplus and nothing at all to kickers. QB suffers both defects; K/DST suffer only
+the first, but extremely.
+
+The snake turn **unmasks** rather than causes: restoring an 18-pick opportunity cost at #20
+collapses the QB margin from +73.2 to +3.4 without reversing it.
+
+### The candidates, pre-registered before any run (`d843120`, wired `6069721`)
+
+Arm **B** (starter-demand replacement) was **withdrawn before running**: it is essentially D67's
+`W0`, which consumption demand beat by +32.1 starter points, CI [+11.5, +52.7]. 400 drafts, fair
+opponent, both formats. The control reproduces D79's published `Z0` **to the decimal in both
+formats** (2055.9 / 2114.5), and a test asserts Q0 scores identically to Z0 per candidate.
+
+| arm | target_league | legacy_2qb_dynasty | verdict |
+|---|---|---|---|
+| A control | **2055.9** | **2114.5** | incumbent |
+| C `msv_over_replacement + daVORP` | +3.1, CI [−128.8, +134.9] | **−29.6** | FAIL |
+| D symmetric survival | −15.2 | **+50.8**, 4/5 seasons | FAIL |
+| E C + D | +4.1, CI [−182.4, +190.5] | −11.2 | FAIL |
+
+### Three findings that decide it
+
+1. **The behavioural fix works and is worth nothing.** Arm C delivers exactly what was sought —
+   first QB 2.20 → 3.10, first RB 4.94 → **3.62**, first K 8.64 → 10.14, first DST 10.08 →
+   12.94 — for **+3.1 starter points**, an order of magnitude below the pre-registered 25-point
+   floor, with a CI spanning ±130.
+2. **The apparent win is one season.** Arm C is worse in **4 of 5** seasons; the entire margin is
+   2024. Dropping 2024 gives −41.0 (C) and −60.1 (E).
+3. **The over-valuation is load-bearing.** The arms that defer K/DST "correctly" produce rosters
+   that cannot field a legal lineup — C zeroes TE twice (2 infeasible), E zeroes DST three times
+   (4 infeasible), against **zero of both** for the control. Zero unfilled mandatory slots is not
+   independent of the over-valuation; **it is bought by it.**
+
+Both arms also **flip sign across formats**, which Gate 7 exists to detect and which is on its
+own disqualifying.
+
+### RB layer isolation: both, interacting non-linearly
+
+`d(value_base)/d(proj) = 2.00` exactly (verified at Δ ∈ {0,+10,+20,+40,+80}), uniform across
+positions — so the known +45.5 RB top-10 bias carries roughly **91 points** of value-base error.
+Meanwhile the opportunity-cost term is **threshold-gated**: flat at 3.3 from a 169 cell through
+260, then slope 1.000 above 300. The decision layer **over-reacts by 2× and under-reacts by 0×
+simultaneously**. RB is both a projection and a decision problem, which is a good reason neither
+layer's fix has worked alone. **No RB projection was modified.**
+
+### Decision: DO NOT SHIP
+
+Y1 remains correct not merely by default: its control figures are verified against D79 in both
+formats, its incoherence now has an exact algebraic form and a per-position severity ranking, and
+correcting that incoherence properly measures at approximately zero while breaking roster
+legality.
+
+**The single most promising remaining direction** is a roster-legality constraint as a *hard
+restriction on the candidate pool* rather than a valuation term (D67's `W2`/`W3` already
+prototype this), measured **jointly** with arm C. The double count and the legality guarantee are
+currently the same mechanism and must be separated before either can be fixed. That is a
+constraint question, not a valuation question.
