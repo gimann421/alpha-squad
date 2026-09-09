@@ -198,11 +198,34 @@ format and −75.8 in `legacy_2qb_dynasty`.** Z1 (daVORP alone) lost −34.6/−
 So the economically cleaner formulation drafts **worse**. Any candidate proposed here must
 reckon with that, and "it is more principled" is not evidence.
 
-**What has never been varied is the demand target itself.** D66 swept a uniform multiplier on
-`startable_slots` (rejected as positional re-weighting in disguise); D67 chose the consumption
-boundary; D63/D79 varied the *form* of the value base while holding that boundary fixed. Nobody
-has measured the *starter*-demand boundary in the value term. That is the one open axis, and it
-is the axis Defect 2 identifies.
+### And the fix Defect 2 implies has also already failed
+
+My first reading of the tier history was that the demand target had never been varied. **That is
+wrong, and the correction matters more than the original claim.** D67's W-tiers varied exactly
+that, and `W0` — static replacement via `replacement_level()`, which allocates dedicated plus
+earned flex slots and *is* the starter-demand boundary — was the control. `W1` (consumption)
+**beat it by +32.1 starter points, 95% CI [+11.5, +52.7]**, and by +75.5 [+38.6, +112.3] in
+`legacy_2qb_dynasty`.
+
+So the economic argument in §4 — that replacement should sit at the starter boundary because only
+starters score — has already been put to the benchmark in close to its natural form, and it lost.
+A draft-aware starter-boundary level is not *identical* to W0 (W0 never updates as the pool
+depletes, which D67 measured as +178.2 too high for QB by round 13), but §4's own measurement
+shows the draft-aware level is constant until roughly pick 120, so the two agree exactly where
+the QB decision at #20 is made. **Candidate B below is therefore not proposed.**
+
+### What is actually still untested
+
+Two things, and only two:
+
+1. **`msv_over_replacement + daVORP`** — no tier has this. Every arm that removed the raw
+   projection (Z1, Z2, Z3) also *halved the scale of the value base* against a fixed opportunity
+   cost, so "remove raw projection" and "halve the scale" are perfectly confounded in the
+   existing evidence. This arm separates them.
+2. **A survival term that can discount as well as urge.** `S_TIER_SPEC` swept the coefficient
+   over {0.0, 0.15, 0.3, 0.6, 1.0} — all non-negative, so `survival_mult ≥ 1.0` in every arm ever
+   run. Nothing has ever tested letting a player who is *certain* to be available be worth less
+   now than later, which is precisely what §5 shows the kicker case needs.
 
 ---
 
@@ -214,4 +237,55 @@ measurable without changing the value function — run the production engine and
 K/DST before round 13 — and it is the next thing to establish, because it decides whether the
 K/DST behaviour is a genuine defect or merely an odd-looking one.
 
-*(Result recorded in §9 once measured.)*
+*(Result recorded in §11 once measured.)*
+
+---
+
+## 9. Phase 7 — does the distortion move correctly with the league format?
+
+| | | target_league (1-QB) | | | legacy_2qb_dynasty | |
+|---|---|---|---|---|---|---|
+| pos | S_p | C_p | C/S | S_p | C_p | C/S |
+| QB | 1.00 | 2.20 | **2.20×** | 2.00 | 3.90 | 1.95× |
+| RB | 2.40 | 4.20 | 1.75× | 2.40 | 4.00 | 1.67× |
+| WR | 3.60 | 5.80 | 1.61× | 3.60 | 6.80 | 1.89× |
+| TE | 1.00 | 1.80 | 1.80× | 1.00 | 2.30 | **2.30×** |
+| K | 1.00 | 1.00 | 1.00× | — | — | — |
+| DST | 1.00 | 1.00 | 1.00× | — | — | — |
+
+Starter demand **does** respond correctly to the format: QB rises 1.00 → 2.00 when the league
+starts two. So the framework is not a 1-QB artifact.
+
+But the consumption target over-counts in **both** formats, and *which* position it hurts most
+moves: QB in the 1-QB league, **TE in the 2-QB league (2.30×)**. And the surplus D67's choice
+hands quarterbacks is far larger out of format — `legacy_2qb_dynasty` consumes 39 QBs, putting
+replacement at **QB39 = 56.8** against a starter boundary of 214.3, a **−157.5** gift to every
+quarterback. That the same mechanism produces a bigger distortion where QBs are genuinely more
+valuable is why its net effect cannot be reasoned about, only measured.
+
+---
+
+## 10. Phase 9 — RB layer isolation: the answer is **both B and D**
+
+**(a) The engine amplifies projection error by exactly 2×.** With an empty slot,
+`value_base = 2·proj − R`, so `d(value_base)/d(proj) = 2` against `1` for the principled surplus.
+Verified numerically on Jonathan Taylor at Δ ∈ {0, +10, +20, +40, +80}: the slope is **2.00 at
+every step**. This is uniform across positions — amplifying, not RB-specific. Applied to the
+known RB top-10 signed bias of +45.5, the value base carries roughly **91 points** of error.
+
+**(b) There is also a genuinely RB-specific distortion, and it is a dead zone.** Opportunity cost
+is computed in *static* VORP units off the board, so under-projecting the elite RBs suppresses
+what the engine thinks it costs to lose them — and the response is **threshold-gated**:
+
+| elite-RB cell set to | 169 (Y1) | 210 | 260 | 300 | 320 | 350 | 400 |
+|---|---|---|---|---|---|---|---|
+| RB opportunity cost | 3.3 | 3.3 | 3.3 | 37.1 | 57.1 | 87.1 | 137.1 |
+| d(RB oc)/d(cell) | — | **0.000** | **0.000** | 0.846 | 1.000 | 1.000 | 1.000 |
+
+Below ≈285 the term is **completely insensitive** to the elite-RB projection, then responds
+one-for-one. So the decision layer simultaneously **over-reacts** to the RB projection error by
+2× in the value base and **under-reacts** to it by 0× in the opportunity-cost term, until a
+threshold flips the second on.
+
+**RB is therefore both a projection problem and a decision problem** — and the two interact
+non-linearly, which is why neither layer's fix has worked in isolation.
