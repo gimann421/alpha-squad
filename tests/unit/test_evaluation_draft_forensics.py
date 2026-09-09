@@ -851,3 +851,107 @@ class TestD79STiers:
         result = simulate_forensic_draft(con, league, 2023, tier, draft_slot=1, static=static)
         assert len(result.drafted_player_ids) == 5
         assert len(set(result.drafted_player_ids)) == 5
+
+
+class TestQTiersDecisionValueBase:
+    """D84. The Q-tiers vary the two decision-layer axes nothing had varied: the
+    raw-projection double count (holding the value base's SCALE) and the survival term's
+    one-sidedness. Arms, gates and selection rule are pre-registered in
+    `evaluation/decision_value_base.py`."""
+
+    def test_q_tier_spec_matches_the_preregistration(self):
+        """The wiring must not drift from the committed pre-registration."""
+        from alpha_squad.evaluation.decision_value_base import ARM_SPEC, ARMS
+        from alpha_squad.evaluation.draft_forensics import Q_TIER_SPEC, Q_TIERS
+
+        assert [Q_TIER_SPEC[t] for t in Q_TIERS] == [ARM_SPEC[a] for a in ARMS]
+
+    def test_every_q_tier_is_described_and_draft_aware(self):
+        from alpha_squad.evaluation.draft_forensics import (
+            DRAFT_AWARE_REPLACEMENT_TIERS,
+            Q_TIERS,
+            TIER_DESCRIPTIONS,
+        )
+
+        for tier in Q_TIERS:
+            assert tier in TIER_DESCRIPTIONS
+            assert tier in DRAFT_AWARE_REPLACEMENT_TIERS
+
+    def test_q0_scores_identically_to_z0_on_real_shaped_data(self, con):
+        """THE control check. Q0 must be the shipped engine exactly -- if it is not, every
+        Q-tier margin is measured against the wrong baseline."""
+        _seed_league_season(con, 2023)
+        league = _small_league()
+        static = load_season_static(con, league, 2023)
+        available = set(static.projections)
+        for player_id in sorted(available):
+            kwargs = dict(
+                available=available,
+                current_pick_overall=1,
+                next_pick_overall=5,
+                roster_player_ids=[],
+            )
+            q0 = score_candidate(static, player_id, league, [], "Q0", **kwargs)
+            z0 = score_candidate(static, player_id, league, [], "Z0", **kwargs)
+            assert (q0 is None) == (z0 is None)
+            if q0 is not None:
+                assert q0.score == pytest.approx(z0.score, abs=1e-9), player_id
+
+    def test_q1_removes_the_raw_projection_but_keeps_the_scale(self, con):
+        """On an empty roster Q1's base is 2*(proj - R) against Q0's 2*proj - R, so Q1 must be
+        strictly lower wherever the replacement level is positive -- but NOT half of Q0, which
+        is what every previously-measured alternative was."""
+        _seed_league_season(con, 2023)
+        league = _small_league()
+        static = load_season_static(con, league, 2023)
+        available = set(static.projections)
+        best = max(available, key=lambda p: static.projections[p])
+        # `_pick_by_tier` hoists this per pick; calling `score_candidate` directly means
+        # supplying it, and the tier RAISES rather than silently degrading if it is missing.
+        from alpha_squad.league.replacement import replacement_marginal_starter_values
+
+        replacement_msv = replacement_marginal_starter_values(
+            league, [], static.projections, static.positions, static.replacement_levels
+        )
+        kwargs = dict(
+            available=available,
+            current_pick_overall=1,
+            next_pick_overall=5,
+            roster_player_ids=[],
+            replacement_msv=replacement_msv,
+        )
+        q0 = score_candidate(static, best, league, [], "Q0", **kwargs)
+        q1 = score_candidate(static, best, league, [], "Q1", **kwargs)
+        z2 = score_candidate(static, best, league, [], "Z2", **kwargs)
+        assert q1.score < q0.score
+        # Q1 keeps both surplus terms; Z2 keeps one. Q1 must sit strictly above Z2.
+        assert q1.score > z2.score
+
+    def test_q2_discounts_a_certain_survivor_relative_to_the_control(self, con):
+        """The survival asymmetry, end to end: a player certain to still be there must score
+        LESS under Q2 than under Q0, which is impossible in the shipped one-sided form."""
+        _seed_league_season(con, 2023)
+        league = _small_league()
+        static = load_season_static(con, league, 2023)
+        available = set(static.projections)
+        kwargs = dict(available=available, current_pick_overall=1, roster_player_ids=[])
+        # next_pick_overall=1 -> the player cannot be gone, so survival is 1.0.
+        moved = 0
+        for player_id in sorted(available):
+            q0 = score_candidate(
+                static, player_id, league, [], "Q0", next_pick_overall=1, **kwargs)
+            q2 = score_candidate(
+                static, player_id, league, [], "Q2", next_pick_overall=1, **kwargs)
+            if q0 is None or q0.survival_probability is None:
+                continue
+            if q0.survival_probability == pytest.approx(1.0):
+                assert q2.score < q0.score, player_id
+                moved += 1
+        assert moved > 0, "no certain-survivor in the fixture; the test proved nothing"
+
+    def test_q3_is_q1_and_q2_together(self, con):
+        """E must compose C and D rather than being a third thing."""
+        from alpha_squad.evaluation.draft_forensics import Q_TIER_SPEC
+
+        assert Q_TIER_SPEC["Q3"][0] == Q_TIER_SPEC["Q1"][0]
+        assert Q_TIER_SPEC["Q3"][1] == Q_TIER_SPEC["Q2"][1] is True

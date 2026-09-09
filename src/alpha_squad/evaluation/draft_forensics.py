@@ -29,6 +29,12 @@ from typing import Literal
 
 import duckdb
 
+from alpha_squad.evaluation.decision_value_base import (
+    ARM_VORP_WEIGHT as DECISION_ARM_VORP_WEIGHT,
+)
+from alpha_squad.evaluation.decision_value_base import (
+    survival_multiplier as dvb_survival_multiplier,
+)
 from alpha_squad.evaluation.draft_simulation import (
     ALL_OPPONENT_STRATEGIES,
     MARKET_CONSENSUS,
@@ -153,6 +159,10 @@ Tier = Literal[
     "SS15",
     "SS60",
     "SS100",
+    "Q0",
+    "Q1",
+    "Q2",
+    "Q3",
 ]
 ALL_TIERS: tuple[Tier, ...] = ("A", "B", "C", "D", "E", "F", "G", "H")
 
@@ -668,6 +678,33 @@ S_TIER_SPEC: dict[Tier, float] = {
 PREREGISTERED_S_CONTROL: Tier = "S0"
 
 
+# --- Q-tiers (D84): the two decision-layer axes nothing has varied ---------------------------
+# Arms, rationale, gates and selection rule are PRE-REGISTERED in
+# `evaluation/decision_value_base.py`, committed before any Q-tier was run. This dict is only
+# the wiring; the science lives there.
+#
+#   Q0 = arm A, the shipped engine (control; asserted byte-identical to Z0/S0/X0/W1 by a test)
+#   Q1 = arm C, msv_over_replacement + 1.0*daVORP -- removes the raw-projection double count
+#        while HOLDING the value base's scale, which no prior arm did
+#   Q2 = arm D, symmetric survival, so a player certain to still be there can be worth less now
+#   Q3 = arm E, both
+#
+# Everything else -- draft-aware replacement, opportunity cost, roster fit, confidence,
+# feasibility cap -- is the shipped engine, so a difference between Q-tiers is attributable to
+# these two factors and nothing else.
+Q_TIERS: tuple[Tier, ...] = ("Q0", "Q1", "Q2", "Q3")
+
+#: {tier: (value base name, symmetric survival)} -- mirrors `decision_value_base.ARM_SPEC`, and a
+#: test asserts the two agree so the wiring cannot drift from the pre-registration.
+Q_TIER_SPEC: dict[Tier, tuple[str, bool]] = {
+    "Q0": ("msv_plus_weighted_vorp", False),
+    "Q1": ("msv_over_replacement_plus_weighted_vorp", False),
+    "Q2": ("msv_plus_weighted_vorp", True),
+    "Q3": ("msv_over_replacement_plus_weighted_vorp", True),
+}
+
+PREREGISTERED_Q_CONTROL: Tier = "Q0"
+
 #: Every tier scored as "N4, except VORP may use a draft-aware replacement level". V- and
 #: W-tiers share the scoring branch verbatim so a difference between them is attributable to the
 #: demand target (and, for W2/W3, the legality constraint) and nothing else.
@@ -678,6 +715,7 @@ DRAFT_AWARE_REPLACEMENT_TIERS: tuple[Tier, ...] = (
     *Y_TIERS,
     *ALL_Z_TIERS,
     *ALL_S_TIERS,
+    *Q_TIERS,
 )
 
 #: W-tiers that enforce the endgame mandatory-slot reservation, as a hard restriction on the
@@ -832,6 +870,12 @@ TIER_DESCRIPTIONS: dict[Tier, str] = {
     "Y1": "D70: W1 with RB projections from a walk-forward refit adding preseason-knowable "
     "availability features (F1-F4); QB/WR/TE/K/DST unchanged from control",
     # Z-tiers (D79): D67's draft-aware replacement held FIXED, only the value base varies.
+    "Q0": "D84 control (arm A): the shipped engine. Byte-identical to Z0/S0/X0/W1",
+    "Q1": "D84 arm C: value base = msv_over_replacement + 1.0*daVORP -- removes the "
+    "raw-projection double count while HOLDING the value base's scale",
+    "Q2": "D84 arm D: shipped value base, symmetric survival multiplier in [0.7, 1.3] so a "
+    "player certain to still be available can be worth less now than later",
+    "Q3": "D84 arm E: arm C + arm D",
     "Z0": "D79 control: the shipped engine -- msv + 1.0*daVORP + opp_cost. Byte-identical to "
     "X0/W1 by construction",
     "Z1": "D79: value base = daVORP alone -- pure value-based drafting at the shipped "
@@ -1092,7 +1136,15 @@ def score_candidate(
         # the shipped 0.3, so V/W/X/Y/Z results stay byte-identical to what they were measured
         # at. `S0` resolves to 0.3, which is what makes S0 == Z0 == X0 == W1 by construction.
         survival_bonus = S_TIER_SPEC[tier] if tier in ALL_S_TIERS else 0.3
-        survival_mult = 1.0 if survival is None else (1.0 + survival_bonus * (1.0 - survival))
+        # D84: the Q-tiers may re-centre this term so it can DISCOUNT a player who is certain to
+        # still be available, not only add urgency to one who is not. Every other tier keeps the
+        # shipped one-sided form, so Q0 reproduces Z0/S0/X0/W1 exactly.
+        if tier in Q_TIERS and Q_TIER_SPEC[tier][1]:
+            survival_mult = dvb_survival_multiplier(survival, symmetric=True)
+        else:
+            survival_mult = (
+                1.0 if survival is None else (1.0 + survival_bonus * (1.0 - survival))
+            )
         opp_cost = _opportunity_cost_for(
             static,
             position,
@@ -1150,6 +1202,27 @@ def score_candidate(
             else:  # msv_plus_weighted_vorp
                 value_base = msv + weight * vorp_term
             reasons.append(f"value_base={base_name}(w={weight:g}) {value_base:+.1f} pts")
+        elif tier in Q_TIERS:
+            # D84. Q0/Q2 are the shipped base; Q1/Q3 replace the RAW-PROJECTION half of it with
+            # a second surplus, so on an empty slot the base is 2*(proj - R) rather than
+            # 2*proj - R. That holds the SCALE of the value base while removing the double
+            # count -- the one thing Z1/Z2/Z3 could not separate, because each of them also
+            # halved the base against a fixed opportunity cost.
+            base_name = Q_TIER_SPEC[tier][0]
+            if base_name == "msv_over_replacement_plus_weighted_vorp":
+                # Same RAISE-rather-than-default rule as Z2: without the hoisted map this
+                # silently becomes Q0 while still reporting itself as Q1.
+                if replacement_msv is None:
+                    raise RuntimeError(
+                        f"tier {tier} needs `replacement_msv`; without it the value base "
+                        "silently degrades to the control and the tier measures nothing"
+                    )
+                value_base = (msv - replacement_msv.get(position, 0.0)) + (
+                    DECISION_ARM_VORP_WEIGHT * vorp_term
+                )
+            else:  # msv_plus_weighted_vorp -- the control
+                value_base = msv + DECISION_ARM_VORP_WEIGHT * vorp_term
+            reasons.append(f"value_base={base_name} {value_base:+.1f} pts")
         else:
             value_base = msv + N4_VORP_WEIGHT * vorp_term
 
@@ -1647,7 +1720,13 @@ def _pick_by_tier(
             else REPLACEMENT_VARIANTS[target]
         )
         dynamic_levels = variant(league, available, static.projections, static.positions)
-    elif tier in X_TIERS or tier in Y_TIERS or tier in ALL_Z_TIERS or tier in ALL_S_TIERS:
+    elif (
+        tier in X_TIERS
+        or tier in Y_TIERS
+        or tier in ALL_Z_TIERS
+        or tier in ALL_S_TIERS
+        or tier in Q_TIERS
+    ):
         # D68/D70: identical to W1. The projections `static` carries are the treatment; the
         # replacement rule they are measured against is the shipped one, unchanged.
         # D79: the Z-tiers hold that same shipped replacement rule fixed and vary the VALUE BASE
@@ -1679,6 +1758,17 @@ def _pick_by_tier(
             static.projections,
             static.positions,
             static.replacement_levels,
+            base_points=base_lineup_points,
+        )
+    elif tier in Q_TIERS and Q_TIER_SPEC[tier][0] == "msv_over_replacement_plus_weighted_vorp":
+        # D84: identical quantity and identical draft-aware anchoring to Z2's below -- only the
+        # value base that consumes it differs.
+        replacement_msv = replacement_marginal_starter_values(
+            league,
+            roster_player_ids or [],
+            static.projections,
+            static.positions,
+            {**static.replacement_levels, **(dynamic_levels or {})},
             base_points=base_lineup_points,
         )
     elif tier in ALL_Z_TIERS and Z_TIER_SPEC[tier][0] == "msv_over_replacement":
