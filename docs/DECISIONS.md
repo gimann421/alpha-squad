@@ -5473,8 +5473,26 @@ formats, its incoherence now has an exact algebraic form and a per-position seve
 correcting that incoherence properly measures at approximately zero while breaking roster
 legality.
 
-**The single most promising remaining direction** is a roster-legality constraint as a *hard
-restriction on the candidate pool* rather than a valuation term (D67's `W2`/`W3` already
-prototype this), measured **jointly** with arm C. The double count and the legality guarantee are
-currently the same mechanism and must be separated before either can be fixed. That is a
-constraint question, not a valuation question.
+### The clean isolation that names the remaining direction
+
+Forcing the timing without touching any value -- run the production engine and simply decline
+K/DST before round 13 (a round read off the consensus board, not tuned) -- binds perfectly and
+costs **-7.6 starter points, 95% CI [-70.0, +54.8]**, with all ten starting slots still filled.
+Its control figure, 2055.9, comes from a third independent code path and again matches `Q0` and
+D79's `Z0`.
+
+| how K/DST is deferred | starter points | mandatory slots filled |
+|---|---|---|
+| by **constraint** (defer, but still draft them) | -7.6, CI includes 0 | **all 10** |
+| by **removing the valuation** (arms C/E) | +3.1 / +4.1, CI includes 0 | **2 and 4 infeasible rosters** |
+
+**Deferring K/DST is free and safe; removing their valuation is free and dangerous.** The early
+kicker is not itself costly -- what is costly is losing the only thing that guarantees a kicker
+gets drafted at all.
+
+**The single most promising remaining direction** follows directly: a roster-legality constraint
+as a *hard restriction on the candidate pool* rather than a valuation term (D67's `W2`/`W3`
+already prototype this), measured **jointly** with arm C. The double count and the legality
+guarantee are currently the same mechanism and must be separated before either can be fixed.
+This is a scheduling/constraint question, not a valuation question -- and the probe above is
+direct evidence that the constraint side is where the free lunch is.

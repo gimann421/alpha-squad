@@ -237,7 +237,45 @@ measurable without changing the value function — run the production engine and
 K/DST before round 13 — and it is the next thing to establish, because it decides whether the
 K/DST behaviour is a genuine defect or merely an odd-looking one.
 
-*(Result recorded in §12 once measured.)*
+### 12. Measured: the early K/DST costs nothing, and the danger is elsewhere
+
+Run the production engine unchanged and simply **decline** K/DST before round 13 — an external
+constraint applied *after* scoring, so the engine's own numbers are byte-identical between arms
+and only the acted-on candidate differs. The deferral round was read off the consensus board
+(first K at #145, first DST at #133), not tuned. 50 paired drafts per arm, fair opponent. An
+assertion fails the run if the deferral does not actually bind.
+
+*(That assertion earned its place: the first version capped the candidate list at 60 and silently
+fell through to the kicker, because at round 10 **all 60 top-ranked candidates were kickers**.)*
+
+| | control | deferred |
+|---|---|---|
+| mean realized starter points | **2055.9** | 2048.4 |
+| paired margin, season-clustered (D71) | — | **−7.6, 95% CI [−70.0, +54.8]** |
+| seasons won | — | 2 of 5 |
+| slots won | — | 23 of 50 |
+| **starters filled** | **10.0** | **10.0** |
+| first K / first DST | 8.64 / 10.08 | **13.00 / 14.00** |
+| first QB / RB / WR | 2.20 / 4.94 / 1.62 | **2.20 / 4.94 / 1.62** *(identical)* |
+
+The constraint binds perfectly — kickers move five rounds later, defenses four — while every
+other position is untouched. **The cost is −7.6 points, indistinguishable from zero.**
+
+Note also that the control's 2055.9 here comes from a completely independent code path (a direct
+`recommend_draft_pick` loop) and matches both `Q0` and D79's published `Z0`. Three independent
+harnesses, one number.
+
+### The distinction this draws, which the value-base arms could not
+
+| how K/DST is deferred | starter points | mandatory slots filled |
+|---|---|---|
+| by **constraint** (this probe: defer, but still draft them) | −7.6, CI includes 0 | **10.0 — all filled** |
+| by **removing the valuation** (arms C/E) | +3.1 / +4.1, CI includes 0 | **2 and 4 infeasible rosters** |
+
+**Deferring K/DST is free and safe. Removing their valuation is free and dangerous.** The early
+kicker is not itself costly — what is costly is having nothing left to guarantee a kicker gets
+drafted at all. That is a *scheduling* property, not a *valuation* property, and it is why the
+remaining direction below is a constraint question rather than a value question.
 
 ---
 

@@ -107,6 +107,23 @@ That ranking, derived from the algebra rather than fitted, reproduces the observ
 ranking exactly. At round 10 of a real draft, **all 60 of the top 60 ranked candidates were
 kickers.**
 
+### And yet the early kicker costs nothing
+
+Forcing the correct timing without touching any value — run the production engine and simply
+decline K/DST before round 13 — binds perfectly (first K 8.64 → **13.00**, first DST 10.08 →
+**14.00**, every other position identical) and costs **−7.6 starter points, 95% CI [−70.0,
++54.8]**, 2 seasons of 5. All ten starting slots stay filled.
+
+**The crucial contrast:**
+
+| how K/DST is deferred | starter points | mandatory slots filled |
+|---|---|---|
+| by **constraint** (defer, but still draft them) | −7.6, CI includes 0 | **all 10** |
+| by **removing the valuation** (arms C/E) | +3.1 / +4.1, CI includes 0 | **2 and 4 infeasible rosters** |
+
+Deferring K/DST is free and safe; *removing their valuation* is free and dangerous. The early
+kicker is not the problem — losing the only thing that guarantees a kicker gets drafted is.
+
 ---
 
 ## 4. Replacement-level theory — what it should mean in Alpha
@@ -314,13 +331,16 @@ slot plus a replacement quarterback (QB22) that a one-QB roster would never star
 survives a 90-point projection change — four times the measured QB bias. Take the running back or
 receiver; a quarterback within ~60 points of Allen is available six rounds later.
 
-**Round 9's kicker — the honest answer is more uncomfortable than "override it."** It is
-indefensible on its face: Alpha spends pick #81 on a player its own model says is 81% likely to
-be there at #141, and at that moment it ranks *sixty kickers above every skill player alive*. But
-when that behaviour is corrected properly and measured over 200 drafts, it is worth **+3.1
-points** — and the corrected engine **starts leaving mandatory roster slots empty**. So: override
-it if you want, take the receiver, and then *actually remember to draft a kicker and a defense*.
-The engine's absurd kicker valuation is what currently guarantees you never forget.
+**Round 9's kicker — override it, and the measurement says exactly how.** It is indefensible on
+its face: Alpha spends pick #81 on a player its own model says is 81% likely to be there at #141,
+and at that moment it ranks *sixty kickers above every skill player alive*.
+
+Forcing the correct timing directly — decline K/DST until round 13, change nothing else — costs
+**−7.6 starter points, CI [−70.0, +54.8]**, and keeps all ten starting slots filled. So the
+override is safe and very nearly free. What is *not* safe is fixing it in the valuation: the arms
+that did so started leaving mandatory slots empty. **Override the pick, keep the deadline.** Take
+the receiver at #81, and draft a kicker and a defense by round 13-14 — because the engine's
+absurd kicker valuation is currently the only thing guaranteeing you never forget.
 
 **What I would not trust it for at all** is a claim that its numbers mean what they say. A value
 base of 530 for Josh Allen is not 530 of anything; it is 361.9 points of projection counted twice
