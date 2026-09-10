@@ -5845,3 +5845,133 @@ already prototype this), measured **jointly** with arm C. The double count and t
 guarantee are currently the same mechanism and must be separated before either can be fixed.
 This is a scheduling/constraint question, not a valuation question -- and the probe above is
 direct evidence that the constraint side is where the free lunch is.
+
+---
+
+## D85 — Economic valuation and roster legality are already separate; the correction is right and unshippable. Nothing ships.
+
+*Branch `claude/separate-valuation-legality-4tw82o`. Pre-registration committed at `1212faa`
+before any arm ran; harness defect fixed at `ab5a1aa`. Full report:
+`docs/VALUATION_LEGALITY_SEPARATION.md`. **`league/` and `models/` are byte-identical to Y1.***
+
+D84 closed by naming one remaining direction: a roster-legality constraint as a hard restriction
+on the candidate pool, measured **jointly** with its arm C, because "the double count and the
+legality guarantee are currently the same mechanism". D85 ran that as a pre-registered 2x2
+(`evaluation/decision_legality.py`):
+
+|                     | legality OFF | legality ON |
+|---|---|---|
+| Y1 valuation        | L0 (control) | L1 |
+| arm C valuation     | L2           | L3 |
+
+with gates G1-G9 **imported** from `decision_value_base` rather than restated, and predictions
+P1-P5 recorded in advance.
+
+### The result: nothing ships, and the premise was wrong
+
+| format | L0 | L1 | L2 | L3 | margin | interaction |
+|---|---|---|---|---|---|---|
+| target 1QB | 2042.8 | 2042.8 | 2069.4 | 2069.4 | **+26.6** | **+0.00** |
+| legacy 2QB dynasty | 2150.6 | 2150.6 | 2141.5 | 2141.5 | −9.1 | +0.00 |
+| superflex redraft | 2159.5 | 2159.5 | 2155.1 | 2155.1 | −4.4 | +0.00 |
+| 2QB redraft | 2110.7 | 2110.7 | 2099.6 | 2099.6 | −11.1 | +0.00 |
+
+**Zero infeasible rosters in all four arms, in all four formats.** L2/L3 fail G3 (2 of 5 seasons
+worse), G7 (negative in 3 of 3 alternative formats) and G8 (clustered CI [−72.5, +125.7]). L1 is
+an exact null and fails G6/G8/G9.
+
+### 1. The two mechanisms were never entangled. D84's "load-bearing" claim does not reproduce
+
+The legality constraint (D67's `W2`/`W3` rule, unchanged, no free parameter) **provably works** —
+on a constructed state it restricts the pick from A.J. Brown to Breece Hall — and **never fires
+once in 800 real picks**, under either valuation. `L1 == L0` and `L3 == L2` is measured inertness
+with a demonstrated mechanism, not a silent defect.
+
+D84 measured 2 infeasible rosters under arm C and concluded the over-valuation was buying roster
+legality. On this rebuilt board arm C produces **0**. That conclusion is board-specific, not
+structural, and should not be relied on again.
+
+### 2. NEW: the corrected valuation does NOT remove the 2x amplification
+
+`d(value_base)/d(proj)`, measured by finite difference at every position:
+
+| value base | at an empty slot | slope |
+|---|---|---|
+| Y1 `msv + daVORP` | `2*proj - R` | **2.000** |
+| arm C `msv_over_repl + daVORP` | `2*proj - 2R` | **2.000** |
+| `daVORP` alone / `msv_over_repl` alone | `proj - R` | 1.000 |
+
+`Y1 - armC = R_p` exactly: arm C subtracts a **per-position constant** and fixes the *level*, not
+the *slope*. D84 attributed the 2x amplification to the double count and did not check whether its
+own correction removed it. **It does not.** The only unit-slope forms are the two already measured
+and rejected three times (D63 `N3`, D79 `Z1`/`Z2`), and they lose because halving the value base
+against a static-VORP opportunity cost re-weights every position — the scale mismatch open since
+D60. There is no third option inside `(value_base + oc) * multipliers`.
+
+### 3. The mechanism generalises across formats; the benefit does not
+
+Arm C defers QB where QB demand is low (1QB first QB 2.12 -> 3.04) and leaves it alone where
+demand is high (superflex 1.56 -> 1.54, 2QB slightly earlier). The brief's requirement that a
+1-QB fix must not suppress QB in superflex is **met**. K/DST deferral is consistent in all three
+formats with those slots (first K ~8.8 -> ~10.4-11.1, first DST ~10.0-10.6 -> ~13.0-13.9).
+Starter points are positive in one format and negative in three.
+
+### 4. RB (mandatory phase): both layers, and the correction does not help the amplification
+
+Elite-ECR RB signed error 2022-2025 is **+47.7** (Alpha under-projects; D84 measured +42.3).
+Sensitivity sweep on the elite-RB cell, everything else unchanged, in memory only:
+
+| Δ applied to elite RBs | Y1 pick #1 | arm C pick #1 |
+|---|---|---|
+| +25 | Amon-Ra St. Brown (WR) | Amon-Ra St. Brown (WR) |
+| **+50** | Amon-Ra St. Brown (WR) | **McCaffrey (RB)** |
+| **+75** | **McCaffrey (RB)** | McCaffrey (RB) |
+
+Y1 needs **+75** (McCaffrey at 351.7 — independently reproducing D84's "elite RBs must project
+~350"); arm C needs **+50**; the real bias is **+47.7**, just short of both. At #20 the RB
+projection is irrelevant under either arm up to +100 — the valuation decides that pick. Top-15
+board composition is **identical** under the two valuations (11 WR, 4 RB). Opportunity cost works
+*against* elite RBs at the top (McCaffrey oc 19.3 vs WR 51.2 at pick #5). **No RB projection was
+modified.**
+
+### 5. Snake turns: D84's reading is refined
+
+`oc = 0` at a turn is correct. But restoring an 18-pick opportunity cost at #20 **widens** the QB
+margin here (+11.7 -> +36.2), where D84 found it collapsing (+73.2 -> +3.4), and Josh Allen wins
+at slot 5 pick #25 *with* a live opportunity cost. The zero-gap turn is **neither necessary nor
+sufficient** for the early QB; it amplifies or dampens depending on the board. The double count is
+the cause.
+
+### 6. A silent harness defect, caught by the pre-registered control check
+
+The first D85 run omitted the L-tiers from `dynamic_levels`' dispatch, silently reverting every
+arm to the **static** replacement level — the D65 defect D67 removed. Control 1963.62 against
+Q0/Z0/S0/W1/X0's 2042.80 on the identical board. Fixed at `ab5a1aa`; all six controls now agree to
+four decimals in both formats. Every pre-fix number was discarded. Same class as D78's paired
+harness and D81's override-that-never-arrived; `test_l0_is_the_shipped_engine` now pins it.
+
+### 7. Reproduction check (P2), reported before interpretation as pre-registered
+
+Harness verified identical (`L0 == Q0 == Z0 == S0 == W1 == X0`), so differences are the **board**,
+not the wiring — the database was rebuilt from source and the data moved (837 players vs 834).
+
+| | D84 | D85 | delta |
+|---|---|---|---|
+| control target / legacy | 2055.9 / 2114.5 | 2042.8 / 2150.6 | −13.1 / +36.1 |
+| arm C margin target / legacy | +3.1 / −29.6 | +26.6 / −9.1 | +23.5 / +20.5 |
+| **arm C infeasible rosters** | **2** | **0** | **qualitative** |
+
+Numeric deltas sit inside D71's ±100-point instrument noise and signs are preserved. The
+qualitative one is finding 1 above.
+
+### Production decision
+
+**NOTHING SHIPS.** Added: `evaluation/decision_legality.py` (pre-registration), L-tier wiring in
+`evaluation/draft_forensics.py`, 28 tests. This is the **ninth** value-base reformulation measured
+(D63's five, D79's Z-tiers, D84's Q-tiers, these) and the conclusion is now structural rather than
+incidental: **the theory is right, the correction behaves exactly as designed in every format, and
+the benchmark cannot resolve an effect of this size.** D71's MDE of ~128 points is confirmed
+again. Resolving this needs a better objective — one that prices bench depth, injuries, byes and
+waiver leverage — not another value base. That remains the single highest-value next step, and
+D85 adds that it must also solve the slope problem, which no reformulation inside the current
+score shape can.
