@@ -7,6 +7,7 @@ tests/integration/test_sleeper_trending_live.py."""
 from __future__ import annotations
 
 import json
+from datetime import date, timedelta
 
 import httpx
 import pytest
@@ -109,9 +110,16 @@ class TestDetectSleeperTrending:
 
         adds = [{"count": 5000, "player_id": SLEEPER_PLAYER_ID}]
         monkeypatch.setattr(httpx, "get", _fake_get_sequence(adds, []))
+        # The opener must be dated relative to now, not hardcoded: detect_sleeper_trending
+        # dates its event `captured_at` (i.e. today), and the cutoff is strictly `<` Week 1,
+        # so a fixed date silently stops exercising this path once the wall clock reaches it.
+        # This was hardcoded to 2026-09-10 -- the real 2026 opener -- and began failing
+        # permanently on that date.
+        week1 = date.today() + timedelta(days=1)
         con.execute(
             "INSERT INTO games (game_id, season, week, game_type, game_date, home_team, away_team) "
-            "VALUES ('2026_01_AAA_BBB', 2026, 1, 'REG', '2026-09-10', 'AAA', 'BBB')"
+            "VALUES ('2026_01_AAA_BBB', 2026, 1, 'REG', ?, 'AAA', 'BBB')",
+            [week1.isoformat()],
         )
 
         detect_sleeper_trending(con, settings, season=2026, week=1)
