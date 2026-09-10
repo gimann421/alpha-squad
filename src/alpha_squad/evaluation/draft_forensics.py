@@ -1797,9 +1797,16 @@ def _pick_by_tier(
         or tier in ALL_Z_TIERS
         or tier in ALL_S_TIERS
         or tier in Q_TIERS
+        or tier in L_TIERS
     ):
         # D68/D70: identical to W1. The projections `static` carries are the treatment; the
         # replacement rule they are measured against is the shipped one, unchanged.
+        # D85: the L-tiers MUST be here. Omitting them silently reverted every L-tier to the
+        # STATIC replacement level -- the D65 defect D67 shipped to remove -- which made the
+        # D85 control score 1963.62 against Q0/Z0/S0/W1/X0's 2042.80 on the identical board.
+        # Caught by the pre-registered "L0 is byte-identical to Q0" check, which is exactly the
+        # class of silent harness defect D78 and D81 recorded. `test_l0_is_the_shipped_engine`
+        # now pins it so it cannot regress.
         # D79: the Z-tiers hold that same shipped replacement rule fixed and vary the VALUE BASE
         # instead -- the mirror image of D65-D67, which held the value base fixed and varied the
         # replacement rule.

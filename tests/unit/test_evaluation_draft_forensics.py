@@ -961,3 +961,155 @@ class TestQTiersDecisionValueBase:
 
         assert Q_TIER_SPEC["Q3"][0] == Q_TIER_SPEC["Q1"][0]
         assert Q_TIER_SPEC["Q3"][1] == Q_TIER_SPEC["Q2"][1] is True
+
+
+class TestD85LTiersLegalityVsValuation:
+    """D85's 2x2. The arms, gates and predictions are pre-registered in
+    `evaluation/decision_legality.py`; these pin the WIRING to it.
+
+    `test_l0_is_the_shipped_engine` is the load-bearing one. It exists because the first D85
+    run silently omitted the L-tiers from `dynamic_levels`, which reverted every arm to the
+    STATIC replacement level (the D65 defect D67 removed) and put the control 79 points below
+    Q0 on the identical board. Every L-tier margin measured that way was against the wrong
+    baseline."""
+
+    def test_l_tier_spec_matches_the_preregistration(self):
+        from alpha_squad.evaluation.decision_legality import L_TIER_SPEC as PRE
+        from alpha_squad.evaluation.decision_legality import LEGALITY_TIERS
+        from alpha_squad.evaluation.draft_forensics import L_TIER_SPEC, L_TIERS
+
+        assert L_TIERS == LEGALITY_TIERS
+        assert dict(PRE) == L_TIER_SPEC
+
+    def test_every_l_tier_is_described_and_draft_aware(self):
+        """The second half is what the harness defect broke: an L-tier missing from
+        `DRAFT_AWARE_REPLACEMENT_TIERS` silently scores against the static level."""
+        from alpha_squad.evaluation.draft_forensics import (
+            DRAFT_AWARE_REPLACEMENT_TIERS,
+            L_TIERS,
+            TIER_DESCRIPTIONS,
+        )
+
+        for tier in L_TIERS:
+            assert tier in TIER_DESCRIPTIONS
+            assert tier in DRAFT_AWARE_REPLACEMENT_TIERS
+
+    def test_only_l1_and_l3_enforce_legality(self):
+        from alpha_squad.evaluation.draft_forensics import TIERS_ENFORCING_LEGALITY
+
+        assert "L1" in TIERS_ENFORCING_LEGALITY
+        assert "L3" in TIERS_ENFORCING_LEGALITY
+        assert "L0" not in TIERS_ENFORCING_LEGALITY
+        assert "L2" not in TIERS_ENFORCING_LEGALITY
+
+    def test_the_legality_constraint_is_d67s_rule_unchanged(self):
+        """D85 must not invent a second legality mechanism -- W2/W3 and L1/L3 share one."""
+        from alpha_squad.evaluation.draft_forensics import (
+            TIERS_ENFORCING_LEGALITY,
+            W_TIERS_ENFORCING_LEGALITY,
+        )
+
+        assert set(W_TIERS_ENFORCING_LEGALITY) <= set(TIERS_ENFORCING_LEGALITY)
+
+    def test_l0_is_the_shipped_engine(self, con):
+        """THE control check. L0 must score identically to Q0 and Z0 candidate by candidate.
+        If it does not, every L-tier margin is measured against the wrong baseline."""
+        _seed_league_season(con, 2023)
+        league = _small_league()
+        static = load_season_static(con, league, 2023)
+        available = set(static.projections)
+        for player_id in sorted(available):
+            kwargs = dict(
+                available=available,
+                current_pick_overall=1,
+                next_pick_overall=5,
+                roster_player_ids=[],
+            )
+            l0 = score_candidate(static, player_id, league, [], "L0", **kwargs)
+            q0 = score_candidate(static, player_id, league, [], "Q0", **kwargs)
+            z0 = score_candidate(static, player_id, league, [], "Z0", **kwargs)
+            assert (l0 is None) == (q0 is None) == (z0 is None)
+            if l0 is not None:
+                assert l0.score == pytest.approx(q0.score, abs=1e-9), player_id
+                assert l0.score == pytest.approx(z0.score, abs=1e-9), player_id
+
+    def test_l1_scores_identically_to_l0(self, con):
+        """The legality constraint is a restriction on candidate ELIGIBILITY, applied in
+        `_pick_by_tier`. It must not change any candidate's VALUE -- if L1 and L0 ever score
+        differently, the constraint has leaked into the valuation and the 2x2 is confounded."""
+        _seed_league_season(con, 2023)
+        league = _small_league()
+        static = load_season_static(con, league, 2023)
+        available = set(static.projections)
+        for player_id in sorted(available):
+            kwargs = dict(
+                available=available,
+                current_pick_overall=1,
+                next_pick_overall=5,
+                roster_player_ids=[],
+            )
+            l0 = score_candidate(static, player_id, league, [], "L0", **kwargs)
+            l1 = score_candidate(static, player_id, league, [], "L1", **kwargs)
+            assert (l0 is None) == (l1 is None)
+            if l0 is not None:
+                assert l0.score == pytest.approx(l1.score, abs=1e-9), player_id
+
+    def test_l2_scores_identically_to_l3_and_to_d84s_q1(self, con):
+        """The valuation half of the 2x2 must be D84's arm C exactly, and must not depend on
+        whether the legality constraint is switched on."""
+        _seed_league_season(con, 2023)
+        league = _small_league()
+        static = load_season_static(con, league, 2023)
+        available = set(static.projections)
+        # `_pick_by_tier` hoists this per pick; calling `score_candidate` directly means
+        # supplying it, and the tier RAISES rather than silently degrading if it is missing.
+        from alpha_squad.league.replacement import replacement_marginal_starter_values
+
+        replacement_msv = replacement_marginal_starter_values(
+            league, [], static.projections, static.positions, static.replacement_levels
+        )
+        for player_id in sorted(available):
+            kwargs = dict(
+                available=available,
+                current_pick_overall=1,
+                next_pick_overall=5,
+                roster_player_ids=[],
+                replacement_msv=replacement_msv,
+            )
+            l2 = score_candidate(static, player_id, league, [], "L2", **kwargs)
+            l3 = score_candidate(static, player_id, league, [], "L3", **kwargs)
+            q1 = score_candidate(static, player_id, league, [], "Q1", **kwargs)
+            assert (l2 is None) == (l3 is None) == (q1 is None)
+            if l2 is not None:
+                assert l2.score == pytest.approx(l3.score, abs=1e-9), player_id
+                assert l2.score == pytest.approx(q1.score, abs=1e-9), player_id
+
+    def test_the_corrected_value_base_still_has_slope_two_in_the_projection(self):
+        """D85's central algebraic finding. At an empty slot `msv == proj`, so
+
+            Y1   = proj + (proj - R)     = 2*proj - R
+            armC = (proj - R) + (proj-R) = 2*proj - 2R
+
+        Both have d(value_base)/d(proj) = 2: arm C subtracts a per-position CONSTANT and does
+        NOT reduce the decision layer's amplification of projection error. Only the
+        single-surplus forms (daVORP alone, msv_over_replacement alone) have unit slope, and
+        those are exactly the ones already measured and rejected three times."""
+        R = 96.0
+
+        def y1(proj):
+            return proj + (proj - R)
+
+        def arm_c(proj):
+            return (proj - R) + (proj - R)
+
+        def single(proj):
+            return proj - R
+
+        for lo, hi in ((200.0, 210.0), (240.0, 280.0)):
+            assert (y1(hi) - y1(lo)) / (hi - lo) == pytest.approx(2.0)
+            assert (arm_c(hi) - arm_c(lo)) / (hi - lo) == pytest.approx(2.0)
+            assert (single(hi) - single(lo)) / (hi - lo) == pytest.approx(1.0)
+
+        # And the difference between them is exactly the replacement level, at every projection.
+        for proj in (150.0, 200.0, 300.0):
+            assert y1(proj) - arm_c(proj) == pytest.approx(R)
