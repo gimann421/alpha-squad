@@ -273,7 +273,7 @@ def expected_weekly_starter_points(
     positions: dict[str, str],
     rates: dict[str, float],
     *,
-    n_draws: int = DEFAULT_AVAILABILITY_DRAWS,
+    n_draws: int | None = None,
 ) -> float:
     """`E[ weekly lineup value ]` for a roster, per week, under independent availability.
 
@@ -286,6 +286,7 @@ def expected_weekly_starter_points(
     bye correlation properly needs a schedule join; the effect is to make depth slightly MORE
     valuable than this estimate, so the approximation is conservative in the direction that
     matters for the conclusion."""
+    n_draws = DEFAULT_AVAILABILITY_DRAWS if n_draws is None else n_draws
     single_team = league.model_copy(update={"teams": 1})
     total = 0.0
     for draw in range(n_draws):
@@ -311,7 +312,7 @@ def expected_weekly_marginal_value(
     positions: dict[str, str],
     rates: dict[str, float],
     *,
-    n_draws: int = DEFAULT_AVAILABILITY_DRAWS,
+    n_draws: int | None = None,
     base: float | None = None,
 ) -> float:
     """The availability-aware replacement for `marginal_starter_value`.
