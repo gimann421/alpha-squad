@@ -66,6 +66,11 @@ from alpha_squad.evaluation.replacement_diagnostics import (
     consumption_replacement,
     mock_draft_consumption_demand,
 )
+from alpha_squad.evaluation.weekly_objective import (
+    expected_weekly_marginal_value,
+    expected_weekly_starter_points,
+    measure_availability_rates,
+)
 from alpha_squad.league.context import LeagueContext
 from alpha_squad.league.draft import recommend_draft_pick
 from alpha_squad.league.opportunity_cost import (
@@ -173,6 +178,8 @@ Tier = Literal[
     "L1",
     "L2",
     "L3",
+    "O0",
+    "O1",
 ]
 ALL_TIERS: tuple[Tier, ...] = ("A", "B", "C", "D", "E", "F", "G", "H")
 
@@ -744,6 +751,29 @@ L_TIER_SPEC: dict[Tier, tuple[str, bool]] = dict(DECISION_L_TIER_SPEC)
 
 PREREGISTERED_L_CONTROL: Tier = "L0"
 
+
+# --- O-tiers (D86): the OBJECTIVE, not the value base --------------------------------------
+# Arms, metrics, gates, selection rule and predictions Q1-Q6 are pre-registered in
+# `evaluation/objective_candidates.py`, committed before any O-tier ran. This block is wiring.
+#
+# D85 closed the value-base seam: nine reformulations of `value_base`, all failed, and the slope
+# problem is structural. So these tiers change NOTHING about the value base's algebra -- they
+# change what its marginal-value half is an expectation OF. `marginal_starter_value` assumes
+# every rostered player plays every week, which is why it equals `proj` at an empty slot and
+# exactly `0` at a saturated one. `expected_weekly_marginal_value` computes the same quantity
+# under MEASURED per-position availability, so a bench player is worth what the data says he is
+# worth and no bench bonus exists anywhere.
+#
+#   O0 = control, the shipped engine (asserted identical to L0/Q0/Z0)
+#   O1 = E[weekly msv] + 1.0*daVORP; daVORP, opportunity cost, roster fit, confidence, survival
+#        and the feasibility cap are all UNCHANGED
+O_TIERS: tuple[Tier, ...] = ("O0", "O1")
+
+#: {tier: use availability-aware marginal value}
+O_TIER_SPEC: dict[Tier, bool] = {"O0": False, "O1": True}
+
+PREREGISTERED_O_CONTROL: Tier = "O0"
+
 #: Every tier scored as "N4, except VORP may use a draft-aware replacement level". V- and
 #: W-tiers share the scoring branch verbatim so a difference between them is attributable to the
 #: demand target (and, for W2/W3, the legality constraint) and nothing else.
@@ -756,6 +786,7 @@ DRAFT_AWARE_REPLACEMENT_TIERS: tuple[Tier, ...] = (
     *ALL_S_TIERS,
     *Q_TIERS,
     *L_TIERS,
+    *O_TIERS,
 )
 
 #: Tiers that enforce the endgame mandatory-slot reservation, as a hard restriction on the
@@ -918,6 +949,8 @@ TIER_DESCRIPTIONS: dict[Tier, str] = {
     "Y1": "D70: W1 with RB projections from a walk-forward refit adding preseason-knowable "
     "availability features (F1-F4); QB/WR/TE/K/DST unchanged from control",
     # Z-tiers (D79): D67's draft-aware replacement held FIXED, only the value base varies.
+    "O0": "D86 control: the shipped Y1 engine. Byte-identical to L0/Q0/Z0",
+    "O1": "D86: availability-aware marginal value (E[weekly msv]) + 1.0*daVORP",
     "L0": "D85 control: the shipped Y1 engine, no legality constraint. Byte-identical to Q0/Z0",
     "L1": "D85: endgame mandatory-slot legality constraint ALONE, on the shipped valuation",
     "L2": "D85: arm C valuation ALONE (msv_over_replacement + 1.0*daVORP) -- reproduces Q1",
@@ -975,6 +1008,11 @@ class SeasonStatic:
     # exactly like `market_rank` and `vorp` -- computing it per pick would run a whole mock draft
     # 160 times per draft. Diagnostic only; the W-tiers are its sole consumer.
     consumption_demand: dict[str, float] = field(default_factory=dict)
+    # D86: {position: fraction of fantasy weeks a draftable player was available}, measured on
+    # seasons STRICTLY BEFORE `season` -- walk-forward by construction, so an O-tier draft for
+    # 2024 cannot see 2024's injuries. Empty for seasons with no prior data; the O1 tier raises
+    # rather than defaulting, so an empty dict fails loudly instead of silently becoming O0.
+    availability_rates: dict[str, float] = field(default_factory=dict)
 
 
 def _normalize(values: dict[str, float]) -> dict[str, float]:
@@ -1011,6 +1049,11 @@ def load_season_static(
     scarcity_raw = positional_scarcity(league, projections, positions)
     scarcity_norm = _normalize(scarcity_raw)
     market_rank = _preseason_overall_market(con, ecr_type, season)
+    # D86: measured on prior seasons only. `measure_availability_rates` returns {} for a
+    # position with no data, and the O1 tier raises on an empty dict rather than defaulting.
+    availability_rates = measure_availability_rates(
+        con, tuple(range(max(2015, season - 5), season))
+    )
 
     conf_rows = con.execute(
         "SELECT player_id, confidence FROM uncertainty_predictions "
@@ -1048,6 +1091,7 @@ def load_season_static(
         consumption_demand=mock_draft_consumption_demand(
             league, market_rank, projections, positions
         ),
+        availability_rates=availability_rates,
     )
 
 
@@ -1156,6 +1200,8 @@ def score_candidate(
     replacement_msv: dict[str, float] | None = None,
     saturation_factors: dict[str, float] | None = None,
     dynamic_levels: dict[str, float] | None = None,
+    availability_rates: dict[str, float] | None = None,
+    expected_weekly_base: float | None = None,
 ) -> CandidateScore | None:
     position = static.positions.get(player_id)
     if position is None or player_id not in static.vorp:
@@ -1203,14 +1249,34 @@ def score_candidate(
             next_pick_overall,
             opportunity_costs,
         )
-        msv = marginal_starter_value(
-            league,
-            roster_player_ids or [],
-            player_id,
-            static.projections,
-            static.positions,
-            base_points=base_lineup_points,
-        )
+        if tier in O_TIERS and O_TIER_SPEC[tier]:
+            # D86. Same marginal-value question, asked under measured availability instead of
+            # under "everyone plays 17 weeks". RAISE rather than default if the rates were not
+            # hoisted: without them this silently degrades to the control while still reporting
+            # itself as O1 -- the D78/D81/D85 failure mode.
+            if availability_rates is None:
+                raise RuntimeError(
+                    f"tier {tier} needs `availability_rates`; without them the value base "
+                    "silently degrades to the control and the tier measures nothing"
+                )
+            msv = expected_weekly_marginal_value(
+                league,
+                roster_player_ids or [],
+                player_id,
+                static.projections,
+                static.positions,
+                availability_rates,
+                base=expected_weekly_base,
+            )
+        else:
+            msv = marginal_starter_value(
+                league,
+                roster_player_ids or [],
+                player_id,
+                static.projections,
+                static.positions,
+                base_points=base_lineup_points,
+            )
         if dynamic_levels is None:
             vorp_term = vorp
         else:
@@ -1273,6 +1339,13 @@ def score_candidate(
             else:  # msv_plus_weighted_vorp -- the control
                 value_base = msv + DECISION_ARM_VORP_WEIGHT * vorp_term
             reasons.append(f"value_base={base_name} {value_base:+.1f} pts")
+        elif tier in O_TIERS:
+            # The D63 sum, unchanged. Only `msv` above differs between O0 and O1.
+            value_base = msv + DECISION_ARM_VORP_WEIGHT * vorp_term
+            reasons.append(
+                f"value_base={'E[weekly]' if O_TIER_SPEC[tier] else 'msv'}+vorp "
+                f"{value_base:+.1f} pts"
+            )
         elif tier in L_TIERS:
             # D85. The VALUE half of the 2x2 is exactly D84's: L0/L1 carry the shipped base,
             # L2/L3 carry arm C's. The LEGALITY half is not scored here at all -- it is a
@@ -1891,6 +1964,25 @@ def _pick_by_tier(
             candidate_positions,
         )
 
+    # D86: E[weekly lineup value] of the CURRENT roster -- the subtrahend in O1's marginal
+    # value. Depends only on the roster, so it is hoisted out of the per-candidate loop exactly
+    # like `base_lineup_points` above; recomputing it per candidate would multiply the Monte
+    # Carlo cost by the size of the board.
+    expected_weekly_base = None
+    if tier in O_TIERS and O_TIER_SPEC[tier]:
+        if not static.availability_rates:
+            raise RuntimeError(
+                f"tier {tier} needs measured availability rates and this season's static has "
+                "none (no prior seasons?); refusing to default them"
+            )
+        expected_weekly_base = expected_weekly_starter_points(
+            league,
+            roster_player_ids or [],
+            static.projections,
+            static.positions,
+            static.availability_rates,
+        )
+
     scored = []
     for player_id in available:
         s = score_candidate(
@@ -1908,6 +2000,8 @@ def _pick_by_tier(
             replacement_msv=replacement_msv,
             saturation_factors=saturation_factors,
             dynamic_levels=dynamic_levels,
+            availability_rates=static.availability_rates or None,
+            expected_weekly_base=expected_weekly_base,
         )
         if s is not None:
             scored.append(s)

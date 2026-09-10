@@ -1113,3 +1113,104 @@ class TestD85LTiersLegalityVsValuation:
         # And the difference between them is exactly the replacement level, at every projection.
         for proj in (150.0, 200.0, 300.0):
             assert y1(proj) - arm_c(proj) == pytest.approx(R)
+
+
+class TestD86OTiersObjective:
+    """D86's objective arms. Pre-registered in `evaluation/objective_candidates.py`.
+
+    `test_o0_is_the_shipped_engine` is the control check that caught D85's silent harness defect
+    (L-tiers omitted from the draft-aware replacement dispatch); the same class of mistake would
+    make every O-tier margin measure the wrong baseline."""
+
+    def test_o_tier_spec_matches_the_preregistration(self):
+        from alpha_squad.evaluation.draft_forensics import O_TIER_SPEC, O_TIERS
+        from alpha_squad.evaluation.objective_candidates import ARMS, PREREGISTERED_CONTROL
+
+        assert O_TIERS == ARMS
+        assert O_TIER_SPEC[PREREGISTERED_CONTROL] is False
+        assert O_TIER_SPEC["O1"] is True
+
+    def test_every_o_tier_is_described_and_draft_aware(self):
+        from alpha_squad.evaluation.draft_forensics import (
+            DRAFT_AWARE_REPLACEMENT_TIERS,
+            O_TIERS,
+            TIER_DESCRIPTIONS,
+        )
+
+        for tier in O_TIERS:
+            assert tier in TIER_DESCRIPTIONS
+            assert tier in DRAFT_AWARE_REPLACEMENT_TIERS
+
+    def test_o0_is_the_shipped_engine(self, con):
+        """THE control check. O0 must score identically to L0/Q0/Z0, candidate by candidate."""
+        _seed_league_season(con, 2023)
+        league = _small_league()
+        static = load_season_static(con, league, 2023)
+        available = set(static.projections)
+        for player_id in sorted(available):
+            kwargs = dict(
+                available=available,
+                current_pick_overall=1,
+                next_pick_overall=5,
+                roster_player_ids=[],
+            )
+            o0 = score_candidate(static, player_id, league, [], "O0", **kwargs)
+            l0 = score_candidate(static, player_id, league, [], "L0", **kwargs)
+            z0 = score_candidate(static, player_id, league, [], "Z0", **kwargs)
+            assert (o0 is None) == (l0 is None) == (z0 is None)
+            if o0 is not None:
+                assert o0.score == pytest.approx(l0.score, abs=1e-9), player_id
+                assert o0.score == pytest.approx(z0.score, abs=1e-9), player_id
+
+    def test_o1_raises_rather_than_silently_degrading_without_rates(self, con):
+        """The D78/D81/D85 failure mode: an arm that reports itself as running while quietly
+        measuring the control. Without availability rates O1 must fail loudly."""
+        _seed_league_season(con, 2023)
+        league = _small_league()
+        static = load_season_static(con, league, 2023)
+        with pytest.raises(RuntimeError, match="availability_rates"):
+            score_candidate(
+                static,
+                sorted(static.projections)[0],
+                league,
+                [],
+                "O1",
+                available=set(static.projections),
+                current_pick_overall=1,
+                next_pick_overall=5,
+                roster_player_ids=[],
+                availability_rates=None,
+            )
+
+    def test_o1_prices_a_saturated_position_above_zero(self, con):
+        """The whole point. At a position whose startable slots are full the shipped MSV is
+        exactly 0; O1 must be positive, because the starter ahead is absent some weeks."""
+        _seed_league_season(con, 2023)
+        league = _small_league()
+        static = load_season_static(con, league, 2023)
+        rates = {p: 0.85 for p in ("QB", "RB", "WR", "TE")}
+        # fill every startable QB slot (this league has QB: 1 and no superflex)
+        roster = ["QB_0"]
+        candidate = "QB_1"
+        kwargs = dict(
+            available=set(static.projections),
+            current_pick_overall=5,
+            next_pick_overall=9,
+            roster_player_ids=roster,
+        )
+        shipped = score_candidate(static, candidate, league, ["QB"], "O0", **kwargs)
+        aware = score_candidate(
+            static, candidate, league, ["QB"], "O1", availability_rates=rates, **kwargs
+        )
+        assert shipped.marginal_starter_value == pytest.approx(0.0, abs=1e-9)
+        assert aware.marginal_starter_value > 0.0
+
+    def test_availability_rates_on_static_are_walk_forward(self, con):
+        """A draft for season S must never see S's own injuries. The rates are measured from
+        seasons strictly before S, so a season with no prior data gets an EMPTY dict rather than
+        a fabricated one -- and O1 then raises."""
+        _seed_league_season(con, 2023)
+        league = _small_league()
+        static = load_season_static(con, league, 2023)
+        # the fixture seeds no weekly rows at all, so there is nothing to measure
+        assert static.availability_rates == {}
