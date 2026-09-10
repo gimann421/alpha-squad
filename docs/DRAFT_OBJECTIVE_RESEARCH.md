@@ -347,3 +347,203 @@ winner in the same step.
 Not proposed, each with the evidence excluding it: any value-base algebra change (D85, nine
 failures, structural slope problem); a waiver replacement level (§6, unmeasurable); a risk term
 (§8); any bench or positional bonus (the brief — and O1 needs none, which is the test).
+
+---
+
+## 11. Historical results — the pre-registered O-tier evaluation
+
+5 seasons × 4 draft slots × 2 formats, fair roster-aware opponents. **Scope note:** 4 slots
+rather than 10 (the same slots the oracle audited). O1 costs ~180× a control pick, so the full
+10-slot grid is ~3 h per format. The pre-registered `n_draws = 200` was **not** changed — it was
+verified precise to 1.44 points against an n=800 reference.
+
+### Target format (10-team 1-QB PPR)
+
+| tier | weekly (no foresight) — **primary** | weekly (hindsight) | season-long | bench pts | infeasible |
+|---|---|---|---|---|---|
+| **O0** control | 1924.5 | 2100.5 | 1967.1 | 400.4 | 0 |
+| **O1** | **1977.3** | **2175.2** | **2001.6** | 424.2 | 0 |
+| **Δ** | **+52.9** | **+74.7** | **+34.5** | +23.8 | — |
+
+Per season: 2021 **+71.0**, 2022 −14.6, 2023 +18.4, 2024 **+102.2**, 2025 **+87.5** — 1 of 5
+worse. Leave-one-season-out: all five positive (+40.6 … +69.8). Season-clustered 95% CI
+**[−8.3, +114.0]**.
+
+| tier | 1st QB | 1st RB | 1st WR | 1st TE | 1st K | 1st DST | nQB | nRB | nWR | nTE | **nK** | nDST |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| O0 | 2.30 | 4.25 | 1.70 | 6.35 | 7.90 | 9.95 | 1.75 | 2.10 | 4.50 | 1.90 | **3.70** | 2.05 |
+| O1 | 2.30 | 4.25 | 1.70 | 6.55 | 7.80 | 10.45 | 1.45 | **2.50** | 4.60 | **2.85** | **2.60** | 2.00 |
+
+### Legacy 2QB dynasty (no K, no DEF slots)
+
+| tier | weekly (no foresight) | weekly (hindsight) | season-long |
+|---|---|---|---|
+| O0 | 2207.3 | 2480.0 | 2151.4 |
+| O1 | 2208.8 | 2499.7 | 2170.8 |
+| **Δ** | **+1.6** | +19.7 | +19.3 |
+
+Per season: −55.5, +28.9, +39.7, +38.5, −43.7 — 2 of 5 worse. CI **[−56.9, +60.1]**.
+
+### Gates
+
+| gate | target | legacy |
+|---|---|---|
+| G2 infeasibility | ok (0 vs 0) | ok |
+| G3 ≤1 season worse | ok (1/5) | **FAIL** (2/5) |
+| G6 leave-one-season-out | ok (all +) | **FAIL** |
+| **G7 cross-format sign** | **ok — POSITIVE IN BOTH (+52.9 / +1.6)** | — |
+| G8 clustered CI excludes 0 | **FAIL** [−8.3, +114.0] | **FAIL** |
+| G9 margin ≥ 25 | ok (+52.9) | **FAIL** (+1.6) |
+| G10 season-long not worse than −25 | ok (**+34.5**) | ok (+19.3) |
+
+**Verdict: DO NOT SHIP.** In the target format only G8 fails; in `legacy_2qb_dynasty` the arm is
+an effective null and fails four gates.
+
+**This is nonetheless the strongest draft-layer result this project has produced.** It is the
+first candidate in nine to (a) improve *both* metrics, (b) keep the same sign in both formats,
+and (c) survive leave-one-season-out in the target format. Every previous candidate flipped sign
+across formats or lost outright.
+
+### Why it helps where it helps
+
+The target-format gain is concentrated in one mechanism: **kickers drafted falls 3.70 → 2.60**,
+with RB 2.10 → 2.50 and TE 1.90 → 2.85. `legacy_2qb_dynasty` has **no K and no DEF slots at
+all** — so the mechanism has almost nothing to act on there, and the +1.6 null is exactly what
+the mechanism predicts rather than a contradiction of it.
+
+### Predictions vs outcomes
+
+| | prediction | outcome |
+|---|---|---|
+| **Q1** | O1 defers first K by 1.5+ rounds, first DST by 2+ | **WRONG.** First K 7.90 → 7.80, first DST 9.95 → 10.45. O1 does not take the first kicker later — it stops **hoarding** them (3.70 → 2.60). A different mechanism than predicted. |
+| **Q2** | more RB depth, fewer K/DST | **CORRECT** (RB 2.10 → 2.50, K 3.70 → 2.60); TE also rose 1.90 → 2.85, which was not predicted |
+| **Q3** | O1 beats O0 on the weekly metric | **CORRECT** (+52.9) |
+| **Q4** | O1 neutral-to-negative on season-long | **WRONG, favourably** — +34.5, comfortably positive, so G10 passes rather than being the failure route |
+| **Q5** | most likely outcome is nothing ships, on G8 | **CORRECT** |
+| **Q6** | lookahead changes few picks | **WRONG** — 27% disagreement |
+
+Four of six predictions missed. Recorded as misses, not reinterpreted.
+
+---
+
+## 12. The 2026 board — #1 / #20 / #21
+
+Draft slot 1, whose first three picks are overall #1, #20, #21.
+
+| pick | Y1 (O0) | availability-aware (O1) |
+|---|---|---|
+| **#1** | Amon-Ra St. Brown (WR) | **identical** |
+| **#20** | Josh Allen (QB) | **identical** |
+| **#21** | Trey McBride (TE) | **identical** |
+
+**O1 does not change the opening at all on the 2026 board.** The entire difference is in the
+endgame:
+
+| | Y1 | O1 |
+|---|---|---|
+| composition | WR 5, QB 1, TE 2, RB 2, **K 4**, DST 2 | WR 5, QB 1, **TE 3**, **RB 3**, **K 2**, DST 2 |
+| rounds 11–16 | K, WR, TE, DST, **K**, **K** | TE, K, WR, DST, **RB**, **TE** |
+| first K / DST | r9 / r10 | r9 / r10 (**unchanged**) |
+
+Y1 drafts **four kickers** on this board. O1 replaces the third and fourth with a running back and
+a tight end, and takes the first kicker at exactly the same time. The elite RBs, the rookies and
+the QB timing are untouched.
+
+---
+
+## 13. Computational cost
+
+| | per pick | 16-pick draft |
+|---|---|---|
+| O0 (shipped) | **0.03 s** | ~0.5 s |
+| O1, full board (596 candidates) | **6.26 s** | ~100 s |
+| **O1, K=40 shortlist** | **0.51 s** | **~7 s** |
+
+The naive form is **180×** the control. But the expensive objective only needs to run on
+candidates that could plausibly win: computing the cheap shipped score for the whole board and
+re-scoring only the top K under the availability model reproduces the **identical pick and the
+identical top five** at every K tested (20, 40, 80, 160).
+
+**A K=40 shortlist is 12× faster than the full form and production-feasible** (~7 s for a whole
+draft, ~0.5 s for a single recommendation). Memory is unchanged; the estimator is reproducible
+across processes by construction (common random numbers on a non-salted hash).
+
+---
+
+## 14. Ship / do not ship
+
+**DO NOT SHIP.** `league/draft.py` stays byte-identical to Y1.
+
+O1 fails **G8** in both formats and fails G3/G6/G9 in `legacy_2qb_dynasty`. The pre-registered
+selection rule requires every gate.
+
+What is different from the eight previous failures, and worth recording: the point estimate is
+positive on **both** metrics and in **both** formats, LOSO survives in the target format, and the
+mechanism is a measured availability rate rather than a tuned constant. This is a near miss rather
+than a refutation — but a near miss does not ship, and the rule was fixed in advance precisely so
+that a near miss could not be talked into shipping afterwards.
+
+---
+
+## 15. Most promising next architecture
+
+**More slots, not more terms.** The target-format CI is **[−8.3, +114.0]** — it excludes zero on
+one side by 8 points. This evaluation ran 4 draft slots because O1 costs 180× the control; the
+K=40 shortlist (§13) removes that constraint entirely. **Re-running the identical, already
+pre-registered arm at the full 10 slots is the single highest-value next step, and it requires no
+new idea.** It is the first time in this project's history that the honest recommendation is
+"measure the same thing again with more power" rather than "try a different formula".
+
+Two supporting directions, in order:
+
+1. **Model bye-week correlation.** Availability is currently independent per player; real byes
+   take a whole team out at once. That makes depth *more* valuable, so the current estimate is
+   conservative — the effect can only help O1.
+2. **Get transaction data.** §6 shows streaming optionality is real and largest at exactly the
+   positions the engine over-drafts, and it is the one material value source this database cannot
+   measure at all.
+
+**Not recommended:** another value-base reformulation (nine failures, structural slope problem —
+D85), a lookahead optimizer (27% disagreement but the structural headroom is ~90 points, below the
+instrument's resolution), or any projection work (D79–D83 closed it).
+
+---
+
+## 16. Trust assessment — plain English
+
+> **"Does Alpha fundamentally need a better objective, or are the remaining weaknesses primarily
+> projection/data limitations?"**
+
+**It needs a better objective, and the better objective has now been specified and measured — but
+the honest answer is that neither a better objective nor better projections is the binding
+constraint. The binding constraint is that fantasy football is mostly luck, and the benchmark
+cannot resolve what remains.**
+
+Three numbers carry that conclusion:
+
+* **One pick moves the final roster by about 2.6%** (1 SD = 53.2 points of ~2036). Across ~20
+  plausible candidates the whole spread is 191 points, and it shrinks every round.
+* **About 90% of the gap to a retrospectively optimal pick is luck** — the oracle's advantage is
+  almost entirely that its player scored more (104.1 of 116.2 points), and Alpha's score has
+  essentially **zero** rank correlation (−0.03) with final realized roster value.
+* **The structural headroom — the part a better objective could actually reach — is ~90 points per
+  draft**, from just 5% of picks. D71's minimum detectable effect for this benchmark is ~128
+  points. **The prize is smaller than the ruler.**
+
+So the objective *was* genuinely wrong, in a way nobody had named: it scores season totals and
+therefore prices the bench at zero, when the bench supplies **17.8%** of realized points and a
+bench player starts in **16.2 of 17 weeks**. Fixing that is worth about **+53** points in the
+target format — real, the right sign in both formats and on both metrics, and still inside the
+noise band.
+
+**What this changes about trusting Alpha at pick #1 in a real 10-team 1-QB league.** Nothing at the
+top: on the 2026 board the availability-aware objective makes the **identical** picks at #1, #20
+and #21. What it changes is the endgame — Y1 drafts **four kickers** on that board, and the
+corrected objective drafts two, spending the other two picks on a running back and a tight end.
+That is the concrete, defensible advice this phase produces, and a human can apply it without any
+code change: **take the kicker you need, then stop.**
+
+Everything D85 said about the top of the board still stands unchanged: trust Alpha to field a
+legal roster and to beat naive strategies by a wide margin; do not trust its elite-RB valuation
+(it under-projects them ~48 points and needs ~75 to act); and do not trust any claim that it beats
+a good human with FantasyPros open, because that margin has never had a stable sign.

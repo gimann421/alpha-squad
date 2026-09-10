@@ -3,7 +3,39 @@
 Living summary of what is implemented, validated, and outstanding. Updated at the end of every
 milestone. See `docs/TRACEABILITY.md` for the acceptance-criteria-level mapping.
 
-## Status: M37 complete (D85) — **economic valuation and roster legality are already separate; the value-base correction is mathematically right, behaviourally correct in every format, and unshippable. Nothing shipped.**
+## Status: M38 complete (D86) — **the objective itself was wrong: it scores season totals and therefore prices the bench at zero, when the bench supplies 17.8% of realized points. The fix is real, generalises, and still fails the gates. Nothing shipped.**
+
+D85 closed the value-base seam. D86 asked the prior question — *what should Alpha optimize?* — and
+found the defect is the **metric**, not the formula. Every published draft number scores a roster
+from season totals with one lineup allocation; fantasy scores weekly, so the incumbent objective
+cannot see a bye, cannot see an injury, and gives the bench a value of exactly zero. Measured:
+bench = **17.8%** of realized points (no-foresight lineups), and a bench player starts in **16.2 of
+17 weeks**. Full report: `docs/DRAFT_OBJECTIVE_RESEARCH.md`.
+
+**A retrospective oracle over 320 real pick states decides the phase.** ~90% of the gap to a
+retrospectively optimal pick is luck (realized-points gap 104.1 of 116.2 mean regret; Spearman of
+Alpha's score against final realized roster value = **−0.033**). **One pick moves the final roster
+by ~2.6%.** The *structural* residual — picks where the oracle's player scored no more and still
+won — is 16 of 320 and worth **~90 points per draft**, against D71's ~128-point minimum detectable
+effect. **The prize is smaller than the ruler.**
+
+**The candidate is the strongest this project has produced and still does not ship.** O1
+(`E[weekly msv] + daVORP`, availability rates measured walk-forward, no bonus anywhere) scores
+**+52.9** on the primary weekly metric and **+34.5** season-long in the target format, cuts kickers
+drafted from **3.70 to 2.60**, and is the first candidate in nine to keep the same sign in both
+formats. It fails **G8 alone** in the target format (CI [−8.3, +114.0]) and is an effective null in
+`legacy_2qb_dynasty`, which has no K/DEF slots for the mechanism to act on. On the 2026 board it
+makes the **identical** picks at #1/#20/#21 and replaces Y1's third and fourth kickers with a RB
+and a TE.
+
+Four of six pre-registered predictions missed and are recorded as misses. Replacement level is
+**validated** rather than changed (the incumbent tracks the no-foresight waiver replacement at
+every position; streaming is real but unmeasurable — there is no transaction history). O1 costs
+180× a control pick naively, but a **K=40 shortlist reproduces the identical pick at ~7s per
+draft**, which is production-feasible — and which makes **re-running the identical pre-registered
+arm at the full 10 slots** the highest-value next step, requiring no new idea.
+
+### Earlier status: M37 complete (D85) — **economic valuation and roster legality are already separate; the value-base correction is mathematically right, behaviourally correct in every format, and unshippable. Nothing shipped.**
 
 D84 closed by naming one remaining direction: roster legality as a hard constraint on the
 candidate pool, measured **jointly** with its arm C, because "the double count and the legality

@@ -5975,3 +5975,113 @@ again. Resolving this needs a better objective — one that prices bench depth, 
 waiver leverage — not another value base. That remains the single highest-value next step, and
 D85 adds that it must also solve the slope problem, which no reformulation inside the current
 score shape can.
+
+---
+
+## D86 — The objective WAS wrong (it prices the bench at zero), the fix is real and generalises, and the prize is smaller than the ruler. Nothing ships.
+
+*Branch `claude/separate-valuation-legality-4tw82o`. Pre-registration `8c309d9` before any
+candidate ran. Instruments: `evaluation/draft_oracle.py` (`47ce0f1`),
+`evaluation/weekly_objective.py` (`ee59634`). Full report:
+`docs/DRAFT_OBJECTIVE_RESEARCH.md`. **`league/` and `models/` byte-identical to Y1.***
+
+D85 closed the value-base seam (nine reformulations, all failed, slope problem structural). D86
+asked the prior question: *what should Alpha optimize at all?*
+
+### 1. The incumbent OBJECTIVE, not the value base, is the defect
+
+Every published draft number scores a roster from **season totals** with one lineup allocation.
+Fantasy scores **weekly**. So the incumbent metric cannot see a bye, cannot see an injury, and
+therefore **prices the bench at exactly zero**. Measured on the rosters Alpha actually drafts:
+
+| | |
+|---|---|
+| season-long (incumbent) | 2036.2 |
+| weekly, no-foresight lineups | 2017.3 |
+| **bench share of realized points (no foresight)** | **17.8%** (358.5 pts) |
+| weeks a bench player started | **16.2 of 17** |
+
+The *level* is roughly right; the *composition* is not. No new data is needed: a bye and an injury
+are both a missing `player_week_stats` row.
+
+### 2. Availability is measurable, and it prices depth with no positional rule
+
+Draftable-player availability 2021-2025: QB 88.2%, RB 85.3%, WR 86.1%, TE 87.3%, K 93.6%,
+DST 94.0%. On a saturated roster the shipped MSV returns exactly 0.0 for every backup;
+`expected_weekly_marginal_value` returns **RB 207.2, WR 79.2, TE 69.8, QB 34.1, K 9.1, DST 5.9**.
+The K/DST over-draft five phases could only fix with an arbitrary round rule falls out of an
+availability rate.
+
+### 3. THE ORACLE -- 320 real pick states, and the number that decides the phase
+
+`draft_oracle.py` rolls the rest of the draft out with the shipped policy and scores on realized
+points; outcomes touch nothing but the final scoring (enforced by signature inspection).
+
+| | mean regret |
+|---|---|
+| **Alpha's pick** | **116.2** |
+| a random pick from the same slate | 122.3 |
+| the highest-projection pick | 144.6 |
+
+Alpha captures only ~5% of the random-to-perfect gap, though it beats best-by-projection by 28.4.
+**~90% of the regret is luck** (realized-points gap 104.1 of 116.2; Spearman(score, final roster
+value) = **-0.033**).
+
+**One pick moves the final roster by ~2.6%** (1 SD = 53.2 of 2036), decaying from 343.7 spread in
+round 1 to 113.0 in round 16. The **structural** residual -- picks where the oracle's player scored
+NO MORE and still won -- is **16 of 320 (5%)**, worth **~90 points per draft (upper bound)**.
+D71's minimum detectable effect is ~128 points. **The prize is smaller than the ruler.** Its
+dominant pattern is Alpha taking a QB where the oracle wanted a RB (6) or WR (3) -- the RB and
+QB-timing problems are one error seen from two sides, established here without any projection.
+
+### 4. Result: the best draft-layer candidate this project has produced, and it still fails
+
+O1 = `E[weekly msv] + 1.0*daVORP`; everything else shipped. 5 seasons x 4 slots x 2 formats.
+
+| format | primary (weekly, no foresight) | season-long | seasons worse | clustered 95% CI |
+|---|---|---|---|---|
+| target 1QB | **+52.9** | **+34.5** | 1/5 | **[-8.3, +114.0]** |
+| legacy 2QB dynasty | +1.6 | +19.3 | 2/5 | [-56.9, +60.1] |
+
+Positional: **kickers drafted 3.70 -> 2.60**, RB 2.10 -> 2.50, TE 1.90 -> 2.85; first-K round
+essentially unchanged (7.90 -> 7.80). On the 2026 board O1 makes the **identical** picks at #1,
+#20 and #21 and replaces Y1's third and fourth kickers with a RB and a TE.
+
+**DO NOT SHIP.** Target format fails G8 alone; legacy fails G3/G6/G8/G9. But this is the first
+candidate in nine to improve **both** metrics, keep the **same sign in both formats** (G7 passes,
+where D85's arm C flipped) and survive LOSO in the target format. The legacy null is what the
+mechanism predicts: that format has no K and no DEF slots, so there is almost nothing to fix.
+
+### 5. Predictions: four of six missed, recorded as misses
+
+Q1 (K/DST deferred 1.5-2 rounds) **WRONG** -- O1 does not take the first kicker later, it stops
+hoarding them. Q4 (season-long neutral-to-negative) **WRONG, favourably** (+34.5). Q6 (lookahead
+changes few picks) **WRONG** -- 27% disagreement, always to a greedy rank-3/4 candidate. Q2, Q3,
+Q5 correct.
+
+### 6. Replacement level: the incumbent is VALIDATED, and streaming is unmeasurable
+
+There is **no transaction history in this database**. What is measurable is the realized undrafted
+pool, and the incumbent draft replacement tracks the no-foresight waiver replacement closely
+(QB 200.4 vs 194.6, RB 89.0 vs 94.1, WR 111.9 vs 133.8, TE 116.2 vs 118.4, K 132.9 vs 104.2,
+DST 95.5 vs 87.4). No replacement-level change is proposed. Streaming optionality is real and
+largest at K/DST/TE, and its magnitude cannot be pinned down without transaction data.
+
+### 7. Cost, and why the next step needs no new idea
+
+O1 is **180x** a control pick (6.26s vs 0.03s on a 596-player board). A **K=40 shortlist**
+reproduces the **identical pick and top five** at 0.51s/pick -- ~7s for a whole draft, and
+**production-feasible**.
+
+That matters because the target-format CI **[-8.3, +114.0]** misses excluding zero by 8 points,
+and this run used 4 draft slots rather than 10 purely because of the naive cost. **Re-running the
+identical, already pre-registered arm at the full 10 slots is the highest-value next step** -- the
+first time this project's honest recommendation is "measure the same thing with more power"
+rather than "try another formula".
+
+### Production decision
+
+**NOTHING SHIPS.** Added: `evaluation/draft_oracle.py`, `evaluation/weekly_objective.py`,
+`evaluation/objective_candidates.py` (pre-registration), O-tier wiring, and 46 tests. Not
+recommended next: another value-base reformulation (D85), a lookahead optimizer (27% disagreement
+but ~90-point structural headroom), or projection work (D79-D83).
