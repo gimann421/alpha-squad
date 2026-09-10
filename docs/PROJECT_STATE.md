@@ -3,7 +3,52 @@
 Living summary of what is implemented, validated, and outstanding. Updated at the end of every
 milestone. See `docs/TRACEABILITY.md` for the acceptance-criteria-level mapping.
 
-## Status: M35 complete (D78) — **the reported projection "compression" was investigated and is mostly correct behaviour; a real training-specification defect was found, pre-registered, measured and shipped; and a production-blocking DST bug was found and fixed.**
+## Status: M37 complete (D85) — **economic valuation and roster legality are already separate; the value-base correction is mathematically right, behaviourally correct in every format, and unshippable. Nothing shipped.**
+
+D84 closed by naming one remaining direction: roster legality as a hard constraint on the
+candidate pool, measured **jointly** with its arm C, because "the double count and the legality
+guarantee are currently the same mechanism". D85 ran that as a pre-registered 2x2 (Y1 vs corrected
+valuation) x (legality off vs on), gates imported from D84 rather than restated, predictions
+recorded in advance. Full report: `docs/VALUATION_LEGALITY_SEPARATION.md`.
+
+**The premise did not survive.** The legality constraint provably works — on a constructed state
+it changes the pick — and **never fires once in 800 real picks** under either valuation. Arm C
+produces **zero** infeasible rosters here against D84's 2, so D84's "the over-valuation is
+load-bearing for roster legality" is board-specific, not structural. The interaction is **exactly
++0.00** in all four formats tested. The two mechanisms were never entangled.
+
+**A new mathematical result closes the seam.** `d(value_base)/d(proj) = 2.000` under Y1 **and
+under the correction**, at every position: arm C subtracts a per-position *constant* (`Y1 - armC =
+R_p` exactly) and fixes the level, not the slope. The only unit-slope formulations are the two
+already measured and rejected three times, and they lose because halving the value base against a
+static-VORP opportunity cost re-weights every position (the scale mismatch open since D60). No
+reformulation inside `(value_base + oc) x multipliers` can have both the D63 scale and a correct
+slope.
+
+**The correction generalises; the benefit does not.** It defers QB in 1-QB (first QB 2.12 -> 3.04)
+and leaves superflex alone (1.56 -> 1.54), defers K (~8.8 -> ~10.4) and DST (~10.0 -> ~13.0) in
+every format that has them, and flips #20 on the 2026 board from Josh Allen to Jeremiyah Love.
+Starter points: **+26.6 target, -9.1 legacy 2QB, -4.4 superflex, -11.1 2QB redraft**; clustered CI
+[-72.5, +125.7]; 2 of 5 seasons worse. Fails G3, G7, G8. **Nothing ships.**
+
+**RB (mandatory) is both layers.** Elite-ECR RB signed error 2022-2025 is **+47.7**; Y1 needs
+**+75** of correction before it takes an RB at #1 (McCaffrey at 351.7, independently reproducing
+D84's "~350"), the correction needs **+50**, and at #20 the RB projection is irrelevant under
+either up to +100. Opportunity cost works *against* elite RBs at the top. No RB projection was
+modified.
+
+**One silent harness defect was found and fixed before it produced a false result** (`ab5a1aa`):
+the L-tiers were omitted from the draft-aware replacement dispatch, reverting every arm to the
+static level (the D65 defect) and putting the control 79 points below its own known value. Caught
+by the pre-registered "L0 must equal Q0" check; all six controls now agree to four decimals in
+both formats.
+
+This is the **ninth** value-base reformulation measured. D71's ~128-point MDE is confirmed again:
+**no draft-layer value-base change can be established or refuted at this data scale.** Resolving
+it needs a better objective — one that prices bench depth, injuries, byes and waiver leverage —
+not another value base.
+
+### Earlier status: M35 complete (D78) — **the reported projection "compression" was investigated and is mostly correct behaviour; a real training-specification defect was found, pre-registered, measured and shipped; and a production-blocking DST bug was found and fixed.**
 
 A pre-draft report said the 2026 projections were materially miscalibrated, particularly at RB
 (top projected WR ~316 against ~3-4 real 2025 WRs above it; top projected RB ~251 against ~10-11).

@@ -29,6 +29,12 @@ from typing import Literal
 
 import duckdb
 
+from alpha_squad.evaluation.decision_legality import (
+    L_TIER_SPEC as DECISION_L_TIER_SPEC,
+)
+from alpha_squad.evaluation.decision_legality import (
+    LEGALITY_TIERS as DECISION_LEGALITY_TIERS,
+)
 from alpha_squad.evaluation.decision_value_base import (
     ARM_VORP_WEIGHT as DECISION_ARM_VORP_WEIGHT,
 )
@@ -163,6 +169,10 @@ Tier = Literal[
     "Q1",
     "Q2",
     "Q3",
+    "L0",
+    "L1",
+    "L2",
+    "L3",
 ]
 ALL_TIERS: tuple[Tier, ...] = ("A", "B", "C", "D", "E", "F", "G", "H")
 
@@ -705,6 +715,35 @@ Q_TIER_SPEC: dict[Tier, tuple[str, bool]] = {
 
 PREREGISTERED_Q_CONTROL: Tier = "Q0"
 
+
+# --- L-tiers (D85): economic valuation and roster legality, separated --------------------------
+# Arms, rationale, gates, selection rule and PREDICTED OUTCOMES are pre-registered in
+# `evaluation/decision_legality.py`, committed before any L-tier was run. This block is only the
+# wiring; the science lives there.
+#
+# D84 proved the engine uses ONE mechanism -- a value base it can prove is wrong -- to do TWO
+# jobs: price players, and guarantee a legal roster. Its arm C removed the double count and
+# broke roster legality (2 infeasible rosters vs the control's 0), because the over-valuation is
+# what was dragging mandatory positions onto the roster at all. D85 is the 2x2 that separates
+# them:
+#
+#                     legality OFF     legality ON
+#   Y1 valuation          L0               L1
+#   arm C valuation       L2               L3
+#
+# L0 == Q0 == Z0 == S0 == X0 == W1 (a test asserts it), and L2 == Q1, so D85's numbers land on
+# exactly the instrument D84 published. The legality constraint is D67's W2/W3 rule verbatim,
+# applied in `_pick_by_tier` -- it restricts which candidates are ELIGIBLE and never touches any
+# candidate's value.
+L_TIERS: tuple[Tier, ...] = DECISION_LEGALITY_TIERS
+
+#: {tier: (value base name, enforce endgame mandatory-slot legality)} -- mirrors
+#: `decision_legality.L_TIER_SPEC`, and a test asserts the two agree so the wiring cannot drift
+#: from the pre-registration.
+L_TIER_SPEC: dict[Tier, tuple[str, bool]] = dict(DECISION_L_TIER_SPEC)
+
+PREREGISTERED_L_CONTROL: Tier = "L0"
+
 #: Every tier scored as "N4, except VORP may use a draft-aware replacement level". V- and
 #: W-tiers share the scoring branch verbatim so a difference between them is attributable to the
 #: demand target (and, for W2/W3, the legality constraint) and nothing else.
@@ -716,10 +755,19 @@ DRAFT_AWARE_REPLACEMENT_TIERS: tuple[Tier, ...] = (
     *ALL_Z_TIERS,
     *ALL_S_TIERS,
     *Q_TIERS,
+    *L_TIERS,
 )
 
-#: W-tiers that enforce the endgame mandatory-slot reservation, as a hard restriction on the
+#: Tiers that enforce the endgame mandatory-slot reservation, as a hard restriction on the
 #: candidate pool rather than a score adjustment -- roster legality is a constraint, not a value.
+#: D67's W2/W3 and D85's L1/L3 apply the identical rule; keeping them in one tuple is what makes
+#: "the constraint is unchanged from its prototype" a property of the code rather than a claim.
+TIERS_ENFORCING_LEGALITY: tuple[Tier, ...] = (
+    *(t for t, (_, legality) in W_TIER_SPEC.items() if legality),
+    *(t for t, (_, legality) in L_TIER_SPEC.items() if legality),
+)
+
+#: Back-compat alias: D67 named this `W_TIERS_ENFORCING_LEGALITY` and existing tests import it.
 W_TIERS_ENFORCING_LEGALITY: tuple[Tier, ...] = tuple(
     t for t, (_, legality) in W_TIER_SPEC.items() if legality
 )
@@ -870,6 +918,10 @@ TIER_DESCRIPTIONS: dict[Tier, str] = {
     "Y1": "D70: W1 with RB projections from a walk-forward refit adding preseason-knowable "
     "availability features (F1-F4); QB/WR/TE/K/DST unchanged from control",
     # Z-tiers (D79): D67's draft-aware replacement held FIXED, only the value base varies.
+    "L0": "D85 control: the shipped Y1 engine, no legality constraint. Byte-identical to Q0/Z0",
+    "L1": "D85: endgame mandatory-slot legality constraint ALONE, on the shipped valuation",
+    "L2": "D85: arm C valuation ALONE (msv_over_replacement + 1.0*daVORP) -- reproduces Q1",
+    "L3": "D85: arm C valuation PLUS the legality constraint -- the joint arm",
     "Q0": "D84 control (arm A): the shipped engine. Byte-identical to Z0/S0/X0/W1",
     "Q1": "D84 arm C: value base = msv_over_replacement + 1.0*daVORP -- removes the "
     "raw-projection double count while HOLDING the value base's scale",
@@ -1210,6 +1262,26 @@ def score_candidate(
             if base_name == "msv_over_replacement_plus_weighted_vorp":
                 # Same RAISE-rather-than-default rule as Z2: without the hoisted map this
                 # silently becomes Q0 while still reporting itself as Q1.
+                if replacement_msv is None:
+                    raise RuntimeError(
+                        f"tier {tier} needs `replacement_msv`; without it the value base "
+                        "silently degrades to the control and the tier measures nothing"
+                    )
+                value_base = (msv - replacement_msv.get(position, 0.0)) + (
+                    DECISION_ARM_VORP_WEIGHT * vorp_term
+                )
+            else:  # msv_plus_weighted_vorp -- the control
+                value_base = msv + DECISION_ARM_VORP_WEIGHT * vorp_term
+            reasons.append(f"value_base={base_name} {value_base:+.1f} pts")
+        elif tier in L_TIERS:
+            # D85. The VALUE half of the 2x2 is exactly D84's: L0/L1 carry the shipped base,
+            # L2/L3 carry arm C's. The LEGALITY half is not scored here at all -- it is a
+            # restriction on candidate eligibility applied in `_pick_by_tier`, which is the whole
+            # point of the phase, so L0/L1 are identical here and so are L2/L3.
+            base_name = L_TIER_SPEC[tier][0]
+            if base_name == "msv_over_replacement_plus_weighted_vorp":
+                # Same RAISE-rather-than-default rule as Z2/Q1: without the hoisted map this
+                # silently becomes the control while still reporting itself as L2/L3.
                 if replacement_msv is None:
                     raise RuntimeError(
                         f"tier {tier} needs `replacement_msv`; without it the value base "
@@ -1647,8 +1719,9 @@ def _pick_by_tier(
     """Returns (chosen_player_id, every scored candidate sorted best-first) -- the ranked list
     is what a JSON trace needs to show runner-up reasoning, not just the winner.
 
-    `picks_remaining` (counting this one) is only consulted by the W-tiers that enforce roster
-    legality; every other tier ignores it, so omitting it leaves them byte-identical."""
+    `picks_remaining` (counting this one) is only consulted by the tiers in
+    `TIERS_ENFORCING_LEGALITY` (D67's W2/W3, D85's L1/L3); every other tier ignores it, so
+    omitting it leaves them byte-identical."""
     if tier == "H":
         needs = roster_need(league, roster_positions)
         rec = recommend_draft_pick(
@@ -1724,9 +1797,16 @@ def _pick_by_tier(
         or tier in ALL_Z_TIERS
         or tier in ALL_S_TIERS
         or tier in Q_TIERS
+        or tier in L_TIERS
     ):
         # D68/D70: identical to W1. The projections `static` carries are the treatment; the
         # replacement rule they are measured against is the shipped one, unchanged.
+        # D85: the L-tiers MUST be here. Omitting them silently reverted every L-tier to the
+        # STATIC replacement level -- the D65 defect D67 shipped to remove -- which made the
+        # D85 control score 1963.62 against Q0/Z0/S0/W1/X0's 2042.80 on the identical board.
+        # Caught by the pre-registered "L0 is byte-identical to Q0" check, which is exactly the
+        # class of silent harness defect D78 and D81 recorded. `test_l0_is_the_shipped_engine`
+        # now pins it so it cannot regress.
         # D79: the Z-tiers hold that same shipped replacement rule fixed and vary the VALUE BASE
         # instead -- the mirror image of D65-D67, which held the value base fixed and varied the
         # replacement rule.
@@ -1758,9 +1838,12 @@ def _pick_by_tier(
             static.replacement_levels,
             base_points=base_lineup_points,
         )
-    elif tier in Q_TIERS and Q_TIER_SPEC[tier][0] == "msv_over_replacement_plus_weighted_vorp":
-        # D84: identical quantity and identical draft-aware anchoring to Z2's below -- only the
-        # value base that consumes it differs.
+    elif (
+        tier in L_TIERS and L_TIER_SPEC[tier][0] == "msv_over_replacement_plus_weighted_vorp"
+    ) or (tier in Q_TIERS and Q_TIER_SPEC[tier][0] == "msv_over_replacement_plus_weighted_vorp"):
+        # D84/D85: identical quantity and identical draft-aware anchoring to Z2's below -- only
+        # the value base that consumes it differs. L2/L3 share this branch with Q1/Q3 precisely
+        # so that D85's valuation arm is the SAME computation D84 published, not a re-derivation.
         replacement_msv = replacement_marginal_starter_values(
             league,
             roster_player_ids or [],
@@ -1854,7 +1937,7 @@ def _pick_by_tier(
     # drafts with a mean 6.48 unfilled mandatory slots and nothing raises); applying it to both
     # sides also makes the benchmark symmetric. It triggers at the last possible pick and only
     # while a slot is still empty, so it is not a positional quota or a fixed round.
-    if tier in W_TIERS_ENFORCING_LEGALITY and picks_remaining is not None:
+    if tier in TIERS_ENFORCING_LEGALITY and picks_remaining is not None:
         deficits = unfilled_dedicated_slots(league, roster_positions)
         total_deficit = sum(deficits.values())
         if total_deficit > 0 and picks_remaining <= total_deficit:
