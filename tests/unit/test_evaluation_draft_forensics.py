@@ -905,7 +905,15 @@ class TestQTiersDecisionValueBase:
         league = _small_league()
         static = load_season_static(con, league, 2023)
         available = set(static.projections)
-        best = max(available, key=lambda p: static.projections[p])
+        # Q1 differs from Q0 by exactly the replacement level, so a candidate drawn from a
+        # position whose level is 0 makes the first assertion vacuous (both bases coincide).
+        # Every position ties at the same top projection and `available` is a set, so sort
+        # before taking the max: otherwise the winner -- and this test -- turns on the
+        # interpreter's hash seed.
+        best = max(
+            sorted(p for p in available if static.replacement_levels[static.positions[p]] > 0),
+            key=lambda p: static.projections[p],
+        )
         # `_pick_by_tier` hoists this per pick; calling `score_candidate` directly means
         # supplying it, and the tier RAISES rather than silently degrading if it is missing.
         from alpha_squad.league.replacement import replacement_marginal_starter_values
