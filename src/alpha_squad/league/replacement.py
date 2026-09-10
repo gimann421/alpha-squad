@@ -382,7 +382,7 @@ def demand_boundary_replacement(
 
 
 def load_season_projections(
-    con: duckdb.DuckDBPyConnection, season: int
+    con: duckdb.DuckDBPyConnection, season: int, model_version: str | None = None
 ) -> tuple[dict[str, float], dict[str, str]]:
     """Real per-season projections from M6's uncertainty model (point_prediction) -- the
     same model M8's EDGE and M9's evidence adjustments already build on, so the league
@@ -394,11 +394,16 @@ def load_season_projections(
     rookie-draft recommendation most needs. Rookies are filled in from M7's real
     rookie_predictions (draft_class == season) rather than silently omitted, so the league
     engine can still evaluate them; established players always take the M6 value when both
-    exist, since M6 has more information (an actual prior season) to work with."""
+    exist, since M6 has more information (an actual prior season) to work with.
+
+    `model_version` defaults to the shipped M6 version. It is an argument rather than a fixed
+    constant so that a projection-specification change can be evaluated as a paired
+    variant-vs-control contrast on identical trials -- D71's recommended instrument, and what
+    D78 used to check that the specification change did not regress the draft layer."""
     rows = con.execute(
         "SELECT player_id, position, point_prediction FROM uncertainty_predictions "
         "WHERE season = ? AND model_version = ?",
-        [season, UNCERTAINTY_MODEL_VERSION],
+        [season, model_version or UNCERTAINTY_MODEL_VERSION],
     ).fetchall()
     projections = {r[0]: r[2] for r in rows}
     positions = {r[0]: r[1] for r in rows}

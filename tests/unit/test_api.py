@@ -86,7 +86,7 @@ class TestPlayerDetail:
             "INSERT INTO uncertainty_predictions (prediction_id, player_id, season, position, "
             "model_version, feature_version, point_prediction, p10, p90, confidence, top24_prob, "
             "calibration_season, predicted_at) VALUES "
-            "('pred1', 'p1', 2025, 'WR', 'uncertainty_catboost_v1', 'fv1', 200.0, 160.0, 250.0, "
+            "('pred1', 'p1', 2025, 'WR', 'uncertainty_catboost_v2', 'fv1', 200.0, 160.0, 250.0, "
             "0.8, 0.6, 2024, current_timestamp)"
         )
         con.execute(
@@ -220,7 +220,7 @@ class TestRankingsAreADirectProjection:
             INSERT INTO uncertainty_predictions
                 (prediction_id, player_id, season, position, model_version, feature_version,
                  point_prediction, p10, p90, top24_prob, confidence, calibration_season, predicted_at)
-            VALUES ('pred1', 'p1', 2025, 'WR', 'uncertainty_catboost_v1', 'fv1', 123.456, 90.0, 160.0, 0.42, 0.81, 2024, current_timestamp)
+            VALUES ('pred1', 'p1', 2025, 'WR', 'uncertainty_catboost_v2', 'fv1', 123.456, 90.0, 160.0, 0.42, 0.81, 2024, current_timestamp)
             """
         )
         r = client.get("/rankings", params={"season": 2025})
@@ -238,11 +238,152 @@ class TestRankingsAreADirectProjection:
             con.execute(
                 "INSERT INTO uncertainty_predictions (prediction_id, player_id, season, position, "
                 "model_version, feature_version, point_prediction, calibration_season, predicted_at) "
-                "VALUES (?, ?, 2025, 'RB', 'uncertainty_catboost_v1', 'fv1', ?, 2024, current_timestamp)",
+                "VALUES (?, ?, 2025, 'RB', 'uncertainty_catboost_v2', 'fv1', ?, 2024, current_timestamp)",
                 [f"pred_{pid}", pid, pts],
             )
         r = client.get("/rankings", params={"season": 2025})
         assert [row["player_id"] for row in r.json()] == ["p2", "p3", "p1"]
+
+    def test_rankings_serves_only_the_shipped_model_version(self, con, client):
+        """D78 regression. `uncertainty_predictions` is keyed by
+        (player_id, season, model_version), so a second specification in the table used to make
+        this endpoint return EVERY player twice with different projections, interleaved by
+        point_prediction. Reproduced on real 2026 data: 610 duplicated players. The draft engine
+        was never affected -- it has always pinned the version -- which is precisely why this
+        was the hardest place for a stale projection to be noticed."""
+        from alpha_squad.models.uncertainty.run import (
+            LEGACY_MODEL_VERSION,
+        )
+        from alpha_squad.models.uncertainty.run import (
+            MODEL_VERSION as UNCERTAINTY_MODEL_VERSION,
+        )
+
+        _seed_player(con, "p1", "Two Versions", "WR")
+        for version, points, pred_id in (
+            (UNCERTAINTY_MODEL_VERSION, 200.0, "pred_current"),
+            (LEGACY_MODEL_VERSION, 999.0, "pred_superseded"),
+        ):
+            con.execute(
+                "INSERT INTO uncertainty_predictions (prediction_id, player_id, season, "
+                "position, model_version, feature_version, point_prediction, "
+                "calibration_season, predicted_at) VALUES (?, 'p1', 2025, 'WR', ?, 'fv1', ?, "
+                "2024, current_timestamp)",
+                [pred_id, version, points],
+            )
+
+        body = client.get("/rankings", params={"season": 2025}).json()
+        assert len(body) == 1, "a superseded model_version must not add a second row"
+        assert body[0]["model_version"] == UNCERTAINTY_MODEL_VERSION
+        # The superseded row deliberately carries the LARGER projection, so an unfiltered
+        # ORDER BY point_prediction would have surfaced it first.
+        assert body[0]["point_prediction"] == pytest.approx(200.0)
+
+
+class TestRankingsServeTheEngineBoard:
+    """D79 regression. `GET /rankings` used to read `uncertainty_predictions` alone, while the
+    draft engine drafts from `load_season_projections` (uncertainty + rookies + K/DST). The web
+    Draft view builds `available_player_ids` from this endpoint, so the difference was the set of
+    players Alpha could never recommend -- measured at 163-179 per real season, including every
+    kicker and every team defense in a league that starts one of each.
+
+    The invariant these tests pin is that the two universes are the SAME. Anything less specific
+    (e.g. "kickers appear") would pass again the moment a fourth projection source is added and
+    only this endpoint forgets about it."""
+
+    @staticmethod
+    def _seed_three_sources(con, season=2025):
+        from alpha_squad.models.baselines.kicking_defense import MODEL_NAME as KDST_MODEL_NAME
+        from alpha_squad.models.uncertainty.run import (
+            MODEL_VERSION as UNCERTAINTY_MODEL_VERSION,
+        )
+
+        _seed_player(con, "asq_wr", "Established Receiver", "WR")
+        con.execute(
+            "INSERT INTO uncertainty_predictions (prediction_id, player_id, season, position, "
+            "model_version, feature_version, point_prediction, p10, p90, confidence, "
+            "calibration_season, predicted_at) VALUES ('pred_wr', 'asq_wr', ?, 'WR', ?, 'fv1', "
+            "250.0, 190.0, 310.0, 0.8, ?, current_timestamp)",
+            [season, UNCERTAINTY_MODEL_VERSION, season - 1],
+        )
+        _seed_player(con, "asq_rookie_rb", "Rookie Back", "RB")
+        con.execute(
+            "INSERT INTO rookie_predictions (prediction_id, player_id, draft_class, "
+            "position, predicted_rookie_points, model_version, predicted_at) "
+            "VALUES ('rpred_1', 'asq_rookie_rb', ?, 'RB', 240.0, 'rookie_v1', "
+            "current_timestamp)",
+            [season],
+        )
+        _seed_player(con, "asq_dst_KC", "Kansas City", "DST")
+        con.execute(
+            "INSERT INTO projection_snapshot (model_name, player_id, season, position, "
+            "predicted_points, built_at) VALUES (?, 'asq_dst_KC', ?, 'DST', 95.0, "
+            "current_timestamp)",
+            [KDST_MODEL_NAME, season],
+        )
+        _seed_player(con, "asq_k_1", "A Kicker", "K")
+        con.execute(
+            "INSERT INTO projection_snapshot (model_name, player_id, season, position, "
+            "predicted_points, built_at) VALUES (?, 'asq_k_1', ?, 'K', 140.0, current_timestamp)",
+            [KDST_MODEL_NAME, season],
+        )
+
+    def test_the_served_board_is_exactly_the_engine_board(self, con, client):
+        from alpha_squad.league.replacement import load_season_projections
+
+        self._seed_three_sources(con)
+        projections, _ = load_season_projections(con, 2025)
+        body = client.get("/rankings", params={"season": 2025, "limit": 2000}).json()
+        assert {row["player_id"] for row in body} == set(projections)
+
+    def test_the_served_projection_is_the_engine_projection(self, con, client):
+        from alpha_squad.league.replacement import load_season_projections
+
+        self._seed_three_sources(con)
+        projections, _ = load_season_projections(con, 2025)
+        body = client.get("/rankings", params={"season": 2025, "limit": 2000}).json()
+        for row in body:
+            assert row["point_prediction"] == pytest.approx(projections[row["player_id"]])
+
+    def test_kickers_and_defenses_are_draftable(self, con, client):
+        """The league config starts a K and a DEF. A board that omits them cannot fill them."""
+        self._seed_three_sources(con)
+        body = client.get("/rankings", params={"season": 2025, "limit": 2000}).json()
+        assert {row["position"] for row in body} >= {"K", "DST"}
+
+    def test_a_rookie_reaches_the_board(self, con, client):
+        self._seed_three_sources(con)
+        body = client.get("/rankings", params={"season": 2025, "limit": 2000}).json()
+        assert "asq_rookie_rb" in {row["player_id"] for row in body}
+
+    def test_rows_without_a_conformal_interval_report_null_rather_than_a_fabricated_one(
+        self, con, client
+    ):
+        """K/DST are deliberately baselines, not models (D57), and M7 rookie projections carry
+        no conformal interval either. Reporting a made-up interval for them would be exactly the
+        fabrication the project forbids."""
+        self._seed_three_sources(con)
+        body = client.get("/rankings", params={"season": 2025, "limit": 2000}).json()
+        by_id = {row["player_id"]: row for row in body}
+        for player_id in ("asq_k_1", "asq_dst_KC", "asq_rookie_rb"):
+            row = by_id[player_id]
+            assert row["p10"] is None and row["p90"] is None
+            assert row["confidence"] is None
+            assert row["top12_prob"] is None and row["top24_prob"] is None
+        assert by_id["asq_wr"]["confidence"] == pytest.approx(0.8)
+
+    def test_the_position_filter_still_works_across_every_source(self, con, client):
+        self._seed_three_sources(con)
+        body = client.get(
+            "/rankings", params={"season": 2025, "position": "K", "limit": 2000}
+        ).json()
+        assert [row["player_id"] for row in body] == ["asq_k_1"]
+
+    def test_the_whole_board_fits_in_one_request(self, con, client):
+        """The Draft view fetches the board in a single call; a cap below a real season's size
+        would silently reintroduce the truncation this endpoint was fixed for."""
+        from alpha_squad.api.routers.rankings import MAX_RANKING_ROWS
+
+        assert MAX_RANKING_ROWS >= 1000  # real 2021-2026 boards run 602-651
 
 
 class TestWeeklyRankingsSurfaceEvidenceAdjustment:
@@ -559,7 +700,7 @@ class TestLeague:
                 "INSERT INTO uncertainty_predictions (prediction_id, player_id, season, "
                 "position, model_version, feature_version, point_prediction, top24_prob, "
                 "calibration_season, predicted_at) VALUES "
-                "(?, ?, 2025, 'WR', 'uncertainty_catboost_v1', 'fv1', ?, 0.3, 2024, current_timestamp)",
+                "(?, ?, 2025, 'WR', 'uncertainty_catboost_v2', 'fv1', ?, 0.3, 2024, current_timestamp)",
                 [f"pred_{pid}", pid, pts],
             )
         con.execute(
@@ -623,7 +764,7 @@ class TestLeague:
                 "INSERT INTO uncertainty_predictions (prediction_id, player_id, season, "
                 "position, model_version, feature_version, point_prediction, top24_prob, "
                 "calibration_season, predicted_at) VALUES "
-                "(?, ?, 2025, 'WR', 'uncertainty_catboost_v1', 'fv1', ?, 0.1, 2024, current_timestamp)",
+                "(?, ?, 2025, 'WR', 'uncertainty_catboost_v2', 'fv1', ?, 0.1, 2024, current_timestamp)",
                 [f"pred_{pid}", pid, pts],
             )
         con.execute(
@@ -669,7 +810,7 @@ class TestLeague:
         con.execute(
             "INSERT INTO uncertainty_predictions (prediction_id, player_id, season, position, "
             "model_version, feature_version, point_prediction, calibration_season, predicted_at) "
-            "VALUES ('pred1', 'p1', 2025, 'QB', 'uncertainty_catboost_v1', 'fv1', 300.0, 2024, current_timestamp)"
+            "VALUES ('pred1', 'p1', 2025, 'QB', 'uncertainty_catboost_v2', 'fv1', 300.0, 2024, current_timestamp)"
         )
         r = client.post(
             "/league/target_league/draft",
@@ -691,6 +832,75 @@ class TestLeague:
             json={"season": 2025, "available_player_ids": ["nobody"]},
         )
         assert r.status_code == 422
+
+    def _seed_manual_draft_board(self, con):
+        for player_id, name, position, points in (
+            ("p_qb", "Some QB", "QB", 300.0),
+            ("p_rb", "Some RB", "RB", 250.0),
+            ("p_wr", "Some WR", "WR", 240.0),
+        ):
+            _seed_player(con, player_id, name, position)
+            con.execute(
+                "INSERT INTO uncertainty_predictions (prediction_id, player_id, season, "
+                "position, model_version, feature_version, point_prediction, "
+                "calibration_season, predicted_at) VALUES (?, ?, 2025, ?, "
+                "'uncertainty_catboost_v2', 'fv1', ?, 2024, current_timestamp)",
+                [f"pred_{player_id}", player_id, position, points],
+            )
+
+    def test_manual_draft_derives_roster_positions_from_the_marked_picks(self, con, client):
+        """D78 (#3): a manual draft used to send two independent pictures of the same team --
+        a hand-typed `roster_positions` and the marked `roster_player_ids` -- and marking a
+        pick moved only the second. The ids now win and positions are derived from them, so
+        the two cannot describe different rosters."""
+        self._seed_manual_draft_board(con)
+        r = client.post(
+            "/league/target_league/draft",
+            json={
+                "season": 2025,
+                # Deliberately WRONG and stale, exactly the drift being fixed.
+                "roster_positions": ["TE", "TE", "TE"],
+                "roster_player_ids": ["p_rb", "p_wr"],
+                "available_player_ids": ["p_qb"],
+            },
+        )
+        assert r.status_code == 200
+        body = r.json()
+        assert sorted(body["roster_positions_used"]) == ["RB", "WR"]
+        assert body["unresolved_roster_player_ids"] == []
+
+    def test_manual_draft_still_honours_roster_positions_when_no_ids_are_sent(self, con, client):
+        """Ids win only when there are ids. A caller describing positions alone -- with no
+        claim about which players it holds -- must keep the behaviour it had."""
+        self._seed_manual_draft_board(con)
+        r = client.post(
+            "/league/target_league/draft",
+            json={
+                "season": 2025,
+                "roster_positions": ["TE", "TE"],
+                "available_player_ids": ["p_qb"],
+            },
+        )
+        assert r.status_code == 200
+        assert r.json()["roster_positions_used"] == ["TE", "TE"]
+
+    def test_a_marked_pick_missing_from_the_board_is_reported_not_swallowed(self, con, client):
+        """Roster need computed against fewer players than the caller believes it holds is
+        exactly the silent disagreement this change exists to end, so an id the season's board
+        cannot place is named in the response rather than dropped."""
+        self._seed_manual_draft_board(con)
+        r = client.post(
+            "/league/target_league/draft",
+            json={
+                "season": 2025,
+                "roster_player_ids": ["p_rb", "ghost_player"],
+                "available_player_ids": ["p_qb"],
+            },
+        )
+        assert r.status_code == 200
+        body = r.json()
+        assert body["roster_positions_used"] == ["RB"]
+        assert body["unresolved_roster_player_ids"] == ["ghost_player"]
 
     def test_trade_endpoint_returns_the_real_action(self, con, client):
         con.execute(
@@ -1114,7 +1324,7 @@ class TestDraftCallSiteRosterParity:
         con.execute(
             "INSERT INTO uncertainty_predictions (prediction_id, player_id, season, position, "
             "model_version, feature_version, point_prediction, confidence, calibration_season, "
-            "predicted_at) VALUES (?, ?, 2025, ?, 'uncertainty_catboost_v1', 'fv1', ?, 0.8, "
+            "predicted_at) VALUES (?, ?, 2025, ?, 'uncertainty_catboost_v2', 'fv1', ?, 0.8, "
             "2024, current_timestamp)",
             [f"pred_{player_id}", player_id, position, points],
         )
@@ -1420,7 +1630,7 @@ class TestDraftDecisionTraceEndpoint:
         con.execute(
             "INSERT INTO uncertainty_predictions (prediction_id, player_id, season, position, "
             "model_version, feature_version, point_prediction, confidence, calibration_season, "
-            "predicted_at) VALUES (?, ?, 2025, ?, 'uncertainty_catboost_v1', 'fv1', ?, 0.8, "
+            "predicted_at) VALUES (?, ?, 2025, ?, 'uncertainty_catboost_v2', 'fv1', ?, 0.8, "
             "2024, current_timestamp)",
             [f"pred_{player_id}", player_id, position, points],
         )

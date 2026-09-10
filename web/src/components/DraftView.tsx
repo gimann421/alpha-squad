@@ -1,6 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "../api";
 import { useLatestSeason } from "../hooks";
+import {
+  nextPickNumber,
+  pickNumberOf as pickNumberIn,
+  snakePickNumbers as snakePicksFor,
+  withPickNumber,
+} from "../draft-picks";
 import { useLeague } from "../league-context";
 import { PlayerLink } from "../player-context";
 import type {
@@ -33,9 +39,16 @@ interface PersistedUiPrefs {
   topN?: number;
 }
 interface PersistedManualState extends PersistedUiPrefs {
-  rosterPositions?: string;
   draftedIds?: string[];
+  // Display names for the players picked here, so the board keeps reading as names after a
+  // reload and for anyone outside the ranked pool.
+  pickedNames?: Record<string, string>;
   myPickIds?: string[];
+  // #2: which seat in the snake order this user drafts from, so their overall pick numbers can
+  // be derived rather than remembered. Persisted with everything else -- a reload mid-draft must
+  // not lose it, or `nextPick` silently reverts to a default and every survival probability
+  // downstream is computed against the wrong horizon.
+  draftSlot?: number;
 }
 
 function loadJson<T>(key: string): T | null {
@@ -73,7 +86,7 @@ export function DraftView() {
   const mode: "sleeper" | "manual" = usingRealRoster ? "sleeper" : "manual";
 
   const [season, setSeason] = useState(latestSeason);
-  const [rosterPositions, setRosterPositions] = useState("");
+  const [draftSlot, setDraftSlot] = useState(1);
   const [nextPick, setNextPick] = useState(10);
   // Blank means "let the server resolve the board from the league" (D56).
   const [ecrType, setEcrType] = useState("");
@@ -84,6 +97,10 @@ export function DraftView() {
   const [addDraftedId, setAddDraftedId] = useState("");
   const [myPickIds, setMyPickIds] = useState<string[]>([]);
   const [addMyPickId, setAddMyPickId] = useState("");
+  // {player_id: display_name} for players chosen through the picker. `pool` only carries the
+  // top 500 ranked players, so without this a legitimately draftable player outside it showed
+  // as a raw `asq_<hash>` in the board -- unreadable at the one moment it matters (D78).
+  const [pickedNames, setPickedNames] = useState<Record<string, string>>({});
 
   const [pool, setPool] = useState<RankingRow[] | null>(null);
   const [poolError, setPoolError] = useState<string | null>(null);
@@ -116,6 +133,7 @@ export function DraftView() {
   const nameFor = (playerId: string) =>
     pool?.find((p) => p.player_id === playerId)?.display_name ??
     draftSync?.picks.find((p) => p.player_id === playerId)?.display_name ??
+    pickedNames[playerId] ??
     playerId;
 
   // Load persisted state whenever the league or mode changes -- restores season/ECR/topN
@@ -128,19 +146,41 @@ export function DraftView() {
   // not a hypothetical: it reproduces every time under React StrictMode's double-effect-invoke
   // and was caught by a real reload-and-check with Playwright, not just reasoned about.
   const [hydrated, setHydrated] = useState(false);
+  // Whether `season` came from a persisted value or a user edit, as opposed to still being the
+  // hook's own placeholder. Only an UNCHOSEN season may be moved by the effect below.
+  const [seasonChosen, setSeasonChosen] = useState(false);
+
+  // REGRESSION (D78): `useLatestSeason` starts on its `fallback` (2025) and swaps to the real
+  // latest season when `/seasons/latest` resolves, but this component copies that value into
+  // its OWN state -- as an initial value, and again in the hydration effect below, both of
+  // which can run before the fetch resolves. With no persisted season (a first visit, or a
+  // cleared browser) the Draft view then sat on 2025 indefinitely: it would draft the upcoming
+  // season against LAST season's backtest projections, silently, with a plausible-looking
+  // board and no warning anywhere. Found by driving the real UI, not by review. This follows
+  // the resolved season until something actually chooses one.
+  useEffect(() => {
+    if (!seasonChosen) setSeason(latestSeason);
+  }, [latestSeason, seasonChosen]);
+
   useEffect(() => {
     setHydrated(false);
     if (!leagueId) return;
     const persisted = loadJson<PersistedManualState>(draftStateKey(leagueId, mode));
-    if (persisted?.season) setSeason(persisted.season);
-    else setSeason(latestSeason);
+    if (persisted?.season) {
+      setSeason(persisted.season);
+      setSeasonChosen(true);
+    } else {
+      setSeason(latestSeason);
+      setSeasonChosen(false);
+    }
     if (persisted?.nextPick) setNextPick(persisted.nextPick);
     if (persisted?.ecrType !== undefined) setEcrType(persisted.ecrType);
     if (persisted?.topN) setTopN(persisted.topN);
     if (mode === "manual") {
-      setRosterPositions(persisted?.rosterPositions ?? "");
       setDraftedIds(persisted?.draftedIds ?? []);
       setMyPickIds(persisted?.myPickIds ?? []);
+      setDraftSlot(persisted?.draftSlot ?? 1);
+      setPickedNames(persisted?.pickedNames ?? {});
     }
     setHydrated(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -153,17 +193,27 @@ export function DraftView() {
     if (!leagueId || !hydrated) return;
     const value: PersistedManualState = { season, nextPick, ecrType, topN };
     if (mode === "manual") {
-      value.rosterPositions = rosterPositions;
       value.draftedIds = draftedIds;
       value.myPickIds = myPickIds;
+      value.draftSlot = draftSlot;
+      value.pickedNames = pickedNames;
     }
     saveJson(draftStateKey(leagueId, mode), value);
-  }, [leagueId, mode, hydrated, season, nextPick, ecrType, topN, rosterPositions, draftedIds, myPickIds]);
+  }, [
+    leagueId, mode, hydrated, season, nextPick, ecrType, topN, draftSlot, draftedIds, myPickIds,
+    pickedNames,
+  ]);
 
+  // The WHOLE board, not a top-N slice (D79). `pool` is what `available_player_ids` is built
+  // from, so anything missing here is a player Alpha can never recommend. At limit 500 that
+  // silently excluded every kicker, every team defense and every rookie -- 163-179 players per
+  // real season -- and it also broke the engine's draft-aware replacement level, which reads a
+  // short pool as "everyone else is already drafted". Real boards run ~600-650 players;
+  // MAX_RANKING_ROWS (api/routers/rankings.py) is the server-side cap.
   async function loadPool() {
     setPoolError(null);
     try {
-      const rows = await api.getRankings({ season, limit: 500 });
+      const rows = await api.getRankings({ season, limit: 2000 });
       setPool(rows);
     } catch (e) {
       setPoolError(String(e));
@@ -269,6 +319,11 @@ export function DraftView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draftSync?.is_users_turn, draftSync?.drafted_player_ids.length, usingRealRoster, pool]);
 
+  function rememberName(playerId: string, displayName?: string | null) {
+    if (!displayName) return;
+    setPickedNames((names) => (names[playerId] ? names : { ...names, [playerId]: displayName }));
+  }
+
   function addDrafted(playerId: string) {
     if (!playerId || draftedIds.includes(playerId)) return;
     setDraftedIds((ids) => [...ids, playerId]);
@@ -289,6 +344,36 @@ export function DraftView() {
     setMyPickIds((ids) => ids.filter((id) => id !== playerId));
   }
 
+  // PICK NUMBERS (#2). `draftedIds` is the ordered board and a player's overall pick number is
+  // simply his 1-based position in it. Keeping the number derived rather than stored is what
+  // makes 1..N contiguous by construction -- no gaps, no duplicates, no way for a stored number
+  // to disagree with the list it came from. Correcting a number therefore MOVES the player, and
+  // everyone between the old and new slot shifts by one, exactly as a real board re-numbers when
+  // a pick is logged out of order.
+  const pickNumberOf = (playerId: string) => pickNumberIn(draftedIds, playerId);
+
+  function setPickNumber(playerId: string, requested: number) {
+    setDraftedIds((ids) => withPickNumber(ids, playerId, requested));
+  }
+
+  // The snake-draft overall pick numbers for a given slot -- what the user needs to know in
+  // advance ("my picks are 4, 17, 24, ..."), and what `nextPick` should be rather than a number
+  // typed from memory. Odd rounds run 1..teams, even rounds reverse.
+  const teamsInLeague = leagueContext?.teams ?? null;
+  const rosterSize = Number(leagueContext?.roster?.roster_size ?? 0) || null;
+  const snakePickNumbers =
+    teamsInLeague && rosterSize ? snakePicksFor(teamsInLeague, rosterSize, draftSlot) : [];
+  // My next pick is the first scheduled pick number that hasn't happened yet.
+  const derivedNextPick = nextPickNumber(snakePickNumbers, draftedIds.length);
+
+  // ROSTER-POSITION SYNC (#3). The positions the engine will price roster need against, derived
+  // from the marked picks rather than hand-typed alongside them. The server derives the same
+  // thing from the same ids (api/routers/league.py) and echoes back what it used; this is the
+  // client-side preview of that, so the two representations cannot silently disagree.
+  const derivedRosterPositions = myPickIds
+    .map((id) => pool?.find((p) => p.player_id === id)?.position)
+    .filter((p): p is string => Boolean(p));
+
   // Shared by `runDraft` and `runClaudeReview` -- both endpoints take the same request shape
   // (api/schemas.py::ClaudeDraftReviewRequest extends DraftRequest), and building it in one
   // place means the two calls can never silently drift into asking about different boards.
@@ -302,15 +387,15 @@ export function DraftView() {
     const availableIds = pool.map((p) => p.player_id).filter((id) => !draftedFromSync.includes(id));
     return {
       season,
-      roster_positions: usingRealRoster
-        ? undefined
-        : rosterPositions
-            .split(",")
-            .map((s) => s.trim())
-            .filter(Boolean),
+      // #3: never a separately-typed list. In manual mode the server derives roster positions
+      // from `roster_player_ids` anyway (one source of truth, api/routers/league.py); this
+      // sends the same derivation so request and response describe the same team.
+      roster_positions: usingRealRoster ? undefined : derivedRosterPositions,
       roster_id: usingRealRoster ? (rosterId ?? undefined) : undefined,
       available_player_ids: availableIds,
-      next_pick_overall: usingRealRoster ? (draftSync?.next_pick_overall ?? undefined) : nextPick,
+      next_pick_overall: usingRealRoster
+        ? (draftSync?.next_pick_overall ?? undefined)
+        : (derivedNextPick ?? nextPick),
       current_pick_overall: usingRealRoster
         ? (draftSync?.current_pick_overall ?? undefined)
         : draftedIds.length + 1,
@@ -452,9 +537,29 @@ export function DraftView() {
 
       <div className="controls">
         <label>
-          Season <input type="number" value={season} onChange={(e) => setSeason(Number(e.target.value))} />
+          Season{" "}
+          <input
+            type="number"
+            value={season}
+            onChange={(e) => {
+              setSeason(Number(e.target.value));
+              setSeasonChosen(true);
+            }}
+          />
         </label>
         {!usingRealRoster && (
+          <label>
+            My draft slot{" "}
+            <input
+              type="number"
+              min={1}
+              max={teamsInLeague ?? undefined}
+              value={draftSlot}
+              onChange={(e) => setDraftSlot(Number(e.target.value))}
+            />
+          </label>
+        )}
+        {!usingRealRoster && derivedNextPick == null && (
           <label>
             Next pick # <input type="number" value={nextPick} onChange={(e) => setNextPick(Number(e.target.value))} />
           </label>
@@ -465,13 +570,23 @@ export function DraftView() {
         <label>
           Top N alternatives <input type="number" value={topN} onChange={(e) => setTopN(Number(e.target.value))} />
         </label>
-        {!usingRealRoster && (
-          <label>
-            Roster positions{" "}
-            <input value={rosterPositions} onChange={(e) => setRosterPositions(e.target.value)} placeholder="QB,RB" />
-          </label>
-        )}
       </div>
+
+      {!usingRealRoster && snakePickNumbers.length > 0 && (
+        <p className="muted">
+          Snake order from slot {draftSlot} of {teamsInLeague}: your overall picks are{" "}
+          {snakePickNumbers.map((n, i) => (
+            <span key={n}>
+              {i > 0 && ", "}
+              <strong style={{ fontWeight: n === derivedNextPick ? 700 : 400 }}>#{n}</strong>
+            </span>
+          ))}
+          . {draftedIds.length} pick{draftedIds.length === 1 ? "" : "s"} logged, so you are next
+          at <strong>#{derivedNextPick ?? "—"}</strong>. Assumes a standard snake order; if your
+          league drafts linearly or by auction, clear the draft slot and enter the next pick
+          number by hand instead.
+        </p>
+      )}
 
       {poolError && <p className="error">Couldn't load the ranked player pool: {poolError}</p>}
 
@@ -512,9 +627,10 @@ export function DraftView() {
               <span className="picker-field-label">Mark drafted</span>
               <PlayerPicker
                 value={addDraftedId}
-                onChange={(id) => {
+                onChange={(id, player) => {
                   setAddDraftedId(id);
                   if (id) {
+                    rememberName(id, player?.display_name);
                     addDrafted(id);
                     setAddDraftedId("");
                   }
@@ -523,13 +639,31 @@ export function DraftView() {
             </span>
           </div>
           {draftedIds.length > 0 && (
-            <ul className="action-list">
-              {draftedIds.map((id) => (
-                <li key={id}>
-                  {nameFor(id)} <button className="secondary" onClick={() => removeDrafted(id)}>undo</button>
-                </li>
-              ))}
-            </ul>
+            <>
+              <p className="muted">
+                Overall pick numbers are the board order, so they are always 1–{draftedIds.length}{" "}
+                with no gaps. If you logged a pick out of order, type its real number to move it —
+                every pick between the old and new slot renumbers, exactly as a real board does.
+              </p>
+              <ul className="action-list">
+                {draftedIds.map((id, index) => (
+                  <li key={id}>
+                    <input
+                      type="number"
+                      className="pick-number"
+                      aria-label={`Overall pick number for ${nameFor(id)}`}
+                      min={1}
+                      max={draftedIds.length}
+                      value={index + 1}
+                      onChange={(e) => setPickNumber(id, Number(e.target.value))}
+                    />{" "}
+                    {nameFor(id)}
+                    {myPickIds.includes(id) && <span className="muted"> · mine</span>}{" "}
+                    <button className="secondary" onClick={() => removeDrafted(id)}>undo</button>
+                  </li>
+                ))}
+              </ul>
+            </>
           )}
 
           <h3>My picks</h3>
@@ -545,9 +679,10 @@ export function DraftView() {
               <span className="picker-field-label">Mark my pick</span>
               <PlayerPicker
                 value={addMyPickId}
-                onChange={(id) => {
+                onChange={(id, player) => {
                   setAddMyPickId(id);
                   if (id) {
+                    rememberName(id, player?.display_name);
                     addMyPick(id);
                     setAddMyPickId("");
                   }
@@ -556,16 +691,33 @@ export function DraftView() {
             </span>
           </div>
           {myPickIds.length > 0 && (
-            <ul className="action-list">
-              {myPickIds.map((id) => (
-                <li key={id}>
-                  {nameFor(id)}{" "}
-                  <button className="secondary" onClick={() => removeMyPick(id)}>
-                    undo
-                  </button>
-                </li>
-              ))}
-            </ul>
+            <>
+              <ul className="action-list">
+                {[...myPickIds]
+                  .sort((a, b) => (pickNumberOf(a) ?? 0) - (pickNumberOf(b) ?? 0))
+                  .map((id) => (
+                    <li key={id}>
+                      <span className="pick-number-badge">#{pickNumberOf(id) ?? "?"}</span>{" "}
+                      {nameFor(id)}
+                      <span className="muted">
+                        {" "}
+                        · {pool?.find((p) => p.player_id === id)?.position ?? "position unknown"}
+                      </span>{" "}
+                      <button className="secondary" onClick={() => removeMyPick(id)}>
+                        undo
+                      </button>
+                    </li>
+                  ))}
+              </ul>
+              {/* #3: the roster the engine will price roster need against, derived from the
+                  marked picks above rather than typed separately. Shown so the user can SEE the
+                  two representations agree instead of taking it on trust. */}
+              <p className="muted">
+                Roster positions used for need/fit:{" "}
+                <strong>{derivedRosterPositions.join(", ") || "none yet"}</strong> — derived from
+                your marked picks, so marking a pick updates it automatically.
+              </p>
+            </>
           )}
         </>
       )}
@@ -672,6 +824,20 @@ export function DraftView() {
                 </tbody>
               </table>
             </details>
+          )}
+          {!usingRealRoster && decision.roster_positions_used && (
+            <p className="muted">
+              Priced against roster:{" "}
+              <strong>{decision.roster_positions_used.join(", ") || "empty"}</strong> (echoed back
+              by the server — this is the roster the engine actually used, not what was typed).
+            </p>
+          )}
+          {decision.unresolved_roster_player_ids && decision.unresolved_roster_player_ids.length > 0 && (
+            <p className="error">
+              {decision.unresolved_roster_player_ids.length} of your marked picks could not be
+              placed at a position on the {season} board, so roster need was computed without
+              them: {decision.unresolved_roster_player_ids.map((id) => nameFor(id)).join(", ")}.
+            </p>
           )}
           <div className="muted">Decision recorded: {decision.decision_id}</div>
 

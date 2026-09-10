@@ -3,10 +3,12 @@
 
 from __future__ import annotations
 
+from datetime import date
+
 import pytest
 
 from alpha_squad.config.settings import Settings
-from alpha_squad.evidence.prior_update import evidence_score_for_action
+from alpha_squad.evidence.prior_update import evidence_score_for_action, nfl_week1_date
 from alpha_squad.evidence.sleeper_trending import detect_sleeper_trending
 from alpha_squad.identity.canonical import build_identity
 from alpha_squad.sources.dynastyprocess import DynastyProcessSource
@@ -89,6 +91,14 @@ def test_real_trending_evidence_moves_the_edge_evidence_score(con_ready, setting
     if row is None:
         pytest.skip("every real trending-add player also appears in trending-drops this run")
     player_id, direction = row
+
+    # `evidence_score_for_action` only counts evidence dated before that season's own Week 1,
+    # and `detect_sleeper_trending` dates its events today -- so this assertion is only
+    # meaningful while the season under test has not kicked off. Stating that here rather than
+    # assuming it: the assertion silently began failing on 1 September 2026 under the old
+    # hardcoded cutoff, and would legitimately stop applying once 2026 Week 1 is played (D78).
+    if date.today() >= nfl_week1_date(2026):
+        pytest.skip("2026 Week 1 has kicked off; today's events are in-season, not preseason")
 
     score = evidence_score_for_action(con, player_id, 2026, action_sign=direction)
     assert score > 0.5, "real trending evidence agreeing with the action must move the score up"

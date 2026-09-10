@@ -80,11 +80,39 @@ production. Every adapter (including the now-working ones) still raises `SourceB
 unreachable again — this environment's network policy has already changed once and may again, so
 trust a fresh `alpha-squad sources status` run over this note if they disagree.
 
+## Projections vs backtests
+`make train` is a **backtest**: it walk-forward evaluates seasons whose outcomes are already known
+and writes nothing for the season being drafted. The board a real draft runs against comes from
+`make project-current-season` (`CURRENT_SEASON`), which ends on `alpha-squad train
+projection-status` — a gate that calls `load_season_projections` (the application's own loader,
+not a re-query) and exits non-zero if the board is missing, empty, or missing a position the
+league must start. A pipeline exiting 0 is not evidence that projections exist; that gate is.
+
+**M6's point model trains through S-1; its conformal interval model does not (D78).** They are two
+fits, deliberately. The interval model must never see the calibration season, or the residuals it
+measures stop being out-of-sample and the intervals become fiction. `--specification legacy`
+reproduces the pre-D78 single-model behaviour under `uncertainty_catboost_v1` so older backtests
+stay reproducible; production is `uncertainty_catboost_v2`.
+
+**The reported top-of-board "compression" was investigated in D78 and is mostly correct
+behaviour** — `E[max Y] > max E[Y]`, and the observed exceedance counts sit inside the model's own
+90% predictive band in 18 of 20 position-seasons. The residual RB effect in 2024-2025 is shared
+almost exactly with the FantasyPros expert consensus. Do not "fix" it by inflating projections:
+the un-shrunk prior-season total produces the highest top-of-board numbers of anything tested and
+is the worst projection in the comparison.
+
 ## Modeling
 Use baselines first, then position-specific ML, uncertainty, rookie modeling, market EDGE, current information, league strategy.
 
 **K and DST (D57)** are deliberately baselines, not models, and the weighting for each was
-chosen by walk-forward MAE rather than assumed. Both carry weak year-over-year signal (K
+chosen by walk-forward MAE rather than assumed.
+
+**A DST's points-allowed tier needs `team_week_points`, so `features build` builds that table
+itself before the K/DST step (D78).** Until D78 the documented `make` order ran `features` before
+`team-scores`, the K/DST step joined an empty table, and *every* season ended up with zero DST
+rows — a league starting a DEF filled that slot with nothing and scored zero for it, silently.
+`build_kicking_and_defense` now raises `MissingTeamScoresError` rather than writing zero, and the
+CLI prints the K/DST counts. Never reorder those two steps back. Both carry weak year-over-year signal (K
 r=0.41, DST r=0.29 over real 2015–2025 seasons); an ML model would imply an accuracy the data
 does not support. Their realized points are *computed* — nflverse scores only
 passing/rushing/receiving, so kickers came through as 0.0 and team defenses did not exist as

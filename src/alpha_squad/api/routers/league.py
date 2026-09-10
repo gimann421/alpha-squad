@@ -47,6 +47,7 @@ from alpha_squad.league.draft import DraftRecommendation, recommend_draft_pick
 from alpha_squad.league.replacement import load_season_projections
 from alpha_squad.league.roster import roster_need
 from alpha_squad.league.roster_import import (
+    positions_for_player_ids,
     resolve_roster_positions,
     resolve_roster_selection,
     teams_for_league,
@@ -519,7 +520,8 @@ def _recommend_draft_pick_for_request(
     (Stage 1 Claude strategic layer, D74) -- identical roster resolution, live-draft-pick
     augmentation, and `recommend_draft_pick` call either endpoint would otherwise have to
     duplicate. Returns `(rec, roster_positions)`; `roster_positions` is also what
-    `strategy/context_builder.py` needs to recompute `roster_need` for Claude's context."""
+    `strategy/context_builder.py` needs to recompute `roster_need` for Claude's context, plus
+    any rostered ids whose position the season's board does not carry (D78)."""
     if body.available_player_ids is not None:
         available = set(body.available_player_ids)
     else:
@@ -539,9 +541,19 @@ def _recommend_draft_pick_for_request(
         selection.player_ids if selection.player_ids is not None else body.roster_player_ids
     )
     roster_positions = selection.positions
+    unresolved_roster_player_ids: list[str] = []
     if body.roster_id is not None:
         roster_positions, roster_player_ids = _augment_with_live_draft_picks(
             con, league, body.roster_id, roster_positions, roster_player_ids
+        )
+    elif roster_player_ids:
+        # D78: a manual draft has no real roster to read, so the caller used to send two
+        # independent pictures of its team -- a hand-typed position list and the marked picks
+        # -- and marking a pick updated only the second. Derive the first from the second, the
+        # same precedence `roster_id` already takes over `roster_positions`: the concrete
+        # players are the roster, and the position list is a view of them.
+        roster_positions, unresolved_roster_player_ids = positions_for_player_ids(
+            con, body.season, roster_player_ids
         )
     rec = recommend_draft_pick(
         con,
@@ -555,7 +567,7 @@ def _recommend_draft_pick_for_request(
         current_pick_overall=body.current_pick_overall,
         roster_player_ids=roster_player_ids,
     )
-    return rec, roster_positions
+    return rec, roster_positions, unresolved_roster_player_ids
 
 
 def _trace_row_for(rec: DraftRecommendation) -> DraftDecisionTrace:
@@ -590,7 +602,9 @@ def post_draft(
 ) -> DecisionResponse:
     league = _league_or_404(league_id, con)
     try:
-        rec, _roster_positions = _recommend_draft_pick_for_request(con, league, body)
+        rec, roster_positions_used, unresolved_ids = _recommend_draft_pick_for_request(
+            con, league, body
+        )
     except RuntimeError as e:
         raise HTTPException(status_code=422, detail=str(e)) from e
     trace_row = _trace_row_for(rec)
@@ -619,6 +633,8 @@ def post_draft(
         confidence=rec.confidence,
         reasons=rec.reasons,
         trace=trace_row,
+        roster_positions_used=roster_positions_used,
+        unresolved_roster_player_ids=unresolved_ids,
     )
 
 
@@ -640,7 +656,9 @@ def post_draft_claude_review(
     read and approve. Nothing here calls Sleeper or writes draft state anywhere."""
     league = _league_or_404(league_id, con)
     try:
-        rec, roster_positions = _recommend_draft_pick_for_request(con, league, body)
+        rec, roster_positions, _unresolved_ids = _recommend_draft_pick_for_request(
+            con, league, body
+        )
     except RuntimeError as e:
         raise HTTPException(status_code=422, detail=str(e)) from e
     trace_row = _trace_row_for(rec)

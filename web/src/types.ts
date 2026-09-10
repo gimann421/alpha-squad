@@ -184,6 +184,11 @@ export interface DecisionResponse {
   reasons: string[];
   action?: string | null;
   trace?: DraftDecisionTrace | null;
+  // The roster the engine actually priced against, echoed back (D78) -- roster need/fit and
+  // marginal starter value are now derived from one source instead of two client inputs that
+  // could describe different teams, and this is what lets the UI show that rather than assume it.
+  roster_positions_used?: string[];
+  unresolved_roster_player_ids?: string[];
 }
 
 // Stage 1 Claude strategic decision layer (docs/DECISIONS.md D74). Mirrors

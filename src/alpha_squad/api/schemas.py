@@ -5,7 +5,7 @@ separate code path from what the CLI/orchestrator already produced."""
 
 from __future__ import annotations
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from alpha_squad.market.edge import DEFAULT_ECR_TYPE
 from alpha_squad.strategy.contracts import ClaudeDraftDecision
@@ -454,6 +454,17 @@ class DecisionResponse(BaseModel):
     reasons: list[str]
     action: str | None = None
     trace: DraftDecisionTrace | None = None
+    #: The roster the engine actually priced against, echoed back (D78). `roster_positions`
+    #: drives roster need/fit and `roster_player_ids` drives marginal starter value; before
+    #: D78 they were two independent client inputs that could describe different teams
+    #: without anything saying so. They are now derived from one source, and echoing the
+    #: result is what lets a caller SEE that rather than assume it.
+    roster_positions_used: list[str] = Field(default_factory=list)
+    #: Rostered ids whose position could not be resolved from the season's board. They are
+    #: excluded from `roster_positions_used`, so a non-empty list here means roster need was
+    #: computed against fewer players than the caller believes it holds -- surfaced instead of
+    #: silently absorbed.
+    unresolved_roster_player_ids: list[str] = Field(default_factory=list)
 
 
 class ClaudeDraftReviewRequest(DraftRequest):

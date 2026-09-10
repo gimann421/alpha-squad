@@ -1,4 +1,4 @@
-.PHONY: install test test-network test-cov lint fmt check-secrets ingest identity college-usage features team-scores market train evaluate edge simulate orchestrate serve serve-web clean
+.PHONY: install test test-network test-cov lint fmt check-secrets ingest identity college-usage features team-scores market train project-current-season capture-live-market evaluate edge simulate orchestrate serve serve-web clean
 
 install:
 	uv sync --extra dev
@@ -44,12 +44,16 @@ identity:
 college-usage:
 	uv run alpha-squad features build-college-usage
 
+# `features build` now builds team_week_points itself, BEFORE the K/DST step that depends on
+# it (D78). Until then this target ran before `team-scores`, so on a clean database the DST
+# scoring step found an empty team_week_points, wrote zero rows, and a league starting a DEF
+# got an empty slot with nothing on screen saying so.
 features:
 	uv run alpha-squad features build --season-start 2015 --season-end 2025
 
 # team_week_points (real final scores, from pbp) is a separate table from `features`'s
-# team_week_stats -- simulate_team_season's environment draw needs both. Not folded into
-# `features build` itself so nothing already-validated there is touched by adding it.
+# team_week_stats -- simulate_team_season's environment draw needs both. `features build`
+# already builds it (see above); this target stays for refreshing it on its own.
 team-scores:
 	uv run alpha-squad features build-team-scores --season-start 2015 --season-end 2025
 
@@ -57,10 +61,50 @@ market:
 	uv run alpha-squad market build
 	uv run alpha-squad market build-dynasty-values
 
+# `train kdst-projections` is part of this target because `load_season_projections` -- the board
+# the draft engine, the benchmark and every evaluation path read -- merges K/DST from
+# `projection_snapshot`. Without it a from-source rebuild produces historical boards with no
+# kickers and no defenses at all, so a league that starts a K and a DEF cannot fill either slot
+# and every draft measured against that board is wrong by two forfeited starters (~-130 realized
+# points each, D67). Found by rebuilding from scratch in the D84 session: `make ingest ... train`
+# completed cleanly and still left 2021-2025 with zero K/DST rows, silently.
 train:
 	uv run alpha-squad train established-season
 	uv run alpha-squad train uncertainty
 	uv run alpha-squad train rookie
+	uv run alpha-squad train kdst-projections --season-start 2015 --season-end 2025
+
+# ------------------------------------------------------------------------------------------
+# Current-season projections (D78). Everything above this line is HISTORICAL: `train` is a
+# walk-forward backtest over seasons whose outcomes are already known, and it deliberately
+# writes nothing for the upcoming season. This target is what produces the board an actual
+# draft is run against.
+#
+# CURRENT_SEASON is the season being DRAFTED FOR -- the one that has not been played. Override
+# it (`make project-current-season CURRENT_SEASON=2027`) rather than editing it here.
+#
+# It ends on `train projection-status`, which is a gate, not a summary: it calls the same
+# `load_season_projections` the draft engine calls and exits non-zero if the board it gets
+# back is missing, empty, or missing a position the league has to start. A pipeline that
+# merely exits 0 does not establish that the application has projections.
+CURRENT_SEASON ?= 2026
+
+project-current-season:
+	uv run alpha-squad sources ingest --season-start $(CURRENT_SEASON) --season-end $(CURRENT_SEASON)
+	uv run alpha-squad identity build
+	uv run alpha-squad market build
+	uv run alpha-squad train uncertainty-project --season $(CURRENT_SEASON)
+	uv run alpha-squad train rookie-project --draft-class $(CURRENT_SEASON)
+	uv run alpha-squad train kdst-projections --season-start $(CURRENT_SEASON) --season-end $(CURRENT_SEASON)
+	uv run alpha-squad train projection-status --season $(CURRENT_SEASON)
+
+# Optional: today's FantasyPros consensus straight from the live API, as its own
+# provenance-tagged series (source='fantasypros_live') alongside the DynastyProcess-sourced
+# board. Requires FANTASYPROS_API_KEY. Not part of the target above because the board that
+# every historical measurement was made against is the DynastyProcess one, and a draft should
+# be run against the same series the model was validated on.
+capture-live-market:
+	uv run alpha-squad market capture-live-fantasypros --season $(CURRENT_SEASON)
 
 evaluate:
 	uv run alpha-squad evaluate baselines

@@ -192,6 +192,39 @@ def resolve_roster_selection(
     )
 
 
+def positions_for_player_ids(
+    con: duckdb.DuckDBPyConnection, season: int, player_ids: list[str]
+) -> tuple[list[str], list[str]]:
+    """`(positions, unresolved_ids)` for a hand-tracked roster (D78).
+
+    A manual/non-Sleeper draft has no `roster_id`, so before D78 the caller sent TWO
+    independent descriptions of the same team -- `roster_positions` (a hand-typed string,
+    driving roster need/fit) and `roster_player_ids` (the marked picks, driving marginal
+    starter value). Nothing reconciled them, so marking a pick moved one and not the other and
+    the engine could price a lineup against a roster the caller did not have. This derives the
+    first from the second, which is the same precedence a Sleeper league already gets: the
+    concrete players win, and the position list is a projection of them.
+
+    Positions come from the season's own board (`load_season_projections`), the identical
+    mapping `recommend_draft_pick` scores against, so a player cannot be one position for
+    roster need and another for value. An id the board does not carry is returned in
+    `unresolved_ids` rather than dropped silently -- roster need computed against fewer
+    players than the caller believes it holds is exactly the kind of quiet disagreement this
+    function exists to end."""
+    from alpha_squad.league.replacement import load_season_projections
+
+    _, board_positions = load_season_projections(con, season)
+    positions: list[str] = []
+    unresolved: list[str] = []
+    for player_id in player_ids:
+        position = board_positions.get(player_id)
+        if position:
+            positions.append(position)
+        else:
+            unresolved.append(player_id)
+    return positions, unresolved
+
+
 def resolve_roster_positions(
     con: duckdb.DuckDBPyConnection,
     settings: Settings,

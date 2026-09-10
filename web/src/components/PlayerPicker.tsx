@@ -15,7 +15,11 @@ export function PlayerPicker({
   displayLabel,
 }: {
   value: string;
-  onChange: (playerId: string) => void;
+  // The picked player is passed alongside the id so a caller can remember its display name.
+  // Without it a caller holding only ids has to find the name in some other list, and shows a
+  // raw `asq_<hash>` for anyone missing from that list -- which is what the draft board did for
+  // any player outside the top-500 ranked pool (D78).
+  onChange: (playerId: string, player?: PlayerSummary) => void;
   placeholder?: string;
   // Shown instead of the raw player_id when `value` was set externally (e.g. PlayerLink
   // jumping the Player Detail tab straight to a player_id, bypassing this picker's own
@@ -44,7 +48,7 @@ export function PlayerPicker({
     setSelected(p);
     setResults(null);
     setQuery("");
-    onChange(p.player_id);
+    onChange(p.player_id, p);
   }
 
   function clear() {
@@ -52,9 +56,17 @@ export function PlayerPicker({
     onChange("");
   }
 
-  if (selected || (value && !query)) {
-    const label = selected
-      ? `${selected.display_name ?? selected.player_id} (${selected.position ?? "?"})`
+  // BUG (D78, found by driving a real manual draft in a browser): this used to key off the
+  // component's OWN `selected` state, which nothing cleared when the PARENT reset `value` to
+  // "". A caller that consumes a pick and clears the field -- which is exactly what the draft
+  // board does, once per pick -- got a picker frozen on the previous player, so entering
+  // consecutive picks required clicking "change" between every one. Keying the whole branch on
+  // `value` makes the parent's clear authoritative: `selected` is only ever a nicer label for
+  // the id the parent is actually holding.
+  const selectionMatchesValue = selected?.player_id === value;
+  if (value && (selectionMatchesValue || !query)) {
+    const label = selectionMatchesValue
+      ? `${selected!.display_name ?? selected!.player_id} (${selected!.position ?? "?"})`
       : (displayLabel ?? value);
     return (
       <span>

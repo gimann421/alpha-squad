@@ -227,6 +227,7 @@ def recommend_draft_pick(
     top_n: int = 5,
     current_pick_overall: int | None = None,
     roster_player_ids: list[str] | None = None,
+    projection_model_version: str | None = None,
 ) -> DraftRecommendation:
     # Which consensus board this league's market signals should come from is a property of
     # the league, not a constant (D56): a 1-QB league and a superflex league price QBs very
@@ -235,7 +236,14 @@ def recommend_draft_pick(
     if ecr_type is None:
         ecr_type = resolve_market_series(league).ecr_type
 
-    projections, positions = load_season_projections(con, season)
+    # `projection_model_version` defaults to the shipped M6 version. It exists so a projection
+    # change can be evaluated as a paired variant-vs-control contrast on IDENTICAL draft trials
+    # (D71's recommended instrument). Threading it only as far as `simulate_draft` is not
+    # enough and was measured to be a silent no-op: this function reloads the board itself, so
+    # both arms of a contrast scored on the same projections and produced 50 identical drafts
+    # -- a harness defect that looked exactly like "the change has no draft-layer effect"
+    # (D78). Production callers pass nothing and get the shipped version, unchanged.
+    projections, positions = load_season_projections(con, season, projection_model_version)
     vorp = marginal_value_over_replacement(league, projections, positions)
     needs = roster_need(league, roster_positions)
 

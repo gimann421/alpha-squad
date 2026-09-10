@@ -3,7 +3,88 @@
 Living summary of what is implemented, validated, and outstanding. Updated at the end of every
 milestone. See `docs/TRACEABILITY.md` for the acceptance-criteria-level mapping.
 
-## Status: M30 complete — **D67/W1 remains production; no calibration of any kind has shipped.** D67 put draft-aware replacement level at the demand a draft actually consumes, and **Alpha leads fair market consensus on the official benchmark for the first time on this format (2061.3 vs 2034.8, +26.5), but the margin is inside noise**. D68 tested broad positional calibration and **rejected every arm**; D69 assessed the RB-only calibration follow-up and **abandoned it before implementation**; **D70 implemented and ran D69's own recommended follow-up — RB availability FEATURES (not a calibration) — and it also failed its pre-registered gates**: B1 (accuracy) and B2 (the targeted RB bias falls) both FAIL, with B2 the decisive one — the treatment made the RB signed bias *larger*, not smaller, in all three treated seasons (2023 +22.1 vs control +16.9, 2024 +44.7 vs +44.4, 2025 +26.9 vs +23.5). B3 (availability predicts realized games, out of fold) passed but only weakly and trending toward zero (+0.23 → +0.18 → +0.05). Per protocol the draft layer was never run. **P1-0 remains OPEN.** Both of D69's proposed paths (RB-only calibration, RB availability features) are now closed; no further RB-specific mechanism is currently proposed, and any future one needs its own pre-registration. M13 complete; M14 post-audit hardening (D41-D52) except P2-3 (needs a user credential decision); M15 productization (D53); M16-M19 evaluation, draft forensics, opportunity cost, 1-QB retarget (D54-D60); M20 benchmark artifact found (D61); M21 measurement fixed (D62); M22 shipped `msv + VORP` (D63); M23 rejected two kicker fixes (D64); M24 proved static replacement is a causal defect (D65); M25 found demand DEPTH is the governing parameter (D66); M26 replaced the depth multiplier with a derived demand target and shipped it (D67). **P1-0 remains OPEN**: the +26.5 lead has 95% CI [−38.0, +91.0] and W/L 28/22, and it falls to +3.1 with 2022 removed. Roster construction is sound (0/50 unfilled mandatory slots, no zero-K/zero-DEF roster, every roster exactly 16) and the run is deterministic across two processes. The residual gap is diagnosed and sits **upstream of the draft engine**: Alpha loses RB starter points in all five seasons (mean −247.7) and wins WR in all five (+183.2), because M6 under-projects RB in 4 of 5 seasons (+38.0 in 2024, the one season Alpha loses) and over-projects WR/QB. **D68 ran that walk-forward positional calibration and rejected every arm** (M27): all five pre-registered forms improve raw accuracy (MAE 63.3 → 61.8-62.9) but none clears the pre-registered gates, because RB is the ONLY position whose walk-forward bias estimate is sign-stable (+2.5/+8.0/+16.9/+44.4 across 2021-2024) while QB, WR and TE all flip sign between seasons and are corrected in the wrong direction. Nothing shipped; production is byte-identical to D67. The draft layer was not run, per the committed protocol that an arm failing the projection layer never reaches it. **D69 then assessed the RB-only arm D68 had deferred, and abandoned it before implementation** (M28): RB's sign stability holds for the mean but not the median or trimmed mean (2021 median −12.3, trimmed −1.5); magnitude is not usefully forecastable walk-forward (best predictor MAE 16.3 against a 14.4 SD of the truths and an ~11.2 oracle); the residual's leading — **not demonstrated** — explanation is an association with an RB-specific availability measure that has been trending (corr with games played +0.70 to +0.80 every season, RB mean games 11.67→14.19→13.83, RB-specific vs WR +0.35 / QB −0.04), which a backward-looking estimator lags; and a uniform additive RB shift leaves `draft_aware_vorp` **invariant by construction** (measured ΔVORP exactly 0.00), moving only 0–2 of the top-20 pick-1 board slots against a −247.7/season deficit. Winner's-curse / projection-rank conditioning and a market-varying universe remain unresolved alternatives. Nothing shipped, nothing fitted, no benchmark run. **D71 (M30)** then audited the benchmark's own inferential structure, read-only, no new simulation: the 50 trials are a deterministic `(season × slot)` cross-product sharing one projection set and one market board per season, so the true experimental unit is the season — **n=5, not n=50** (10 per-season rosters overlap 53-73%, ICC 0.0995). The season-clustered 95% CI is **[−100.4, +153.4]** (df=4) — wider than the naive-iid **[−38.0, +91.0]** D67 published, which assumed 50 independent draws. Resolving the +26.5 effect would need **~116 seasons** at current precision, or **~61 even under a hypothetically perfect within-season measurement** — against a season universe hard-bounded at 2021+ (`market_snapshot` has no `ro`/`redraft-overall` preseason rows before 2021) and growing by one season per year. **P1-0 is therefore split**: **P1-0a** (the item's original roster-balance defect) is **CLOSED** — `alpha_league_aware` has 0/50 unfilled mandatory slots, every roster exactly 16, vs 327/50 for `alpha_bpa` — while **P1-0b** (absolute superiority vs. fair consensus) stays **OPEN**, reclassified from "the next experiment should close it" to a standing measurement limitation, not a blocking gate. Future engine-change evaluation uses a variant-vs-control contrast on identical trials instead — the instrument D65's Candidate C already used successfully (CI [+2.3, +44.1]). No RB/WR/QB work reopened; no code, model, or production change.
+## Status: M35 complete (D78) — **the reported projection "compression" was investigated and is mostly correct behaviour; a real training-specification defect was found, pre-registered, measured and shipped; and a production-blocking DST bug was found and fixed.**
+
+A pre-draft report said the 2026 projections were materially miscalibrated, particularly at RB
+(top projected WR ~316 against ~3-4 real 2025 WRs above it; top projected RB ~251 against ~10-11).
+Both figures reproduce. Their interpretation does not survive measurement: `E[max Y] > max E[Y]`
+for any noisy outcome, and against M6's own out-of-sample residual distribution the observed
+exceedance count is **inside the model's 90% predictive band in 18 of 20 position-seasons** — 2025
+RB is 11 observed against 13.0 expected, band [9,17], i.e. the model expected *more* than happened.
+The only genuine outlier in 2021-2025 is 2024 RB. The cross-positional part is real (RB−WR
+top-decile gap +98.8 in 2024, +123.3 in 2025) but trending rather than stationary, and **the
+FantasyPros expert consensus makes the identical error** (RB top-decile bias +38.96 market vs
++39.21 model over 2022-2025). Naively raising the top of the board is measurably worse.
+
+Nine candidate model changes were measured walk-forward and rejected. **Two defects in M6's
+training specification did hold up** — the ECR sentinel 999 doubling as "no board existed this
+season" (2016-2019), and the point model never training on season S-1 — and were tested under four
+arms and seven gates pre-registered in git before the run. **Y1 shipped**: real backtest MAE
+42.31 → 40.88, RMSE 59.09 → 57.09, Spearman 0.757 → 0.770, better in all five seasons and at all
+four positions, with conformal coverage moving 0.7901 → 0.7971 against a 0.80 target. Y3 scores
+better and clears every gate but was **not** taken, because the selection rule was fixed in advance
+and Y2 (the component Y3 adds) fails G6 alone. No positional term of any kind shipped; D68/D69/D70
+stay closed.
+
+Separately, the new `train projection-status` gate immediately exposed a production-blocking bug
+that had nothing to do with projections: `make` ran `features` before `team-scores`, so the K/DST
+step joined an empty `team_week_points` and wrote **zero DST rows in every season** — a league
+starting a DEF would have scored zero for that slot, silently. Fixed at the dependency, with the
+counts now printed and a hard error rather than a quiet zero.
+
+**The draft-layer contrast is a null.** A paired variant-vs-control run on identical trials
+(5 seasons x 4 slots, 40 drafts per arm) puts Y1 at **-15.8 starter points, W/L 10/10,
+season-clustered 95% CI [-89.2, +57.6]** against the v1 specification. A measurable
+projection-accuracy gain did not translate into a measurable drafting gain and may have cost a
+little. Y1 stays shipped because D78 pre-registered projection-layer gates only and it cleared
+every one; reverting on a post-hoc non-significant negative would be the after-the-fact
+selection this project has refused six times. The claim is therefore narrow: Y1 is more
+accurate, and is NOT demonstrated to draft better. The first run of that contrast returned a
+perfect +0.0/50-ties null which was a HARNESS DEFECT, not a finding -- `recommend_draft_pick`
+reloads the board itself and both arms scored on the same projections; the fix and the
+"assert the arms diverge before interpreting" check are recorded in D78 section 8c.
+
+`make project-current-season` produces and verifies the upcoming season's board (610 established +
+150 rookie + 74 K/DST rows; the application's own loader returns 834 players across all 6
+positions). #2 (overall pick numbers with correction) and #3 (one source of truth for roster
+state) shipped, along with three real UI bugs found by driving the app in a browser — the most
+serious being the Draft view sitting on season 2025 while 2026 projections existed. **P1-0b
+remains OPEN** as the standing measurement limitation D71 reclassified it to; nothing in this phase
+changes that, and the season universe is still n=5.
+
+### M36 (D79-D83) — the draft-decision and projection investigation. **Nothing shipped to the model.**
+
+One production defect was found and fixed (D79): `GET /rankings` served the wrong universe —
+163-179 players missing per season, including **every K and DST** — which also broke
+`league/draft.py`'s `pool_is_a_board` guard, so D67's draft-aware replacement never engaged in
+production (RB-vs-WR replacement gap −0.4 static against +31.1 draft-aware). The served universe
+is now verified identical to the engine's in every season 2021-2025.
+
+Everything else was measured and rejected. **Thirteen pre-registered candidate models across three
+phases** (D80 top-of-board arms, D82 feature addition, D83 seed ensembling) were tested against
+gates committed to git *before* any arm ran, walk-forward on 2022-2025. **Every one failed.** The
+closest — a 24-seed ensemble — confirmed its own pre-registered mechanism prediction (WR top5
+−7.62 MAE, gains scaling with seed count, 7 of 9 gates passed) and was then measured on realized
+starter points: **−7.9, season-clustered 95% CI [−101.9, +86.1]**, 2 of 4 seasons, median paired
+difference exactly zero.
+
+The common cause is now measured. Varying **nothing but CatBoost's random seed**, the shipped
+model's predictions move **9.66 points in the head of the board against 2.42 in the body** — the
+top is four times less determined by the data than the rest, before any change is made. It is
+**variance-limited, not information-limited**, which is why changing the estimator (D79/D80) and
+changing the information (D82) both failed.
+
+**The WR-heavy opening is a decision-engine property, not a projection-model property**, on three
+independent lines: elite RBs must project ~350 (about 140 points above the training data's own
+answer of 210.3) before one is taken at #1, and no value changes picks #20 or #21; no projection
+change clears the gates; and the one candidate that measurably improved top-of-board accuracy made
+the WR concentration *worse* (first-pick RB 8/40 → 0/40) at no gain. The open question is the
+decision layer's value base — `msv + daVORP` counts raw projection twice at an empty roster slot,
+and QB replacement is drawn at the *consumption* boundary (QB22) rather than what a 1-QB roster
+starts. Full report: `docs/PROJECTION_INVESTIGATION_FINAL.md` and
+`docs/OPENING_DRAFT_AUDIT.md`.
+
+Earlier milestone history (M0-M34) is unchanged and summarised in the table below.
 
 | Milestone | Status | Notes |
 |---|---|---|
@@ -42,6 +123,7 @@ milestone. See `docs/TRACEABILITY.md` for the acceptance-criteria-level mapping.
 | M32 Production-readiness hardening pass | DONE | D73. Audited the full live-draft path (Sleeper -> roster/league context -> draft state -> recommendation -> UI) for a real upcoming draft; zero scoring/methodology change. Found and fixed a real load-bearing bug: mid-draft roster resolution read only `GET /league/{id}/rosters`, whose live-draft update behavior Sleeper's own docs do not document, risking marginal-starter-value pricing against a roster missing this team's own just-drafted players -- fixed by unioning in the authoritative `GET /league/{id}/sleeper-draft` picks feed (`api/routers/league.py::_augment_with_live_draft_picks`). Found and fixed a real unhandled-exception bug: a genuine Sleeper 429/5xx or malformed response bypassed every `except SourceError` handler and would 500 instead of degrading to 503 (`sources/sleeper.py`). Exposed a `DraftDecisionTrace` (runner-up, score gap, full scored candidate list, draft-state inputs) via `DecisionResponse.trace` and `decisions.provenance_json` -- Phase 4/5's "what is calculated but discarded before reaching the UI," now retained, with no change to what gets recommended -- the structured seam a future Claude strategic layer will read. Fixed two real `DraftView.tsx` bugs: an auto-recommend transition ref that didn't reset on league/roster switch, and a race letting a recommendation request fire before the first Sleeper draft-state sync resolved; added a stale-recommendation banner keyed off live pick count. Verified live against the real `dilworth`/`boys_of_fall` leagues (real team/roster fetch, real 180- and 40-pick completed-draft reconstruction, graceful 404/422 on bad input) -- no in-progress draft was available in either, documented as a limitation rather than faked. No autonomous Sleeper pick submission exists anywhere in the codebase (verified by repo-wide grep) -- the recommendation/action safety boundary is currently satisfied only because the action side does not exist yet. 866 offline tests passing (up from 853); lint/typecheck/build clean both sides. Full detail: D73. |
 | M33 Claude strategic decision layer (Stage 1) | DONE | D74. New `strategy/` package sits above `league/draft.py`, never inside it -- zero changes to `league/`, `models/`, `features/`, `evaluation/`. `strategy/contracts.py` defines the typed boundary: `ClaudeDecisionContext` (built entirely from D73's already-computed `DraftDecisionTrace` plus `roster_need`, nothing independently fetched) and `ClaudeDraftDecision` (a schema-constrained FOLLOW_ALPHA/OVERRIDE_ALPHA response, pydantic-validated with an override-requires-a-reason self-consistency rule). `strategy/provider.py` calls the real `anthropic` SDK with a JSON-schema-constrained structured output, translating every real SDK error into a `ClaudeUnavailableError`/`ClaudeInvalidResponseError` pair mirroring `sources/base.py`'s existing error taxonomy; `FakeClaudeProvider` is what every test uses instead. `strategy/review.py` hard-validates Claude's selection against the exact candidate pool it was shown (never the full board) and self-consistency between decision/selected_player_id, persisting every outcome -- valid or rejected -- to a new `claude_decisions` table for replay, and falls back to Alpha's own (unaffected, already-computed) recommendation on ANY failure. New `POST /league/{id}/draft/claude-review` reuses the identical Alpha-computation helper `POST /draft` itself now calls (`_recommend_draft_pick_for_request`, extracted by refactor -- `POST /draft`'s own behavior confirmed unchanged) so there is exactly one recommendation engine, never two. `DraftView.tsx` adds a separate, opt-in "Get Claude's strategic review" button (never automatic per pick, for live-draft cost/latency discipline) showing agree/override/confidence/reasons/risk-flags and a staleness banner reusing D73's exact pick-count mechanism. No autonomous action: nothing in this package calls Sleeper or writes draft state; every path ends at a recommendation returned to the user. Real Anthropic API smoke test NOT performed -- no credentials available in this sandbox (verified), documented rather than faked; every other layer verified against a mocked SDK client or `FakeClaudeProvider`. 906 offline tests passing (up from 866: 31 + 9 new); lint/typecheck/build clean both sides. Full detail: D74. |
 | M34 Final pre-draft verification | DONE | D75. Re-verified D73/D74 end to end from the code (not from memory) ahead of a real draft. Found and fixed one real bug: `<DraftView>` is not remounted on a Sleeper league switch, and `draftSync`/`decision`/`claudeReview` were never cleared on `leagueId`/`rosterId` change -- switching leagues could show a stale, wrong-league Alpha/Claude recommendation with no staleness warning (two leagues' pick counts can coincidentally match). Fixed with one reset `useEffect`. Verified with real evidence: mocked-Claude cases A-E all confirmed, including a new stale-decision-vs-changed-board test (Case D) that actually re-validates an old decision against a new context rather than only checking fingerprints differ; a new cross-league isolation test confirming `claude_decisions` rows never collide; a real `/draft/claude-review` call against the real `dilworth` Sleeper league with a real rostered player (Sleeper id `11581`) correctly priced as already-owned, the real live-picks feed executing cleanly, and Claude correctly reporting `claude_unavailable`; a full security grep (zero Anthropic references in `web/src`, no logging of credentials, zero write calls to Sleeper anywhere); and a re-measured payload (5 candidates regardless of a 150-player pool, ~1,220 tokens). Real Anthropic credentials remain unavailable in this sandbox -- unchanged from D74, still documented rather than faked. 908 offline tests passing (up from 906: 2 new); lint/typecheck/build clean both sides. Full detail: D75. |
+| M35 Projection-compression investigation (D78) | DONE — Y1 shipped | D78. Answered a pre-draft report that the 2026 projections were materially miscalibrated at RB. **The reported symptom is mostly correct behaviour**: `E[max Y] > max E[Y]`, and against the model's own out-of-sample residual distribution the observed number of players beating the top projection is inside its 90% predictive band in **18 of 20** position-seasons (2025 RB: 11 observed vs 13.0 expected, band [9,17] — the model expected MORE than happened). The only real outlier in the window is 2024 RB. The cross-positional part is real (RB−WR top-decile gap +98.8 in 2024, +123.3 in 2025) but is a TREND, not a stationary bias, and **the FantasyPros consensus makes the identical error** — RB top-decile bias +38.96 for the market vs +39.21 for M6 over 2022-2025, a 0.25-point difference. Naively lifting the top of the board is measurably worse: the un-shrunk prior-season total reaches the highest top-of-board values of anything tested and is the worst projection in the comparison (MAE 49.4 vs 45.3). Nine candidate model changes measured walk-forward and rejected (RMSE loss +2.29 MAE, Huber +0.61, more capacity +2.81, Ridge +3.92, ppg×games +0.69, recency weights +0.16/+0.31, dropping ECR +1.83). **What did hold up were two defects in M6's TRAINING SPECIFICATION**, both position-agnostic and neither a calibration: the ECR sentinel 999 doubling as 'this season had no board at all' (2016-2019, ~44% of the RB rows behind a 2026 projection), and the point model never seeing season S-1 because it is spent entirely on conformal calibration. Pre-registered four arms and seven gates in git (`d976622`) before the confirmatory run; **Y1 shipped** by the pre-registered rule, Y2 FAILED G6, and Y3 — which scores better on every metric and clears every gate — was NOT taken because the rule was fixed in advance and Y2 is the component it adds. Real backtest 2021-2025: MAE 42.31→40.88, RMSE 59.09→57.09, Spearman 0.757→0.770, better in all 5 seasons and at all 4 positions; conformal coverage_10_90 0.7901→0.7971 against a 0.80 target with interval widths unchanged. 2026 board top-12 mean: RB 206.3→222.4, WR 253.1→242.0 — the RB−WR gap narrows 27 points from a change with **no positional term in it**. Also found and fixed a production-BLOCKING bug the projection work had nothing to do with: `make` ran `features` before `team-scores`, so the K/DST step joined an empty `team_week_points`, wrote **zero DST rows in every season**, and a league starting a DEF would have scored zero for that slot in silence. Shipped `make project-current-season` ending on a `train projection-status` gate that calls the application's own loader rather than trusting exit codes. #2 (pick numbers) and #3 (roster-position sync) shipped, plus three real UI bugs found by driving the app — including the Draft view sitting on season 2025 while 2026 projections existed. 927 python (961 offline incl. leakage/contract) + 15 frontend tests, and the live network suite re-run clean at 43 passed / 1 skipped / 0 failed (was 2 failed); a 20-step live draft rehearsal in real Chromium passed 20/20. The live suite also exposed two PRE-EXISTING failures, neither caused by D78: a stale 2QB-era assertion left by D58's retarget, and a real bug -- `evidence_score_for_action` fell back to a hardcoded September 1st Week-1 cutoff, so every preseason signal between 1 September and the real opener (the week most redraft leagues draft in) was silently discarded from EDGE; replaced with the league's own scheduling rule, which reproduces all eleven ingested Week 1 dates exactly. The Y1 draft-layer contrast is a NULL (-15.8, CI [-89.2, +57.6]); Y1's demonstrated benefit is projection accuracy only. A 20-step live draft rehearsal in real Chromium passed 20/20. Full account: `docs/DECISIONS.md` D78. |
 
 ## M1 summary
 - Adapters: `nflverse` (15 datasets), `dynastyprocess` (4), `cfbfastr` (1), `ffopportunity` (1)
@@ -1053,3 +1135,59 @@ the corrected benchmark, not chosen to hit the target.
 `features/kicking_defense.py`, `models/baselines/kicking_defense.py`,
 `evaluation/pick_attribution.py`, M-tiers in `evaluation/draft_forensics.py`,
 `docs/TARGET_FORMAT_1QB.md`, `docs/BENCHMARK_SPEC.md`, `docs/FORMAT_MIGRATION_DIAGNOSTIC.md`.
+
+---
+
+## D84 — Trust audit of the whole draft path (third pass). Nothing shipped.
+
+**Status: `league/` and `models/` byte-identical to Y1.** Full record: `docs/DECISIONS.md` D84.
+
+Opened on D83's closing question (is the value base drawing replacement at the wrong boundary?).
+Answer: **the hypothesis as posed is refuted, and a sharper defect is now measured and named.**
+
+* **The starter-vs-consumption question is settled and the answer is "neither".** Moving
+  replacement to the starter boundary *widens* the round-2 QB margin (+38.6 → +48.5), because it
+  raises RB's replacement more than QB's and so amplifies the raw-projection term. The
+  consumption/starter gap at QB is also larger in 2QB (145.4) and superflex (104.7) than in 1QB
+  (60.1), where the engine's early-QB behaviour is correct — so it is not a 1-QB pathology.
+* **The real defect is the double count, and it is provable at K.** The engine takes a kicker at
+  pick #80 valued at 224.5 (`2·182.4 − 140.4`) when its own board says the best kicker is still
+  free at pick **#141** — a true marginal value of 0.0. Four of the top five candidates at #80 are
+  kickers.
+* **Every fix loses.** Experiment T (pre-registered, `91c5ab9`) tested timing-aware (VONA)
+  replacement in three forms: −29.5, −163.3 and −0.1 starter points. That makes eight value-base
+  reformulations measured across D63/D79/D84, all losing.
+* **The benchmark cannot price the defect.** Bench players score zero realized starter points, so a
+  wasted bench slot is free by construction. Diagnostic arms that defer K/DST cost −16.7/−18.3
+  (unresolvable); deferring QB costs −79.7 at round 5 with a CI **excluding zero**.
+* **The elite-RB error is largely not Alpha's.** The free consensus market under-projects the same
+  players by +35.2 against Alpha's +42.3, and shares the sign of every other tier bias (WR 11–24
+  over-projected, QB top-10 over-projected — where the market is *twice* as biased). Correcting the
+  elite-RB cell to a market-grade projection changes **no decision Alpha makes** (verified as a real
+  null, not a silent no-op).
+* **Experiment N (pre-registered, `1ad9dfe`) refutes the model-family hypothesis.** Linear, isotonic,
+  shrinkage and hybrid estimators all make the RB elite tail worse (+19.5, +20.2, +0.7, +8.7 MAE);
+  a walk-forward blend given a free choice selects the tree outright.
+
+**Benchmark, re-measured on a from-source rebuild:** Alpha 2013.5 vs fair consensus 2034.8
+(**−21.3**, CI [−141.5, +99.0], 2/5 seasons). D79 §10a measured **+21.2** for the identical
+comparison — the margin has no stable sign, exactly as D71's power analysis predicted. The gap to
+`alpha_bpa` (417.8) is unambiguous: the league-context layer is doing very large work.
+
+**Confirmed end to end on the production path:** 60 full drafts (2021-2026 x 10 slots) through the
+real `recommend_draft_pick` return a mean 2021-2025 starter total of **2013.5**, identical to the
+counterfactual harness's control. Across seasons the opening is board-dependent (first pick WR
+46/60, RB 9/60, QB 5/60; 2021 opens `RB-TE-WR`), so the 2026 board's WR-first/QB-early figures do
+not generalise. **The early kicker does: a kicker is taken by round 10 in 60 of 60 drafts** (mean
+round 8.75), on every board and from every slot -- the engine's single most reproducible behaviour,
+and worth 0.0 by its own board.
+
+**Highest-value next step is a better objective, not another value base.** The one thing that would
+let the instrument see the defect it cannot currently price is a benchmark that models bench depth —
+injuries, byes, waiver leverage, weekly lineup decisions.
+
+Also fixed this pass: `make train` never built historical K/DST projections (`train
+kdst-projections` is not one of its steps), so a from-source rebuild could not fill a K or DEF slot
+for 2021–2025. 1181 offline tests passing. New: `evaluation/opening_audit.py`,
+`evaluation/decision_counterfactuals.py`, `evaluation/timing_replacement.py`,
+`evaluation/projection_shrinkage.py`.

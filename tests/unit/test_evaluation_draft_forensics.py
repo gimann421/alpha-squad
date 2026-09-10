@@ -9,9 +9,16 @@ import duckdb
 import pytest
 
 from alpha_squad.evaluation.draft_forensics import (
+    ALL_S_TIERS,
     ALL_TIERS,
+    ALL_Z_TIERS,
     DRAFT_AWARE_REPLACEMENT_TIERS,
+    PREREGISTERED_S_CONTROL,
     PREREGISTERED_W_CONTROL,
+    PREREGISTERED_Z_CONTROL,
+    S_SWEEP_TIERS,
+    S_TIER_SPEC,
+    S_TIERS,
     TIER_DESCRIPTIONS,
     W_TIER_SPEC,
     W_TIERS,
@@ -19,10 +26,16 @@ from alpha_squad.evaluation.draft_forensics import (
     X_TIER_SPEC,
     X_TIERS,
     Y_TIERS,
+    Z_SWEEP_TIERS,
+    Z_TIER_SPEC,
+    Z_TIERS,
+    _pick_by_tier,
+    _survival_probability,
     homogeneous_league_draft,
     load_season_static,
     roster_feasibility_metrics,
     score_candidate,
+    season_clustered_margin,
     simulate_forensic_draft,
 )
 from alpha_squad.league.context import LeagueContext, load_league_context
@@ -486,3 +499,465 @@ class TestD70Y1Tier:
         of treatment (a model refit, not a residual-calibration arm) and must stay a distinct
         letter rather than extending that closed set."""
         assert not set(Y_TIERS) & set(X_TIERS)
+
+
+class TestD79ZTiers:
+    """D79: D67's draft-aware replacement held fixed, only the VALUE BASE varies.
+
+    The load-bearing property is that Z0 reproduces the shipped engine EXACTLY. If it ever
+    diverges, every Z-tier margin is measuring the harness rather than the value base -- the
+    same self-check D68 built for X0 == W1.
+    """
+
+    def test_the_control_is_the_shipped_value_base(self):
+        assert PREREGISTERED_Z_CONTROL == "Z0"
+        assert Z_TIERS[0] == "Z0"
+        assert Z_TIER_SPEC["Z0"] == ("msv_plus_weighted_vorp", 1.0)
+
+    def test_every_z_tier_scores_through_the_draft_aware_branch(self):
+        """A Z-tier that routed through any other branch would be measured against a
+        replacement level the shipped engine does not use, which is the one thing this phase
+        exists to hold constant."""
+        for tier in ALL_Z_TIERS:
+            assert tier in DRAFT_AWARE_REPLACEMENT_TIERS
+
+    def test_every_z_tier_is_described(self):
+        for tier in ALL_Z_TIERS:
+            assert TIER_DESCRIPTIONS[tier]
+
+    def test_every_z_tier_has_exactly_one_spec(self):
+        assert set(Z_TIER_SPEC) == set(ALL_Z_TIERS)
+
+    def test_sweep_tiers_are_separate_from_the_candidates(self):
+        """The sweep is a stress test of the incumbent's shape, not a candidate set. Keeping
+        the tuples disjoint is what stops a swept weight from being shipped post-hoc -- the
+        error D67 identified in D66's uniform x2.5 selection."""
+        assert not set(Z_TIERS) & set(Z_SWEEP_TIERS)
+        for tier in Z_SWEEP_TIERS:
+            assert Z_TIER_SPEC[tier][0] == "msv_plus_weighted_vorp"
+
+    def test_z_tiers_do_not_collide_with_earlier_letters(self):
+        assert not set(ALL_Z_TIERS) & (set(X_TIERS) | set(Y_TIERS) | set(W_TIERS))
+
+    def test_z0_scores_identically_to_x0_on_real_shaped_data(self, con):
+        """Z0 and X0 are the same formula written two ways; they must produce the same score
+        for every candidate, or the control is not the shipped engine."""
+        _seed_league_season(con, 2023)
+        league = _small_league()
+        static = load_season_static(con, league, 2023)
+        available = set(static.projections)
+        for player_id in sorted(available):
+            z0 = score_candidate(
+                static,
+                player_id,
+                league,
+                [],
+                "Z0",
+                available=available,
+                current_pick_overall=1,
+                next_pick_overall=5,
+                roster_player_ids=[],
+            )
+            x0 = score_candidate(
+                static,
+                player_id,
+                league,
+                [],
+                "X0",
+                available=available,
+                current_pick_overall=1,
+                next_pick_overall=5,
+                roster_player_ids=[],
+            )
+            assert (z0 is None) == (x0 is None)
+            if z0 is not None:
+                assert z0.score == pytest.approx(x0.score, abs=1e-9), player_id
+
+    def test_zw0_drops_the_vorp_term_entirely(self, con):
+        """w=0 must leave `msv + opp_cost`, i.e. strictly less than Z0 wherever the
+        draft-aware surplus is positive."""
+        _seed_league_season(con, 2023)
+        league = _small_league()
+        static = load_season_static(con, league, 2023)
+        available = set(static.projections)
+        best = max(available, key=lambda p: static.projections[p])
+        z0 = score_candidate(
+            static,
+            best,
+            league,
+            [],
+            "Z0",
+            available=available,
+            current_pick_overall=1,
+            next_pick_overall=5,
+            roster_player_ids=[],
+        )
+        zw0 = score_candidate(
+            static,
+            best,
+            league,
+            [],
+            "ZW0",
+            available=available,
+            current_pick_overall=1,
+            next_pick_overall=5,
+            roster_player_ids=[],
+        )
+        assert zw0.score < z0.score
+
+    def test_z2_reduces_to_z1_on_an_empty_roster(self, con):
+        """`msv over the draft-aware replacement level` is defined so that, with every lineup
+        slot empty, it equals `projection - draft_aware_level` -- which is exactly Z1's value
+        base. Exercised through `_pick_by_tier` rather than `score_candidate` directly, because
+        the identity depends on the hoisted per-position replacement map that only the real
+        scoring path builds."""
+        _seed_league_season(con, 2023)
+        league = _small_league()
+        static = load_season_static(con, league, 2023)
+        available = set(static.projections)
+        z1_pick, z1_scored = _pick_by_tier(
+            static, con, league, 2023, set(available), [], "Z1", 1, 5, roster_player_ids=[]
+        )
+        z2_pick, z2_scored = _pick_by_tier(
+            static, con, league, 2023, set(available), [], "Z2", 1, 5, roster_player_ids=[]
+        )
+        assert z1_pick == z2_pick
+        by_id_1 = {s.player_id: s.score for s in z1_scored}
+        by_id_2 = {s.player_id: s.score for s in z2_scored}
+        assert set(by_id_1) == set(by_id_2)
+        for player_id, score in by_id_1.items():
+            assert by_id_2[player_id] == pytest.approx(score, abs=1e-6), player_id
+
+    def test_z2_refuses_to_score_without_its_hoisted_replacement_map(self, con):
+        """Guards the silent-no-op failure mode: defaulting the subtrahend to 0.0 would turn
+        Z2 into ZW0 while still labelling itself Z2."""
+        _seed_league_season(con, 2023)
+        league = _small_league()
+        static = load_season_static(con, league, 2023)
+        available = set(static.projections)
+        best = max(available, key=lambda p: static.projections[p])
+        with pytest.raises(RuntimeError, match="replacement_msv"):
+            score_candidate(
+                static,
+                best,
+                league,
+                [],
+                "Z2",
+                available=available,
+                current_pick_overall=1,
+                next_pick_overall=5,
+                roster_player_ids=[],
+            )
+
+    @pytest.mark.parametrize("tier", ["Z0", "Z1", "Z2", "Z3", "ZW0", "ZW05", "ZW2", "ZW3"])
+    def test_every_z_tier_drafts_a_full_roster(self, con, tier):
+        _seed_league_season(con, 2023)
+        league = _small_league()
+        static = load_season_static(con, league, 2023)
+        result = simulate_forensic_draft(con, league, 2023, tier, draft_slot=1, static=static)
+        assert len(result.drafted_player_ids) == 5
+        assert len(set(result.drafted_player_ids)) == 5
+
+
+class TestSeasonClusteredMargin:
+    """D79 Gate 8 -- D71's correction. The naive n=50 i.i.d. interval every phase through D70
+    quoted treats ten slots that share one projection set, one market board and one set of
+    realized outcomes as ten independent draws. The season is the real unit."""
+
+    @staticmethod
+    def _rows(margins_by_season):
+        rows = []
+        for season, per_slot in margins_by_season.items():
+            for slot, margin in enumerate(per_slot, start=1):
+                rows.append(
+                    {"season": season, "draft_slot": slot, "tier": "C", "starter_points": 1000.0}
+                )
+                rows.append(
+                    {
+                        "season": season,
+                        "draft_slot": slot,
+                        "tier": "T",
+                        "starter_points": 1000.0 + margin,
+                    }
+                )
+        return rows
+
+    def test_pairs_by_season_and_slot(self):
+        out = season_clustered_margin(
+            self._rows({2021: [10.0, 20.0], 2022: [30.0, 40.0]}), "T", "C"
+        )
+        assert out["n_seasons"] == 2
+        assert out["season_means"] == {2021: 15.0, 2022: 35.0}
+        assert out["mean_margin"] == pytest.approx(25.0)
+
+    def test_a_consistent_large_margin_excludes_zero(self):
+        out = season_clustered_margin(
+            self._rows({y: [200.0, 210.0] for y in range(2021, 2026)}), "T", "C"
+        )
+        assert out["ci_excludes_zero"]
+        assert out["n_wins"] == 5
+
+    def test_a_margin_carried_by_one_season_does_not(self):
+        """The failure mode this gate exists for: a large pooled mean produced by one season,
+        which the naive interval over 50 rows would report as significant."""
+        rows = self._rows(
+            {
+                2021: [5.0] * 10,
+                2022: [-5.0] * 10,
+                2023: [3.0] * 10,
+                2024: [-2.0] * 10,
+                2025: [400.0] * 10,
+            }
+        )
+        out = season_clustered_margin(rows, "T", "C")
+        assert out["mean_margin"] > 75.0  # the pooled mean looks impressive
+        assert not out["ci_excludes_zero"]  # ... and is not resolvable
+
+    def test_is_wider_than_the_naive_interval_on_the_same_data(self):
+        """The correction must make the bar HARDER to clear, never easier (D71)."""
+        rows = self._rows({y: [30.0 + 5 * s for s in range(10)] for y in range(2021, 2026)})
+        out = season_clustered_margin(rows, "T", "C")
+        diffs = [r["starter_points"] for r in rows if r["tier"] == "T"]
+        naive_se = (
+            sum((d - sum(diffs) / len(diffs)) ** 2 for d in diffs) / (len(diffs) - 1)
+        ) ** 0.5 / len(diffs) ** 0.5
+        assert out["se"] >= naive_se or out["n_seasons"] < len(diffs)
+
+
+class TestD79STiers:
+    """D79 phase 2: the survival multiplier's coefficient -- the one term in the production
+    score no phase has ever measured. Same self-check discipline as the Z-tiers: S0 must
+    reproduce the shipped engine exactly, or every S-tier margin measures the harness."""
+
+    def test_the_control_carries_the_shipped_coefficient(self):
+        assert PREREGISTERED_S_CONTROL == "S0"
+        assert S_TIERS[0] == "S0"
+        assert S_TIER_SPEC["S0"] == 0.3
+
+    def test_the_only_candidate_is_the_parameter_free_one(self):
+        """S1 removes the term. Every other arm is a swept coefficient and must not be
+        shippable -- replacing an unmeasured constant with a fitted one is strictly worse."""
+        assert S_TIERS == ("S0", "S1")
+        assert S_TIER_SPEC["S1"] == 0.0
+        assert not set(S_TIERS) & set(S_SWEEP_TIERS)
+
+    def test_every_s_tier_scores_through_the_draft_aware_branch(self):
+        for tier in ALL_S_TIERS:
+            assert tier in DRAFT_AWARE_REPLACEMENT_TIERS
+
+    def test_every_s_tier_is_described_and_specified(self):
+        assert set(S_TIER_SPEC) == set(ALL_S_TIERS)
+        for tier in ALL_S_TIERS:
+            assert TIER_DESCRIPTIONS[tier]
+
+    def test_s_tiers_do_not_collide_with_earlier_letters(self):
+        assert not set(ALL_S_TIERS) & (
+            set(ALL_Z_TIERS) | set(X_TIERS) | set(Y_TIERS) | set(W_TIERS)
+        )
+
+    def test_s0_scores_identically_to_z0_on_real_shaped_data(self, con):
+        _seed_league_season(con, 2023)
+        league = _small_league()
+        static = load_season_static(con, league, 2023)
+        available = set(static.projections)
+        for player_id in sorted(available):
+            s0 = score_candidate(
+                static,
+                player_id,
+                league,
+                [],
+                "S0",
+                available=available,
+                current_pick_overall=1,
+                next_pick_overall=5,
+                roster_player_ids=[],
+            )
+            z0 = score_candidate(
+                static,
+                player_id,
+                league,
+                [],
+                "Z0",
+                available=available,
+                current_pick_overall=1,
+                next_pick_overall=5,
+                roster_player_ids=[],
+            )
+            assert s0.score == pytest.approx(z0.score, abs=1e-9), player_id
+
+    def test_switching_the_term_off_removes_the_bonus_for_a_player_who_will_be_gone(self, con):
+        """A candidate certain to be taken before the next turn carries the full 1.3x under the
+        control and exactly 1.0x under S1, so the ratio is the coefficient and nothing else."""
+        _seed_league_season(con, 2023)
+        league = _small_league()
+        static = load_season_static(con, league, 2023)
+        available = set(static.projections)
+        doomed = [p for p in sorted(available) if _survival_probability(static, p, 20) == 0.0]
+        assert doomed, "fixture must contain a player who cannot survive to pick 20"
+        for player_id in doomed:
+            s0 = score_candidate(
+                static,
+                player_id,
+                league,
+                [],
+                "S0",
+                available=available,
+                current_pick_overall=1,
+                next_pick_overall=20,
+                roster_player_ids=[],
+            )
+            s1 = score_candidate(
+                static,
+                player_id,
+                league,
+                [],
+                "S1",
+                available=available,
+                current_pick_overall=1,
+                next_pick_overall=20,
+                roster_player_ids=[],
+            )
+            assert s0.score == pytest.approx(s1.score * 1.3, rel=1e-9), player_id
+
+    def test_an_unknown_next_pick_is_unaffected_by_the_coefficient(self, con):
+        """With no next pick there is no survival probability, so every arm must agree -- the
+        coefficient can only act through a real availability estimate."""
+        _seed_league_season(con, 2023)
+        league = _small_league()
+        static = load_season_static(con, league, 2023)
+        available = set(static.projections)
+        best = max(available, key=lambda p: static.projections[p])
+        scores = {
+            tier: score_candidate(
+                static,
+                best,
+                league,
+                [],
+                tier,
+                available=available,
+                current_pick_overall=None,
+                next_pick_overall=None,
+                roster_player_ids=[],
+            ).score
+            for tier in ALL_S_TIERS
+        }
+        assert len(set(round(v, 9) for v in scores.values())) == 1
+
+    @pytest.mark.parametrize("tier", ["S0", "S1", "SS15", "SS60", "SS100"])
+    def test_every_s_tier_drafts_a_full_roster(self, con, tier):
+        _seed_league_season(con, 2023)
+        league = _small_league()
+        static = load_season_static(con, league, 2023)
+        result = simulate_forensic_draft(con, league, 2023, tier, draft_slot=1, static=static)
+        assert len(result.drafted_player_ids) == 5
+        assert len(set(result.drafted_player_ids)) == 5
+
+
+class TestQTiersDecisionValueBase:
+    """D84. The Q-tiers vary the two decision-layer axes nothing had varied: the
+    raw-projection double count (holding the value base's SCALE) and the survival term's
+    one-sidedness. Arms, gates and selection rule are pre-registered in
+    `evaluation/decision_value_base.py`."""
+
+    def test_q_tier_spec_matches_the_preregistration(self):
+        """The wiring must not drift from the committed pre-registration."""
+        from alpha_squad.evaluation.decision_value_base import ARM_SPEC, ARMS
+        from alpha_squad.evaluation.draft_forensics import Q_TIER_SPEC, Q_TIERS
+
+        assert [Q_TIER_SPEC[t] for t in Q_TIERS] == [ARM_SPEC[a] for a in ARMS]
+
+    def test_every_q_tier_is_described_and_draft_aware(self):
+        from alpha_squad.evaluation.draft_forensics import (
+            DRAFT_AWARE_REPLACEMENT_TIERS,
+            Q_TIERS,
+            TIER_DESCRIPTIONS,
+        )
+
+        for tier in Q_TIERS:
+            assert tier in TIER_DESCRIPTIONS
+            assert tier in DRAFT_AWARE_REPLACEMENT_TIERS
+
+    def test_q0_scores_identically_to_z0_on_real_shaped_data(self, con):
+        """THE control check. Q0 must be the shipped engine exactly -- if it is not, every
+        Q-tier margin is measured against the wrong baseline."""
+        _seed_league_season(con, 2023)
+        league = _small_league()
+        static = load_season_static(con, league, 2023)
+        available = set(static.projections)
+        for player_id in sorted(available):
+            kwargs = dict(
+                available=available,
+                current_pick_overall=1,
+                next_pick_overall=5,
+                roster_player_ids=[],
+            )
+            q0 = score_candidate(static, player_id, league, [], "Q0", **kwargs)
+            z0 = score_candidate(static, player_id, league, [], "Z0", **kwargs)
+            assert (q0 is None) == (z0 is None)
+            if q0 is not None:
+                assert q0.score == pytest.approx(z0.score, abs=1e-9), player_id
+
+    def test_q1_removes_the_raw_projection_but_keeps_the_scale(self, con):
+        """On an empty roster Q1's base is 2*(proj - R) against Q0's 2*proj - R, so Q1 must be
+        strictly lower wherever the replacement level is positive -- but NOT half of Q0, which
+        is what every previously-measured alternative was."""
+        _seed_league_season(con, 2023)
+        league = _small_league()
+        static = load_season_static(con, league, 2023)
+        available = set(static.projections)
+        # Q1 differs from Q0 by exactly the replacement level, so a candidate drawn from a
+        # position whose level is 0 makes the first assertion vacuous (both bases coincide).
+        # Every position ties at the same top projection and `available` is a set, so sort
+        # before taking the max: otherwise the winner -- and this test -- turns on the
+        # interpreter's hash seed.
+        best = max(
+            sorted(p for p in available if static.replacement_levels[static.positions[p]] > 0),
+            key=lambda p: static.projections[p],
+        )
+        # `_pick_by_tier` hoists this per pick; calling `score_candidate` directly means
+        # supplying it, and the tier RAISES rather than silently degrading if it is missing.
+        from alpha_squad.league.replacement import replacement_marginal_starter_values
+
+        replacement_msv = replacement_marginal_starter_values(
+            league, [], static.projections, static.positions, static.replacement_levels
+        )
+        kwargs = dict(
+            available=available,
+            current_pick_overall=1,
+            next_pick_overall=5,
+            roster_player_ids=[],
+            replacement_msv=replacement_msv,
+        )
+        q0 = score_candidate(static, best, league, [], "Q0", **kwargs)
+        q1 = score_candidate(static, best, league, [], "Q1", **kwargs)
+        z2 = score_candidate(static, best, league, [], "Z2", **kwargs)
+        assert q1.score < q0.score
+        # Q1 keeps both surplus terms; Z2 keeps one. Q1 must sit strictly above Z2.
+        assert q1.score > z2.score
+
+    def test_q2_discounts_a_certain_survivor_relative_to_the_control(self, con):
+        """The survival asymmetry, end to end: a player certain to still be there must score
+        LESS under Q2 than under Q0, which is impossible in the shipped one-sided form."""
+        _seed_league_season(con, 2023)
+        league = _small_league()
+        static = load_season_static(con, league, 2023)
+        available = set(static.projections)
+        kwargs = dict(available=available, current_pick_overall=1, roster_player_ids=[])
+        # next_pick_overall=1 -> the player cannot be gone, so survival is 1.0.
+        moved = 0
+        for player_id in sorted(available):
+            q0 = score_candidate(static, player_id, league, [], "Q0", next_pick_overall=1, **kwargs)
+            q2 = score_candidate(static, player_id, league, [], "Q2", next_pick_overall=1, **kwargs)
+            if q0 is None or q0.survival_probability is None:
+                continue
+            if q0.survival_probability == pytest.approx(1.0):
+                assert q2.score < q0.score, player_id
+                moved += 1
+        assert moved > 0, "no certain-survivor in the fixture; the test proved nothing"
+
+    def test_q3_is_q1_and_q2_together(self, con):
+        """E must compose C and D rather than being a third thing."""
+        from alpha_squad.evaluation.draft_forensics import Q_TIER_SPEC
+
+        assert Q_TIER_SPEC["Q3"][0] == Q_TIER_SPEC["Q1"][0]
+        assert Q_TIER_SPEC["Q3"][1] == Q_TIER_SPEC["Q2"][1] is True
