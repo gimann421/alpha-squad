@@ -6382,3 +6382,96 @@ and gates all exist; D89's cost table puts a format at ~1 hour.
 *Explicitly NOT next:* a new objective, re-weighting O1, waiver/risk terms, projections (D79-D83),
 shortlists (D87), more slots (D88 proved they cannot help), or relaxing G7 because the target
 result is attractive.
+
+---
+
+## D90 — The mechanism generalises to a second board (K 2.40→2.00, +20.8); the magnitude does not clearly. G7 still fails. Nothing ships.
+
+*Branch `claude/separate-valuation-legality-4tw82o`. Checkpoint `431e424` (pre-registration).
+Full report: `docs/D90_CROSS_FORMAT_GENERALIZATION.md`. **`league/` and `models/` byte-identical
+to Y1.***
+
+D89's recommendation, executed: test O1 unchanged on a third format whose lineup contains K and
+DEF slots. No new objective, no tuning, no new gate. 120 drafts.
+
+### 1. The candidate set was CLOSED, and the choice was forced by data
+
+`market/series.py` derives the board from is_dynasty x is_superflex, so there are exactly four
+possible series and two are used. Measured before any result:
+
+| series | format | seasons | K rows | DST rows |
+|---|---|---|---|---|
+| `ro` | redraft 1QB (target) | 6 | 1,692 | 1,473 |
+| `dsf` | dynasty SF (legacy) | 5 | **0** | **0** |
+| `rsf` | redraft SF (candidate) | 5 | **0** | **0** |
+| **`do`** | **dynasty 1QB (SELECTED)** | **6** | **1,533** | **1,494** |
+
+`do` wins criterion 1 (most complete seasons) outright and is the only candidate whose board can
+express the mechanism.
+
+### 2. This DEEPENS D89's diagnosis: legacy failed for TWO reasons, not one
+
+**Both superflex boards carry zero kickers and zero defenses** -- FantasyPros' "OP" pages rank
+offensive players only. So legacy could not test O1 because its lineup has no K/DEF slot AND
+because its board has no K/DST players at all. It was never a weak test; it was not a test.
+
+### 3. THE MECHANISM REPRODUCES on an independent board
+
+Kickers **2.40 -> 2.00**, defenses 1.83 -> 1.63, RB depth 2.72 -> 2.97, TE depth 1.58 -> 1.97,
+first DST a full round later. Early rounds untouched (first QB/RB/WR all move < 0.1 rounds).
+**O1 draws exactly 2.00 kickers in EVERY season** -- precisely the roster's K capacity -- while Y1
+ranges 2.00-3.00 and drifts upward. O1 has now never drafted more kickers than Y1 in any season of
+any format. G5 makes the same point from the legality side: **0 capacity breaches for O1 vs 24 for
+Y1.**
+
+### 4. The magnitude does NOT clearly generalise
+
+| format | K/DST slots | seasons | effect | 95% CI | improved | mechanism |
+|---|---|---|---|---|---|---|
+| target_league | 2/2 | 6 | **+49.0** | [+6.5, +91.5] | 5/6 | ACTIVE |
+| legacy_2qb_dynasty | **0/0** | 5 | -2.3 | [-85.5, +80.8] | 3/5 | **NOT TESTABLE** |
+| dynasty_1qb | 2/2 | 6 | **+20.8** | [-30.8, +72.3] | 4/6 | ACTIVE |
+
++20.8 is **below the 25.0 economic threshold**, its CI **spans zero**, and MDE here is 51.5
+(effect/MDE 0.40). All three metrics are positive (+20.8 / +24.8 / +13.1) and LOSO is all-positive
+(+8.9..+34.2), but G3 fails (2/6 seasons worse), G8 fails and G9 fails.
+
+### 5. G7 still FAILS and is NOT redefined
+
+Signs differ (+49.0 / -2.3 / +20.8). Among the two structurally testable formats the sign is
+consistent -- reported as a DIAGNOSTIC, not as a gate. Converting it into one after seeing the
+result is the post-hoc move prediction T5 was written to forbid. Changing G7's text to distinguish
+"format lacks the mechanism" from "candidate fails to generalise" would be a deliberate
+specification change, pre-registered BEFORE the next experiment.
+
+### 6. An unregistered pattern, flagged not interpreted
+
+`dynasty_1qb`'s per-season effects are **perfectly monotone increasing**: -46.2, -15.4, +5.1,
++31.4, +69.5, +80.2 (rho = 1.00). Early half -18.8 vs late half +60.4. target_league trends the
+same way, weaker (+29.4 -> +68.6). Noticed AFTER seeing results; no p-value computed and no
+inferential claim made. But a mean of +20.8 built from a monotone climb is not a stable +20.8, and
+LOSO cannot see that structure. Recorded as the phase's one new research question: is O1's benefit
+a function of how much K/DST over-drafting there is to correct, and has that been rising? Testable
+on existing artifacts -- Y1's own kicker count rose 2.00 -> 3.00 over the same window.
+
+### 7. 2026 and cost
+
+Identical #1/#20/#21 in the third format too (St. Brown / McCaffrey / Allen); the only roster
+difference is Y1's third kicker becoming a fifth WR. O1-FULL costs 4.505 s/pick (180x Y1),
+1.2 h for 120 drafts.
+
+### 8. Verdict: B -- PROMISING BUT UNRESOLVED. DO NOT SHIP.
+
+Fails G3, G8, G9 in the third format and G7 overall. Not C/D: the effect did not reverse and the
+mechanism reproduced, so closing O1 would be wrong in the opposite direction.
+
+**The reason to doubt O1 has changed.** It is no longer "O1 might be a target-format artifact" --
+the mechanism demonstrably operates on an independent board. It is now "the size of O1's benefit
+outside the target format is smaller than this benchmark can measure."
+
+### 9. Repository note
+
+`origin/main` does NOT contain D86-D89. Main is at b9c389d (PR #16, which merged D85); those 16
+commits exist only on this branch. Production integrity is unaffected (main is a strict ancestor,
+and nothing on the branch touches models/ or league/), but the brief's premise that main is
+current is not accurate.

@@ -3,7 +3,66 @@
 Living summary of what is implemented, validated, and outstanding. Updated at the end of every
 milestone. See `docs/TRACEABILITY.md` for the acceptance-criteria-level mapping.
 
-## Status: M41 complete (D89) — **six seasons DO resolve O1 in the target format: +49.0, CI [+6.5, +91.5], and all nine in-format gates pass. It still does not ship — the binding gate is now G7 (cross-format), not G8. Nothing shipped.**
+## Status: M42 complete (D90) — **O1's mechanism reproduces on a second, independent board (kickers 2.40 → 2.00), and the effect is same-signed at +20.8 — but below the economic threshold and unresolved. G7 still fails. Nothing shipped.**
+
+D89's recommendation, executed: run O1 unchanged on a third format whose lineup actually contains
+K and DEF slots. 120 drafts. Full report: `docs/D90_CROSS_FORMAT_GENERALIZATION.md`.
+Pre-registered at `431e424` **before any result was seen**, with a test asserting D90 differs from
+D89 in `phase` and `formats` and in nothing else.
+
+**The format choice was forced by data, not preference.** `market/series.py` derives the board
+from `is_dynasty × is_superflex`, so exactly four series exist and two are used. Of the two
+candidates, `do` (dynasty 1QB) has 6 usable seasons to `rsf`'s 5 — and **both superflex boards
+carry zero kickers and zero defenses**, because FantasyPros' "OP" pages rank offensive players
+only.
+
+**That deepens D89's diagnosis.** The legacy format could not test O1 for *two* independent
+reasons: no K/DEF slot in its lineup **and** no K/DST players on its board. It was never a weak
+test of this mechanism; it was not a test of it.
+
+**The mechanism reproduces on a board sharing no rows with the target's**: kickers **2.40 → 2.00**,
+defenses 1.83 → 1.63, RB depth 2.72 → 2.97, TE depth 1.58 → 1.97, first DST a full round later,
+early rounds untouched (first QB/RB/WR all move < 0.1 rounds). **O1 draws exactly 2.00 kickers in
+every season** — precisely the roster's K capacity — while Y1 ranges 2.00–3.00 and drifts upward.
+G5 says it from the legality side: **0 capacity breaches for O1 vs 24 for Y1**.
+
+**The magnitude does not clearly generalise.**
+
+| format | K/DST slots | seasons | effect | 95% CI | improved | mechanism |
+|---|---|---|---|---|---|---|
+| target_league | 2/2 | 6 | **+49.0** | [+6.5, +91.5] | 5/6 | ACTIVE |
+| legacy_2qb_dynasty | **0/0** | 5 | −2.3 | [−85.5, +80.8] | 3/5 | **NOT TESTABLE** |
+| dynasty_1qb | 2/2 | 6 | **+20.8** | [−30.8, +72.3] | 4/6 | ACTIVE |
+
++20.8 sits **below the 25.0 economic threshold**, its CI **spans zero**, and the MDE here is 51.5.
+All three metrics are positive (+20.8 / +24.8 / +13.1) and LOSO is all-positive, but **G3, G8 and
+G9 fail** in the third format and **G7 fails** overall.
+
+**G7 is not redefined.** Among the two structurally testable formats the sign is consistent — that
+is reported as a *diagnostic*, not promoted to a gate, which is exactly what prediction T5 was
+written to forbid.
+
+**One unregistered pattern, flagged not interpreted:** `dynasty_1qb`'s per-season effects are
+perfectly monotone increasing (−46.2 → +80.2, ρ = 1.00; early half −18.8 vs late half +60.4), and
+`target_league` trends the same way. Noticed after the fact, so no p-value and no claim — but a
+mean of +20.8 built from a monotone climb is not a stable +20.8, and LOSO cannot see that.
+
+**2026 is unchanged in the third format too**: identical #1/#20/#21 (St. Brown / McCaffrey /
+Allen); the only roster difference is Y1's third kicker becoming a fifth WR.
+
+Verdict: **B — promising but unresolved. DO NOT SHIP.** Not C or D: the effect did not reverse and
+the mechanism reproduced, so closing O1 would be wrong in the opposite direction. **The reason to
+doubt O1 has changed** — no longer "it might be a target-format artifact" but "its benefit outside
+the target format is smaller than this benchmark can measure."
+
+**Next:** the documented question is whether O1's benefit is a function of how much K/DST
+over-drafting there is to correct, and whether that has been rising — testable on existing
+artifacts, since Y1's own kicker count rose 2.00 → 3.00 over the same window.
+
+**Repository note:** `origin/main` does not yet contain D86–D89; those commits live on this
+branch (main is at `b9c389d`, which merged D85). Production integrity is unaffected.
+
+### Earlier status: M41 complete (D89) — **six seasons DO resolve O1 in the target format: +49.0, CI [+6.5, +91.5], and all nine in-format gates pass. It still does not ship — the binding gate is now G7 (cross-format), not G8. Nothing shipped.**
 
 D88's own recommendation, executed: add the one remaining usable season and re-run O1-FULL
 unchanged. No new objective, no tuning, no new gate. 240 drafts run, 220 analysed. Full report:
