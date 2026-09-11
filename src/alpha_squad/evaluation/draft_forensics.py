@@ -1045,9 +1045,12 @@ def preseason_page_type(con: duckdb.DuckDBPyConnection, ecr_type: str, season: i
     every published number byte-identical) and `redraft-offense` for 2020. It is deliberately
     NOT a hardcoded season->page map: a relabel in another season is handled by the same rule.
 
-    Returns `None` when the season has no preseason rows at all, which callers pass straight to
-    `_preseason_overall_market` as "no page scoping" -- the pre-D56 behaviour, and the honest
-    answer when there is nothing to scope.
+    Returns `None` when the season has no preseason rows at all. A caller passing that straight
+    through does NOT get an unscoped query: `_preseason_overall_market` treats `page_type=None`
+    as "use the series default", so an `ecr_type` with a registered series still gets scoped to
+    it. The board comes back empty either way -- there were no preseason rows to find -- so this
+    is the honest answer rather than a silent widening, but it is a fallback to the default
+    scoping, not an absence of scoping.
 
     Note what this must NOT do: widen the Jul/Aug window to find rows. 2020's `redraft-overall`
     rows exist but are IN-SEASON, so reading them would leak market movement that happened after
