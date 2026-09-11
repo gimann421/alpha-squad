@@ -1068,6 +1068,46 @@ def preseason_page_type(con: duckdb.DuckDBPyConnection, ecr_type: str, season: i
     return rows[0][0] if rows else None
 
 
+#: Opponent strategies that READ `static.market_rank` to choose a pick, and therefore degrade
+#: silently to alphabetical ordering when the board is empty. Listed explicitly rather than
+#: aliased to `ALL_OPPONENT_STRATEGIES` so that adding a non-market strategy later does not
+#: quietly opt it into a check that does not apply to it.
+MARKET_DRIVEN_OPPONENT_STRATEGIES: frozenset[str] = frozenset(
+    {MARKET_CONSENSUS, MARKET_CONSENSUS_ROSTER_AWARE}
+)
+
+
+class EmptyMarketBoardError(RuntimeError):
+    """A market-driven opponent was asked to draft against a season with no preseason board.
+
+    Raised rather than tolerated because the failure is SILENT otherwise: with `market_rank`
+    empty, `_market_consensus_pick` and `_market_consensus_roster_aware_pick` fall through to
+    ordering by `player_id`, so the nine opponents draft ALPHABETICALLY. The loop completes, the
+    rosters are legal and every metric is finite -- the run looks successful and measures a
+    different game. That is a fabricated observation, which this project forbids outright.
+
+    Found in D89: the `dsf` (dynasty superflex) series begins 2020-10-16, so the legacy format
+    has no 2020 preseason board at all, and the legacy 2020 cell had to be dropped.
+    """
+
+
+def assert_usable_market_board(static: SeasonStatic, opponent_strategy: str) -> None:
+    """Refuse to simulate a market-opponent draft against an empty preseason board (D89).
+
+    Only the market-driven opponents are checked; a strategy that does not read `market_rank`
+    is unaffected, and a season whose board is merely SPARSE is allowed through -- the line is
+    drawn at "no board at all", which is the case that silently degrades to alphabetical."""
+    if opponent_strategy not in MARKET_DRIVEN_OPPONENT_STRATEGIES:
+        return
+    if not static.market_rank:
+        raise EmptyMarketBoardError(
+            f"season {static.season} has no preseason market board for ecr_type "
+            f"'{static.ecr_type}', so opponent strategy '{opponent_strategy}' would draft "
+            f"alphabetically by player_id. Resolve the season's own page with "
+            f"`preseason_page_type`, or exclude the season -- do not measure this cell."
+        )
+
+
 def load_season_static(
     con: duckdb.DuckDBPyConnection,
     league: LeagueContext,
@@ -2169,6 +2209,7 @@ def simulate_forensic_draft(
     `ForensicDraftResult`, so a tier figure can never be read without its opponent."""
     if opponent_strategy not in ALL_OPPONENT_STRATEGIES:
         raise ValueError(f"unknown opponent strategy '{opponent_strategy}'")
+    assert_usable_market_board(static, opponent_strategy)
     from alpha_squad.evaluation.draft_simulation import _actual_points_for
     from alpha_squad.league.replacement import compute_league_starters
 

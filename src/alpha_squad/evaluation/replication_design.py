@@ -28,10 +28,20 @@ The lineage
          -> infinity, because between-season variance is irreducible at 5 clusters.
     D89  10 slots, 2020-2025, full board     -> THIS PHASE. Adds the one remaining usable season.
 
-Why 2020 and not 2019 (Phase 1, decided on measured data before the run)
-------------------------------------------------------------------------
+Why 2020 and not 2019 -- and why 2020 is TARGET-ONLY (Phase 1)
+---------------------------------------------------------------
+**A season's usability is a property of (format, season), not of the season.** The two shipped
+formats resolve to different market series: the target format to `ro` (redraft overall) and the
+legacy format to `dsf` (dynasty superflex). D89's first Phase 1 pass checked only `ro` and
+concluded "2020 is comparable"; that conclusion is correct for the target format and **was wrong
+for the legacy format**, which the run itself exposed by reporting `board=None`. The `dsf` series'
+earliest scrape of ANY kind is **2020-10-16** -- 2020 has 3,246 `dynasty-op` rows, all of them
+October-December, and **zero** in the July/August preseason window. There is no dynasty-superflex
+preseason board in 2020 to resolve to, so `legacy_2qb_dynasty` runs on **2021-2025 (5 clusters)**
+while `target_league` runs on **2020-2025 (6 clusters)**. See `EXCLUDED_SEASONS`.
+
 `preseason_page_type` resolves the board each season actually published in July/August rather than
-assuming one. Under that resolution:
+assuming one. Under that resolution, for the TARGET format's series:
 
   * **2020 is comparable.** 612 projected board players (2021-2025: 602-651), 74.8% market
     coverage (76.2-85.5%), 17,269 weekly rows (17,271-17,968), weeks 1-17, best kicker at overall
@@ -99,18 +109,23 @@ class ReplicationDesign:
     #: there is no seed to set and repeated runs are bit-identical.
     randomization: str = "common random numbers keyed on player_id; deterministic, no seed"
 
-    @property
-    def paired_observations(self) -> int:
-        return len(self.seasons) * len(self.slots)
+    def seasons_for(self, fmt: str) -> tuple[int, ...]:
+        """The nominal seasons minus any excluded for THIS format on measured data grounds.
 
-    @property
-    def clusters(self) -> int:
-        return len(self.seasons)
+        A season is not excluded globally: 2020 has a usable preseason board in the target
+        format's series and none at all in the legacy format's (see `EXCLUDED_SEASONS`), so the
+        two formats legitimately run on different numbers of clusters."""
+        return tuple(s for s in self.seasons if (fmt, s) not in EXCLUDED_SEASONS)
 
-    @property
+    def paired_observations(self, fmt: str) -> int:
+        return len(self.seasons_for(fmt)) * len(self.slots)
+
+    def clusters(self, fmt: str) -> int:
+        return len(self.seasons_for(fmt))
+
     def drafts(self) -> int:
-        """Both arms, both formats."""
-        return self.paired_observations * 2 * len(self.formats)
+        """Both arms, every format."""
+        return sum(self.paired_observations(f) for f in self.formats) * 2
 
 
 D87_SHORTLIST = ReplicationDesign(
@@ -134,12 +149,31 @@ D89_SIX_SEASONS = ReplicationDesign(
 
 ACTIVE_DESIGN = D89_SIX_SEASONS
 
-#: Seasons excluded from the benchmark universe, with the measured reason. Append-only.
-EXCLUDED_SEASONS: dict[int, str] = {
-    2019: (
+#: (format, season) cells excluded from the benchmark universe, with the MEASURED reason.
+#: Append-only. Exclusion is per-format because the two formats resolve to different market
+#: series -- `ro` (redraft overall) and `dsf` (dynasty superflex) -- whose historical coverage
+#: differs. A season usable in one is not automatically usable in the other, and D89 learned
+#: that the hard way.
+EXCLUDED_SEASONS: dict[tuple[str, int], str] = {
+    ("target_league", 2019): (
         "no preseason market board: 174 projected board players and 0% market-rank coverage under "
         "the resolved preseason page_type, so the fair-market opponent has nothing to draft "
         "against and the implied consumption demand degenerates (K 3.3, DST 3.0)."
+    ),
+    ("legacy_2qb_dynasty", 2019): (
+        "the `dsf` series does not exist in 2019 -- its earliest scrape of any kind is 2020-10-16."
+    ),
+    ("legacy_2qb_dynasty", 2020): (
+        "NO PRESEASON BOARD EXISTS. The legacy format resolves to ecr_type `dsf` (dynasty "
+        "superflex), whose first scrape of any kind is 2020-10-16: 2020 holds 3,246 `dynasty-op` "
+        "rows, ALL of them in October-December, and ZERO in the July/August preseason window. "
+        "`preseason_page_type` therefore returns None and the board comes back empty, which would "
+        "make the nine fair-market opponents draft ALPHABETICALLY. The October rows cannot be "
+        "substituted: they are in-season and reading them would leak market movement that "
+        "happened after the draft (the D54 defect). No page_type resolution can recover a board "
+        "that was never published, so the legacy 2020 cell is dropped rather than manufactured. "
+        "Recorded BEFORE any legacy 2020 outcome was examined. The target format is unaffected -- "
+        "its `ro` series has 3,462 preseason rows in 2020 under `redraft-offense`."
     ),
 }
 

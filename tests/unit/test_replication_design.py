@@ -91,35 +91,75 @@ class TestGatesAreImportedNotRestated:
         }, f"unexpected numeric constant(s) in a replication design: {numeric}"
 
 
+TARGET = "target_league"
+LEGACY = "legacy_2qb_dynasty"
+
+
 class TestSampleSizeArithmetic:
     @pytest.mark.parametrize(
-        ("design", "obs", "clusters", "drafts"),
+        ("design", "fmt", "obs", "clusters"),
         [
-            (rd.D87_SHORTLIST, 20, 5, 80),
-            (rd.D88_TEN_SLOTS, 50, 5, 200),
-            (rd.D89_SIX_SEASONS, 60, 6, 240),
+            (rd.D87_SHORTLIST, TARGET, 20, 5),
+            (rd.D87_SHORTLIST, LEGACY, 20, 5),
+            (rd.D88_TEN_SLOTS, TARGET, 50, 5),
+            (rd.D88_TEN_SLOTS, LEGACY, 50, 5),
+            (rd.D89_SIX_SEASONS, TARGET, 60, 6),
+            # legacy has no 2020 preseason board, so it stays at five clusters
+            (rd.D89_SIX_SEASONS, LEGACY, 50, 5),
         ],
     )
-    def test_counts(
-        self, design: rd.ReplicationDesign, obs: int, clusters: int, drafts: int
-    ) -> None:
-        assert design.paired_observations == obs
-        assert design.clusters == clusters
-        assert design.drafts == drafts
+    def test_counts(self, design: rd.ReplicationDesign, fmt: str, obs: int, clusters: int) -> None:
+        assert design.paired_observations(fmt) == obs
+        assert design.clusters(fmt) == clusters
 
-    def test_d89_adds_exactly_one_cluster_and_20_percent_more_observations(self) -> None:
-        assert rd.D89_SIX_SEASONS.clusters == rd.D88_TEN_SLOTS.clusters + 1
-        assert rd.D89_SIX_SEASONS.paired_observations == rd.D88_TEN_SLOTS.paired_observations + 10
+    @pytest.mark.parametrize(
+        ("design", "drafts"),
+        [(rd.D87_SHORTLIST, 80), (rd.D88_TEN_SLOTS, 200), (rd.D89_SIX_SEASONS, 220)],
+    )
+    def test_total_drafts(self, design: rd.ReplicationDesign, drafts: int) -> None:
+        assert design.drafts() == drafts
+
+    def test_d89_adds_a_cluster_in_the_target_format_only(self) -> None:
+        assert rd.D89_SIX_SEASONS.clusters(TARGET) == rd.D88_TEN_SLOTS.clusters(TARGET) + 1
+        assert rd.D89_SIX_SEASONS.clusters(LEGACY) == rd.D88_TEN_SLOTS.clusters(LEGACY)
+
+    def test_earlier_designs_are_unaffected_by_the_2020_exclusion(self) -> None:
+        # D87/D88 never ran 2020, so a per-format exclusion of it must change nothing for them
+        for design in (rd.D87_SHORTLIST, rd.D88_TEN_SLOTS):
+            for fmt in design.formats:
+                assert design.seasons_for(fmt) == design.seasons
 
 
 class TestExclusionsAndPredictions:
-    def test_2019_is_excluded_with_a_measured_reason(self) -> None:
-        assert 2019 in rd.EXCLUDED_SEASONS
-        assert "0% market-rank coverage" in rd.EXCLUDED_SEASONS[2019]
+    def test_2019_is_excluded_in_both_formats_with_a_measured_reason(self) -> None:
+        for fmt in rd.ACTIVE_DESIGN.formats:
+            assert (fmt, 2019) in rd.EXCLUDED_SEASONS
+        assert "0% market-rank coverage" in rd.EXCLUDED_SEASONS[(TARGET, 2019)]
         assert 2019 not in rd.D89_SIX_SEASONS.seasons
 
-    def test_no_excluded_season_is_also_in_the_active_design(self) -> None:
-        assert not set(rd.EXCLUDED_SEASONS) & set(rd.ACTIVE_DESIGN.seasons)
+    def test_legacy_2020_is_excluded_because_no_preseason_board_exists(self) -> None:
+        reason = rd.EXCLUDED_SEASONS[(LEGACY, 2020)]
+        assert "NO PRESEASON BOARD EXISTS" in reason
+        assert "2020-10-16" in reason
+        assert 2020 not in rd.D89_SIX_SEASONS.seasons_for(LEGACY)
+
+    def test_target_2020_is_NOT_excluded(self) -> None:
+        assert (TARGET, 2020) not in rd.EXCLUDED_SEASONS
+        assert 2020 in rd.D89_SIX_SEASONS.seasons_for(TARGET)
+
+    def test_exclusion_is_per_format_not_global(self) -> None:
+        # the whole point: the same season is usable in one format and not the other
+        assert 2020 in rd.D89_SIX_SEASONS.seasons_for(TARGET)
+        assert 2020 not in rd.D89_SIX_SEASONS.seasons_for(LEGACY)
+
+    def test_no_excluded_cell_survives_into_the_active_design(self) -> None:
+        for fmt in rd.ACTIVE_DESIGN.formats:
+            for season in rd.ACTIVE_DESIGN.seasons_for(fmt):
+                assert (fmt, season) not in rd.EXCLUDED_SEASONS
+
+    def test_every_exclusion_names_a_real_format(self) -> None:
+        for fmt, _season in rd.EXCLUDED_SEASONS:
+            assert fmt in rd.ACTIVE_DESIGN.formats
 
     def test_predictions_are_recorded_and_include_both_directions(self) -> None:
         assert set(rd.PREDICTIONS) == {"R1", "R2", "R3", "R4", "R5", "R6"}

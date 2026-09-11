@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 from pathlib import Path
 
 import duckdb
@@ -13,6 +14,7 @@ from alpha_squad.evaluation.draft_forensics import (
     ALL_TIERS,
     ALL_Z_TIERS,
     DRAFT_AWARE_REPLACEMENT_TIERS,
+    MARKET_DRIVEN_OPPONENT_STRATEGIES,
     PREREGISTERED_S_CONTROL,
     PREREGISTERED_W_CONTROL,
     PREREGISTERED_Z_CONTROL,
@@ -29,14 +31,22 @@ from alpha_squad.evaluation.draft_forensics import (
     Z_SWEEP_TIERS,
     Z_TIER_SPEC,
     Z_TIERS,
+    EmptyMarketBoardError,
+    SeasonStatic,
     _pick_by_tier,
     _survival_probability,
+    assert_usable_market_board,
     homogeneous_league_draft,
     load_season_static,
     roster_feasibility_metrics,
     score_candidate,
     season_clustered_margin,
     simulate_forensic_draft,
+)
+from alpha_squad.evaluation.draft_simulation import (
+    ALL_OPPONENT_STRATEGIES,
+    MARKET_CONSENSUS,
+    MARKET_CONSENSUS_ROSTER_AWARE,
 )
 from alpha_squad.league.context import LeagueContext, load_league_context
 from alpha_squad.league.roster import positional_feasibility_cap, unfilled_dedicated_slots
@@ -1423,3 +1433,80 @@ class TestD89PreseasonPageType:
         b = load_season_static(con, league, 2023, page_type=None)
         assert a.market_rank == b.market_rank
         assert a.consumption_demand == b.consumption_demand
+
+
+class TestD89EmptyMarketBoardGuard:
+    """D89 regression: an empty preseason board must RAISE, never silently draft alphabetically.
+
+    Found in D89 by the run itself. The legacy format resolves to ecr_type `dsf`, whose earliest
+    scrape of any kind is 2020-10-16, so it has no 2020 preseason board at all. The 2020 legacy
+    cell completed "successfully" -- legal rosters, finite metrics -- with all nine opponents
+    picking in `player_id` order, because `_market_consensus_pick` falls back to sorting by id
+    when `market_rank` is empty. A fabricated observation that looks like a real one is the worst
+    possible failure mode, so it is now an error."""
+
+    def _static(self, market_rank):
+        return SeasonStatic(
+            season=2020,
+            ecr_type="dsf",
+            projections={"a": 100.0, "b": 90.0},
+            positions={"a": "WR", "b": "RB"},
+            vorp={},
+            replacement_levels={},
+            scarcity_raw={},
+            scarcity_norm={},
+            market_rank=market_rank,
+            confidence={},
+            ecr_dispersion={},
+            consumption_demand={},
+        )
+
+    @pytest.mark.parametrize("strategy", [MARKET_CONSENSUS, MARKET_CONSENSUS_ROSTER_AWARE])
+    def test_empty_board_raises_for_every_market_driven_opponent(self, strategy):
+        with pytest.raises(EmptyMarketBoardError) as exc:
+            assert_usable_market_board(self._static({}), strategy)
+        assert "2020" in str(exc.value)
+        assert "dsf" in str(exc.value)
+        assert "alphabetically" in str(exc.value)
+
+    def test_a_populated_board_passes(self):
+        assert_usable_market_board(self._static({"a": ("WR", 1.0)}), MARKET_CONSENSUS)
+
+    def test_a_sparse_board_is_allowed_through(self):
+        """The line is 'no board at all', not 'a thin board' -- coverage varies 74.8-85.5% across
+        the usable seasons and none of that is a defect."""
+        assert_usable_market_board(self._static({"a": ("WR", 1.0)}), MARKET_CONSENSUS_ROSTER_AWARE)
+
+    def test_every_known_opponent_strategy_is_classified(self):
+        """If a new opponent strategy is added, it must be deliberately in or out of the check
+        rather than defaulting to unguarded."""
+        assert set(ALL_OPPONENT_STRATEGIES) >= MARKET_DRIVEN_OPPONENT_STRATEGIES
+        assert set(ALL_OPPONENT_STRATEGIES) == MARKET_DRIVEN_OPPONENT_STRATEGIES
+
+    def test_simulate_forensic_draft_refuses_an_empty_board(self, con):
+        _seed_league_season(con, 2023)
+        league = _small_league()
+        static = load_season_static(con, league, 2023)
+        blanked = dataclasses.replace(static, market_rank={})
+        with pytest.raises(EmptyMarketBoardError):
+            simulate_forensic_draft(
+                con,
+                league,
+                2023,
+                "A",
+                1,
+                blanked,
+                opponent_strategy=MARKET_CONSENSUS_ROSTER_AWARE,
+            )
+
+    def test_the_guard_does_not_change_a_normal_draft(self, con):
+        """The check must be a pure precondition: a season with a board draws the same roster it
+        drew before the guard existed."""
+        _seed_league_season(con, 2023)
+        league = _small_league()
+        static = load_season_static(con, league, 2023)
+        result = simulate_forensic_draft(
+            con, league, 2023, "A", 1, static, opponent_strategy=MARKET_CONSENSUS_ROSTER_AWARE
+        )
+        assert result.drafted_player_ids
+        assert len(result.drafted_player_ids) == len(result.drafted_positions)
