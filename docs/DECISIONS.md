@@ -6085,3 +6085,101 @@ rather than "try another formula".
 `evaluation/objective_candidates.py` (pre-registration), O-tier wiring, and 46 tests. Not
 recommended next: another value-base reformulation (D85), a lookahead optimizer (27% disagreement
 but ~90-point structural headroom), or projection work (D79-D83).
+
+---
+
+## D87 — A candidate shortlist is not a free speed-up: ranked by Y1, it re-imports Y1's K/DST bias into O1. Nothing ships.
+
+*Branch `claude/separate-valuation-legality-4tw82o`. Shortlist parameter at `4254455`. Full
+report: `docs/D87_SHORTLIST_REPLICATION.md`. **`league/` and `models/` byte-identical to Y1.***
+
+A controlled replication/efficiency experiment on D86's O1, not a new objective.
+
+### 0. A baseline discrepancy, diagnosed before anything ran
+
+The D87 brief cited "O1 K=40 = 6.26 s/pick, O1 K=10 = 0.51 s/pick". Both are mislabelled:
+D86 measured **6.26 s/pick for the FULL BOARD** and **0.51 s/pick for K=40**, and **K=10 was never
+tested**. Verified three ways: `_pick_by_tier` scores `for player_id in available` (no shortlist
+in the evaluated path); the D86 artifact records O1 at **5.716 s/pick**; and D86's own cost table
+says so. Code, artifact and report agree with each other -- the mislabel is in the brief.
+
+**Consequence: there is no "O1-K40" historical baseline. D86's +52.9 belongs to O1-FULL.** The
+experiment was therefore run against O1-FULL, with K=40 included so nothing was lost.
+
+### 1. K=10 is NOT a faithful approximation, and the headline rate hides it
+
+592 real pick states, trajectory held fixed at O1-FULL's:
+
+| format | K | same pick | changes the decision |
+|---|---|---|---|
+| target | 40 | 94.1% | 5.9% |
+| target | **10** | **89.7%** | **10.3%** |
+| legacy | 10 | 93.4% | 6.6% |
+
+Split by stage (target): **rounds 1-7 change 0/140 (0.0%); rounds 8-16 change 33/180 (18.3%)** --
+perfectly faithful early, badly unfaithful exactly where O1's mechanism operates.
+
+### 2. The mechanism: a shortlist inherits the bias of the scorer that builds it
+
+All 33 changed decisions had the full-board pick **outside** the cheap top-10 (median cheap rank
+**205**, max 377), and they substitute K/DST for skill players: **TE->K 13, RB->K 5, TE->DST 3,
+WR->DST 3**.
+
+The shortlist is ranked by the **cheap scorer, which is Y1** -- the engine D85 measured as
+over-valuing K by **5.34x** and DST by **8.10x**. In rounds 12-16 the Y1 top-10 contains a kicker
+**90-100%** of the time and a defense **95-100%**, against TE 10-65% and RB 0-35%. So the
+shortlist **re-imports Y1's K/DST pathology into O1** and structurally prevents O1 from expressing
+the behaviour that made it interesting. Kickers drafted: **Y1 3.70 -> O1-FULL 2.60 -> O1-K40 3.40
+-> O1-K10 3.25**.
+
+### 3. Results: the one arm that passes a gate set flips sign across formats
+
+| arm | target primary | legacy primary | target CI | G7 |
+|---|---|---|---|---|
+| O1-FULL | **+52.9** | **+1.6** | [-8.3, +114.0] | sign held -- ok |
+| O1-K40 | +41.9 | -6.2 | [-21.5, +105.4] | **FAIL** |
+| **O1-K10** | **+62.3** | **-7.1** | **[+16.1, +108.6]** | **FAIL** |
+
+O1-K10 passes every target-format gate (G2/G3/G6/G8/G9/G10, 0/5 seasons worse) and then **fails
+G7** -- the only arm to change sign. The shortcut made the candidate WORSE on the gate that
+distinguishes a fix from a format artifact.
+
+**The margins are also non-monotonic in K (+62.3 at K=10, +41.9 at K=40, +52.9 at FULL).** A
+quantity that does not move monotonically with the computation spent on it is not measuring that
+computation; combined with the absence of any mechanism (O1-K10 scores highest while drafting MORE
+kickers than O1-FULL), these differences are noise.
+
+### 4. Cost was never the binding constraint
+
+| arm | s/pick | s/draft | vs Y1 |
+|---|---|---|---|
+| O0 (Y1) | 0.028 | 0.4 | 1.0x |
+| O1-FULL | 4.972 | 79.6 | 179.6x |
+| O1-K40 | 0.408 | 6.5 | 14.7x |
+| O1-K10 | 0.131 | 2.1 | 4.7x |
+
+Even the full board answers a single pick in ~5s, and a real draft pick has minutes. K buys
+research throughput, and that is exactly where it costs fidelity.
+
+### 5. 2026 board
+
+At **#1 / #20 / #21 all four arms select the identical player** (the full-board pick is also the
+cheap ranking's #1 at each). But **O1-K10's final 2026 roster is composition-identical to Y1's,
+four kickers included** (Y1 K4 / O1-FULL K2 / O1-K10 K4). The one concrete improvement D86
+produced -- "take the kicker you need, then stop" -- is entirely absent under K=10. Roster
+legality held everywhere (0 unfilled slots, all arms, both formats).
+
+### Production decision
+
+**NOTHING SHIPS. No production diff was prepared, because no arm passed.** Added: a research-only
+`shortlist_k` parameter on `_pick_by_tier`/`simulate_forensic_draft` and 5 tests (including that
+K=1 degenerates to the control, which is what makes an agreement rate a measurement rather than a
+tautology).
+
+**This phase changed the next step rather than confirming it.** D86 recommended re-running O1 at
+the full 10 slots for power, and the obvious way to afford it was the K=40 shortlist. D87 shows
+that would have measured a **different policy**. The corrected recommendation: **re-run O1-FULL,
+no shortlist, at 10 slots in both formats** (~2.2h per format at 79.6 s/draft, affordable). And
+the general lesson: **a shortlist must be validated against the full board for the BEHAVIOUR under
+test, not merely for the selected player** -- and it must not be ranked by the engine whose
+pathology the expensive objective exists to correct.

@@ -3,7 +3,38 @@
 Living summary of what is implemented, validated, and outstanding. Updated at the end of every
 milestone. See `docs/TRACEABILITY.md` for the acceptance-criteria-level mapping.
 
-## Status: M38 complete (D86) — **the objective itself was wrong: it scores season totals and therefore prices the bench at zero, when the bench supplies 17.8% of realized points. The fix is real, generalises, and still fails the gates. Nothing shipped.**
+## Status: M39 complete (D87) — **the K=10 shortcut is not a faithful approximation: ranked by Y1, it re-imports Y1's K/DST over-valuation into O1 and flips sign across formats. Nothing shipped.**
+
+A controlled replication/efficiency test of D86's O1. Full report:
+`docs/D87_SHORTLIST_REPLICATION.md`.
+
+**A baseline discrepancy was diagnosed first.** The D87 brief cited "O1 K=40 = 6.26 s/pick, O1
+K=10 = 0.51 s/pick"; D86 actually measured 6.26 s/pick for the **full board** and 0.51 s/pick for
+**K=40**, and K=10 was never tested. D86's +52.9 therefore belongs to **O1-FULL**, and the
+experiment was run against that.
+
+**K=10 changes 10.3% of decisions in the target format — but 0.0% in rounds 1–7 and 18.3% in
+rounds 8–16**, exactly where O1's mechanism operates. All 33 changed decisions had the full-board
+pick outside the cheap top-10 (median cheap rank 205), and they substitute K/DST for skill players
+(TE→K 13, RB→K 5). The cause is structural: **the shortlist is ranked by Y1**, which D85 measured
+as over-valuing K 5.34× and DST 8.10×, so in rounds 12–16 the Y1 top-10 contains a kicker 90–100%
+of the time. Kickers drafted go Y1 3.70 → O1-FULL 2.60 → **O1-K10 3.25**, and O1-K10's 2026 roster
+is composition-identical to Y1's, four kickers included.
+
+**O1-K10 passes every target-format gate (+62.3, CI [+16.1, +108.6], 0/5 seasons worse) and then
+fails G7**, flipping to −7.1 in `legacy_2qb_dynasty` — the only arm to change sign, where O1-FULL
+held (+52.9 / +1.6). The margins are also **non-monotonic in K** (+62.3 / +41.9 / +52.9), which
+with no supporting mechanism marks them as noise. Cost was never the binding constraint: even the
+full board answers one pick in ~5 s.
+
+**This changed the next step rather than confirming it.** D86 recommended re-running O1 at 10 slots
+and the affordable route looked like the shortlist; D87 shows that would have measured a different
+policy. The corrected recommendation is **O1-FULL, no shortlist, 10 slots, both formats** (~2.2 h
+per format). General lesson: a shortlist must be validated for the *behaviour* under test, not
+merely the selected player, and must not be ranked by the engine whose bias the expensive
+objective exists to correct.
+
+### Earlier status: M38 complete (D86) — **the objective itself was wrong: it scores season totals and therefore prices the bench at zero, when the bench supplies 17.8% of realized points. The fix is real, generalises, and still fails the gates. Nothing shipped.**
 
 D85 closed the value-base seam. D86 asked the prior question — *what should Alpha optimize?* — and
 found the defect is the **metric**, not the formula. Every published draft number scores a roster
