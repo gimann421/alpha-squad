@@ -24,6 +24,7 @@ and every tier that reuses a production concept calls the production function di
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from typing import Literal
 
@@ -1788,13 +1789,25 @@ def _pick_by_tier(
     next_pick_overall: int | None,
     roster_player_ids: list[str] | None = None,
     picks_remaining: int | None = None,
+    shortlist_k: int | None = None,
 ) -> tuple[str, list[CandidateScore]]:
     """Returns (chosen_player_id, every scored candidate sorted best-first) -- the ranked list
     is what a JSON trace needs to show runner-up reasoning, not just the winner.
 
     `picks_remaining` (counting this one) is only consulted by the tiers in
     `TIERS_ENFORCING_LEGALITY` (D67's W2/W3, D85's L1/L3); every other tier ignores it, so
-    omitting it leaves them byte-identical."""
+    omitting it leaves them byte-identical.
+
+    `shortlist_k` (D87) is a pure COST approximation for the tiers whose objective is expensive
+    (currently O1). When set, the whole board is first ranked by the CHEAP control scorer and only
+    the top `shortlist_k` are re-scored under the expensive objective -- exactly the procedure
+    D86's Phase 14 cost probe used. It changes no formula, no weight and no gate; it changes only
+    how many candidates the expensive objective is evaluated on. `None` (the default) scores the
+    entire board, which is what every D86 number was measured with.
+
+    It is NOT free: a candidate outside the cheap top-K can never be selected, so a shortlist can
+    in principle lose a position the roster still needs. Whether it actually does is measured
+    (D87 Phases 3 and 5), never assumed."""
     if tier == "H":
         needs = roster_need(league, roster_positions)
         rec = recommend_draft_pick(
@@ -1983,8 +1996,35 @@ def _pick_by_tier(
             static.availability_rates,
         )
 
+    # D87: restrict the EXPENSIVE objective to the cheap scorer's top-K, when asked. The cheap
+    # ranking uses the control tier (`PREREGISTERED_O_CONTROL`), which is the shipped engine, so
+    # the shortlist is built from production's own view of the board and nothing about the
+    # expensive objective leaks into which candidates it gets to see.
+    candidate_ids: Iterable[str] = available
+    if shortlist_k is not None and tier in O_TIERS and O_TIER_SPEC[tier]:
+        cheap = []
+        for player_id in available:
+            c = score_candidate(
+                static,
+                player_id,
+                league,
+                roster_positions,
+                PREREGISTERED_O_CONTROL,
+                available=available,
+                current_pick_overall=current_pick_overall,
+                next_pick_overall=next_pick_overall,
+                opportunity_costs=opportunity_costs,
+                roster_player_ids=roster_player_ids,
+                base_lineup_points=base_lineup_points,
+                dynamic_levels=dynamic_levels,
+            )
+            if c is not None:
+                cheap.append(c)
+        cheap.sort(key=lambda c: (-c.score, c.player_id))
+        candidate_ids = [c.player_id for c in cheap[:shortlist_k]]
+
     scored = []
-    for player_id in available:
+    for player_id in candidate_ids:
         s = score_candidate(
             static,
             player_id,
@@ -2067,6 +2107,7 @@ def simulate_forensic_draft(
     *,
     trace: list[dict] | None = None,
     opponent_strategy: str = MARKET_CONSENSUS,
+    shortlist_k: int | None = None,
 ) -> ForensicDraftResult:
     """Same snake-draft loop, fixed 9-slot opponent field, and outcome scoring as
     evaluation/draft_simulation.py::simulate_draft -- the only thing that varies is how the
@@ -2120,6 +2161,7 @@ def simulate_forensic_draft(
                     next_pick,
                     roster_player_ids=drafted,
                     picks_remaining=picks_remaining,
+                    shortlist_k=shortlist_k,
                 )
                 if trace is not None:
                     top = scored[0]

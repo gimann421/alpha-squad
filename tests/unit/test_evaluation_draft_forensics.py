@@ -1214,3 +1214,158 @@ class TestD86OTiersObjective:
         static = load_season_static(con, league, 2023)
         # the fixture seeds no weekly rows at all, so there is nothing to measure
         assert static.availability_rates == {}
+
+
+class TestD87ShortlistK:
+    """D87's candidate shortlist. It is a pure COST approximation: rank the whole board with the
+    CHEAP control scorer, then re-score only the top K under the expensive objective.
+
+    What these pin is that it changes nothing except how many candidates get the expensive
+    treatment -- and that it is genuinely capable of changing a pick, so a measured
+    'K=10 agrees with the full board' is a finding rather than a no-op."""
+
+    def test_shortlist_is_a_no_op_for_the_control_tier(self, con):
+        """O0 is already cheap; a shortlist must never touch it, or the control would differ
+        between arms and every margin would be measured against a moving baseline."""
+        _seed_league_season(con, 2023)
+        league = _small_league()
+        static = load_season_static(con, league, 2023)
+        available = set(static.projections)
+        full, scored_full = _pick_by_tier(
+            static,
+            con,
+            league,
+            2023,
+            available,
+            [],
+            "O0",
+            1,
+            5,
+            roster_player_ids=[],
+            picks_remaining=5,
+        )
+        short, scored_short = _pick_by_tier(
+            static,
+            con,
+            league,
+            2023,
+            available,
+            [],
+            "O0",
+            1,
+            5,
+            roster_player_ids=[],
+            picks_remaining=5,
+            shortlist_k=2,
+        )
+        assert full == short
+        assert len(scored_full) == len(scored_short) == len(available)
+
+    def test_shortlist_limits_how_many_candidates_are_scored(self, con):
+        _seed_league_season(con, 2023)
+        league = _small_league()
+        static = load_season_static(con, league, 2023)
+        static.availability_rates.update({"QB": 0.9, "RB": 0.9, "WR": 0.9, "TE": 0.9})
+        available = set(static.projections)
+        _, scored = _pick_by_tier(
+            static,
+            con,
+            league,
+            2023,
+            available,
+            [],
+            "O1",
+            1,
+            5,
+            roster_player_ids=[],
+            picks_remaining=5,
+            shortlist_k=3,
+        )
+        assert len(scored) == 3
+
+    def test_none_scores_the_whole_board(self, con):
+        """The default must be what every D86 number was measured with."""
+        _seed_league_season(con, 2023)
+        league = _small_league()
+        static = load_season_static(con, league, 2023)
+        static.availability_rates.update({"QB": 0.9, "RB": 0.9, "WR": 0.9, "TE": 0.9})
+        available = set(static.projections)
+        _, scored = _pick_by_tier(
+            static,
+            con,
+            league,
+            2023,
+            available,
+            [],
+            "O1",
+            1,
+            5,
+            roster_player_ids=[],
+            picks_remaining=5,
+            shortlist_k=None,
+        )
+        assert len(scored) == len(available)
+
+    def test_a_shortlist_of_one_forces_the_cheap_scorers_pick(self, con):
+        """The sharpest statement of what a shortlist can cost: at K=1 the expensive objective
+        has no choice at all and the arm degenerates to the control. This is what makes
+        'K=10 agreed with the full board' a real measurement rather than a tautology."""
+        _seed_league_season(con, 2023)
+        league = _small_league()
+        static = load_season_static(con, league, 2023)
+        static.availability_rates.update({"QB": 0.9, "RB": 0.9, "WR": 0.9, "TE": 0.9})
+        available = set(static.projections)
+        control_pick, _ = _pick_by_tier(
+            static,
+            con,
+            league,
+            2023,
+            available,
+            [],
+            "O0",
+            1,
+            5,
+            roster_player_ids=[],
+            picks_remaining=5,
+        )
+        k1_pick, scored = _pick_by_tier(
+            static,
+            con,
+            league,
+            2023,
+            available,
+            [],
+            "O1",
+            1,
+            5,
+            roster_player_ids=[],
+            picks_remaining=5,
+            shortlist_k=1,
+        )
+        assert len(scored) == 1
+        assert k1_pick == control_pick
+
+    def test_shortlist_is_deterministic(self, con):
+        _seed_league_season(con, 2023)
+        league = _small_league()
+        static = load_season_static(con, league, 2023)
+        static.availability_rates.update({"QB": 0.9, "RB": 0.9, "WR": 0.9, "TE": 0.9})
+        available = set(static.projections)
+        picks = {
+            _pick_by_tier(
+                static,
+                con,
+                league,
+                2023,
+                available,
+                [],
+                "O1",
+                1,
+                5,
+                roster_player_ids=[],
+                picks_remaining=5,
+                shortlist_k=5,
+            )[0]
+            for _ in range(3)
+        }
+        assert len(picks) == 1
