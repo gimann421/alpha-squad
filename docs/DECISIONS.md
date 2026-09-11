@@ -6183,3 +6183,93 @@ no shortlist, at 10 slots in both formats** (~2.2h per format at 79.6 s/draft, a
 the general lesson: **a shortlist must be validated against the full board for the BEHAVIOUR under
 test, not merely for the selected player** -- and it must not be ranked by the engine whose
 pathology the expensive objective exists to correct.
+
+---
+
+## D88 — O1 replicates at 2.5x the data, and draft slots provably cannot resolve it: the MDE floors at ~56 against an effect of ~50. Nothing ships.
+
+*Branch `claude/separate-valuation-legality-4tw82o`. Checkpoint `ecc9e71`. Full report:
+`docs/D88_O1_POWER_REPLICATION.md`. **`league/` and `models/` byte-identical to Y1.***
+
+A power/replication experiment on D86's O1, exactly as D87 recommended. The only change from
+D86/D87 is the slot count: 4 -> 10. Full candidate board, no shortlist, same objective, opponent,
+seasons, metrics and gates.
+
+### 1. Reproduction is exact
+
+Slots 1-10 superset D86/D87's (1,4,7,10), so that subset is a built-in control. It reproduced
+**identically in both formats**: target +52.9 CI [-8.3,+114.0]; legacy +1.6 CI [-56.9,+60.1] --
+same drafted rosters, same metrics to the decimal. A pre-run spot check on three cells also
+matched exactly, confirming no accidental shortlist.
+
+### 2. The effect REPLICATES
+
+| format | D87 (4 slots) | **D88 (10 slots)** | season-long | seasons improved |
+|---|---|---|---|---|
+| target 1QB | +52.9 | **+50.5**, CI [-5.5, +106.6] | **+39.9** | **4/5** |
+| legacy 2QB | +1.6 | **-2.3**, CI [-85.5, +80.8] | +16.2 | 3/5 |
+
+200 drafts, 50 paired observations per format. Target keeps its sign and magnitude at 2.5x the
+data, improves BOTH metrics, survives leave-one-season-out, and holds 0 unfilled mandatory slots.
+
+### 3. THE DECISIVE FINDING: slots cannot resolve this, and never could
+
+Variance decomposition of the paired difference (target): **between-season SD 45.1**, within-season
+SD 55.7. The clustered SE is `sqrt(between^2 + within^2/n)/sqrt(5)`, so slots shrink only the
+second term:
+
+| slots | MDE |
+|---|---|
+| 4 (D86/D87) | 65.8 |
+| **10 (D88)** | **60.1** |
+| 20 | 58.1 |
+| 100 | 56.4 |
+| **infinity** | **56.0** |
+
+**The MDE converges to ~56 points regardless of how many slots are added, and the effect is
+~50.5 -- below the asymptote.** Going 4 -> 10 bought a 9% MDE reduction; 100 slots would buy 5%
+more. **The binding constraint is SEASONS, not slots.** D87's recommended experiment was correctly
+designed and was never capable of succeeding; D88's contribution is proving that rather than
+assuming it.
+
+With between-season SD fixed, MDE = t(df=n-1) x 45.1/sqrt(n): 5 seasons 56.0, **6 seasons 47.3**,
+7 seasons 41.7. **Exactly one more season is available** -- the usable universe is 2020-2025 (2020
+has 612 board players; 2019 has 174 and no established-player projections). So 6 seasons gives
+MDE ~47.3 against an effect of ~50.5: a **~3-point margin**, a coin-flip rather than a resolution.
+
+### 4. K/DST survives; early rounds are untouched
+
+Kickers drafted **3.74 -> 2.62** (D87 at 4 slots: 3.70 -> 2.60 -- essentially identical, so not a
+small-sample artifact). O1 does NOT take the first kicker later (7.92 -> 7.74); it stops hoarding
+them, spending the picks on TE (1.92 -> 2.80) and RB (2.12 -> 2.52). First QB/RB/WR rounds are
+identical to two decimals. **0 unfilled mandatory slots in all 200 drafts.**
+
+### 5. The mechanism is confirmed in realized utility
+
+O1 accumulates **fewer** raw roster points (-19.8) while converting more into lineup points
+(+50.5 weekly, +39.9 season-long) and drawing more from the bench (+22.6), and it drafts players
+who miss slightly MORE time (+4.7 player-weeks) and gains anyway -- which is what real depth buys.
+
+### 6. RB: the hypothesis is CLOSED
+
+Elite-RB cell perturbed +25/+50/+75/+100 (diagnostic only, no projection changed). **O1 and Y1 are
+identical**: both need **+75** before taking an RB at #1, and neither changes at #20 or #21 at any
+perturbation. **Weekly roster utility provides no protection against the elite-RB
+under-projection.** (D85's arm C lowered the threshold to +50; O1 does not.)
+
+### 7. 2026
+
+**#1/#20/#21 identical under both arms** (St. Brown / Allen / McBride). First divergence is round
+11. Y1 drafts four kickers; O1 drafts two, spending the picks on Charbonnet (RB) and Henry (TE).
+
+### Production decision
+
+**NOTHING SHIPS.** Target fails G8 alone (by 5.5 points); legacy fails G3/G6/G7/G8/G9. No
+production diff was prepared. Cost: O1 4.80 s/pick, 76.7 s/draft, 178x Y1 -- immaterial for a live
+pick, and never the binding constraint.
+
+**Verdict: B -- PROMISING BUT UNRESOLVED, with the obstruction now identified exactly.** The next
+and only remaining experiment on this benchmark is **add 2020 and re-run at 6 seasons x 10 slots**
+(~2.5 h), pre-registered in advance because a 3-point margin invites post-hoc reading. If that
+does not resolve it, the benchmark is exhausted for effects of this size and the instrument, not
+the candidate, is what must change.

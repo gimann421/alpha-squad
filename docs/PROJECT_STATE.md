@@ -3,7 +3,42 @@
 Living summary of what is implemented, validated, and outstanding. Updated at the end of every
 milestone. See `docs/TRACEABILITY.md` for the acceptance-criteria-level mapping.
 
-## Status: M39 complete (D87) — **the K=10 shortcut is not a faithful approximation: ranked by Y1, it re-imports Y1's K/DST over-valuation into O1 and flips sign across formats. Nothing shipped.**
+## Status: M40 complete (D88) — **O1 replicates at 2.5× the data (+50.5), and draft slots provably cannot resolve it: the MDE floors at ~56 against an effect of ~50. The binding constraint is seasons, not slots. Nothing shipped.**
+
+The power/replication experiment D87 recommended: O1-FULL at 10 draft slots, full board, no
+shortlist, same objective/opponent/seasons/metrics/gates. 200 drafts. Full report:
+`docs/D88_O1_POWER_REPLICATION.md`.
+
+**Reproduction is exact.** Slots 1–10 superset D86/D87's four, and that subset reproduced
+identically in both formats (+52.9 / +1.6, same rosters, same metrics to the decimal).
+
+**The effect replicates.** Target 1QB **+50.5** (was +52.9), season-long **+39.9**, **4 of 5
+seasons improved**, LOSO all positive, 0 unfilled slots. Legacy remains a null (−2.3).
+
+**The decisive finding is a power result.** Between-season SD is 45.1 and within-season SD 55.7, so
+the clustered SE is `sqrt(45.1² + 55.7²/n)/√5` — slots shrink only the second term. MDE goes
+65.8 (4 slots) → **60.1 (10 slots)** → 58.1 (20) → **56.0 (∞)**. **The effect (+50.5) sits below
+the asymptote, so no number of draft slots can ever resolve it.** D87's recommended experiment was
+correctly designed and was never capable of succeeding; D88 proves that rather than assuming it.
+Six seasons would give MDE ≈ 47.3, and **exactly one more season is available** (2020; 2019 has no
+established-player projections) — a ~3-point margin, a coin-flip.
+
+**K/DST survives at scale**: kickers drafted 3.74 → 2.62 (4-slot measured 3.70 → 2.60). Early
+rounds are untouched (first QB/RB/WR identical to two decimals); all the difference is the
+endgame. The mechanism is confirmed in realized utility — O1 accumulates *fewer* raw roster points
+(−19.8) while converting more into lineup points and bench contribution.
+
+**The RB hypothesis is closed**: O1 and Y1 have *identical* elite-RB sensitivity (both need +75 at
+#1, neither moves at #20/#21). Weekly roster utility gives no protection against the known
+under-projection.
+
+**2026 #1/#20/#21 are identical under both arms**; first divergence is round 11, where Y1's third
+and fourth kickers become a RB and a TE.
+
+Verdict: **B — promising but unresolved, obstruction identified.** Nothing ships; target fails G8
+alone (by 5.5 points), legacy fails G3/G6/G7/G8/G9.
+
+### Earlier status: M39 complete (D87) — **the K=10 shortcut is not a faithful approximation: ranked by Y1, it re-imports Y1's K/DST over-valuation into O1 and flips sign across formats. Nothing shipped.**
 
 A controlled replication/efficiency test of D86's O1. Full report:
 `docs/D87_SHORTLIST_REPLICATION.md`.
