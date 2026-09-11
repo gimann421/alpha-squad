@@ -1025,12 +1025,53 @@ def _normalize(values: dict[str, float]) -> dict[str, float]:
     return {k: (v - lo) / (hi - lo) for k, v in values.items()}
 
 
+def preseason_page_type(con: duckdb.DuckDBPyConnection, ecr_type: str, season: int) -> str | None:
+    """Which `page_type` actually holds this season's PRESEASON board for `ecr_type` (D89).
+
+    `market/series.py` maps a league to one `(ecr_type, page_type)` pair, which is correct for
+    production because production drafts the current season. Across history the label moved:
+    DynastyProcess stored the 2020 preseason redraft board as **`redraft-offense`** and every
+    season from 2021 as **`redraft-overall`**. Measured, not assumed -- 2020 `redraft-overall`
+    has 4922 rows and **none of them are in the Jul/Aug preseason window**, so a fixed
+    `redraft-overall` lookup returns an EMPTY board for 2020.
+
+    An empty board is not a harmless gap. `market_rank` drives the fair opponent, the
+    `market_draft_demand` target and the opportunity-cost replay; with it empty,
+    `best_by_market_rank` falls through to sorting by `player_id`, so the opponents draft
+    ALPHABETICALLY and the whole season measures a different game.
+
+    This resolves the page_type from the data -- whichever page carries the most Jul/Aug rows
+    for that `ecr_type` and season -- so it returns `redraft-overall` for 2021-2025 (leaving
+    every published number byte-identical) and `redraft-offense` for 2020. It is deliberately
+    NOT a hardcoded season->page map: a relabel in another season is handled by the same rule.
+
+    Returns `None` when the season has no preseason rows at all, which callers pass straight to
+    `_preseason_overall_market` as "no page scoping" -- the pre-D56 behaviour, and the honest
+    answer when there is nothing to scope.
+
+    Note what this must NOT do: widen the Jul/Aug window to find rows. 2020's `redraft-overall`
+    rows exist but are IN-SEASON, so reading them would leak market movement that happened after
+    the draft -- exactly the D54 defect.
+    """
+    rows = con.execute(
+        """
+        SELECT page_type, count(*) AS n FROM market_snapshot
+        WHERE ecr_type = ? AND year(scrape_date) = ? AND month(scrape_date) IN (7, 8)
+          AND page_type IS NOT NULL
+        GROUP BY 1 ORDER BY n DESC, page_type
+        """,
+        [ecr_type, season],
+    ).fetchall()
+    return rows[0][0] if rows else None
+
+
 def load_season_static(
     con: duckdb.DuckDBPyConnection,
     league: LeagueContext,
     season: int,
     ecr_type: str | None = None,
     projections_override: dict[str, float] | None = None,
+    page_type: str | None = None,
 ) -> SeasonStatic:
     """`projections_override` is D68's single insertion point.
 
@@ -1049,7 +1090,10 @@ def load_season_static(
     levels = replacement_level(league, projections, positions)
     scarcity_raw = positional_scarcity(league, projections, positions)
     scarcity_norm = _normalize(scarcity_raw)
-    market_rank = _preseason_overall_market(con, ecr_type, season)
+    # D89: `page_type` defaults to `market/series.py`'s mapping (production behaviour, and what
+    # every D86/D87/D88 number was measured with). A caller may pass the season's own page via
+    # `preseason_page_type` to reach a season whose board was labelled differently.
+    market_rank = _preseason_overall_market(con, ecr_type, season, page_type=page_type)
     # D86: measured on prior seasons only. `measure_availability_rates` returns {} for a
     # position with no data, and the O1 tier raises on an empty dict rather than defaulting.
     availability_rates = measure_availability_rates(

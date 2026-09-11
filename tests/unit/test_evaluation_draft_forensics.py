@@ -1369,3 +1369,57 @@ class TestD87ShortlistK:
             for _ in range(3)
         }
         assert len(picks) == 1
+
+
+class TestD89PreseasonPageType:
+    """D89: which `page_type` holds a season's PRESEASON board is not constant across history.
+
+    DynastyProcess stored the 2020 redraft board as `redraft-offense` and every season from 2021
+    as `redraft-overall`. A fixed `redraft-overall` lookup returns an EMPTY board for 2020, which
+    silently makes the fair opponent draft alphabetically -- a different game, not a gap."""
+
+    def _seed_board(self, con, season, page_type, n=5, month=8):
+        for i in range(n):
+            con.execute(
+                "INSERT INTO market_snapshot (player_id, scrape_date, ecr_type, position, "
+                "ecr_rank, page_type) VALUES (?, ?, 'ro', 'WR', ?, ?)",
+                [f"WR_{i}", f"{season}-{month:02d}-01", float(i + 1), page_type],
+            )
+
+    def test_resolves_the_page_that_actually_holds_the_preseason_board(self, con):
+        from alpha_squad.evaluation.draft_forensics import preseason_page_type
+
+        self._seed_board(con, 2020, "redraft-offense", n=9)
+        self._seed_board(con, 2020, "redraft-idp", n=2)
+        assert preseason_page_type(con, "ro", 2020) == "redraft-offense"
+
+    def test_ignores_rows_outside_the_preseason_window(self, con):
+        """2020's `redraft-overall` rows exist but are IN-SEASON. Reading them would leak market
+        movement that happened after the draft -- the D54 defect. They must not win."""
+        from alpha_squad.evaluation.draft_forensics import preseason_page_type
+
+        self._seed_board(con, 2020, "redraft-overall", n=20, month=11)  # in-season, must lose
+        self._seed_board(con, 2020, "redraft-offense", n=3, month=8)  # preseason, must win
+        assert preseason_page_type(con, "ro", 2020) == "redraft-offense"
+
+    def test_returns_none_when_the_season_has_no_preseason_board(self, con):
+        from alpha_squad.evaluation.draft_forensics import preseason_page_type
+
+        assert preseason_page_type(con, "ro", 1999) is None
+
+    def test_is_deterministic_when_two_pages_tie(self, con):
+        from alpha_squad.evaluation.draft_forensics import preseason_page_type
+
+        self._seed_board(con, 2020, "redraft-offense", n=4)
+        self._seed_board(con, 2020, "redraft-overall", n=4)
+        assert {preseason_page_type(con, "ro", 2020) for _ in range(3)} == {"redraft-offense"}
+
+    def test_page_type_defaults_to_production_behaviour(self, con):
+        """Omitting `page_type` must leave `load_season_static` exactly as D86/D87/D88 ran it,
+        or every published number moves."""
+        _seed_league_season(con, 2023)
+        league = _small_league()
+        a = load_season_static(con, league, 2023)
+        b = load_season_static(con, league, 2023, page_type=None)
+        assert a.market_rank == b.market_rank
+        assert a.consumption_demand == b.consumption_demand
