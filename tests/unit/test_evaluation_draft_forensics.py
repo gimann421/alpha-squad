@@ -1510,3 +1510,71 @@ class TestD89EmptyMarketBoardGuard:
         )
         assert result.drafted_player_ids
         assert len(result.drafted_player_ids) == len(result.drafted_positions)
+
+
+class TestD89FlexTieBreakIsOrderDependent:
+    """D89 characterization: `compute_league_starters` breaks FLEX ties by set-iteration order.
+
+    `flex_candidates` is assembled by iterating `flex_eligible_positions`, a `set[str]`, and then
+    stable-sorted on points. When two flex-eligible players at DIFFERENT positions have exactly
+    equal points, which one takes the last flex slot therefore depends on set iteration order,
+    which varies with PYTHONHASHSEED between processes.
+
+    Blast radius, measured in D89 and pinned here:
+      * the LINEUP TOTAL is invariant -- the tied players contribute equal points either way, so
+        `weekly_no_foresight` and `weekly_hindsight` are unaffected. All 120 cells shared between
+        the D88 and D89 artifacts matched exactly on all three metrics.
+      * `bench_contribution` is NOT invariant, because it asks WHICH player was fielded in order
+        to attribute points to the bench. One cell of 120 (legacy 2021, slot 2, O0) differed:
+        526.0 under most seeds, 519.6 under PYTHONHASHSEED=4.
+
+    `bench` is a secondary diagnostic and enters no gate, so no D86/D88/D89 conclusion depends on
+    it. The fix belongs in `league/replacement.py` (a deterministic secondary sort key), which D89
+    is forbidden to touch -- Y1 must stay byte-identical. Recorded as a future item instead.
+
+    These tests assert the INVARIANT half, which is the part every conclusion rests on."""
+
+    def _tied_league(self) -> LeagueContext:
+        return LeagueContext(
+            league_id="tie",
+            format="redraft",
+            teams=1,
+            scoring={"ppr": True, "ppr_value": 1.0},
+            lineup={"QB": 1, "RB": 1, "WR": 1, "FLEX": 1},
+            roster={"bench": 2, "roster_size": 6},
+        )
+
+    def test_lineup_total_is_invariant_under_an_exact_flex_tie(self):
+        """The property the primary metric depends on: a tie cannot change the points scored."""
+        from alpha_squad.league.replacement import compute_league_starters
+
+        league = self._tied_league()
+        points = {"qb": 300.0, "rb1": 200.0, "wr1": 190.0, "rb2": 100.0, "wr2": 100.0}
+        positions = {"qb": "QB", "rb1": "RB", "wr1": "WR", "rb2": "RB", "wr2": "WR"}
+        starters = compute_league_starters(league, points, positions, teams=1)["starters"]
+        assert sum(points[p] for p in starters) == 790.0
+        # rb2 and wr2 are exactly tied for the single flex slot; exactly one of them starts
+        assert len({"rb2", "wr2"} & starters) == 1
+
+    def test_the_tie_is_broken_by_position_iteration_not_by_player_identity(self):
+        """Both orderings are reachable, so no caller may depend on which player wins."""
+        from alpha_squad.league.replacement import compute_league_starters
+
+        league = self._tied_league()
+        positions = {"qb": "QB", "rb1": "RB", "wr1": "WR", "rb2": "RB", "wr2": "WR"}
+        points = {"qb": 300.0, "rb1": 200.0, "wr1": 190.0, "rb2": 100.0, "wr2": 100.0}
+        winner = (
+            {"rb2", "wr2"} & compute_league_starters(league, points, positions, teams=1)["starters"]
+        ).pop()
+        assert winner in {"rb2", "wr2"}
+
+    def test_an_untied_flex_is_fully_deterministic(self):
+        """The defect is confined to EXACT ties -- ordinary boards are unaffected."""
+        from alpha_squad.league.replacement import compute_league_starters
+
+        league = self._tied_league()
+        positions = {"qb": "QB", "rb1": "RB", "wr1": "WR", "rb2": "RB", "wr2": "WR"}
+        points = {"qb": 300.0, "rb1": 200.0, "wr1": 190.0, "rb2": 100.1, "wr2": 100.0}
+        for _ in range(5):
+            starters = compute_league_starters(league, points, positions, teams=1)["starters"]
+            assert "rb2" in starters and "wr2" not in starters
