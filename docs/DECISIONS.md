@@ -6273,3 +6273,112 @@ and only remaining experiment on this benchmark is **add 2020 and re-run at 6 se
 (~2.5 h), pre-registered in advance because a 3-point margin invites post-hoc reading. If that
 does not resolve it, the benchmark is exhausted for effects of this size and the instrument, not
 the candidate, is what must change.
+
+---
+
+## D89 — Six seasons DO resolve O1 in the target format (+49.0, CI [+6.5, +91.5], 9/9 in-format gates). It still does not ship: the binding gate is now G7, not G8. Nothing ships.
+
+*Branch `claude/separate-valuation-legality-4tw82o`. Checkpoints `13770d6` (pre-run), `8c34ff9`
+(pre-registration), `ee6c189` / `ed0681e` (defects). Full report:
+`docs/D89_2020_REPLICATION.md`. **`league/` and `models/` byte-identical to Y1.***
+
+D88's final recommendation, executed: add the one remaining usable season and re-run. No new
+objective, no tuning, no new gate. Pre-registered in `evaluation/replication_design.py` before any
+result was seen, with a test asserting D89 differs from D88 in `phase` and `seasons` **and nothing
+else**.
+
+### 1. The answer to D88's question is YES — and by more than D88 forecast
+
+| phase | slots | seasons | primary | 95% CI | between-SD | MDE | effect/MDE |
+|---|---|---|---|---|---|---|---|
+| D86 | 4 | 5 | +52.9 | [−8.3, +114.0] | 49.3 | 65.8 | 0.80 |
+| D88 | 10 | 5 | +50.5 | [−5.5, +106.6] | 45.1 | 56.0 | 0.90 |
+| **D89** | **10** | **6** | **+49.0** | **[+6.5, +91.5]** | **40.5** | **42.5** | **1.15** |
+
+**The CI excludes zero.** D88 projected MDE ≈ 47.3 holding the SD at 45.1; the SD instead *fell* to
+40.5, because 2020's cluster (+41.3) landed near the mean rather than in a tail. **Prediction R2
+registered in advance that this was a coin flip** — an outlier 2020 would have raised the SD and
+cancelled the gain from `t(df=5) < t(df=4)`. It landed favourably.
+
+Stability: +52.9 → +50.5 → **+49.0** across three independent enlargements; D88→D89 movement −1.5
+against R3's ±16.5 threshold. 5/6 seasons improved; LOSO +40.0 … +60.9.
+
+### 2. Reproduction is exact, and the 2021-2025 numbers are D88's to the decimal
+
+All **200** shared cells bit-identical on every gate-bearing metric, **0** roster mismatches.
+
+### 3. ALL NINE in-format gates pass in the target format — including the three D88 never reported
+
+G1 0v0, G2 0v0 unfilled, G3 1/6, G4 max +0.15 rd, **G5 31 vs 53 breaches (O1 breaches FEWER)**,
+G6 all positive, **G8 [+6.5, +91.5]**, G9 +49.0, G10 +35.8. D88's table omitted G1/G4/G5; they are
+computable from the recorded rosters and are computed here rather than left out.
+
+### 4. **G7 fails, and that is now the sole blocker**
+
+target **+49.0** vs legacy **−2.3** — opposite signs. D86's rule is "ship the arm clearing EVERY
+gate", so **nothing ships**. The obstruction has *moved*, not disappeared:
+
+| | D88 | D89 |
+|---|---|---|
+| blocking gate | G8 (resolution) | **G7 (generalisation)** |
+
+Legacy is a **null, not harm**: −2.3 on a ~2,200-point base (−0.1%), CI [−85.5, +80.8], with all
+three secondary metrics positive (+25.1, +16.2, +51.1). Its lineup has **no K and no DEF slot** —
+capacities literally `K: 0, DST: 0`, and both arms draft **zero** of each in all 100 drafts — so
+O1's mechanism cannot act there. **R6 predicted exactly this.** But G7 as written **cannot
+distinguish "null because the mechanism has nothing to act on" from "target-format artifact"**,
+and that ambiguity is not grounds to override it.
+
+### 5. Two data defects, one of which would have fabricated a season
+
+* **Target 2020's preseason board is `redraft-offense`, not `redraft-overall`.** The default
+  returned an EMPTY board; the fair opponents would have drafted **alphabetically**. Fixed before
+  the run (`preseason_page_type`); 2021-2026 unchanged, asserted.
+* **Legacy 2020 has no preseason board at all.** `dsf` begins **2020-10-16** — 3,246 rows, all
+  October-December, zero in Jul/Aug. Phase 1 validated only the target series and missed it; the
+  run exposed it. **Cell excluded, not repaired.** `EXCLUDED_SEASONS` is now keyed by
+  `(format, season)` — usability is a property of the pair. So target ran 6 clusters, legacy 5.
+* **Guard added**: `EmptyMarketBoardError`. An empty board degraded *silently* to alphabetical
+  opponents with legal rosters and finite metrics — a fabricated observation that looks real.
+
+### 6. Two further defects, documented not fixed
+
+* `compute_league_starters` breaks exact FLEX ties by `set` iteration order, so
+  `bench_contribution` is PYTHONHASHSEED-dependent (2 cells of 200, ≈4-6 pts). Verified by seed
+  sweep: seed 4 gives 519.6, others 526.0, while the weekly metrics are identical under every seed
+  — the lineup TOTAL cannot move, only the attribution. **The fix is in `league/`, which D89 must
+  not touch.** 3 characterization tests pin the invariant. **Future item.**
+* **D88's slot-sensitivity table was arithmetically wrong**: `SE = sqrt(SD² + within²/n)/√k` adds
+  within-variance to an SD that already contains it, and contradicts D88's own CI half-width. The
+  true 5-season infinite-slot floor is **51.1**, not 56.0. D88's conclusion is unaffected and
+  slightly strengthened — 51.1 still exceeded the +50.5 it was measuring.
+
+### 7. RB and 2026: both CONFIRMED unchanged
+
+O1 and Y1 have **identical** elite-RB sensitivity — both need **+75** at #1, neither moves at
+#20/#21 at any perturbation to +100, against a measured bias of ≈+47.7. **O1 offers no protection
+against elite-RB under-projection; closed.** 2026 #1/#20/#21 are the identical three players; first
+divergence round 11 (four kickers → two).
+
+### 8. Verdict: **B — PROMISING BUT UNRESOLVED**, obstruction relocated
+
+Not A (G7 fails; and the CI's lower bound +6.5 sits below the 25.0 economic threshold, so an
+economically trivial effect is not excluded). Not C (nothing collapsed, reversed or destabilised;
+9/9 in-format gates). Not D (legacy is a null at −0.1%, not material harm).
+
+**The objective is no longer the weak link.** O1 is better specified than Y1 and now measurably
+better in the format this product targets. What blocks it is that the benchmark contains exactly
+one league in which its mechanism can do anything.
+
+### 9. Next research direction — ONE
+
+**Add a third league format that DOES contain K/DEF slots, and re-run O1 unchanged.** G7 currently
+cannot separate "artifact" from "mechanism has no slots to act on", and those readings imply
+opposite decisions on a candidate passing 9/9 in-format gates. A third format makes G7 a real test:
+if O1 reproduces, G7's failure is diagnosed and O1 ships under the existing rules with no gate
+relaxed; if it does not, G7 was right and O1 closes. Either outcome is decisive. Harness, metrics
+and gates all exist; D89's cost table puts a format at ~1 hour.
+
+*Explicitly NOT next:* a new objective, re-weighting O1, waiver/risk terms, projections (D79-D83),
+shortlists (D87), more slots (D88 proved they cannot help), or relaxing G7 because the target
+result is attractive.

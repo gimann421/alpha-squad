@@ -3,7 +3,68 @@
 Living summary of what is implemented, validated, and outstanding. Updated at the end of every
 milestone. See `docs/TRACEABILITY.md` for the acceptance-criteria-level mapping.
 
-## Status: M40 complete (D88) — **O1 replicates at 2.5× the data (+50.5), and draft slots provably cannot resolve it: the MDE floors at ~56 against an effect of ~50. The binding constraint is seasons, not slots. Nothing shipped.**
+## Status: M41 complete (D89) — **six seasons DO resolve O1 in the target format: +49.0, CI [+6.5, +91.5], and all nine in-format gates pass. It still does not ship — the binding gate is now G7 (cross-format), not G8. Nothing shipped.**
+
+D88's own recommendation, executed: add the one remaining usable season and re-run O1-FULL
+unchanged. No new objective, no tuning, no new gate. 240 drafts run, 220 analysed. Full report:
+`docs/D89_2020_REPLICATION.md`. Pre-registered in
+`src/alpha_squad/evaluation/replication_design.py` **before any result was seen**, with a test
+asserting D89 differs from D88 in `phase` and `seasons` and in nothing else.
+
+**The question D88 posed is answered YES.** Target 1QB: **+49.0**, clustered 95% CI
+**[+6.5, +91.5]** — *the interval excludes zero*. MDE fell 56.0 → **42.5** (effect/MDE **1.15**),
+further than D88's forecast of 47.3, because 2020's cluster (+41.3) landed near the mean and
+*lowered* the between-season SD to 40.5. **Prediction R2 registered in advance that this was a coin
+flip**; an outlier 2020 would have cancelled the gain from the extra cluster.
+
+**The effect is stable**: +52.9 → +50.5 → **+49.0** across three independent enlargements;
+D88 → D89 movement −1.5 against a pre-registered ±16.5 threshold. 5/6 seasons improved, LOSO
++40.0 … +60.9, season-long +35.8.
+
+**Reproduction is exact**: all 200 shared cells bit-identical on every gate-bearing metric, 0 roster
+mismatches.
+
+**All nine in-format gates pass** — including G1/G4/G5, which D88's table never reported and which
+are computable from the recorded rosters. G5 is notably favourable: O1 breaches positional capacity
+**31 times vs Y1's 53**.
+
+**G7 is now the sole blocker.** Target +49.0 vs legacy −2.3 — opposite signs, so D86's "clear every
+gate" rule ships nothing. **The obstruction moved rather than disappeared: D88 was blocked on
+statistical resolution, D89 is blocked on cross-format generalisation.** Legacy is a *null, not
+harm* (−0.1% of base, CI [−85.5, +80.8], all three secondary metrics positive) — its lineup has **no
+K and no DEF slot**, so O1's mechanism cannot act there and both arms draft zero of each in all 100
+drafts. R6 predicted this. But **G7 as written cannot distinguish "null because there is nothing to
+act on" from "target-format artifact"**, and that ambiguity is not grounds to override it.
+
+**Two data defects, one of which would have fabricated a season.** (1) Target 2020's preseason board
+is `redraft-offense`, not `redraft-overall`; the default returned an empty board and the fair
+opponents would have drafted **alphabetically** — fixed before the run, 2021-2026 unchanged. (2)
+**Legacy 2020 has no preseason board at all** (`dsf` begins 2020-10-16): Phase 1 validated only the
+target series and missed it, the run exposed it, and the cell was **excluded, not repaired**. Hence
+target ran 6 clusters and legacy 5. A guard (`EmptyMarketBoardError`) now makes an empty board an
+error, because it previously degraded *silently* to alphabetical opponents with legal rosters and
+finite metrics.
+
+**Two further defects documented, not fixed**: `compute_league_starters` breaks exact FLEX ties by
+`set` iteration order, so `bench_contribution` is PYTHONHASHSEED-dependent (2 cells of 200, ≈4–6
+pts; verified by seed sweep; lineup *totals* provably cannot move) — the fix is in `league/`, which
+D89 must not touch. And **D88's slot-sensitivity table was arithmetically wrong** (it added
+within-variance to an SD that already contained it, contradicting its own CI); the true 5-season
+floor is **51.1**, not 56.0 — which *strengthens* D88's conclusion rather than weakening it.
+
+**RB and 2026 unchanged and confirmed**: identical elite-RB sensitivity (both need +75 at #1, vs a
+measured ≈+47.7 bias), identical 2026 #1/#20/#21, first divergence round 11.
+
+Verdict: **B — promising but unresolved, obstruction relocated.** Not A (G7 fails; and the CI's
+lower bound +6.5 is below the 25.0 economic threshold). Not C (nothing collapsed; 9/9 in-format
+gates). Not D (legacy is a null, not material harm). **The objective is no longer the weak link** —
+what blocks it is that the benchmark holds exactly one league in which its mechanism can act.
+
+**Next: add a third league format that DOES have K/DEF slots and re-run O1 unchanged.** That turns
+G7 from an untestable constraint into a real test, and either outcome is decisive. Not a new
+objective, not more seasons, not more slots.
+
+### Earlier status: M40 complete (D88) — **O1 replicates at 2.5× the data (+50.5), and draft slots provably cannot resolve it: the MDE floors at ~56 against an effect of ~50. The binding constraint is seasons, not slots. Nothing shipped.**
 
 The power/replication experiment D87 recommended: O1-FULL at 10 draft slots, full board, no
 shortlist, same objective/opponent/seasons/metrics/gates. 200 drafts. Full report:

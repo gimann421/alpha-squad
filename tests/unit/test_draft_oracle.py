@@ -94,10 +94,15 @@ def _seed(con, season=2023, n_per_position=8):
                 "total_fantasy_points_ppr, ppr_points_per_game) VALUES (?, ?, ?, 17, ?, ?)",
                 [player_id, season, position, realized, realized / 17],
             )
+            # D89: the league below is `format="redraft"`, so `market/series.py` resolves it to
+            # ecr_type 'ro' / page_type 'redraft-overall'. This fixture previously seeded
+            # 'do'/'dynasty-overall', which NOTHING in these tests reads -- so `market_rank` came
+            # back empty and the nine opponents silently drafted in `player_id` order. Caught by
+            # `assert_usable_market_board`, which is exactly the failure that guard exists for.
             con.execute(
                 "INSERT INTO market_snapshot (player_id, scrape_date, ecr_type, position, "
                 "ecr_rank, ecr_best, ecr_worst, page_type) "
-                "VALUES (?, ?, 'do', ?, ?, ?, ?, 'dynasty-overall')",
+                "VALUES (?, ?, 'ro', ?, ?, ?, ?, 'redraft-overall')",
                 [player_id, f"{season}-08-01", position, float(rank), rank, rank + 3],
             )
             rank += 1
@@ -384,3 +389,43 @@ class TestAuditDraft:
         )
         for p in picks:
             assert p.regret >= -1e-9
+
+
+class TestD89FixtureSeedsTheLeaguesOwnBoard:
+    """D89 regression: the fixture must seed the series the league actually resolves to.
+
+    It previously seeded ecr_type 'do' / 'dynasty-overall' while `_league()` is
+    `format="redraft"`, which resolves to 'ro' / 'redraft-overall'. Nothing read the seeded rows,
+    `market_rank` came back empty, and the nine opponents drafted in `player_id` order -- so every
+    oracle test in this module was silently exercising alphabetical opponents rather than the fair
+    market field it names. `assert_usable_market_board` caught it.
+
+    This does not affect D86's published oracle numbers, which ran against the real database and a
+    real preseason board; it affected only this module's fixture."""
+
+    def test_the_seeded_board_is_the_one_the_league_resolves_to(self, con):
+        from alpha_squad.market.series import resolve_market_series
+
+        _seed(con)
+        league = _league()
+        series = resolve_market_series(league)
+        seeded = {
+            row[0]
+            for row in con.execute(
+                "SELECT DISTINCT ecr_type || '/' || page_type FROM market_snapshot"
+            ).fetchall()
+        }
+        assert f"{series.ecr_type}/{series.page_type}" in seeded
+
+    def test_market_rank_is_non_empty_so_opponents_are_not_alphabetical(self, con):
+        _seed(con)
+        static = load_season_static(con, _league(), 2023)
+        assert static.market_rank, "empty board => opponents would draft by player_id"
+        assert len(static.market_rank) == 32  # 4 positions x 8 players
+
+    def test_the_guard_accepts_this_fixture(self, con):
+        from alpha_squad.evaluation.draft_forensics import assert_usable_market_board
+
+        _seed(con)
+        static = load_season_static(con, _league(), 2023)
+        assert_usable_market_board(static, MARKET_CONSENSUS_ROSTER_AWARE)
