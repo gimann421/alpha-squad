@@ -1,4 +1,4 @@
-"""Pre-registered designs for the O1 REPLICATION / POWER phases (D87, D88, D89).
+"""Pre-registered designs for the O1 REPLICATION / POWER / GENERALISATION phases (D87-D90).
 
 **Committed to git before the corresponding experiment's results were seen.**
 D39/D54/D55/D63/D67/D79/D82/D83/D84/D85/D86 discipline.
@@ -26,7 +26,36 @@ The lineage
     D88  10 slots, 2021-2025, full board     -> target +50.5, CI [-5.5, +106.6]. The effect
          replicated at 2.5x the data, and the MDE was shown to ASYMPTOTE at ~56 points as slots
          -> infinity, because between-season variance is irreducible at 5 clusters.
-    D89  10 slots, 2020-2025, full board     -> THIS PHASE. Adds the one remaining usable season.
+    D89  10 slots, 2020-2025, full board     -> target +49.0, CI [+6.5, +91.5]. SIX seasons
+         resolved the target-format effect: the CI excludes zero and all nine in-format gates
+         pass. The blocker moved to G7 -- target +49.0 vs legacy -2.3, opposite signs.
+    D90  10 slots, 2020-2025, full board, a THIRD LEAGUE FORMAT -> THIS PHASE. Nothing about O1
+         or the gates changes; only the league config does.
+
+Why D90 changes the format rather than the sample (Phase 1)
+------------------------------------------------------------
+D89 left exactly one ambiguity. O1's principal observed mechanism is reducing excessive K/DST
+drafting and spending the picks on flex-eligible depth. The legacy format **cannot exercise that
+mechanism at all**, and D90 measured that it fails for TWO independent reasons, not one:
+
+  * its lineup has no K and no DEF slot (`positional_capacity` is literally 0 for both, and both
+    arms drafted zero of each in all 100 D89 drafts); and
+  * its market board has no K and no DST **players** -- `dsf` carries 0 kicker and 0 defense rows
+    across 2021-2025, because FantasyPros' superflex ("OP") pages rank offensive players only.
+
+So G7's failure is consistent with two very different worlds: O1 is a target-format artifact, or
+legacy was never able to test it. A format in which the mechanism CAN operate separates them.
+
+The candidate set is closed, not a matter of taste. `market/series.py` derives the board from
+is_dynasty x is_superflex, giving exactly four series, two of which are already used:
+
+    ro  redraft 1QB        <- target_league
+    dsf dynasty superflex  <- legacy_2qb_dynasty
+    rsf redraft superflex  <- candidate; 5 historical seasons; **0 K and 0 DST rows**
+    do  dynasty 1QB        <- candidate; 6 historical seasons; 1,533 K and 1,494 DST rows
+
+`do` wins criterion 1 (most complete historical seasons) outright and is the only candidate whose
+board can express the mechanism at all. Selection was forced by data, before any result.
 
 Why 2020 and not 2019 -- and why 2020 is TARGET-ONLY (Phase 1)
 ---------------------------------------------------------------
@@ -147,7 +176,38 @@ D89_SIX_SEASONS = ReplicationDesign(
     shortlist_k=None,
 )
 
-ACTIVE_DESIGN = D89_SIX_SEASONS
+#: D90. A CROSS-FORMAT generalisation test, not a new candidate and not a new gate. O1 is run
+#: exactly as D89 ran it; the only thing that changes is which league config it drafts for.
+#:
+#: The format was selected by the pre-specified rule below, before any D90 result was examined.
+#: `market/series.py` derives the board from is_dynasty x is_superflex, so the deployment has
+#: exactly four possible series and two are already used -- the candidate set is CLOSED at
+#: {redraft superflex (`rsf`), dynasty 1QB (`do`)}. Measured on the real snapshot:
+#:
+#:   criterion 1, most complete historical seasons:  do = 6 (2020-2025), rsf = 5 (2021-2025).
+#:                                                   `rsf`'s earliest scrape is 2021-01-01.
+#:   criterion 5, valid draft board:                 `do` carries 1,533 K and 1,494 DST rows
+#:                                                   across 2021-2025. **`rsf` carries ZERO of
+#:                                                   each** -- the superflex ("OP") pages rank
+#:                                                   offensive players only. A lineup that must
+#:                                                   start a K and a DEF cannot be drafted
+#:                                                   against a board containing neither.
+#:
+#: `do` wins criterion 1 outright and is the only candidate with a board that can express the
+#: mechanism at all. Selection was forced by data, not preference.
+D90_THIRD_FORMAT = ReplicationDesign(
+    phase="D90",
+    seasons=(2020, 2021, 2022, 2023, 2024, 2025),
+    slots=(1, 2, 3, 4, 5, 6, 7, 8, 9, 10),
+    shortlist_k=None,
+    formats=("dynasty_1qb",),
+)
+
+ACTIVE_DESIGN = D90_THIRD_FORMAT
+
+#: Every league format any phase in this lineage has benchmarked. Used to validate that an
+#: exclusion names a real format; not itself a design field.
+KNOWN_FORMATS: tuple[str, ...] = (*PREREGISTERED_FORMATS, "dynasty_1qb")
 
 #: (format, season) cells excluded from the benchmark universe, with the MEASURED reason.
 #: Append-only. Exclusion is per-format because the two formats resolve to different market
@@ -163,6 +223,13 @@ EXCLUDED_SEASONS: dict[tuple[str, int], str] = {
     ("legacy_2qb_dynasty", 2019): (
         "the `dsf` series does not exist in 2019 -- its earliest scrape of any kind is 2020-10-16."
     ),
+    ("dynasty_1qb", 2019): (
+        "no preseason board: the `do` series has no July/August rows in 2019 at all "
+        "(`preseason_page_type` returns None), so there is nothing for the fair-market opponent "
+        "to draft against. 2020 IS usable for this format -- its board is published under "
+        "`dynasty-offense` (3,026 preseason rows, 68.5% coverage), the same page_type relabelling "
+        "D89 found for the target format's 2020."
+    ),
     ("legacy_2qb_dynasty", 2020): (
         "NO PRESEASON BOARD EXISTS. The legacy format resolves to ecr_type `dsf` (dynasty "
         "superflex), whose first scrape of any kind is 2020-10-16: 2020 holds 3,246 `dynasty-op` "
@@ -174,6 +241,51 @@ EXCLUDED_SEASONS: dict[tuple[str, int], str] = {
         "that was never published, so the legacy 2020 cell is dropped rather than manufactured. "
         "Recorded BEFORE any legacy 2020 outcome was examined. The target format is unaffected -- "
         "its `ro` series has 3,462 preseason rows in 2020 under `redraft-offense`."
+    ),
+}
+
+#: D90's predictions, recorded before the third format was run. Same status as R1-R6: NOT gates,
+#: and each states its own failure mode so the result cannot be reinterpreted afterwards.
+D90_PREDICTIONS: dict[str, str] = {
+    "T1": (
+        "The `do` board differs enough from `ro` that Y1's own drafts differ materially between "
+        "the two formats -- different opponent order, different market ranks. If Y1's dynasty_1qb "
+        "rosters came out near-identical to its target_league rosters, this would not be an "
+        "independent test and the phase would have to say so rather than count it as one."
+    ),
+    "T2": (
+        "MECHANISM: O1 drafts FEWER kickers than Y1 in dynasty_1qb, as it does in target_league "
+        "(3.45 -> 2.52). This is the thing the format was chosen to make testable. If the "
+        "mechanism does NOT appear here -- on a board that carries 1,533 K and 1,494 DST rows "
+        "and a lineup with K and DEF slots -- then D89's G7 failure is a genuine cross-format "
+        "weakness and O1 should close, not ship."
+    ),
+    "T3": (
+        "EFFECT: no specific magnitude is predicted, and none is required. The target format's "
+        "+49.0 is not a target to hit. What matters is the SIGN and whether the pre-registered "
+        "gates pass on their own terms. A dynasty board prices youth, so its K/DST ranks sit "
+        "later (best K 184-251 vs 173-190), which could make Y1 hoard kickers either more or "
+        "less than in the target format; both directions are consistent with the mechanism."
+    ),
+    "T4": (
+        "POWER: with 6 clusters and a between-season SD in the target format's range (~40), the "
+        "MDE will land near ~45. An effect materially smaller than that will NOT be resolvable, "
+        "and the honest report in that case is 'mechanism present, effect unresolved' -- which "
+        "is a different finding from 'mechanism absent'. These two must not be conflated."
+    ),
+    "T5": (
+        "G7 IS NOT REDEFINED BY THIS PHASE. D86's rule is that a candidate must clear every "
+        "gate. If dynasty_1qb reproduces the mechanism and the effect, that is evidence about "
+        "WHY legacy is null -- it does not retroactively convert legacy's null into a pass. Any "
+        "claim that G7 is satisfied must be argued against the gate's original text and flagged "
+        "as a judgement, never asserted by arithmetic."
+    ),
+    "T6": (
+        "SCOPE LIMIT, recorded so it cannot be quietly dropped: `is_dynasty` is consumed only by "
+        "`market/series.py`, and dynasty_1qb's lineup is IDENTICAL to target_league's. So D90 "
+        "varies the consensus board and everything downstream of it, and does NOT vary the "
+        "lineup shape. A positive result is evidence that O1 survives a different board -- not "
+        "yet that it survives a different roster structure."
     ),
 }
 
@@ -221,7 +333,10 @@ __all__ = [
     "D87_SHORTLIST",
     "D88_TEN_SLOTS",
     "D89_SIX_SEASONS",
+    "D90_PREDICTIONS",
+    "D90_THIRD_FORMAT",
     "EXCLUDED_SEASONS",
+    "KNOWN_FORMATS",
     "MAX_SEASON_LONG_REGRESSION",
     "MAX_WORSE_SEASONS",
     "MIN_STARTER_POINT_GAIN",

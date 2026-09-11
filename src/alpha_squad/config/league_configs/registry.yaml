@@ -23,6 +23,14 @@ legacy_2qb_dynasty:
   source: yaml
   path: legacy_2qb_dynasty.yaml
 
+# D90's third benchmark format: 1-QB dynasty. Registered because it is the only remaining market
+# series (`do`) that carries kickers and defenses -- the two superflex boards carry neither --
+# and because a cross-format gate (G7) needs more than one format in which a K/DST mechanism can
+# actually operate. Adding it changes no existing league's behaviour.
+dynasty_1qb:
+  source: yaml
+  path: dynasty_1qb.yaml
+
 dilworth:
   source: sleeper
   sleeper_league_id: "1395093181141381120"

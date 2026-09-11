@@ -1,0 +1,80 @@
+# The D90 third benchmark format: a 10-team 1-QB DYNASTY PPR league.
+#
+# Added by D90 to test whether O1's advantage generalises beyond the target format. D89 found
+# that O1 passes every in-format gate in `target_league` (+49.0, CI [+6.5, +91.5]) and is an
+# effective null in `legacy_2qb_dynasty` (-2.3), failing G7 -- but that the legacy format cannot
+# exercise O1's principal mechanism at all, because it has no K and no DEF slot.
+#
+# WHY THIS FORMAT, and why it is not a matter of taste
+# ----------------------------------------------------
+# `market/series.py` derives the consensus board from exactly two booleans -- is_dynasty x
+# is_superflex -- so this deployment has exactly FOUR possible market series, and two are
+# already spoken for:
+#
+#     ro  redraft 1QB        <- target_league
+#     dsf dynasty superflex  <- legacy_2qb_dynasty
+#     rsf redraft superflex  <- candidate
+#     do  dynasty 1QB        <- candidate, SELECTED
+#
+# The candidate set is therefore closed at two. Measured on the real snapshot, before any O1
+# result was examined:
+#
+#   * usable historical seasons: `do` has SIX (2020-2025), `rsf` has FIVE (2021-2025) -- the
+#     `rsf` series' earliest scrape of any kind is 2021-01-01. D90's pre-specified tie-break
+#     ranks candidates by complete historical seasons first, so `do` wins on criterion 1.
+#   * K/DST on the board: `do` carries 1,533 kicker and 1,494 defense rows across 2021-2025.
+#     **`rsf` carries ZERO of each** -- FantasyPros' superflex ("OP") pages rank offensive
+#     players only. A league whose lineup must start a K and a DEF cannot be drafted against a
+#     board containing neither, so `rsf` also fails the "valid draft board" criterion for this
+#     specific test.
+#
+# That second fact also deepens D89's diagnosis: `dsf` likewise carries zero K and zero DST, so
+# the legacy format could not exercise O1's mechanism for TWO independent reasons -- no K/DEF
+# slot in the lineup AND no K/DST players on its board.
+#
+# WHAT THIS FORMAT DOES AND DOES NOT VARY -- stated plainly, because it bounds the conclusion
+# -------------------------------------------------------------------------------------------
+# The lineup is IDENTICAL to `target_league`'s. Exactly one field differs: `format`. That is
+# deliberate -- criterion 3 of the tie-break rewards the closest structural match that is still
+# distinct, and holding the lineup fixed removes the discretion that could otherwise be used to
+# shop for a favourable format.
+#
+# The consequence, which must not be overstated: `is_dynasty` is consumed by `market/series.py`
+# and by nothing else in the engine. So relative to `target_league` this format varies the
+# CONSENSUS BOARD and everything downstream of it -- opponent draft order, market ranks feeding
+# survival / opportunity cost / daVORP, consumption demand, and where K and DST sit (best K at
+# overall rank 184-251 here vs 173-190 on `ro`). It does NOT vary the lineup shape. D90 is
+# therefore a BOARD-generalisation test, not a lineup-generalisation test.
+#
+# Roster arithmetic, stated explicitly because `starters + bench == roster_size` is asserted by
+# test for every shipped config:
+#
+#     starters  QB 1 + RB 2 + WR 2 + TE 1 + FLEX 2 + K 1 + DEF 1  = 10
+#     bench                                                        =  6
+#     roster_size                                                  = 16
+#
+# A 16-man roster is shallow for a real dynasty league, which normally carries deep benches and
+# taxi squads. That is an accepted cost of holding the lineup identical to the target format:
+# the benchmark value here is the controlled comparison, not dynasty realism.
+league_id: dynasty_1qb
+format: dynasty
+teams: 10
+scoring:
+  ppr: true
+  ppr_value: 1.0
+lineup:
+  QB: 1
+  RB: 2
+  WR: 2
+  TE: 1
+  FLEX: 2
+  K: 1
+  DEF: 1
+roster:
+  bench: 6
+  roster_size: 16
+draft_state: {}
+waiver_state: {}
+faab:
+  budget: 100
+future_picks: {}
