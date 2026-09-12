@@ -344,3 +344,69 @@ Two consequences:
 > marginal-lineup term, which at an empty roster is a positive per-position rescale — and no
 > positive rescale can rescue a ranking error. Fixing elite-RB under-projection is a
 > **projection-layer** problem; no decision-layer objective of this shape can reach it.
+
+---
+
+## 7. Phase 6 — O1 is one idea, and this is the idea (`scripts/d91_msv_degeneracy.py`)
+
+### 7.1 Architecturally there is only one change
+
+O1 substitutes one function for another in one place. It adds no term, no bonus, no rule and no
+weight. Its only new input is the per-position availability vector. **"Weekly lineup
+optimization", "bench insurance" and "late-round K/DST restraint" are not three components of
+O1 — they are three descriptions of one substitution's consequences.** So the brief's question
+("is O1 really one idea?") has a clean architectural answer: yes. The useful question is the next
+one down — *which* property of that substitution does the work.
+
+### 7.2 The measurement: Y1's marginal value is degenerate exactly where the draft is still open
+
+`scripts/d91_msv_degeneracy.py`, target format, 2024 board, on a roster whose ten starting slots
+are already filled with elite players — i.e. the situation the engine is in for rounds 11–16.
+The candidate is the **#20 player at each position**, worse than every incumbent he could displace:
+
+| pos | startable slots | rate | P(a hole opens) | proj | **Y1 msv** | **O1 msv** |
+|---|---|---|---|---|---|---|
+| QB | 1 | 0.884 | 0.116 | 212.9 | **0.00** | 20.22 |
+| RB | 4 | 0.845 | 0.490 | 146.9 | **0.00** | **77.14** |
+| WR | 4 | 0.865 | 0.440 | 209.9 | **0.48** | **105.10** |
+| TE | 3 | 0.869 | 0.345 | 105.0 | **0.00** | 59.32 |
+| **K** | **1** | 0.938 | **0.062** | 118.4 | **0.00** | **6.51** |
+| **DST** | **1** | 0.940 | **0.060** | 94.3 | **0.00** | **6.13** |
+
+> **Y1's entire spread across six backups is 0.48 points. O1's is 99 points.**
+>
+> This is the defect, stated more precisely than "the bench is priced at zero": Y1 prices
+> **every** bench candidate at zero **simultaneously**, so in the back half of a draft its
+> marginal-value term carries *no information at all* and the pick is decided entirely by daVORP
+> and the multipliers — which **D85 measured as over-valuing K by 5.34× and DST by 8.10×**.
+
+That closes the causal chain, and every link is separately measured:
+
+1. Y1's MSV → 0 for all bench candidates at once *(measured above)*
+2. → the late draft is decided by daVORP × multipliers alone *(structural)*
+3. → daVORP over-ranks K/DST by 5.3×/8.1× *(D85)*
+4. → Y1 drafts **3.45 kickers** against a capacity of 2 *(D89 §12)*
+5. O1 restores a non-zero ordering among bench candidates, ranked by `P(hole) = 1 − rate^slots`
+6. → flex-eligible depth outbids the third kicker *(D89 §12, D90 §6)*
+7. → a better roster, **73% of whose benefit is visible even to season-long scoring** *(§4.2)*
+
+### 7.3 It is slot count, not injury rates — so this is not really an availability model
+
+The RB-backup : K-backup separation is **11.8×**. Decompose it:
+
+| driver | ratio |
+|---|---|
+| availability spread (K 0.938 vs RB 0.845) | **1.11×** |
+| startable-slot count (RB 4 vs K 1) | **4×** |
+| resulting `P(hole)` spread (0.490 vs 0.062) | **7.9×** |
+
+`P(hole) = 1 − rate^slots` — **the exponent moves it far more than the base does.** O1 is sold as
+an availability-aware objective; what it mostly exploits is a *structural* fact about the lineup
+that needs no availability data to know: a kicker has one slot to reach and a running back has
+four.
+
+**Computed after P2 was committed and before any ablation had run**, so it is a sharpening of the
+prediction rather than a result: flattening the rates to their pooled mean (0.8902) moves `P(hole)`
+for K from 0.062 to **0.110** and for RB from 0.490 to 0.372, cutting the RB:K separation from
+**7.9× to 3.4×** — halved, but nowhere near Y1's 1.0×. So **P2's direction should hold and its
+strength was overstated**: A1 should keep the behaviour, but less sharply than I registered.
