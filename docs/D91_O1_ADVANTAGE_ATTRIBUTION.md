@@ -644,3 +644,43 @@ difference is **one kicker becoming one running back**. Final rosters share 13/1
 
 > **Nothing about the top of a 2026 draft changes, in either format**, which is now the fourth
 > consecutive phase to say so. What changes is a mid-round tie and the number of kickers.
+
+---
+
+## 12. Track B revisits Track A §5: the K/DST refutation is weaker than I first reported
+
+Track A §5 concluded that kicker restraint is "a marker, not the carrier". **Track B undercuts
+that, and the correction belongs here rather than in a footnote.**
+
+Track A tested `ΔnK` — the restraint O1 actually *exercised*. The better variable, and the one
+D90 §15 itself proposed, is **Y1's own kicker count: how much over-drafting there was to fix.**
+There are now three ways to look at it:
+
+| test | r | supports "K/DST is the carrier"? |
+|---|---|---|
+| within D89's board — r(Y1 nK level, effect) across 6 seasons | **−0.128** | no |
+| within D91's board — r(Y1 nK level, effect) across 6 seasons | **+0.805** | **yes** |
+| **between boards** — r(Δ Y1 nK, Δ effect) across the same 6 seasons | **+0.601** | **yes** |
+
+The third row is a genuine natural experiment: *same seasons, same realized outcomes, same code*,
+two ECR vintages. Where the refreshed board made Y1 hoard **more** kickers, O1's advantage grew
+(2022: Y1 nK 3.90 → 4.30, effect −10.4 → **+158.7**); where it made Y1 hoard **fewer**, the
+advantage shrank (2023: 4.50 → 2.90, effect +21.0 → **−20.4**; 2025: 4.00 → 3.00, +94.0 → +8.5).
+
+**And Track A §5.2's decisive counterexample does not replicate.** On D89's board, 2020 had no
+kicker hoarding to fix (Y1 nK 2.00) and still returned **+41.3** — which is what made it look
+decisive. On this board 2020 also has Y1 nK 2.00 and returns **+9.3**, exactly what the K story
+predicts. The counterexample was a property of the board that also produced the anti-correlating
+per-season pattern.
+
+> **Revised position.** Two of three tests, including the only one with a natural experiment
+> behind it, now favour "the effect is roughly proportional to how much K/DST over-drafting Y1
+> does". Track A §5's refutation rested on one board's per-season pattern and a single cell in it,
+> and both are board-specific. **I over-read it.** What survives from §5 unchanged is the narrower
+> claim that `ΔnK` (restraint exercised) has an inconsistent sign across *formats* — but "room to
+> fix" is the better-motivated variable and it does not have that problem.
+>
+> None of these are causal: every one conditions on a draft outcome rather than an assignment, and
+> all have n = 6. **Ablation A3 — K and DST held at rate 1.0 so O1's uplift is switched off at
+> exactly those two positions and nowhere else — is the test that can settle it**, and it was
+> registered in §3 before any of this was seen.
