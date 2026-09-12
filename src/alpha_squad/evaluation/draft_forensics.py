@@ -24,6 +24,7 @@ and every tier that reuses a production concept calls the production function di
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from typing import Literal
 
@@ -65,6 +66,11 @@ from alpha_squad.evaluation.replacement_diagnostics import (
     SWEEP_SCALES,
     consumption_replacement,
     mock_draft_consumption_demand,
+)
+from alpha_squad.evaluation.weekly_objective import (
+    expected_weekly_marginal_value,
+    expected_weekly_starter_points,
+    measure_availability_rates,
 )
 from alpha_squad.league.context import LeagueContext
 from alpha_squad.league.draft import recommend_draft_pick
@@ -173,6 +179,8 @@ Tier = Literal[
     "L1",
     "L2",
     "L3",
+    "O0",
+    "O1",
 ]
 ALL_TIERS: tuple[Tier, ...] = ("A", "B", "C", "D", "E", "F", "G", "H")
 
@@ -744,6 +752,29 @@ L_TIER_SPEC: dict[Tier, tuple[str, bool]] = dict(DECISION_L_TIER_SPEC)
 
 PREREGISTERED_L_CONTROL: Tier = "L0"
 
+
+# --- O-tiers (D86): the OBJECTIVE, not the value base --------------------------------------
+# Arms, metrics, gates, selection rule and predictions Q1-Q6 are pre-registered in
+# `evaluation/objective_candidates.py`, committed before any O-tier ran. This block is wiring.
+#
+# D85 closed the value-base seam: nine reformulations of `value_base`, all failed, and the slope
+# problem is structural. So these tiers change NOTHING about the value base's algebra -- they
+# change what its marginal-value half is an expectation OF. `marginal_starter_value` assumes
+# every rostered player plays every week, which is why it equals `proj` at an empty slot and
+# exactly `0` at a saturated one. `expected_weekly_marginal_value` computes the same quantity
+# under MEASURED per-position availability, so a bench player is worth what the data says he is
+# worth and no bench bonus exists anywhere.
+#
+#   O0 = control, the shipped engine (asserted identical to L0/Q0/Z0)
+#   O1 = E[weekly msv] + 1.0*daVORP; daVORP, opportunity cost, roster fit, confidence, survival
+#        and the feasibility cap are all UNCHANGED
+O_TIERS: tuple[Tier, ...] = ("O0", "O1")
+
+#: {tier: use availability-aware marginal value}
+O_TIER_SPEC: dict[Tier, bool] = {"O0": False, "O1": True}
+
+PREREGISTERED_O_CONTROL: Tier = "O0"
+
 #: Every tier scored as "N4, except VORP may use a draft-aware replacement level". V- and
 #: W-tiers share the scoring branch verbatim so a difference between them is attributable to the
 #: demand target (and, for W2/W3, the legality constraint) and nothing else.
@@ -756,6 +787,7 @@ DRAFT_AWARE_REPLACEMENT_TIERS: tuple[Tier, ...] = (
     *ALL_S_TIERS,
     *Q_TIERS,
     *L_TIERS,
+    *O_TIERS,
 )
 
 #: Tiers that enforce the endgame mandatory-slot reservation, as a hard restriction on the
@@ -918,6 +950,8 @@ TIER_DESCRIPTIONS: dict[Tier, str] = {
     "Y1": "D70: W1 with RB projections from a walk-forward refit adding preseason-knowable "
     "availability features (F1-F4); QB/WR/TE/K/DST unchanged from control",
     # Z-tiers (D79): D67's draft-aware replacement held FIXED, only the value base varies.
+    "O0": "D86 control: the shipped Y1 engine. Byte-identical to L0/Q0/Z0",
+    "O1": "D86: availability-aware marginal value (E[weekly msv]) + 1.0*daVORP",
     "L0": "D85 control: the shipped Y1 engine, no legality constraint. Byte-identical to Q0/Z0",
     "L1": "D85: endgame mandatory-slot legality constraint ALONE, on the shipped valuation",
     "L2": "D85: arm C valuation ALONE (msv_over_replacement + 1.0*daVORP) -- reproduces Q1",
@@ -975,6 +1009,11 @@ class SeasonStatic:
     # exactly like `market_rank` and `vorp` -- computing it per pick would run a whole mock draft
     # 160 times per draft. Diagnostic only; the W-tiers are its sole consumer.
     consumption_demand: dict[str, float] = field(default_factory=dict)
+    # D86: {position: fraction of fantasy weeks a draftable player was available}, measured on
+    # seasons STRICTLY BEFORE `season` -- walk-forward by construction, so an O-tier draft for
+    # 2024 cannot see 2024's injuries. Empty for seasons with no prior data; the O1 tier raises
+    # rather than defaulting, so an empty dict fails loudly instead of silently becoming O0.
+    availability_rates: dict[str, float] = field(default_factory=dict)
 
 
 def _normalize(values: dict[str, float]) -> dict[str, float]:
@@ -986,12 +1025,96 @@ def _normalize(values: dict[str, float]) -> dict[str, float]:
     return {k: (v - lo) / (hi - lo) for k, v in values.items()}
 
 
+def preseason_page_type(con: duckdb.DuckDBPyConnection, ecr_type: str, season: int) -> str | None:
+    """Which `page_type` actually holds this season's PRESEASON board for `ecr_type` (D89).
+
+    `market/series.py` maps a league to one `(ecr_type, page_type)` pair, which is correct for
+    production because production drafts the current season. Across history the label moved:
+    DynastyProcess stored the 2020 preseason redraft board as **`redraft-offense`** and every
+    season from 2021 as **`redraft-overall`**. Measured, not assumed -- 2020 `redraft-overall`
+    has 4922 rows and **none of them are in the Jul/Aug preseason window**, so a fixed
+    `redraft-overall` lookup returns an EMPTY board for 2020.
+
+    An empty board is not a harmless gap. `market_rank` drives the fair opponent, the
+    `market_draft_demand` target and the opportunity-cost replay; with it empty,
+    `best_by_market_rank` falls through to sorting by `player_id`, so the opponents draft
+    ALPHABETICALLY and the whole season measures a different game.
+
+    This resolves the page_type from the data -- whichever page carries the most Jul/Aug rows
+    for that `ecr_type` and season -- so it returns `redraft-overall` for 2021-2025 (leaving
+    every published number byte-identical) and `redraft-offense` for 2020. It is deliberately
+    NOT a hardcoded season->page map: a relabel in another season is handled by the same rule.
+
+    Returns `None` when the season has no preseason rows at all. A caller passing that straight
+    through does NOT get an unscoped query: `_preseason_overall_market` treats `page_type=None`
+    as "use the series default", so an `ecr_type` with a registered series still gets scoped to
+    it. The board comes back empty either way -- there were no preseason rows to find -- so this
+    is the honest answer rather than a silent widening, but it is a fallback to the default
+    scoping, not an absence of scoping.
+
+    Note what this must NOT do: widen the Jul/Aug window to find rows. 2020's `redraft-overall`
+    rows exist but are IN-SEASON, so reading them would leak market movement that happened after
+    the draft -- exactly the D54 defect.
+    """
+    rows = con.execute(
+        """
+        SELECT page_type, count(*) AS n FROM market_snapshot
+        WHERE ecr_type = ? AND year(scrape_date) = ? AND month(scrape_date) IN (7, 8)
+          AND page_type IS NOT NULL
+        GROUP BY 1 ORDER BY n DESC, page_type
+        """,
+        [ecr_type, season],
+    ).fetchall()
+    return rows[0][0] if rows else None
+
+
+#: Opponent strategies that READ `static.market_rank` to choose a pick, and therefore degrade
+#: silently to alphabetical ordering when the board is empty. Listed explicitly rather than
+#: aliased to `ALL_OPPONENT_STRATEGIES` so that adding a non-market strategy later does not
+#: quietly opt it into a check that does not apply to it.
+MARKET_DRIVEN_OPPONENT_STRATEGIES: frozenset[str] = frozenset(
+    {MARKET_CONSENSUS, MARKET_CONSENSUS_ROSTER_AWARE}
+)
+
+
+class EmptyMarketBoardError(RuntimeError):
+    """A market-driven opponent was asked to draft against a season with no preseason board.
+
+    Raised rather than tolerated because the failure is SILENT otherwise: with `market_rank`
+    empty, `_market_consensus_pick` and `_market_consensus_roster_aware_pick` fall through to
+    ordering by `player_id`, so the nine opponents draft ALPHABETICALLY. The loop completes, the
+    rosters are legal and every metric is finite -- the run looks successful and measures a
+    different game. That is a fabricated observation, which this project forbids outright.
+
+    Found in D89: the `dsf` (dynasty superflex) series begins 2020-10-16, so the legacy format
+    has no 2020 preseason board at all, and the legacy 2020 cell had to be dropped.
+    """
+
+
+def assert_usable_market_board(static: SeasonStatic, opponent_strategy: str) -> None:
+    """Refuse to simulate a market-opponent draft against an empty preseason board (D89).
+
+    Only the market-driven opponents are checked; a strategy that does not read `market_rank`
+    is unaffected, and a season whose board is merely SPARSE is allowed through -- the line is
+    drawn at "no board at all", which is the case that silently degrades to alphabetical."""
+    if opponent_strategy not in MARKET_DRIVEN_OPPONENT_STRATEGIES:
+        return
+    if not static.market_rank:
+        raise EmptyMarketBoardError(
+            f"season {static.season} has no preseason market board for ecr_type "
+            f"'{static.ecr_type}', so opponent strategy '{opponent_strategy}' would draft "
+            f"alphabetically by player_id. Resolve the season's own page with "
+            f"`preseason_page_type`, or exclude the season -- do not measure this cell."
+        )
+
+
 def load_season_static(
     con: duckdb.DuckDBPyConnection,
     league: LeagueContext,
     season: int,
     ecr_type: str | None = None,
     projections_override: dict[str, float] | None = None,
+    page_type: str | None = None,
 ) -> SeasonStatic:
     """`projections_override` is D68's single insertion point.
 
@@ -1010,7 +1133,15 @@ def load_season_static(
     levels = replacement_level(league, projections, positions)
     scarcity_raw = positional_scarcity(league, projections, positions)
     scarcity_norm = _normalize(scarcity_raw)
-    market_rank = _preseason_overall_market(con, ecr_type, season)
+    # D89: `page_type` defaults to `market/series.py`'s mapping (production behaviour, and what
+    # every D86/D87/D88 number was measured with). A caller may pass the season's own page via
+    # `preseason_page_type` to reach a season whose board was labelled differently.
+    market_rank = _preseason_overall_market(con, ecr_type, season, page_type=page_type)
+    # D86: measured on prior seasons only. `measure_availability_rates` returns {} for a
+    # position with no data, and the O1 tier raises on an empty dict rather than defaulting.
+    availability_rates = measure_availability_rates(
+        con, tuple(range(max(2015, season - 5), season))
+    )
 
     conf_rows = con.execute(
         "SELECT player_id, confidence FROM uncertainty_predictions "
@@ -1048,6 +1179,7 @@ def load_season_static(
         consumption_demand=mock_draft_consumption_demand(
             league, market_rank, projections, positions
         ),
+        availability_rates=availability_rates,
     )
 
 
@@ -1156,6 +1288,8 @@ def score_candidate(
     replacement_msv: dict[str, float] | None = None,
     saturation_factors: dict[str, float] | None = None,
     dynamic_levels: dict[str, float] | None = None,
+    availability_rates: dict[str, float] | None = None,
+    expected_weekly_base: float | None = None,
 ) -> CandidateScore | None:
     position = static.positions.get(player_id)
     if position is None or player_id not in static.vorp:
@@ -1203,14 +1337,34 @@ def score_candidate(
             next_pick_overall,
             opportunity_costs,
         )
-        msv = marginal_starter_value(
-            league,
-            roster_player_ids or [],
-            player_id,
-            static.projections,
-            static.positions,
-            base_points=base_lineup_points,
-        )
+        if tier in O_TIERS and O_TIER_SPEC[tier]:
+            # D86. Same marginal-value question, asked under measured availability instead of
+            # under "everyone plays 17 weeks". RAISE rather than default if the rates were not
+            # hoisted: without them this silently degrades to the control while still reporting
+            # itself as O1 -- the D78/D81/D85 failure mode.
+            if availability_rates is None:
+                raise RuntimeError(
+                    f"tier {tier} needs `availability_rates`; without them the value base "
+                    "silently degrades to the control and the tier measures nothing"
+                )
+            msv = expected_weekly_marginal_value(
+                league,
+                roster_player_ids or [],
+                player_id,
+                static.projections,
+                static.positions,
+                availability_rates,
+                base=expected_weekly_base,
+            )
+        else:
+            msv = marginal_starter_value(
+                league,
+                roster_player_ids or [],
+                player_id,
+                static.projections,
+                static.positions,
+                base_points=base_lineup_points,
+            )
         if dynamic_levels is None:
             vorp_term = vorp
         else:
@@ -1273,6 +1427,13 @@ def score_candidate(
             else:  # msv_plus_weighted_vorp -- the control
                 value_base = msv + DECISION_ARM_VORP_WEIGHT * vorp_term
             reasons.append(f"value_base={base_name} {value_base:+.1f} pts")
+        elif tier in O_TIERS:
+            # The D63 sum, unchanged. Only `msv` above differs between O0 and O1.
+            value_base = msv + DECISION_ARM_VORP_WEIGHT * vorp_term
+            reasons.append(
+                f"value_base={'E[weekly]' if O_TIER_SPEC[tier] else 'msv'}+vorp "
+                f"{value_base:+.1f} pts"
+            )
         elif tier in L_TIERS:
             # D85. The VALUE half of the 2x2 is exactly D84's: L0/L1 carry the shipped base,
             # L2/L3 carry arm C's. The LEGALITY half is not scored here at all -- it is a
@@ -1715,13 +1876,25 @@ def _pick_by_tier(
     next_pick_overall: int | None,
     roster_player_ids: list[str] | None = None,
     picks_remaining: int | None = None,
+    shortlist_k: int | None = None,
 ) -> tuple[str, list[CandidateScore]]:
     """Returns (chosen_player_id, every scored candidate sorted best-first) -- the ranked list
     is what a JSON trace needs to show runner-up reasoning, not just the winner.
 
     `picks_remaining` (counting this one) is only consulted by the tiers in
     `TIERS_ENFORCING_LEGALITY` (D67's W2/W3, D85's L1/L3); every other tier ignores it, so
-    omitting it leaves them byte-identical."""
+    omitting it leaves them byte-identical.
+
+    `shortlist_k` (D87) is a pure COST approximation for the tiers whose objective is expensive
+    (currently O1). When set, the whole board is first ranked by the CHEAP control scorer and only
+    the top `shortlist_k` are re-scored under the expensive objective -- exactly the procedure
+    D86's Phase 14 cost probe used. It changes no formula, no weight and no gate; it changes only
+    how many candidates the expensive objective is evaluated on. `None` (the default) scores the
+    entire board, which is what every D86 number was measured with.
+
+    It is NOT free: a candidate outside the cheap top-K can never be selected, so a shortlist can
+    in principle lose a position the roster still needs. Whether it actually does is measured
+    (D87 Phases 3 and 5), never assumed."""
     if tier == "H":
         needs = roster_need(league, roster_positions)
         rec = recommend_draft_pick(
@@ -1891,8 +2064,54 @@ def _pick_by_tier(
             candidate_positions,
         )
 
+    # D86: E[weekly lineup value] of the CURRENT roster -- the subtrahend in O1's marginal
+    # value. Depends only on the roster, so it is hoisted out of the per-candidate loop exactly
+    # like `base_lineup_points` above; recomputing it per candidate would multiply the Monte
+    # Carlo cost by the size of the board.
+    expected_weekly_base = None
+    if tier in O_TIERS and O_TIER_SPEC[tier]:
+        if not static.availability_rates:
+            raise RuntimeError(
+                f"tier {tier} needs measured availability rates and this season's static has "
+                "none (no prior seasons?); refusing to default them"
+            )
+        expected_weekly_base = expected_weekly_starter_points(
+            league,
+            roster_player_ids or [],
+            static.projections,
+            static.positions,
+            static.availability_rates,
+        )
+
+    # D87: restrict the EXPENSIVE objective to the cheap scorer's top-K, when asked. The cheap
+    # ranking uses the control tier (`PREREGISTERED_O_CONTROL`), which is the shipped engine, so
+    # the shortlist is built from production's own view of the board and nothing about the
+    # expensive objective leaks into which candidates it gets to see.
+    candidate_ids: Iterable[str] = available
+    if shortlist_k is not None and tier in O_TIERS and O_TIER_SPEC[tier]:
+        cheap = []
+        for player_id in available:
+            c = score_candidate(
+                static,
+                player_id,
+                league,
+                roster_positions,
+                PREREGISTERED_O_CONTROL,
+                available=available,
+                current_pick_overall=current_pick_overall,
+                next_pick_overall=next_pick_overall,
+                opportunity_costs=opportunity_costs,
+                roster_player_ids=roster_player_ids,
+                base_lineup_points=base_lineup_points,
+                dynamic_levels=dynamic_levels,
+            )
+            if c is not None:
+                cheap.append(c)
+        cheap.sort(key=lambda c: (-c.score, c.player_id))
+        candidate_ids = [c.player_id for c in cheap[:shortlist_k]]
+
     scored = []
-    for player_id in available:
+    for player_id in candidate_ids:
         s = score_candidate(
             static,
             player_id,
@@ -1908,6 +2127,8 @@ def _pick_by_tier(
             replacement_msv=replacement_msv,
             saturation_factors=saturation_factors,
             dynamic_levels=dynamic_levels,
+            availability_rates=static.availability_rates or None,
+            expected_weekly_base=expected_weekly_base,
         )
         if s is not None:
             scored.append(s)
@@ -1973,6 +2194,7 @@ def simulate_forensic_draft(
     *,
     trace: list[dict] | None = None,
     opponent_strategy: str = MARKET_CONSENSUS,
+    shortlist_k: int | None = None,
 ) -> ForensicDraftResult:
     """Same snake-draft loop, fixed 9-slot opponent field, and outcome scoring as
     evaluation/draft_simulation.py::simulate_draft -- the only thing that varies is how the
@@ -1987,6 +2209,7 @@ def simulate_forensic_draft(
     `ForensicDraftResult`, so a tier figure can never be read without its opponent."""
     if opponent_strategy not in ALL_OPPONENT_STRATEGIES:
         raise ValueError(f"unknown opponent strategy '{opponent_strategy}'")
+    assert_usable_market_board(static, opponent_strategy)
     from alpha_squad.evaluation.draft_simulation import _actual_points_for
     from alpha_squad.league.replacement import compute_league_starters
 
@@ -2026,6 +2249,7 @@ def simulate_forensic_draft(
                     next_pick,
                     roster_player_ids=drafted,
                     picks_remaining=picks_remaining,
+                    shortlist_k=shortlist_k,
                 )
                 if trace is not None:
                     top = scored[0]

@@ -3,7 +3,225 @@
 Living summary of what is implemented, validated, and outstanding. Updated at the end of every
 milestone. See `docs/TRACEABILITY.md` for the acceptance-criteria-level mapping.
 
-## Status: M37 complete (D85) — **economic valuation and roster legality are already separate; the value-base correction is mathematically right, behaviourally correct in every format, and unshippable. Nothing shipped.**
+## Status: M42 complete (D90) — **O1's mechanism reproduces on a second, independent board (kickers 2.40 → 2.00), and the effect is same-signed at +20.8 — but below the economic threshold and unresolved. G7 still fails. Nothing shipped.**
+
+D89's recommendation, executed: run O1 unchanged on a third format whose lineup actually contains
+K and DEF slots. 120 drafts. Full report: `docs/D90_CROSS_FORMAT_GENERALIZATION.md`.
+Pre-registered at `431e424` **before any result was seen**, with a test asserting D90 differs from
+D89 in `phase` and `formats` and in nothing else.
+
+**The format choice was forced by data, not preference.** `market/series.py` derives the board
+from `is_dynasty × is_superflex`, so exactly four series exist and two are used. Of the two
+candidates, `do` (dynasty 1QB) has 6 usable seasons to `rsf`'s 5 — and **both superflex boards
+carry zero kickers and zero defenses**, because FantasyPros' "OP" pages rank offensive players
+only.
+
+**That deepens D89's diagnosis.** The legacy format could not test O1 for *two* independent
+reasons: no K/DEF slot in its lineup **and** no K/DST players on its board. It was never a weak
+test of this mechanism; it was not a test of it.
+
+**The mechanism reproduces on a board sharing no rows with the target's**: kickers **2.40 → 2.00**,
+defenses 1.83 → 1.63, RB depth 2.72 → 2.97, TE depth 1.58 → 1.97, first DST a full round later,
+early rounds untouched (first QB/RB/WR all move < 0.1 rounds). **O1 draws exactly 2.00 kickers in
+every season** — precisely the roster's K capacity — while Y1 ranges 2.00–3.00 and drifts upward.
+G5 says it from the legality side: **0 capacity breaches for O1 vs 24 for Y1**.
+
+**The magnitude does not clearly generalise.**
+
+| format | K/DST slots | seasons | effect | 95% CI | improved | mechanism |
+|---|---|---|---|---|---|---|
+| target_league | 2/2 | 6 | **+49.0** | [+6.5, +91.5] | 5/6 | ACTIVE |
+| legacy_2qb_dynasty | **0/0** | 5 | −2.3 | [−85.5, +80.8] | 3/5 | **NOT TESTABLE** |
+| dynasty_1qb | 2/2 | 6 | **+20.8** | [−30.8, +72.3] | 4/6 | ACTIVE |
+
++20.8 sits **below the 25.0 economic threshold**, its CI **spans zero**, and the MDE here is 51.5.
+All three metrics are positive (+20.8 / +24.8 / +13.1) and LOSO is all-positive, but **G3, G8 and
+G9 fail** in the third format and **G7 fails** overall.
+
+**G7 is not redefined.** Among the two structurally testable formats the sign is consistent — that
+is reported as a *diagnostic*, not promoted to a gate, which is exactly what prediction T5 was
+written to forbid.
+
+**One unregistered pattern, flagged not interpreted:** `dynasty_1qb`'s per-season effects are
+perfectly monotone increasing (−46.2 → +80.2, ρ = 1.00; early half −18.8 vs late half +60.4), and
+`target_league` trends the same way. Noticed after the fact, so no p-value and no claim — but a
+mean of +20.8 built from a monotone climb is not a stable +20.8, and LOSO cannot see that.
+
+**2026 is unchanged in the third format too**: identical #1/#20/#21 (St. Brown / McCaffrey /
+Allen); the only roster difference is Y1's third kicker becoming a fifth WR.
+
+Verdict: **B — promising but unresolved. DO NOT SHIP.** Not C or D: the effect did not reverse and
+the mechanism reproduced, so closing O1 would be wrong in the opposite direction. **The reason to
+doubt O1 has changed** — no longer "it might be a target-format artifact" but "its benefit outside
+the target format is smaller than this benchmark can measure."
+
+**Next:** the documented question is whether O1's benefit is a function of how much K/DST
+over-drafting there is to correct, and whether that has been rising — testable on existing
+artifacts, since Y1's own kicker count rose 2.00 → 3.00 over the same window.
+
+**Repository note:** `origin/main` does not yet contain D86–D89; those commits live on this
+branch (main is at `b9c389d`, which merged D85). Production integrity is unaffected.
+
+### Earlier status: M41 complete (D89) — **six seasons DO resolve O1 in the target format: +49.0, CI [+6.5, +91.5], and all nine in-format gates pass. It still does not ship — the binding gate is now G7 (cross-format), not G8. Nothing shipped.**
+
+D88's own recommendation, executed: add the one remaining usable season and re-run O1-FULL
+unchanged. No new objective, no tuning, no new gate. 240 drafts run, 220 analysed. Full report:
+`docs/D89_2020_REPLICATION.md`. Pre-registered in
+`src/alpha_squad/evaluation/replication_design.py` **before any result was seen**, with a test
+asserting D89 differs from D88 in `phase` and `seasons` and in nothing else.
+
+**The question D88 posed is answered YES.** Target 1QB: **+49.0**, clustered 95% CI
+**[+6.5, +91.5]** — *the interval excludes zero*. MDE fell 56.0 → **42.5** (effect/MDE **1.15**),
+further than D88's forecast of 47.3, because 2020's cluster (+41.3) landed near the mean and
+*lowered* the between-season SD to 40.5. **Prediction R2 registered in advance that this was a coin
+flip**; an outlier 2020 would have cancelled the gain from the extra cluster.
+
+**The effect is stable**: +52.9 → +50.5 → **+49.0** across three independent enlargements;
+D88 → D89 movement −1.5 against a pre-registered ±16.5 threshold. 5/6 seasons improved, LOSO
++40.0 … +60.9, season-long +35.8.
+
+**Reproduction is exact**: all 200 shared cells bit-identical on every gate-bearing metric, 0 roster
+mismatches.
+
+**All nine in-format gates pass** — including G1/G4/G5, which D88's table never reported and which
+are computable from the recorded rosters. G5 is notably favourable: O1 breaches positional capacity
+**31 times vs Y1's 53**.
+
+**G7 is now the sole blocker.** Target +49.0 vs legacy −2.3 — opposite signs, so D86's "clear every
+gate" rule ships nothing. **The obstruction moved rather than disappeared: D88 was blocked on
+statistical resolution, D89 is blocked on cross-format generalisation.** Legacy is a *null, not
+harm* (−0.1% of base, CI [−85.5, +80.8], all three secondary metrics positive) — its lineup has **no
+K and no DEF slot**, so O1's mechanism cannot act there and both arms draft zero of each in all 100
+drafts. R6 predicted this. But **G7 as written cannot distinguish "null because there is nothing to
+act on" from "target-format artifact"**, and that ambiguity is not grounds to override it.
+
+**Two data defects, one of which would have fabricated a season.** (1) Target 2020's preseason board
+is `redraft-offense`, not `redraft-overall`; the default returned an empty board and the fair
+opponents would have drafted **alphabetically** — fixed before the run, 2021-2026 unchanged. (2)
+**Legacy 2020 has no preseason board at all** (`dsf` begins 2020-10-16): Phase 1 validated only the
+target series and missed it, the run exposed it, and the cell was **excluded, not repaired**. Hence
+target ran 6 clusters and legacy 5. A guard (`EmptyMarketBoardError`) now makes an empty board an
+error, because it previously degraded *silently* to alphabetical opponents with legal rosters and
+finite metrics.
+
+**Two further defects documented, not fixed**: `compute_league_starters` breaks exact FLEX ties by
+`set` iteration order, so `bench_contribution` is PYTHONHASHSEED-dependent (2 cells of 200, ≈4–6
+pts; verified by seed sweep; lineup *totals* provably cannot move) — the fix is in `league/`, which
+D89 must not touch. And **D88's slot-sensitivity table was arithmetically wrong** (it added
+within-variance to an SD that already contained it, contradicting its own CI); the true 5-season
+floor is **51.1**, not 56.0 — which *strengthens* D88's conclusion rather than weakening it.
+
+**RB and 2026 unchanged and confirmed**: identical elite-RB sensitivity (both need +75 at #1, vs a
+measured ≈+47.7 bias), identical 2026 #1/#20/#21, first divergence round 11.
+
+Verdict: **B — promising but unresolved, obstruction relocated.** Not A (G7 fails; and the CI's
+lower bound +6.5 is below the 25.0 economic threshold). Not C (nothing collapsed; 9/9 in-format
+gates). Not D (legacy is a null, not material harm). **The objective is no longer the weak link** —
+what blocks it is that the benchmark holds exactly one league in which its mechanism can act.
+
+**Next: add a third league format that DOES have K/DEF slots and re-run O1 unchanged.** That turns
+G7 from an untestable constraint into a real test, and either outcome is decisive. Not a new
+objective, not more seasons, not more slots.
+
+### Earlier status: M40 complete (D88) — **O1 replicates at 2.5× the data (+50.5), and draft slots provably cannot resolve it: the MDE floors at ~56 against an effect of ~50. The binding constraint is seasons, not slots. Nothing shipped.**
+
+The power/replication experiment D87 recommended: O1-FULL at 10 draft slots, full board, no
+shortlist, same objective/opponent/seasons/metrics/gates. 200 drafts. Full report:
+`docs/D88_O1_POWER_REPLICATION.md`.
+
+**Reproduction is exact.** Slots 1–10 superset D86/D87's four, and that subset reproduced
+identically in both formats (+52.9 / +1.6, same rosters, same metrics to the decimal).
+
+**The effect replicates.** Target 1QB **+50.5** (was +52.9), season-long **+39.9**, **4 of 5
+seasons improved**, LOSO all positive, 0 unfilled slots. Legacy remains a null (−2.3).
+
+**The decisive finding is a power result.** Between-season SD is 45.1 and within-season SD 55.7, so
+the clustered SE is `sqrt(45.1² + 55.7²/n)/√5` — slots shrink only the second term. MDE goes
+65.8 (4 slots) → **60.1 (10 slots)** → 58.1 (20) → **56.0 (∞)**. **The effect (+50.5) sits below
+the asymptote, so no number of draft slots can ever resolve it.** D87's recommended experiment was
+correctly designed and was never capable of succeeding; D88 proves that rather than assuming it.
+Six seasons would give MDE ≈ 47.3, and **exactly one more season is available** (2020; 2019 has no
+established-player projections) — a ~3-point margin, a coin-flip.
+
+**K/DST survives at scale**: kickers drafted 3.74 → 2.62 (4-slot measured 3.70 → 2.60). Early
+rounds are untouched (first QB/RB/WR identical to two decimals); all the difference is the
+endgame. The mechanism is confirmed in realized utility — O1 accumulates *fewer* raw roster points
+(−19.8) while converting more into lineup points and bench contribution.
+
+**The RB hypothesis is closed**: O1 and Y1 have *identical* elite-RB sensitivity (both need +75 at
+#1, neither moves at #20/#21). Weekly roster utility gives no protection against the known
+under-projection.
+
+**2026 #1/#20/#21 are identical under both arms**; first divergence is round 11, where Y1's third
+and fourth kickers become a RB and a TE.
+
+Verdict: **B — promising but unresolved, obstruction identified.** Nothing ships; target fails G8
+alone (by 5.5 points), legacy fails G3/G6/G7/G8/G9.
+
+### Earlier status: M39 complete (D87) — **the K=10 shortcut is not a faithful approximation: ranked by Y1, it re-imports Y1's K/DST over-valuation into O1 and flips sign across formats. Nothing shipped.**
+
+A controlled replication/efficiency test of D86's O1. Full report:
+`docs/D87_SHORTLIST_REPLICATION.md`.
+
+**A baseline discrepancy was diagnosed first.** The D87 brief cited "O1 K=40 = 6.26 s/pick, O1
+K=10 = 0.51 s/pick"; D86 actually measured 6.26 s/pick for the **full board** and 0.51 s/pick for
+**K=40**, and K=10 was never tested. D86's +52.9 therefore belongs to **O1-FULL**, and the
+experiment was run against that.
+
+**K=10 changes 10.3% of decisions in the target format — but 0.0% in rounds 1–7 and 18.3% in
+rounds 8–16**, exactly where O1's mechanism operates. All 33 changed decisions had the full-board
+pick outside the cheap top-10 (median cheap rank 205), and they substitute K/DST for skill players
+(TE→K 13, RB→K 5). The cause is structural: **the shortlist is ranked by Y1**, which D85 measured
+as over-valuing K 5.34× and DST 8.10×, so in rounds 12–16 the Y1 top-10 contains a kicker 90–100%
+of the time. Kickers drafted go Y1 3.70 → O1-FULL 2.60 → **O1-K10 3.25**, and O1-K10's 2026 roster
+is composition-identical to Y1's, four kickers included.
+
+**O1-K10 passes every target-format gate (+62.3, CI [+16.1, +108.6], 0/5 seasons worse) and then
+fails G7**, flipping to −7.1 in `legacy_2qb_dynasty` — the only arm to change sign, where O1-FULL
+held (+52.9 / +1.6). The margins are also **non-monotonic in K** (+62.3 / +41.9 / +52.9), which
+with no supporting mechanism marks them as noise. Cost was never the binding constraint: even the
+full board answers one pick in ~5 s.
+
+**This changed the next step rather than confirming it.** D86 recommended re-running O1 at 10 slots
+and the affordable route looked like the shortlist; D87 shows that would have measured a different
+policy. The corrected recommendation is **O1-FULL, no shortlist, 10 slots, both formats** (~2.2 h
+per format). General lesson: a shortlist must be validated for the *behaviour* under test, not
+merely the selected player, and must not be ranked by the engine whose bias the expensive
+objective exists to correct.
+
+### Earlier status: M38 complete (D86) — **the objective itself was wrong: it scores season totals and therefore prices the bench at zero, when the bench supplies 17.8% of realized points. The fix is real, generalises, and still fails the gates. Nothing shipped.**
+
+D85 closed the value-base seam. D86 asked the prior question — *what should Alpha optimize?* — and
+found the defect is the **metric**, not the formula. Every published draft number scores a roster
+from season totals with one lineup allocation; fantasy scores weekly, so the incumbent objective
+cannot see a bye, cannot see an injury, and gives the bench a value of exactly zero. Measured:
+bench = **17.8%** of realized points (no-foresight lineups), and a bench player starts in **16.2 of
+17 weeks**. Full report: `docs/DRAFT_OBJECTIVE_RESEARCH.md`.
+
+**A retrospective oracle over 320 real pick states decides the phase.** ~90% of the gap to a
+retrospectively optimal pick is luck (realized-points gap 104.1 of 116.2 mean regret; Spearman of
+Alpha's score against final realized roster value = **−0.033**). **One pick moves the final roster
+by ~2.6%.** The *structural* residual — picks where the oracle's player scored no more and still
+won — is 16 of 320 and worth **~90 points per draft**, against D71's ~128-point minimum detectable
+effect. **The prize is smaller than the ruler.**
+
+**The candidate is the strongest this project has produced and still does not ship.** O1
+(`E[weekly msv] + daVORP`, availability rates measured walk-forward, no bonus anywhere) scores
+**+52.9** on the primary weekly metric and **+34.5** season-long in the target format, cuts kickers
+drafted from **3.70 to 2.60**, and is the first candidate in nine to keep the same sign in both
+formats. It fails **G8 alone** in the target format (CI [−8.3, +114.0]) and is an effective null in
+`legacy_2qb_dynasty`, which has no K/DEF slots for the mechanism to act on. On the 2026 board it
+makes the **identical** picks at #1/#20/#21 and replaces Y1's third and fourth kickers with a RB
+and a TE.
+
+Four of six pre-registered predictions missed and are recorded as misses. Replacement level is
+**validated** rather than changed (the incumbent tracks the no-foresight waiver replacement at
+every position; streaming is real but unmeasurable — there is no transaction history). O1 costs
+180× a control pick naively, but a **K=40 shortlist reproduces the identical pick at ~7s per
+draft**, which is production-feasible — and which makes **re-running the identical pre-registered
+arm at the full 10 slots** the highest-value next step, requiring no new idea.
+
+### Earlier status: M37 complete (D85) — **economic valuation and roster legality are already separate; the value-base correction is mathematically right, behaviourally correct in every format, and unshippable. Nothing shipped.**
 
 D84 closed by naming one remaining direction: roster legality as a hard constraint on the
 candidate pool, measured **jointly** with its arm C, because "the double count and the legality

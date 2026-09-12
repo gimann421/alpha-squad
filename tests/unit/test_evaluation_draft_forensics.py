@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 from pathlib import Path
 
 import duckdb
@@ -13,6 +14,7 @@ from alpha_squad.evaluation.draft_forensics import (
     ALL_TIERS,
     ALL_Z_TIERS,
     DRAFT_AWARE_REPLACEMENT_TIERS,
+    MARKET_DRIVEN_OPPONENT_STRATEGIES,
     PREREGISTERED_S_CONTROL,
     PREREGISTERED_W_CONTROL,
     PREREGISTERED_Z_CONTROL,
@@ -29,14 +31,22 @@ from alpha_squad.evaluation.draft_forensics import (
     Z_SWEEP_TIERS,
     Z_TIER_SPEC,
     Z_TIERS,
+    EmptyMarketBoardError,
+    SeasonStatic,
     _pick_by_tier,
     _survival_probability,
+    assert_usable_market_board,
     homogeneous_league_draft,
     load_season_static,
     roster_feasibility_metrics,
     score_candidate,
     season_clustered_margin,
     simulate_forensic_draft,
+)
+from alpha_squad.evaluation.draft_simulation import (
+    ALL_OPPONENT_STRATEGIES,
+    MARKET_CONSENSUS,
+    MARKET_CONSENSUS_ROSTER_AWARE,
 )
 from alpha_squad.league.context import LeagueContext, load_league_context
 from alpha_squad.league.roster import positional_feasibility_cap, unfilled_dedicated_slots
@@ -1113,3 +1123,458 @@ class TestD85LTiersLegalityVsValuation:
         # And the difference between them is exactly the replacement level, at every projection.
         for proj in (150.0, 200.0, 300.0):
             assert y1(proj) - arm_c(proj) == pytest.approx(R)
+
+
+class TestD86OTiersObjective:
+    """D86's objective arms. Pre-registered in `evaluation/objective_candidates.py`.
+
+    `test_o0_is_the_shipped_engine` is the control check that caught D85's silent harness defect
+    (L-tiers omitted from the draft-aware replacement dispatch); the same class of mistake would
+    make every O-tier margin measure the wrong baseline."""
+
+    def test_o_tier_spec_matches_the_preregistration(self):
+        from alpha_squad.evaluation.draft_forensics import O_TIER_SPEC, O_TIERS
+        from alpha_squad.evaluation.objective_candidates import ARMS, PREREGISTERED_CONTROL
+
+        assert O_TIERS == ARMS
+        assert O_TIER_SPEC[PREREGISTERED_CONTROL] is False
+        assert O_TIER_SPEC["O1"] is True
+
+    def test_every_o_tier_is_described_and_draft_aware(self):
+        from alpha_squad.evaluation.draft_forensics import (
+            DRAFT_AWARE_REPLACEMENT_TIERS,
+            O_TIERS,
+            TIER_DESCRIPTIONS,
+        )
+
+        for tier in O_TIERS:
+            assert tier in TIER_DESCRIPTIONS
+            assert tier in DRAFT_AWARE_REPLACEMENT_TIERS
+
+    def test_o0_is_the_shipped_engine(self, con):
+        """THE control check. O0 must score identically to L0/Q0/Z0, candidate by candidate."""
+        _seed_league_season(con, 2023)
+        league = _small_league()
+        static = load_season_static(con, league, 2023)
+        available = set(static.projections)
+        for player_id in sorted(available):
+            kwargs = dict(
+                available=available,
+                current_pick_overall=1,
+                next_pick_overall=5,
+                roster_player_ids=[],
+            )
+            o0 = score_candidate(static, player_id, league, [], "O0", **kwargs)
+            l0 = score_candidate(static, player_id, league, [], "L0", **kwargs)
+            z0 = score_candidate(static, player_id, league, [], "Z0", **kwargs)
+            assert (o0 is None) == (l0 is None) == (z0 is None)
+            if o0 is not None:
+                assert o0.score == pytest.approx(l0.score, abs=1e-9), player_id
+                assert o0.score == pytest.approx(z0.score, abs=1e-9), player_id
+
+    def test_o1_raises_rather_than_silently_degrading_without_rates(self, con):
+        """The D78/D81/D85 failure mode: an arm that reports itself as running while quietly
+        measuring the control. Without availability rates O1 must fail loudly."""
+        _seed_league_season(con, 2023)
+        league = _small_league()
+        static = load_season_static(con, league, 2023)
+        with pytest.raises(RuntimeError, match="availability_rates"):
+            score_candidate(
+                static,
+                sorted(static.projections)[0],
+                league,
+                [],
+                "O1",
+                available=set(static.projections),
+                current_pick_overall=1,
+                next_pick_overall=5,
+                roster_player_ids=[],
+                availability_rates=None,
+            )
+
+    def test_o1_prices_a_saturated_position_above_zero(self, con):
+        """The whole point. At a position whose startable slots are full the shipped MSV is
+        exactly 0; O1 must be positive, because the starter ahead is absent some weeks."""
+        _seed_league_season(con, 2023)
+        league = _small_league()
+        static = load_season_static(con, league, 2023)
+        rates = {p: 0.85 for p in ("QB", "RB", "WR", "TE")}
+        # fill every startable QB slot (this league has QB: 1 and no superflex)
+        roster = ["QB_0"]
+        candidate = "QB_1"
+        kwargs = dict(
+            available=set(static.projections),
+            current_pick_overall=5,
+            next_pick_overall=9,
+            roster_player_ids=roster,
+        )
+        shipped = score_candidate(static, candidate, league, ["QB"], "O0", **kwargs)
+        aware = score_candidate(
+            static, candidate, league, ["QB"], "O1", availability_rates=rates, **kwargs
+        )
+        assert shipped.marginal_starter_value == pytest.approx(0.0, abs=1e-9)
+        assert aware.marginal_starter_value > 0.0
+
+    def test_availability_rates_on_static_are_walk_forward(self, con):
+        """A draft for season S must never see S's own injuries. The rates are measured from
+        seasons strictly before S, so a season with no prior data gets an EMPTY dict rather than
+        a fabricated one -- and O1 then raises."""
+        _seed_league_season(con, 2023)
+        league = _small_league()
+        static = load_season_static(con, league, 2023)
+        # the fixture seeds no weekly rows at all, so there is nothing to measure
+        assert static.availability_rates == {}
+
+
+class TestD87ShortlistK:
+    """D87's candidate shortlist. It is a pure COST approximation: rank the whole board with the
+    CHEAP control scorer, then re-score only the top K under the expensive objective.
+
+    What these pin is that it changes nothing except how many candidates get the expensive
+    treatment -- and that it is genuinely capable of changing a pick, so a measured
+    'K=10 agrees with the full board' is a finding rather than a no-op."""
+
+    def test_shortlist_is_a_no_op_for_the_control_tier(self, con):
+        """O0 is already cheap; a shortlist must never touch it, or the control would differ
+        between arms and every margin would be measured against a moving baseline."""
+        _seed_league_season(con, 2023)
+        league = _small_league()
+        static = load_season_static(con, league, 2023)
+        available = set(static.projections)
+        full, scored_full = _pick_by_tier(
+            static,
+            con,
+            league,
+            2023,
+            available,
+            [],
+            "O0",
+            1,
+            5,
+            roster_player_ids=[],
+            picks_remaining=5,
+        )
+        short, scored_short = _pick_by_tier(
+            static,
+            con,
+            league,
+            2023,
+            available,
+            [],
+            "O0",
+            1,
+            5,
+            roster_player_ids=[],
+            picks_remaining=5,
+            shortlist_k=2,
+        )
+        assert full == short
+        assert len(scored_full) == len(scored_short) == len(available)
+
+    def test_shortlist_limits_how_many_candidates_are_scored(self, con):
+        _seed_league_season(con, 2023)
+        league = _small_league()
+        static = load_season_static(con, league, 2023)
+        static.availability_rates.update({"QB": 0.9, "RB": 0.9, "WR": 0.9, "TE": 0.9})
+        available = set(static.projections)
+        _, scored = _pick_by_tier(
+            static,
+            con,
+            league,
+            2023,
+            available,
+            [],
+            "O1",
+            1,
+            5,
+            roster_player_ids=[],
+            picks_remaining=5,
+            shortlist_k=3,
+        )
+        assert len(scored) == 3
+
+    def test_none_scores_the_whole_board(self, con):
+        """The default must be what every D86 number was measured with."""
+        _seed_league_season(con, 2023)
+        league = _small_league()
+        static = load_season_static(con, league, 2023)
+        static.availability_rates.update({"QB": 0.9, "RB": 0.9, "WR": 0.9, "TE": 0.9})
+        available = set(static.projections)
+        _, scored = _pick_by_tier(
+            static,
+            con,
+            league,
+            2023,
+            available,
+            [],
+            "O1",
+            1,
+            5,
+            roster_player_ids=[],
+            picks_remaining=5,
+            shortlist_k=None,
+        )
+        assert len(scored) == len(available)
+
+    def test_a_shortlist_of_one_forces_the_cheap_scorers_pick(self, con):
+        """The sharpest statement of what a shortlist can cost: at K=1 the expensive objective
+        has no choice at all and the arm degenerates to the control. This is what makes
+        'K=10 agreed with the full board' a real measurement rather than a tautology."""
+        _seed_league_season(con, 2023)
+        league = _small_league()
+        static = load_season_static(con, league, 2023)
+        static.availability_rates.update({"QB": 0.9, "RB": 0.9, "WR": 0.9, "TE": 0.9})
+        available = set(static.projections)
+        control_pick, _ = _pick_by_tier(
+            static,
+            con,
+            league,
+            2023,
+            available,
+            [],
+            "O0",
+            1,
+            5,
+            roster_player_ids=[],
+            picks_remaining=5,
+        )
+        k1_pick, scored = _pick_by_tier(
+            static,
+            con,
+            league,
+            2023,
+            available,
+            [],
+            "O1",
+            1,
+            5,
+            roster_player_ids=[],
+            picks_remaining=5,
+            shortlist_k=1,
+        )
+        assert len(scored) == 1
+        assert k1_pick == control_pick
+
+    def test_shortlist_is_deterministic(self, con):
+        _seed_league_season(con, 2023)
+        league = _small_league()
+        static = load_season_static(con, league, 2023)
+        static.availability_rates.update({"QB": 0.9, "RB": 0.9, "WR": 0.9, "TE": 0.9})
+        available = set(static.projections)
+        picks = {
+            _pick_by_tier(
+                static,
+                con,
+                league,
+                2023,
+                available,
+                [],
+                "O1",
+                1,
+                5,
+                roster_player_ids=[],
+                picks_remaining=5,
+                shortlist_k=5,
+            )[0]
+            for _ in range(3)
+        }
+        assert len(picks) == 1
+
+
+class TestD89PreseasonPageType:
+    """D89: which `page_type` holds a season's PRESEASON board is not constant across history.
+
+    DynastyProcess stored the 2020 redraft board as `redraft-offense` and every season from 2021
+    as `redraft-overall`. A fixed `redraft-overall` lookup returns an EMPTY board for 2020, which
+    silently makes the fair opponent draft alphabetically -- a different game, not a gap."""
+
+    def _seed_board(self, con, season, page_type, n=5, month=8):
+        for i in range(n):
+            con.execute(
+                "INSERT INTO market_snapshot (player_id, scrape_date, ecr_type, position, "
+                "ecr_rank, page_type) VALUES (?, ?, 'ro', 'WR', ?, ?)",
+                [f"WR_{i}", f"{season}-{month:02d}-01", float(i + 1), page_type],
+            )
+
+    def test_resolves_the_page_that_actually_holds_the_preseason_board(self, con):
+        from alpha_squad.evaluation.draft_forensics import preseason_page_type
+
+        self._seed_board(con, 2020, "redraft-offense", n=9)
+        self._seed_board(con, 2020, "redraft-idp", n=2)
+        assert preseason_page_type(con, "ro", 2020) == "redraft-offense"
+
+    def test_ignores_rows_outside_the_preseason_window(self, con):
+        """2020's `redraft-overall` rows exist but are IN-SEASON. Reading them would leak market
+        movement that happened after the draft -- the D54 defect. They must not win."""
+        from alpha_squad.evaluation.draft_forensics import preseason_page_type
+
+        self._seed_board(con, 2020, "redraft-overall", n=20, month=11)  # in-season, must lose
+        self._seed_board(con, 2020, "redraft-offense", n=3, month=8)  # preseason, must win
+        assert preseason_page_type(con, "ro", 2020) == "redraft-offense"
+
+    def test_returns_none_when_the_season_has_no_preseason_board(self, con):
+        from alpha_squad.evaluation.draft_forensics import preseason_page_type
+
+        assert preseason_page_type(con, "ro", 1999) is None
+
+    def test_is_deterministic_when_two_pages_tie(self, con):
+        from alpha_squad.evaluation.draft_forensics import preseason_page_type
+
+        self._seed_board(con, 2020, "redraft-offense", n=4)
+        self._seed_board(con, 2020, "redraft-overall", n=4)
+        assert {preseason_page_type(con, "ro", 2020) for _ in range(3)} == {"redraft-offense"}
+
+    def test_page_type_defaults_to_production_behaviour(self, con):
+        """Omitting `page_type` must leave `load_season_static` exactly as D86/D87/D88 ran it,
+        or every published number moves."""
+        _seed_league_season(con, 2023)
+        league = _small_league()
+        a = load_season_static(con, league, 2023)
+        b = load_season_static(con, league, 2023, page_type=None)
+        assert a.market_rank == b.market_rank
+        assert a.consumption_demand == b.consumption_demand
+
+
+class TestD89EmptyMarketBoardGuard:
+    """D89 regression: an empty preseason board must RAISE, never silently draft alphabetically.
+
+    Found in D89 by the run itself. The legacy format resolves to ecr_type `dsf`, whose earliest
+    scrape of any kind is 2020-10-16, so it has no 2020 preseason board at all. The 2020 legacy
+    cell completed "successfully" -- legal rosters, finite metrics -- with all nine opponents
+    picking in `player_id` order, because `_market_consensus_pick` falls back to sorting by id
+    when `market_rank` is empty. A fabricated observation that looks like a real one is the worst
+    possible failure mode, so it is now an error."""
+
+    def _static(self, market_rank):
+        return SeasonStatic(
+            season=2020,
+            ecr_type="dsf",
+            projections={"a": 100.0, "b": 90.0},
+            positions={"a": "WR", "b": "RB"},
+            vorp={},
+            replacement_levels={},
+            scarcity_raw={},
+            scarcity_norm={},
+            market_rank=market_rank,
+            confidence={},
+            ecr_dispersion={},
+            consumption_demand={},
+        )
+
+    @pytest.mark.parametrize("strategy", [MARKET_CONSENSUS, MARKET_CONSENSUS_ROSTER_AWARE])
+    def test_empty_board_raises_for_every_market_driven_opponent(self, strategy):
+        with pytest.raises(EmptyMarketBoardError) as exc:
+            assert_usable_market_board(self._static({}), strategy)
+        assert "2020" in str(exc.value)
+        assert "dsf" in str(exc.value)
+        assert "alphabetically" in str(exc.value)
+
+    def test_a_populated_board_passes(self):
+        assert_usable_market_board(self._static({"a": ("WR", 1.0)}), MARKET_CONSENSUS)
+
+    def test_a_sparse_board_is_allowed_through(self):
+        """The line is 'no board at all', not 'a thin board' -- coverage varies 74.8-85.5% across
+        the usable seasons and none of that is a defect."""
+        assert_usable_market_board(self._static({"a": ("WR", 1.0)}), MARKET_CONSENSUS_ROSTER_AWARE)
+
+    def test_every_known_opponent_strategy_is_classified(self):
+        """If a new opponent strategy is added, it must be deliberately in or out of the check
+        rather than defaulting to unguarded."""
+        assert set(ALL_OPPONENT_STRATEGIES) >= MARKET_DRIVEN_OPPONENT_STRATEGIES
+        assert set(ALL_OPPONENT_STRATEGIES) == MARKET_DRIVEN_OPPONENT_STRATEGIES
+
+    def test_simulate_forensic_draft_refuses_an_empty_board(self, con):
+        _seed_league_season(con, 2023)
+        league = _small_league()
+        static = load_season_static(con, league, 2023)
+        blanked = dataclasses.replace(static, market_rank={})
+        with pytest.raises(EmptyMarketBoardError):
+            simulate_forensic_draft(
+                con,
+                league,
+                2023,
+                "A",
+                1,
+                blanked,
+                opponent_strategy=MARKET_CONSENSUS_ROSTER_AWARE,
+            )
+
+    def test_the_guard_does_not_change_a_normal_draft(self, con):
+        """The check must be a pure precondition: a season with a board draws the same roster it
+        drew before the guard existed."""
+        _seed_league_season(con, 2023)
+        league = _small_league()
+        static = load_season_static(con, league, 2023)
+        result = simulate_forensic_draft(
+            con, league, 2023, "A", 1, static, opponent_strategy=MARKET_CONSENSUS_ROSTER_AWARE
+        )
+        assert result.drafted_player_ids
+        assert len(result.drafted_player_ids) == len(result.drafted_positions)
+
+
+class TestD89FlexTieBreakIsOrderDependent:
+    """D89 characterization: `compute_league_starters` breaks FLEX ties by set-iteration order.
+
+    `flex_candidates` is assembled by iterating `flex_eligible_positions`, a `set[str]`, and then
+    stable-sorted on points. When two flex-eligible players at DIFFERENT positions have exactly
+    equal points, which one takes the last flex slot therefore depends on set iteration order,
+    which varies with PYTHONHASHSEED between processes.
+
+    Blast radius, measured in D89 and pinned here:
+      * the LINEUP TOTAL is invariant -- the tied players contribute equal points either way, so
+        `weekly_no_foresight` and `weekly_hindsight` are unaffected. All 120 cells shared between
+        the D88 and D89 artifacts matched exactly on all three metrics.
+      * `bench_contribution` is NOT invariant, because it asks WHICH player was fielded in order
+        to attribute points to the bench. One cell of 120 (legacy 2021, slot 2, O0) differed:
+        526.0 under most seeds, 519.6 under PYTHONHASHSEED=4.
+
+    `bench` is a secondary diagnostic and enters no gate, so no D86/D88/D89 conclusion depends on
+    it. The fix belongs in `league/replacement.py` (a deterministic secondary sort key), which D89
+    is forbidden to touch -- Y1 must stay byte-identical. Recorded as a future item instead.
+
+    These tests assert the INVARIANT half, which is the part every conclusion rests on."""
+
+    def _tied_league(self) -> LeagueContext:
+        return LeagueContext(
+            league_id="tie",
+            format="redraft",
+            teams=1,
+            scoring={"ppr": True, "ppr_value": 1.0},
+            lineup={"QB": 1, "RB": 1, "WR": 1, "FLEX": 1},
+            roster={"bench": 2, "roster_size": 6},
+        )
+
+    def test_lineup_total_is_invariant_under_an_exact_flex_tie(self):
+        """The property the primary metric depends on: a tie cannot change the points scored."""
+        from alpha_squad.league.replacement import compute_league_starters
+
+        league = self._tied_league()
+        points = {"qb": 300.0, "rb1": 200.0, "wr1": 190.0, "rb2": 100.0, "wr2": 100.0}
+        positions = {"qb": "QB", "rb1": "RB", "wr1": "WR", "rb2": "RB", "wr2": "WR"}
+        starters = compute_league_starters(league, points, positions, teams=1)["starters"]
+        assert sum(points[p] for p in starters) == 790.0
+        # rb2 and wr2 are exactly tied for the single flex slot; exactly one of them starts
+        assert len({"rb2", "wr2"} & starters) == 1
+
+    def test_the_tie_is_broken_by_position_iteration_not_by_player_identity(self):
+        """Both orderings are reachable, so no caller may depend on which player wins."""
+        from alpha_squad.league.replacement import compute_league_starters
+
+        league = self._tied_league()
+        positions = {"qb": "QB", "rb1": "RB", "wr1": "WR", "rb2": "RB", "wr2": "WR"}
+        points = {"qb": 300.0, "rb1": 200.0, "wr1": 190.0, "rb2": 100.0, "wr2": 100.0}
+        winner = (
+            {"rb2", "wr2"} & compute_league_starters(league, points, positions, teams=1)["starters"]
+        ).pop()
+        assert winner in {"rb2", "wr2"}
+
+    def test_an_untied_flex_is_fully_deterministic(self):
+        """The defect is confined to EXACT ties -- ordinary boards are unaffected."""
+        from alpha_squad.league.replacement import compute_league_starters
+
+        league = self._tied_league()
+        positions = {"qb": "QB", "rb1": "RB", "wr1": "WR", "rb2": "RB", "wr2": "WR"}
+        points = {"qb": 300.0, "rb1": 200.0, "wr1": 190.0, "rb2": 100.1, "wr2": 100.0}
+        for _ in range(5):
+            starters = compute_league_starters(league, points, positions, teams=1)["starters"]
+            assert "rb2" in starters and "wr2" not in starters
