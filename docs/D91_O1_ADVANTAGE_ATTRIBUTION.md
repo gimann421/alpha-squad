@@ -684,3 +684,54 @@ per-season pattern.
 > all have n = 6. **Ablation A3 — K and DST held at rate 1.0 so O1's uplift is switched off at
 > exactly those two positions and nowhere else — is the test that can settle it**, and it was
 > registered in §3 before any of this was seen.
+
+---
+
+## 13. Phase 5 — a roster-level counterfactual: swap only the kickers, change nothing else
+
+For every paired draft, build one intermediate roster — **Y1's, with only its surplus K/DST
+swapped for O1's surplus flex-eligible players** — and score it with the same objective. The
+paired margin then splits into two steps that sum to it by construction:
+
+### `target_league` (47 of 60 pairs have such a swap; 1.62 players swapped per draft)
+
+| step | mean | 95% CI |
+|---|---|---|
+| **Y1 → HYBRID** — the K/DST reallocation **alone** | **+76.0** | **[+58.5, +93.6]** |
+| **HYBRID → O1** — everything else O1 did | **−39.6** | **[−61.8, −17.4]** |
+| Y1 → O1 — the full paired margin on this subset | +36.4 | |
+
+> **Swapping Y1's surplus kickers for depth, and changing nothing else, beats O1 itself** — by
+> roughly a factor of two. Every other change O1 makes is, on this board and in this format, **net
+> harmful**, and its interval excludes zero.
+
+That is a much sharper statement of where the target-format advantage lives than anything in
+D86–D90, and it points the same way as §12's correction.
+
+### `dynasty_1qb` (35 of 60 pairs; 1.23 players swapped)
+
+| step | mean | 95% CI |
+|---|---|---|
+| Y1 → HYBRID — the K/DST reallocation alone | **−11.2** | [−42.2, +19.8] |
+| HYBRID → O1 — everything else O1 did | **+50.4** | [+20.7, +80.1] |
+| Y1 → O1 — full paired margin on this subset | +39.2 | |
+
+**The two formats split, and partly for a reason that is not a contradiction.** Y1 hoards kickers
+in the target format (nK 2.98) and barely does in dynasty (nK 2.08), so there is much less surplus
+to reclaim there and O1's dynasty gain comes through RB depth instead (+0.58 RB). A mechanism of
+the form "reclaim whatever is over-allocated" predicts exactly this asymmetry.
+
+What is **not** reconciled that way is the sign of the second row: O1's non-K/DST changes measure
+as harmful in the target format (−39.6) and helpful in dynasty (+50.4), both with intervals
+excluding zero. **That is a genuine disagreement and I cannot resolve it from these data.**
+
+### Three limits, none of them optional
+
+1. **The hybrid roster was never draftable.** Those players may not have been available at those
+   picks. This is a *valuation* counterfactual — "which roster differences carry the points" — and
+   it does not license any claim about what a draft could have achieved.
+2. **Selection.** Only pairs where Y1 held a K/DST surplus *and* O1 held a flex-eligible surplus
+   qualify (47/60 and 35/60), so the "full margin" rows here (+36.4, +39.2) are subset means and
+   differ from the all-60 figures in §9.
+3. **It still conditions on outcomes**, exactly like §10.4. The swap is defined by what each arm
+   drafted. **Ablation A3 remains the only test in this phase that manipulates an input.**
