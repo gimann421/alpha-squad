@@ -293,3 +293,83 @@ _draft_aware` likewise only asserts membership in `DRAFT_AWARE_REPLACEMENT_TIERS
 **No production code is touched by this finding.** The defect is in research/evaluation code, and
 production `recommend_draft_pick` has been correct throughout — indeed it is the reference that
 exposed the problem.
+
+---
+
+## 6. Historical sample (Phase 3)
+
+Selection rule, applied to every season 2015–2026 and reported in full rather than filtered:
+
+| season | `target_league` (`ro`) | `dynasty_1qb` (`do`) | verdict |
+|---|---|---|---|
+| 2015–2019 | **no July/August board at all** — `preseason_page_type` returns `None` | same | **EXCLUDED** — the rows do not exist |
+| 2020 | `redraft-offense`, 612 projected, 458 ranked, 74.8% | `dynasty-offense`, 419 ranked, 68.5% | included |
+| 2021 | `redraft-overall`, 636 / 490, 77.0% | 459, 72.2% | included |
+| 2022 | 651 / 496, 76.2% | 466, 71.6% | included |
+| 2023 | 610 / 484, 79.3% | 471, 77.2% | included |
+| 2024 | 602 / 515, 85.5% | 471, 78.2% | included |
+| 2025 | 629 / 480, 76.3% | 444, 70.6% | included |
+| 2026 | board exists (837 / 524) | 523 | **EXCLUDED** — unplayed; no realized outcome to score against |
+
+**No season was dropped for being difficult or unfavourable.** The 2015–2019 exclusion is not a
+judgement: `preseason_page_type` finds no July/August scrape in either market series, so there is
+no preseason board for the fair-market opponents to draft against, and D89's `EmptyMarketBoardError`
+guard would refuse the run. **Six seasons is the entire population, not a sample of it.**
+
+### A defect this survey surfaced, affecting production rather than the research path
+
+For 2020 the preseason board is published under `redraft-offense`, not `redraft-overall`. D89 fixed
+this for the research path by threading a resolved `page_type` into `load_season_static`.
+**`recommend_draft_pick` takes no `page_type` argument** and resolves the series' default, so in
+2020 production reads `redraft-overall` and gets an **empty** preseason board. That is exactly why
+`Z0`/`Q0`/`L0` — which otherwise reproduce production in **20 of 20** cells — mismatch in precisely
+the four 2020 cells and nowhere else.
+
+This is a real finding about a production code path, not about the harness. It affects only a
+*historical backtest* of 2020: a live draft resolves the current season, where the default page is
+correct. **Nothing is changed here** — D93 forbids production edits — and it is recorded as a
+defect for a future phase to fix deliberately.
+
+---
+
+## 7. Format sample (Phase 4)
+
+`market/series.py` derives the board from `is_dynasty × is_superflex`, so **exactly four** market
+series exist. The candidate set is therefore closed and was enumerated before selection:
+
+| series | format | seasons | K rows | DST rows | status |
+|---|---|---|---|---|---|
+| `ro` | redraft 1QB | 6 | 1,692 | 1,473 | **primary** — `target_league` |
+| `do` | dynasty 1QB | 6 | 1,533 | 1,494 | **secondary** — `dynasty_1qb` |
+| `dsf` | dynasty superflex | 5 | **0** | **0** | **structurally untestable** |
+| `rsf` | redraft superflex | 5 | **0** | **0** | **structurally untestable** |
+
+Both superflex boards carry **zero** kickers and zero defenses (FantasyPros' "OP" pages rank
+offensive players only), and `legacy_2qb_dynasty`'s lineup has no K or DEF slot at all. Per D93's
+instruction — *"do not treat formats with no K/DST data as evidence for the K/DST mechanism"* — the
+legacy format is reported as **structurally untestable for this mechanism, not as a pass or a
+fail**, wherever a gate touches K/DST.
+
+**No new format was created.** `dynasty_1qb` was registered in D90 on a pre-specified tie-break and
+is reused unchanged.
+
+---
+
+## 8. Pre-registration, and what happened to it (Phase 5)
+
+The estimand (§3), the power analysis (§4), the sample rule (§6) and the format set (§7) were all
+fixed before the confirmatory run. The registered experiment was:
+
+> `scripts/d92_paired_grid.py`, board vintage `74b2ea7d…` asserted as a precondition, both 1-QB
+> formats, seasons 2020–2025, slots 1–10, arms `O0` (control) and `O1` (candidate), primary metric
+> `weekly_no_foresight`, season-clustered `t(5)` interval, D84's gates unchanged, economic threshold
+> 25.0, and the stopping rule that **no additional sample exists** (§4.2).
+
+**That experiment was never run, because the Phase 0 production-parity gate failed first (§5).**
+Its control arm `O0` is not the shipped engine, so the registered contrast would have measured
+"a D65-era engine + weekly marginal value" against "a D65-era engine" and reported it as O1 vs Y1.
+
+Running it anyway would have produced a number — and D91's artifacts say roughly which number —
+but it would not have been an answer to D93's question. **The gate did its job, which is the point
+of having gates run before the experiment rather than after.** What follows measures the defect's
+consequences instead, which is the honest remaining use of the phase.
