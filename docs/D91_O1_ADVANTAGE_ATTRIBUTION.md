@@ -453,3 +453,194 @@ and one orthogonal split *within* the first term:
 > *not* demonstrably a kicker effect. It is **one reallocation of about 1.4 late picks from
 > positions with a single startable slot to positions with three or four**, and about three
 > quarters of its value is visible without any weekly machinery at all.
+
+---
+
+## 9. Track B — gate R0 **FAILS**, and the reason is the most important thing D91 found
+
+The reconstruction ran the pre-registered grid: 6 seasons × 10 slots × 2 arms × 2 formats,
+**240 drafts**, identical code, identical projections, identical realized outcomes. The **only**
+input that differs from D89/D90 is the market-board vintage (§2).
+
+| | D89/D90 published | D91 rebuild |
+|---|---|---|
+| **target** primary Δ | **+49.0**, CI **[+6.5, +91.5]** | **+28.0**, CI **[−40.7, +96.7]** |
+| target between-season SD | **40.5** | **65.4** |
+| target per season | +41.3 / +57.3 / −10.4 / +21.0 / +90.8 / +94.0 | +9.3 / +17.6 / **+158.7** / −20.4 / −5.7 / +8.5 |
+| **dynasty** primary Δ | **+20.8**, CI **[−30.8, +72.3]** | **+31.5**, CI **[+4.6, +58.4]** |
+| dynasty per season | −46.2 / −15.4 / +5.1 / +31.4 / +69.5 / +80.2 | +64.1 / +12.1 / +35.3 / +17.0 / +58.6 / +1.8 |
+
+**Season-level agreement between the two board vintages: r = −0.652 (target), r = −0.340
+(dynasty).** The per-season pattern does not merely fail to reproduce — it *anti*-correlates.
+
+The baseline arm moved too, which rules out "a bug in the O1 path": Y1's own first-RB round goes
+**4.15 → 5.27**, first TE **6.70 → 5.87**, and Y1's kicker count **3.45 → 2.98**. A different
+board changes both arms' drafts, as it must.
+
+> **R0 as written is not met.** The point estimate (+28.0) does fall inside D89's published
+> interval, but that was the weakest of R0's conditions and the interval is 85 points wide. The
+> per-season structure — which is what an attribution actually decomposes — is unrecognisable.
+> **The Track B drafts below therefore describe *a* Y1-vs-O1 contrast on a 2026-vintage board.
+> They do not decompose the published +49.0, and nothing below is labelled as if they did.**
+
+### 9.1 What survives the board change, and what does not
+
+**Survives — the sign.** Four estimates now exist across two board vintages × two 1-QB formats,
+and **all four are positive**: +49.0, +28.0, +20.8, +31.5 (mean ≈ +32.5). O1 beating Y1 in a
+format where its mechanism can operate is the most robust claim in this research line, and D91 is
+the first phase to test it against an independently re-scraped board.
+
+**Survives — the behavioural signature.** Kickers still fall (2.98 → 2.32), RB depth still rises
+(2.22 → 2.53), TE depth still rises (1.97 → 2.50), picks still move off single-startable-slot
+positions onto flex-eligible ones (−0.82 / +0.82). Same direction at every position as D89 §12.
+
+**Does not survive — the magnitude, the per-season structure, and *which format resolves*:**
+
+| | D89/D90 board | D91 board |
+|---|---|---|
+| target G8 (CI excludes zero) | **PASS** [+6.5, +91.5] | **FAIL** [−40.7, +96.7] |
+| dynasty G8 | **FAIL** [−30.8, +72.3] | **PASS** [+4.6, +58.4] |
+
+**The two formats swapped which one clears G8.** D89's headline — "six seasons DO resolve O1 in
+the target format" — is, on this evidence, substantially a property of **one board snapshot**
+rather than of six seasons.
+
+**Does not survive — D90 §7's monotone trend.** Published ρ(season, effect) = **+0.994**; on the
+refreshed board, **−0.397**. D90 flagged that pattern as noticed-after-the-fact and explicitly
+declined to make any inferential claim about it. **That caution was correct**, and this is the
+first direct evidence that it was noise.
+
+### 9.2 The honest limits of this finding
+
+* **Neither board is privileged.** Both are real DynastyProcess `db_fpecr` scrapes; mine simply
+  has higher ECR coverage (2020: 87% vs 74.8%). I cannot say D89's snapshot was wrong, only that
+  the result moves a lot between them.
+* **This is n = 2 on a new dimension.** Two vintages cannot estimate the variance the vintage
+  dimension contributes. The right reading is "board vintage is a material, previously
+  uncontrolled source of variation", not a number for how large it is.
+* **The 2022 cell shows how the same behaviour can pay opposite amounts.** On D89's board 2022 had
+  the *largest* kicker restraint (−1.90) and was the *only losing* season (−10.4). On this board
+  Y1 draws **4–5 kickers in all ten 2022 slots**, O1 draws 2–3, and the season returns **+158.7**
+  — positive in every slot. Identical mechanism, opposite outcome, different board.
+
+### 9.3 What this means for the benchmark
+
+D89 §18.6 concluded the binding limitation was "benchmark/instrument resolution … cross-format
+evidence". D91 adds a third axis the instrument does not control at all: **the market board is an
+input that drifts, and the effect this benchmark measures is sensitive to it.** D89's
+bit-identical reproduction control could not detect this, because it re-ran against *the same
+stored database*. Reproducibility against a frozen snapshot and robustness to a refreshed one are
+different properties, and only the first was ever tested.
+
+**This independently reinforces DO NOT SHIP**, and it does so more strongly than G7 did: a
+candidate whose headline interval depends on which week the market board was scraped is not ready
+to replace production, regardless of how the cross-format gate reads.
+
+---
+
+## 10. Phases 1 and 3 — first-divergence analysis (Track B board; see §9 before reading)
+
+All 60 target-format pairs diverge. Final rosters share **13.2 of 16 players** on average
+(min 11, max 16) — O1 changes fewer than three players per draft.
+
+### 10.1 Divergence is *not* concentrated in the endgame
+
+| first divergence | n | mean Δ primary | 95% CI |
+|---|---|---|---|
+| rounds 1–5 | **26 (43%)** | **+42.3** | [−1.1, +85.8] |
+| rounds 6–10 | 22 (37%) | +19.0 | [−1.4, +39.4] |
+| rounds 11–16 | 12 (20%) | +13.5 | [−1.8, +28.9] |
+
+Mean first-divergence round **6.4**, median 7, range **1–15**. **43% of drafts first part ways
+inside the first five rounds**, and those drafts carry the *largest* mean margin — the reverse of
+the "O1's entire effect is the endgame" summary that D86–D90 have used throughout.
+
+That summary is not *wrong*, it is about a different quantity: D89 §12 measured the **mean round
+of the first player at each position**, which is essentially unchanged (this board: first WR 1.27
+in both arms; first QB 2.73/2.75; first RB 5.27/5.42). Both are true because **35% of first
+divergences are same-position swaps** — the arms take *different players at the same position in
+the same round*, which moves no positional timing at all.
+
+### 10.2 The decision types, and the one nobody has described
+
+| first-divergence decision type | n | % | mean Δ | 95% CI |
+|---|---|---|---|---|
+| **same position, different player** | **21** | **35%** | **+50.2** | [−1.9, +102.3] |
+| between two multi-slot positions | 16 | 27% | +20.5 | [−7.4, +48.4] |
+| off a 1-slot position onto a multi-slot one | 12 | 20% | +14.3 | [−4.9, +33.4] |
+| onto a 1-slot position (O1 takes its K/DST *sooner*) | 11 | 18% | +11.5 | [−9.7, +32.8] |
+
+> **Within a position, O1's availability factor is identical for every candidate — so a
+> same-position swap cannot be a slot-count effect at all.** It is the *other* consequence of the
+> substitution: O1 shrinks the `msv` term and leaves `daVORP` untouched, which changes the
+> **ratio** of the two inside `value_base = msv + daVORP`. Players with different msv/vorp mixes
+> reorder. This is a **reweighting of marginal-lineup value against replacement value**, it is the
+> single most common first divergence, and **no phase from D86 to D90 has named it.**
+
+Two cautions that are not optional. First, the 18% row is the direction correction D89 §12 already
+insisted on: **O1 does not defer kickers — it takes fewer of them, and takes its first one
+slightly *earlier*** (first K 8.25 → 7.82 on this board). Second, **these means are not causal
+shares.** Conditioning on the *first* divergence conditions on an outcome; a draft that first
+diverges on a WR swap still reallocates K/DST later. The classification describes where the arms
+part ways, it does not partition the margin, and every interval above spans zero.
+
+### 10.3 Reorder or substitution?
+
+| | n | % |
+|---|---|---|
+| neither arm gets the other's player — a true substitution | 25 | 42% |
+| both arms end up with both players — a pure reorder | 17 | 28% |
+| one arm also gets the other's player | 18 | 30% |
+
+**58% of first divergences are at least partly reorderings**: the two engines want the same
+players and disagree about *when*. Only 42% are genuine substitutions where the rosters really
+differ at that spot.
+
+### 10.4 The K/DST conditional, and why it is not the causal test
+
+| | n | mean Δ | 95% CI |
+|---|---|---|---|
+| O1 actually drafted fewer K+DST | 37 | **+54.0** | **[+25.8, +82.2]** |
+| O1 did not | 23 | −13.9 | [−32.6, +4.8] |
+
+Read naively this looks like strong support for the K/DST story — and it directly contradicts
+Track A §5. **It is not a causal estimate.** It conditions on a *mediator*: "did O1 behave
+differently in this draft" is an outcome of the draft, not an assignment. Drafts where O1 reduced
+K/DST are drafts where O1 did something, and a draft where O1 did nothing must score ≈ 0 by
+construction. The pre-registered ablation **A3** is the test that can separate these; §11 reports it.
+
+---
+
+## 11. Phase 8 — the 2026 reality check (diagnostic; the board was not changed)
+
+`target_league`, 2026 board (837 projected, 557 market-ranked), slot 1 — whose first three picks
+*are* overall #1, #20 and #21 in a 10-team snake.
+
+| pick | Y1 | O1 | |
+|---|---|---|---|
+| **#1** | Jaxon Smith-Njigba (WR) 508.1, msv 265.3, vorp 107.7 | **same player**, 471.4, msv 234.8, vorp 107.7 | **identical** |
+| **#20** | Josh Allen (QB) 316.4, msv 337.4, vorp 73.3 | **same player**, 281.3, msv 291.9, vorp 73.3 | **identical** |
+| **#21** | **Jeremiyah Love (RB)** 306.6, msv 243.9, vorp 87.1 | **Trey McBride (TE)** 281.9, msv 169.6, vorp 60.2 | **DIFFERENT** |
+
+**The first divergence is round 3, and it is a 0.2-point tie under Y1.** Y1 scores Love 306.6 and
+McBride **306.4** — a gap of 0.2 points on a 306-point scale. O1 scores McBride 281.9 against
+Love 269.3, a gap of 12.6. **Y1 was on a knife-edge and O1 broke the tie the other way**, which is
+the cleanest single illustration of the whole mechanism: O1's contribution is information where Y1
+has almost none.
+
+What it is worth is visible in the endgame, not at the tie:
+
+| | WR | RB | QB | TE | **K** | DST |
+|---|---|---|---|---|---|---|
+| Y1 | 4 | 3 | 2 | **1** | **4** | 2 |
+| O1 | 4 | 3 | 2 | **3** | **2** | 2 |
+
+**Two kickers become two tight ends.** O1 also ends up with Love anyway at a later pick; Y1 never
+gets McBride. Y1's four kickers on the 2026 board reproduce D89 §14 exactly.
+
+`dynasty_1qb`, same board: **#1, #20 and #21 are all identical** (Pickens at #21 in both). First
+divergence is round 9 — Y1 takes George Kittle (TE), O1 takes Josh Jacobs (RB) — and the roster
+difference is **one kicker becoming one running back**. Final rosters share 13/16.
+
+> **Nothing about the top of a 2026 draft changes, in either format**, which is now the fourth
+> consecutive phase to say so. What changes is a mid-round tie and the number of kickers.
