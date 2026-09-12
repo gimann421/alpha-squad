@@ -146,3 +146,152 @@ instrument**, and the correct report in that case is *unresolved* — not a rank
   new pre-registration. Recorded in §12 as the recommended next question, not smuggled in here.
 * **More seasons, more slots, new weights, new terms, projection changes.** Forbidden by the brief
   and already closed by D88/D89.
+
+---
+
+## 4. Track A — what the committed aggregates alone establish (Phase 2)
+
+Exact arithmetic on D89 §8/§11/§12 and D90 §5/§6. No re-computation, no model, no inference.
+
+### 4.1 Decomposition A — the gain is conversion efficiency, not a better roster
+
+Realized lineup points factor exactly as `primary = conversion_rate × total_roster_points`, so the
+paired difference splits with no residual:
+
+    Δprimary = Δ(rate)·roster_Y1  +  rate_O1·Δ(roster)
+
+| format | rate Y1 | rate O1 | Δ rate | **efficiency term** | **roster term** | total | published |
+|---|---|---|---|---|---|---|---|
+| `target_league` | 0.73243 | 0.75603 | **+0.0236** | **+61.3** | **−12.3** | +49.0 | +49.0 ✅ |
+| `dynasty_1qb` | 0.74470 | 0.75548 | +0.0108 | **+31.2** | −10.4 | +20.8 | +20.8 ✅ |
+| `legacy_2qb_dynasty` | 0.72559 | 0.71288 | **−0.0127** | **−38.8** | **+36.5** | −2.3 | −2.3 ✅ |
+
+**In both 1-QB formats O1 drafts a materially *worse* raw roster and converts it better.** The
+whole of the target-format effect is conversion: +61.3 of efficiency, of which 12.3 is handed back
+as lower raw points.
+
+> **A result D89/D90 did not report, and it sharpens the legacy story.** In `legacy_2qb_dynasty`
+> the signature is **inverted, not absent**: O1's conversion efficiency went *down* (−0.0127), and
+> it avoided a loss only by drafting a **better** raw roster (+51.2 points, +36.5 after conversion).
+> The legacy null is therefore not "the mechanism sat idle" — it is "the mechanism ran backwards
+> and was masked by a roster-quality gain." D89 §9 read the null as coherent-because-inert; the
+> decomposition says the inertness claim is too generous.
+
+### 4.2 Decomposition B — only about a quarter of the gain needs weekly granularity
+
+Both metrics score the **same** rosters, so the season-long delta is "how much better O1's roster
+is under the *incumbent* rule", and the remainder is what only weekly scoring can see.
+
+| format | Δ primary (weekly) | Δ season-long | **weekly-only remainder** | % visible season-long |
+|---|---|---|---|---|
+| `target_league` | +49.0 | **+35.8** | **+13.2** | **73.1%** |
+| `dynasty_1qb` | +20.8 | +13.0 | +7.8 | 62.5% |
+| `legacy_2qb_dynasty` | −2.3 | +16.3 | −18.6 | — (signs disagree) |
+
+> **This is the single most consequential number in Track A.** ~73% of O1's target-format advantage
+> is visible to Y1's own season-long scorer. Weekly evaluation is how O1 *chooses*, but it is not
+> where most of the measured benefit lands — O1's roster is simply better by the old ruler too.
+> Any claim that the gain "comes from weekly lineup optimization" is, at most, a claim about 27%
+> of it.
+
+### 4.3 Decomposition C — bench and availability
+
+`bench_contribution` is computed in hindsight-lineup space, so it is a component of
+`weekly_hindsight`, **not** of the primary metric, and must be compared against that.
+
+| format | Δ hindsight | Δ bench | bench share of hindsight | Δ missed player-weeks | Δ roster pts |
+|---|---|---|---|---|---|
+| `target_league` | +66.7 | +18.5 | **27.7%** | +5.2 | −16.3 |
+| `dynasty_1qb` | +24.8 | +3.2 | 12.9% | +2.0 | −13.7 |
+| `legacy_2qb_dynasty` | +25.1 | +14.6 | 58.2% | −4.6 | +51.2 |
+
+D89 §11 already established that the availability difference is **entirely non-bye** (byes +0.0,
+non-bye absences +5.8): O1 cannot and does not dodge byes — every player has exactly one — so
+"bye-week coverage" is **not** one of the categories the effect can be attributed to. It is
+excluded on measurement, not on judgement. `bench` also carries D89 defect #4's ±4–6 point
+`PYTHONHASHSEED` tie-break uncertainty and should not be read as exact.
+
+---
+
+## 5. Track A — mechanism versus correlation (Phase 5)
+
+### 5.1 The K/DST channel does not have a consistent relationship with the gain
+
+Per-season Pearson correlations between O1's kicker restraint (`ΔnK = O1 − Y1`, negative = more
+restraint) and the realized paired margin:
+
+| format | r(ΔnK, Δprimary) | 95% CI | reading |
+|---|---|---|---|
+| `target_league` | **+0.575** | [−0.44, +0.95] | **less** restraint → **bigger** win |
+| `dynasty_1qb` | **−0.842** | [−0.98, −0.10] | **more** restraint → bigger win |
+
+**The two formats disagree in sign.** Controlling for the season index — which D90 §7 flagged as a
+confound, since `dynasty_1qb`'s effect is perfectly monotone in time (ρ = 1.00) — both partial
+correlations turn positive (+0.99 target, +0.91 dynasty), i.e. in *both* formats more kicker
+restraint predicts a *worse* result once the time trend is removed. With n = 6 and three degrees
+of freedom these partials are far too fragile to assert; the sign disagreement in the raw
+correlations is the durable part, and it is enough to deny a consistent K→gain relationship.
+
+### 5.2 The 2020 natural experiment — the decisive within-format case
+
+D89 §12 records a cell nobody designed but which answers the question directly:
+
+| target 2020 | value |
+|---|---|
+| Y1 kickers | 2.00 |
+| O1 kickers | **2.00** |
+| **K restraint** | **exactly 0.00** |
+| Δ primary | **+41.3** |
+| mean Δ over the five seasons where the K channel *did* fire | +50.5 |
+
+**With the kicker channel completely switched off, O1 still delivers 82% of its average effect.**
+In 2020 the gain came through DST (2.00 → 1.20) and RB depth (2.00 → 3.00) instead. This is a
+real, pre-existing, paired observation on the target format itself — not a model.
+
+### 5.3 The counter-case is just as sharp
+
+| target season | K restraint | Δ primary |
+|---|---|---|
+| **2022** | **−1.90 (largest of the six)** | **−10.4 — the only losing season** |
+| 2024 | −0.60 (second smallest) | **+90.8** |
+| 2025 | −1.00 | **+94.0** |
+
+**The season with the most kicker restraint is the season O1 loses.** Taken with §5.1 and §5.2:
+
+> **K/DST restraint is a marker that O1 was used, not the carrier of its benefit.** It is the most
+> *visible* thing O1 does — D86's prediction Q1 called it "nearly certain, therefore NOT evidence
+> of anything on its own", and that warning has aged well. Five phases of plain-English summaries
+> have led with the kicker count; the kicker count is the part of the story the data supports least.
+
+### 5.4 Dose-response works across formats and fails within them
+
+| format | picks moved off ≤1-slot positions | Δ primary | points per pick |
+|---|---|---|---|
+| `target_league` | 1.37 | +49.0 | +35.8 |
+| `dynasty_1qb` | 0.51 | +20.8 | +40.8 |
+| `legacy_2qb_dynasty` | **0.00** | −2.3 | — |
+
+A single through-origin slope of **+36.4 points per reallocated pick** fits all three formats
+(r = 0.996). **This is a consistency check and not evidence**: three points fitted with one
+parameter, one of which is pinned at the origin, cannot fail informatively, and it is reported
+here only because it is the kind of number that gets quoted as if it were a finding.
+
+The version with real degrees of freedom **contradicts it**:
+
+| format | r(K+DST picks reallocated, Δprimary) across its 6 seasons | 95% CI |
+|---|---|---|
+| `target_league` | **−0.831** | [−0.98, −0.06] ← **wrong sign** |
+| `dynasty_1qb` | +0.478 | [−0.55, +0.93] |
+
+**Seasons in which O1 reallocated more picks are seasons in which it did worse**, in the format
+carrying the headline result.
+
+### 5.5 Why Track A cannot finish the attribution, stated plainly
+
+The per-season tests above are the only ones the committed aggregates support, and they have **six
+clusters against a between-season SD of 40.5 and an MDE of 42.5** — the same resolution wall D88
+and D89 hit. Every per-season correlation here has a 95% interval spanning most of the possible
+range, and I selected among several candidate predictors after seeing the data. **They are strong
+enough to *refute* a specific claim (K restraint carries the effect) because they refute it in both
+directions and in both formats; they are nowhere near strong enough to *establish* an alternative.**
+Establishing one needs the per-pick evidence, which is Track B.
