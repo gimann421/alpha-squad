@@ -6475,3 +6475,165 @@ outside the target format is smaller than this benchmark can measure."
 commits exist only on this branch. Production integrity is unaffected (main is a strict ancestor,
 and nothing on the branch touches models/ or league/), but the brief's premise that main is
 current is not accurate.
+
+---
+
+## D91 — The +49 does not survive a market-board refresh; the mechanism is startable-slot count, not availability; Y1's marginal value is degenerate across the whole bench. Nothing ships.
+
+*Branch `claude/o1-advantage-attribution-azp7k7`. Pre-registration `b0342e5`, committed before any
+ablation ran. Full report: `docs/D91_O1_ADVANTAGE_ATTRIBUTION.md`. **`models/` and `league/`
+byte-identical to Y1; `src/` byte-identical to `origin/main`.***
+
+An architecture diagnosis, not an experiment to ship from. 1318 offline tests pass.
+
+### 1. Two of the brief's premises were wrong, and one of them constrains the phase
+
+**D86–D90 are already merged.** `origin/main` is `dc1bf18`, the same commit as HEAD, zero commits
+between them. The stale ref is the *local* `main` (this container's clone), not the repository.
+D90 §9's "main does not contain D86-D89" was true when written; PR #17 merged it afterwards.
+
+**The D86–D90 artifacts no longer exist.** `d88/d89/d90.json`, `otiers2.json` and the 231 MB
+database are gitignored by design, and this container was cloned fresh. So "reuse the
+already-computed paired drafts" could not be followed. D91 split into Track A (exact arithmetic on
+the committed aggregate tables) and Track B (rebuild the database and re-run the grid, recording
+the per-pick traces D89/D90 did not keep).
+
+### 2. The headline result: the effect is sensitive to the market-board vintage
+
+The database was rebuilt from source. Weekly rows, projected board size, uncertainty predictions
+and consumption demand reproduce D89 §2.2 **exactly** in all six seasons. The market board does
+**not** — DynastyProcess's `db_fpecr` has gained historical rows (2020: 533 ranked vs D89's 458).
+Identical code, identical projections, identical realized outcomes, one refreshed ECR board:
+
+| | published | D91 rebuild |
+|---|---|---|
+| target | +49.0, CI [+6.5, +91.5], SD 40.5 | **+28.0, CI [−40.7, +96.7], SD 65.4** |
+| dynasty | +20.8, CI [−30.8, +72.3] | **+31.5, CI [+4.6, +58.4]** |
+
+Season-level agreement between vintages is **r = −0.652** (target): the per-season pattern
+*anti*-correlates. Y1's own behaviour moved too (first-RB round 4.15 → 5.27), so this is not a bug
+confined to the O1 path. **The two formats swapped which one clears G8.** D90 §7's monotone trend
+(ρ = +0.994) comes out −0.397; D90 flagged it as post-hoc and declined to claim it, and that
+caution was correct.
+
+On the refreshed board **94% of the target margin is 2022**; dropping it leaves +1.9. G6 passes
+anyway, so the gate cannot see this. Dynasty is now the better-behaved format (all six seasons
+positive, worst LOSO +24.9).
+
+Pre-registered gate **R0 therefore FAILS**, and nothing in Track B is labelled as a decomposition
+of the published +49.0. D89's bit-identical control could not have caught this: it re-ran against
+*the same stored database*. Reproducibility against a frozen snapshot and robustness to a refreshed
+one are different properties, and only the first was ever tested.
+
+### 3. Y1's defect, measured (`scripts/d91_msv_degeneracy.py`)
+
+On a roster whose ten starting slots are full, asking each objective what the **#20 player at each
+position** is worth:
+
+| pos | slots | P(hole) | Y1 msv | O1 msv |
+|---|---|---|---|---|
+| RB | 4 | 0.490 | **0.00** | 77.14 |
+| WR | 4 | 0.440 | 0.48 | 105.10 |
+| TE | 3 | 0.345 | **0.00** | 59.32 |
+| QB | 1 | 0.116 | **0.00** | 20.22 |
+| K | 1 | 0.062 | **0.00** | 6.51 |
+| DST | 1 | 0.060 | **0.00** | 6.13 |
+
+**Y1's entire spread across six bench candidates is 0.48 points.** This is sharper than D84's "the
+bench is priced at zero": Y1 prices every bench candidate at zero *simultaneously*, so rounds 11–16
+carry no marginal-lineup signal at all and fall through to daVORP — which D85 measured as
+over-valuing K 5.34× and DST 8.10×. Every link in that chain is separately measured.
+
+### 4. The ablations (pre-registered in `b0342e5`; input overrides only, no code change)
+
+| arm | rates | margin vs O0 | share of O1 | nK |
+|---|---|---|---|---|
+| O1 | measured | +28.0 | 100% | 2.32 |
+| **A1** | flat pooled | **+34.5** | **123%** | 2.53 |
+| **A2** | 1.0 everywhere | **+0.0** | **0%** | 2.98 |
+| **A3** | K/DST → 1.0 | +32.5 | 116% | 2.28 |
+
+**P1 HOLDS exactly.** A2 reproduces O0 on all 60 rosters with max |Δ| = 0.000000000000. The claim
+that O1 differs from Y1 in exactly one way is now verified, not asserted.
+
+**P2 HOLDS, more strongly than registered.** Flattening the per-position availability differential
+*increases* the margin. **The availability data is nearly inert**; what carries the behaviour is
+`P(hole) = 1 − rate^slots` with a common rate, i.e. pure **startable-slot count** — a property of
+the league's lineup, needing no injury data.
+
+**P3 WAS NOT TESTED — a design error, recorded rather than reinterpreted.** I registered that A3
+would push the kicker count back toward Y1's. That is backwards: at rate 1.0 a backup kicker's
+expected marginal value is *exactly zero*, which is **below** what O1 pays (6.5), so A3
+*intensifies* the restraint. It does (nK 2.28 vs O1's 2.32). Removing the K/DST channel needs a
+behavioural constraint on the count, which is new code and a new pre-registration. **So the
+K-carrier question is still not settled by an input manipulation.** What A3 does show is that the
+margin is insensitive to the backup K/DST price anywhere in [0, 6.5] — both are ≈0 beside a backup
+RB's 77 — pointing at *elevation of multi-slot depth* rather than *suppression of K/DST*.
+
+### 5. Two corrections to my own earlier claims in this phase
+
+**Track A over-read the K/DST refutation.** Using Y1's kicker level ("room to fix") rather than
+ΔnK, two of three tests support the K story: within D91's board r = +0.805, and a between-board
+natural experiment (same seasons, two vintages) r = +0.601. Track A's decisive 2020 counterexample
+(no room to fix, still +41.3) does **not** replicate — on this board that cell returns +9.3,
+exactly as the K story predicts. Only the narrow claim survives: ΔnK has inconsistent signs across
+*formats*.
+
+**A roster-level counterfactual splits the formats.** Swapping only Y1's surplus K/DST for O1's
+surplus depth and changing nothing else: target **+76.0 [+58.5, +93.6]** for that step alone and
+**−39.6 [−61.8, −17.4]** for everything else O1 does — i.e. the swap beats O1 itself, and O1's
+other changes measure as harmful. Dynasty splits the other way (−11.2 / +50.4). Partly explained
+(Y1 hoards kickers in target, nK 2.98, and barely in dynasty, 2.08), but the sign of the second row
+is a genuine unresolved disagreement.
+
+### 6. What Track A establishes exactly (no inference)
+
+`Δprimary = Δ(conversion rate)·roster_Y1 + rate_O1·Δroster` reproduces all three published numbers
+to the decimal: target +61.3 efficiency − 12.3 roster quality = +49.0; dynasty +31.2 − 10.4 =
++20.8; legacy **−38.8 + 36.5 = −2.3**. **The legacy signature is inverted, not absent** — O1's
+conversion efficiency *fell* there and it avoided a loss only by drafting a better raw roster. D89
+read that null as coherent-because-inert; it is not inert.
+
+**73.1% of the target margin is visible to Y1's own season-long scorer** (+35.8 of +49.0), so at
+most ~27% needs weekly granularity at all.
+
+The brief's seven-category additive accounting **cannot be produced**: bench double-counts weekly
+optimization and is on a different (hindsight) scale; K/DST allocation and positional depth are one
+reallocation seen from two sides; availability has the wrong sign (O1's players miss *more* time,
++5.2 player-weeks, all non-bye); byes are +0.0; future-board effects have no shared counterfactual.
+
+### 7. RB question closed with algebra (Phase 7)
+
+At an empty roster O1's marginal term reduces exactly to `rate(position) × projection` — the Y1
+term times a positive per-position factor (2026: WR 0.8748, TE 0.8746, QB 0.8649, RB 0.8450). **A
+positive rescale cannot reorder a board**, which is precisely the "lowers every score, preserves
+the ordering" behaviour D89 §14 and D90 §10 observed without explaining. So O1 was never *capable*
+of changing #1 at any projection error. And to the extent the rescale is non-uniform it points the
+**wrong way**: RB's measured availability is the lowest of the six positions, so O1 discounts elite
+RBs most. Elite-RB under-projection is projection-layer work or nothing.
+
+### 8. Minimum viable architectural change (Phase 9) — option **G**, smaller than A–F
+
+> Give `marginal_starter_value` a non-degenerate, **startable-slot-aware** value for players who
+> cannot crack the current lineup. Nothing more.
+
+It needs no availability rates (A1), no weekly objective (73% is season-long-visible), no bye
+reasoning (byes +0.0), no K/DST special-casing (A3), and no Monte Carlo — `1 − rate^slots` is
+closed form against O1's 180× cost. D85's closed value-base *algebra* is untouched: this changes
+what one term **is**, not how terms combine.
+
+**Not actionable yet.** The benchmark cannot currently certify any decision-layer change, because
+the quantity it measures moves ~20 points and swaps which format looks clean when the ECR board is
+re-scraped. **Instrument before objective.**
+
+### 9. Decision
+
+**DO NOT SHIP. Y1 remains production.** `src/` is byte-identical to `origin/main`; only `docs/` and
+one read-only `scripts/` diagnostic changed. D91 adds a *second, independent* reason beyond D89/D90's
+G7: the headline result is not robust to a market-board refresh.
+
+**Next question:** pin and version the ECR board as an immutable artifact, then re-run
+D84/D85/D89/D90's headline contrasts on two pinned vintages and report the spread. Second, and
+cheap: does a closed-form `1 − rate^slots` marginal value reproduce O1's picks at 1× cost? A1 says
+the availability differential is inert, so it very likely does — but that needs a new scoring path
+and its own pre-registration, which is why D91 did not run it.

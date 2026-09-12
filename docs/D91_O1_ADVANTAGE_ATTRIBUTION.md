@@ -735,3 +735,205 @@ excluding zero. **That is a genuine disagreement and I cannot resolve it from th
    differ from the all-60 figures in §9.
 3. **It still conditions on outcomes**, exactly like §10.4. The swap is defined by what each arm
    drafted. **Ablation A3 remains the only test in this phase that manipulates an input.**
+
+---
+
+## 14. Phase 4 — the three pre-registered ablations
+
+60 cells per arm, `target_league`, same board as §9. Each ablation overrides
+`SeasonStatic.availability_rates` and nothing else.
+
+| arm | rates | primary margin vs O0 | 95% CI | share of O1 | nK | roster ∩ O1 |
+|---|---|---|---|---|---|---|
+| **O0** | — (Y1) | 0 | — | — | 2.98 | 13.22 |
+| **O1** | measured | **+28.0** | [−40.7, +96.7] | 100% | 2.32 | 16.00 |
+| **A1** | flat pooled (0.890) | **+34.5** | [−32.8, +101.8] | **123%** | 2.53 | 14.73 |
+| **A2** | 1.0 everywhere | **+0.0** | [+0.0, +0.0] | **0%** | 2.98 | 13.22 |
+| **A3** | K/DST → 1.0 | **+32.5** | [−35.4, +100.4] | **116%** | 2.28 | 15.33 |
+
+### P1 — **HOLDS**, exactly
+
+**A2 reproduces O0 on every one of 60 drafted rosters, with `max |Δ primary| = 0.000000000000`.**
+The central structural claim of D86–D90 — that O1 differs from Y1 in exactly one way, and that
+way is the availability-rate vector — is now verified rather than asserted. This was the ablation
+that could have invalidated five phases of work, and it does not.
+
+### P2 — **HOLDS, and more strongly than I registered**
+
+I predicted A1 would keep "most" of the signature, and then (§7.3, before any result) revised the
+strength downward because flattening roughly halves the RB:K separation. **Both were too cautious:
+A1 retains 123% of O1's effect.** Flattening the rates makes the ablation slightly *better* than
+the real thing.
+
+> **The measured per-position availability data is not doing the work.** What survives flattening
+> is `P(hole) = 1 − rate^slots` with a *common* rate — i.e. pure **startable-slot count**. O1 is
+> presented as an availability-aware objective; the availability part is close to inert, and the
+> part that matters is a structural property of the lineup that needs no injury data at all.
+
+### P3 — **NOT TESTED. The ablation I registered does not do what I said it would.**
+
+I registered: *"If the +49 is carried by K/DST restraint, A3 should collapse toward O0 **and** its
+kicker count should return toward Y1's 3.45."* **That is backwards, and the error is mine.**
+
+At rate 1.0 a backup kicker's expected marginal value is *exactly zero* — no hole ever opens at a
+one-slot position whose incumbent always plays. So A3 prices backup K/DST **below** O1 (0 against
+6.5), which *intensifies* the restraint rather than removing it. The data confirm the direction:
+**A3 drafts fewer kickers than O1, not more** (2.28 vs 2.32), and fewer defenses (1.70 vs 1.95).
+
+Removing the K/DST channel would have required constraining O1's K/DST *count* to Y1's — a
+behavioural constraint, not an input override, and therefore new code and a new pre-registration.
+**So the K-carrier question is still not settled by an experiment that manipulates an input**, and
+§12's correction stands unresolved rather than resolved.
+
+What A3 *does* establish is narrower but real: **the effect is insensitive to how backup K/DST are
+priced anywhere in [0, 6.5]** — changing that price moves the margin from +28.0 to +32.5. Both
+values are ≈ 0 next to a backup RB's 77. That is evidence the mechanism is the **elevation of
+multi-slot depth**, not the **suppression of single-slot positions** — the same conclusion §13's
+counterfactual reached from the other side, by a route that does not condition on an outcome.
+
+A1 makes the same point independently: it exercises **less** kicker restraint than O1 (nK 2.53 vs
+2.32) and produces a **larger** margin.
+
+### The finding that overshadows all three: on this board the effect is one season
+
+| | target | dynasty |
+|---|---|---|
+| season means | +9.3 / +17.6 / **+158.7** / −20.4 / −5.7 / +8.5 | +64.1 / +12.1 / +35.3 / +17.0 / +58.6 / +1.8 |
+| all six | +28.0, CI [−40.7, +96.7] | **+31.5, CI [+4.6, +58.4]** |
+| **worst leave-one-season-out** | **+1.9 (drop 2022)** | **+24.9 (drop 2020)** |
+| largest single season's share | **2022 = 94%** | 2020 = 34% |
+
+**94% of the target-format margin on this board is 2022**, and dropping it collapses the effect to
++1.9. G6 ("LOSO margin stays positive") technically passes, which shows the gate cannot see this.
+All three ablations reproduce the same 2022 spike (+158.7 / +161.1 / +158.7), so it is a property
+of that season's board and not of any arm.
+
+**Dynasty is the opposite and is now the better-behaved format**: all six seasons positive, worst
+LOSO +24.9, no season above 34%, CI excluding zero. On D89/D90's board this was reversed — target
+was the robust one and dynasty was carried by its back half. **Which format looks robust flips
+with the board vintage**, which is §9's finding arriving from a third direction.
+
+---
+
+## 15. Phase 9 — the minimum viable architectural change
+
+Against the brief's options, the evidence selects **G — something else**, and it is smaller than
+any of A–F:
+
+> **Give `marginal_starter_value` a non-degenerate, startable-slot-aware value for players who
+> cannot crack the current lineup.** Nothing more.
+
+Everything that recommendation rests on is a measurement in this phase:
+
+| the change does **not** need | evidence |
+|---|---|
+| measured availability rates | **A1** retains 123% of the effect with the differential flattened away |
+| per-position injury modelling | same |
+| a weekly objective | **73%** of the margin is visible to season-long scoring (§4.2) |
+| bye-week reasoning | byes are +0.0 between the arms (D89 §11) |
+| special handling of K/DST | **A3**: the margin is insensitive to their backup price across [0, 6.5] |
+| a bench bonus, a positional rule, a round rule | none is proposed; the degeneracy is the defect |
+| 180× compute | `1 − rate^slots` is closed form; O1's cost is Monte Carlo it does not need |
+
+**Why it is the smallest coherent change:** §7.2 measured Y1's marginal-value spread across six
+bench candidates at **0.48 points**. A term carrying no information is not a term that needs
+re-weighting — it needs to *exist*. Restoring it is one function, and D85's closed result (the
+value-base **algebra** is exhausted) is untouched, because this changes what one term *is*, not
+how the terms combine.
+
+**What is explicitly not recommended:** replacing the objective with O1 (option B). O1 buys the
+same behaviour with a 180× Monte Carlo and an availability model that A1 shows is nearly inert,
+and §13 found its non-K/DST changes measure as net *harmful* in the target format.
+
+**And the recommendation is not actionable yet**, for the reason in §9: this benchmark cannot
+currently certify any decision-layer change, because the quantity it measures moves by ~20 points
+and swaps which format looks robust when the ECR board is re-scraped. **Instrument before
+objective.**
+
+---
+
+## 16. Phase 10 — shipping decision
+
+> ### **DO NOT SHIP. Y1 remains production.**
+
+Verified rather than asserted: `src/` is **byte-identical to `origin/main`** (empty diff);
+`src/alpha_squad/models/` is at tree `73b408e9…`, unchanged since D78 shipped Y1;
+`src/alpha_squad/league/` is at `d4cfd00e…`, unchanged since the D84 baseline. The only changes on
+this branch are `docs/` and one read-only diagnostic under `scripts/`. Offline suite: **1318
+passed**.
+
+D91 adds a **second, independent** reason not to ship, which did not exist before this phase.
+D89/D90 blocked O1 on G7 (cross-format sign). D91 blocks it again on **robustness**: the headline
+result is not stable to a market-board refresh, and on the refreshed board 94% of the target-format
+margin is a single season.
+
+---
+
+## 17. What must NOT change
+
+* **`models/` and `league/`.** Untouched here and no reason to touch them.
+* **The projection layer.** §6 closes the RB question with algebra: a positive per-position
+  rescale of the MSV term cannot reorder the board, so no objective of this shape reaches
+  elite-RB under-projection. That is projection-layer work or nothing.
+* **The gates.** G7 is not redefined, G6 is not re-thresholded despite §14 showing it cannot see a
+  94%-one-season result, and nothing is relaxed because a result is attractive.
+* **K/DST behaviour directly.** Every phase's advice — *take the kicker you need, then stop* —
+  still holds and still needs no code change.
+* **D85's closed result.** The value-base algebra stays closed; §15 changes what one term is, not
+  how terms combine.
+
+---
+
+## 18. The most valuable next research question
+
+> **Pin the market board, then measure how much of every published draft-layer number is board
+> vintage.**
+
+Not another objective, not more seasons, not a new gate. D91's §9 shows the benchmark has an
+uncontrolled input that moves the answer by more than the effect being measured. Concretely:
+
+1. **Snapshot and version the ECR board** as an immutable artifact, the way `data/raw/` already
+   treats everything else, so a phase can state which board it measured against.
+2. **Re-run D84/D85/D89/D90's headline contrasts on two pinned vintages** and report the spread.
+   That is a day of compute against a question that currently invalidates comparisons across
+   phases.
+3. Only then revisit §15's change, pre-registered against a pinned board.
+
+The second-most valuable question, and it is cheap: **does a closed-form `1 − rate^slots` marginal
+value reproduce O1's picks?** A1 says the availability differential is inert, so it very likely
+does — at 1× cost instead of 180×. It needs a new scoring path and therefore its own
+pre-registration, which is why D91 did not run it.
+
+---
+
+## 19. Plain-English trust assessment
+
+**Nothing about Alpha's advice at the top of a 2026 draft changes.** Four phases have now said so
+and D91 says it on a rebuilt board: #1 and #20 are the same player under both engines, in both
+formats. If you want a different opening, this is not it.
+
+**What O1 changes is still the endgame, and the practical advice is unchanged: take the kicker you
+need, then stop.** On the 2026 board Y1 finishes with four kickers and one tight end; O1 with two
+and three. You do not need this code change to act on that.
+
+**Three things this phase learned that previous phases did not:**
+
+1. **Y1's real defect is sharper than "it ignores the bench".** Asked what six different bench
+   players are worth, Y1 answers with a spread of **half a point** — it cannot tell a backup
+   running back from a backup kicker, so the last six rounds are decided by a term that
+   over-values kickers five-fold. That is a missing signal, not a mis-weighted one.
+
+2. **O1's availability model is nearly inert.** Replace the measured injury rates with one flat
+   number for every position and the result gets slightly *better*. What is doing the work is that
+   a running back has four lineup slots to reach and a kicker has one — a fact about the league
+   rules, not about football.
+
+3. **The headline number is less solid than it looked.** Re-scraping the same public ranking source
+   moved the target-format result from **+49 to +28**, inverted its season-by-season pattern, and
+   swapped which of the two formats looks statistically clean. On the refreshed board **94% of the
+   remaining effect is one season (2022)**. The direction has now held up four times across two
+   boards and two formats; the *size* has not held up once.
+
+**So: the idea is real, the measurement is not yet trustworthy, and the fix is probably smaller
+than the thing that was built.** Y1 stays in production, and the next piece of work is on the
+ruler rather than on the candidate.

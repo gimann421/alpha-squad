@@ -3,7 +3,51 @@
 Living summary of what is implemented, validated, and outstanding. Updated at the end of every
 milestone. See `docs/TRACEABILITY.md` for the acceptance-criteria-level mapping.
 
-## Status: M42 complete (D90) — **O1's mechanism reproduces on a second, independent board (kickers 2.40 → 2.00), and the effect is same-signed at +20.8 — but below the economic threshold and unresolved. G7 still fails. Nothing shipped.**
+## Status: M43 complete (D91) — **The +49 does not survive a market-board refresh (+28.0, 94% of it one season); O1's availability model is nearly inert and the real mechanism is startable-slot count; Y1's marginal value is degenerate across the entire bench. Nothing shipped.**
+
+An architecture diagnosis, not an experiment to ship from. Full report:
+`docs/D91_O1_ADVANTAGE_ATTRIBUTION.md`. Ablations pre-registered at `b0342e5` **before any of them
+ran**. `models/` and `league/` byte-identical to Y1; `src/` byte-identical to `origin/main`.
+
+**Two premises in the brief were wrong.** D86–D90 are already merged (`origin/main` == HEAD; the
+stale ref is the local `main`). And the D86–D90 artifacts **no longer exist** — they are gitignored
+and the container was cloned fresh — so "reuse the already-computed paired drafts" was impossible
+and the phase split into Track A (arithmetic on committed tables) and Track B (rebuild and re-run).
+
+**The headline finding is about the ruler, not the candidate.** The rebuilt database reproduces
+D89 §2.2's weekly rows, board size, uncertainty predictions and consumption demand **exactly**; the
+market board does not, because DynastyProcess's `db_fpecr` has gained historical rows. With
+identical code, projections and outcomes, the target-format margin goes **+49.0 → +28.0**, its CI
+stops excluding zero, the per-season pattern **anti-correlates (r = −0.652)**, and **94% of what
+remains is 2022** (drop it and the effect is +1.9). Dynasty moves the other way (+20.8 → +31.5) and
+is now the better-behaved format. **The two formats swapped which one clears G8.** D90 §7's
+monotone trend (ρ = +0.994) comes out −0.397 — its author flagged it as post-hoc and declined to
+claim it, and that caution was right. Pre-registered gate **R0 fails**, so nothing in Track B is
+presented as a decomposition of the published +49.0.
+
+**Y1's actual defect, measured** (`scripts/d91_msv_degeneracy.py`): on a roster with all ten
+starting slots full, Y1's marginal-starter-value across six bench candidates spans **0.48 points**
+(RB 0.00, K 0.00, DST 0.00 …) against O1's 99. Y1 prices the whole bench at zero *simultaneously*,
+so rounds 11–16 carry no lineup signal and fall through to daVORP — which D85 measured as
+over-valuing K 5.34× and DST 8.10×.
+
+**The ablations.** **A2** (rates → 1.0) reproduces Y1 on all 60 rosters with max |Δ| =
+`0.000000000000`, verifying that O1 changes exactly one thing. **A1** (flat pooled rate) retains
+**123%** of the effect — **the measured availability data is nearly inert**, and what carries the
+behaviour is `P(hole) = 1 − rate^slots`, i.e. pure **startable-slot count** (a fact about the
+lineup, not about injuries). **A3 did not test what it was registered to test** — at rate 1.0 a
+backup kicker is worth *exactly zero*, below what O1 pays, so it *intensifies* the restraint;
+recorded as a design error, and the K-carrier question remains unsettled by any input manipulation.
+
+**Minimum viable change (option G, smaller than A–F):** give `marginal_starter_value` a
+non-degenerate, startable-slot-aware value for players who cannot crack the current lineup —
+no availability model, no weekly objective, no Monte Carlo, no K/DST special-casing. **Not
+actionable yet: instrument before objective.**
+
+**Next question:** pin and version the ECR board as an immutable artifact, then re-run
+D84/D85/D89/D90's headline contrasts on two pinned vintages and report the spread.
+
+### Earlier status: M42 complete (D90) — **O1's mechanism reproduces on a second, independent board (kickers 2.40 → 2.00), and the effect is same-signed at +20.8 — but below the economic threshold and unresolved. G7 still fails. Nothing shipped.**
 
 D89's recommendation, executed: run O1 unchanged on a third format whose lineup actually contains
 K and DEF slots. 120 drafts. Full report: `docs/D90_CROSS_FORMAT_GENERALIZATION.md`.
