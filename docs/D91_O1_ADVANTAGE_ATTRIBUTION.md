@@ -410,3 +410,46 @@ prediction rather than a result: flattening the rates to their pooled mean (0.89
 for K from 0.062 to **0.110** and for RB from 0.490 to 0.372, cutting the RB:K separation from
 **7.9× to 3.4×** — halved, but nowhere near Y1's 1.0×. So **P2's direction should hold and its
 strength was overstated**: A1 should keep the behaviour, but less sharply than I registered.
+
+---
+
+## 8. Phase 2 — why the requested additive accounting cannot be produced as specified
+
+The brief asks for
+
+    O1 advantage = weekly lineup optimization + bench/insurance + K/DST allocation
+                 + positional depth + availability + future-board effects + other
+
+with each category carrying a mean, a median and a share of the total. **That accounting cannot
+be produced honestly, and the reason is not a measurement limitation — it is that the categories
+are not disjoint events.** Taking them one at a time:
+
+| requested category | status | why |
+|---|---|---|
+| weekly lineup optimization | **separable: +13.2 of +49.0 (26.9%)** | The season-long and weekly metrics score the *same* rosters, so their difference isolates what only weekly granularity can see. This is the one clean orthogonal split. |
+| bench / insurance | **not separable — double-counts the above** | A bench player entering the lineup *is* weekly lineup optimization. `bench_contribution` measures the same events from the player side rather than the slot side. It is also on the **hindsight** scale (+18.5 of +66.7 = 27.7%), not the primary one, so it cannot be added to a primary-metric total at all. |
+| K/DST allocation | **not assignable a point value** | Measurable as behaviour (−1.14 K+DST picks per draft), but §5 refutes it as a carrier: sign-inconsistent across formats, off entirely in target 2020 (+41.3), and strongest in the only losing season (2022, −10.4). A category whose dose does not predict the response cannot be given a share of it. |
+| positional depth | **the same object as the row above** | The +1.39 picks onto flex-eligible positions and the −1.37 off single-slot positions are one reallocation seen from two sides. Listing both double-counts every pick. |
+| availability | **wrong sign** | O1's players miss **more** time, not less (+5.2 player-weeks, all of it non-bye), and O1's worst-week exposure is worse (7.20 vs 6.43 of 16 unavailable). O1 does not buy availability; it buys a replacement for when availability fails. |
+| bye-week coverage | **excluded on measurement** | D89 §11: byes are +0.0 between the arms and essentially fixed at one per rostered player. O1 cannot dodge a bye and does not. |
+| future-board effects | **not measurable here** | Would require tracking, per pick, which future players each choice denied the other arm. Once the arms diverge their boards differ, so there is no shared counterfactual to difference against. |
+
+**What can be stated as an accounting, and it has two terms rather than seven:**
+
+| term | target (+49.0) | dynasty (+20.8) |
+|---|---|---|
+| conversion efficiency — same picks converted into more lineup points | **+61.3 (125%)** | +31.2 (150%) |
+| raw roster quality — O1 drafts a *worse* pile of points | **−12.3 (−25%)** | −10.4 (−50%) |
+
+and one orthogonal split *within* the first term:
+
+| | target | dynasty |
+|---|---|---|
+| visible to season-long scoring (the incumbent ruler) | **+35.8 — 73.1%** | +13.0 — 62.5% |
+| requires weekly granularity to see at all | **+13.2 — 26.9%** | +7.8 — 37.5% |
+
+> **Stated plainly, because it is the answer to the brief's headline question:** the roughly +49
+> is *not* mostly a weekly-lineup effect, *not* a bye effect, *not* an availability effect, and
+> *not* demonstrably a kicker effect. It is **one reallocation of about 1.4 late picks from
+> positions with a single startable slot to positions with three or four**, and about three
+> quarters of its value is visible without any weekly machinery at all.
