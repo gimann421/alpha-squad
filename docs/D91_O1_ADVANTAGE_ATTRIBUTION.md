@@ -295,3 +295,52 @@ range, and I selected among several candidate predictors after seeing the data. 
 enough to *refute* a specific claim (K restraint carries the effect) because they refute it in both
 directions and in both formats; they are nowhere near strong enough to *establish* an alternative.**
 Establishing one needs the per-pick evidence, which is Track B.
+
+---
+
+## 6. Phase 7 — the RB question, closed with a reason rather than an observation
+
+D88 and D89 both measured that O1 gives **no** protection against elite-RB under-projection: Y1
+and O1 each need **+75** on the elite-RB cell before taking an RB at #1, against a measured
+historical bias of ≈ **+47.7**, and neither moves at #20/#21 under perturbations through +100.
+D89 §13 reported this empirically. **D91 can now say why, from the algebra, and the reason is
+stronger than the observation.**
+
+At the **first pick the roster is empty**, so for any candidate `c`:
+
+    E[U({c})] − E[U({})]  =  rate(pos_c) · proj_c  −  0
+
+i.e. O1's MSV term at the top of the board is the Y1 MSV term **multiplied by that position's
+availability rate**. The published 2026 scores confirm it:
+
+| phase | player | pos | Y1 msv | O1 msv | factor |
+|---|---|---|---|---|---|
+| D89 target | St. Brown | WR | 278.7 | 243.8 | 0.8748 |
+| D89 target | McBride | TE | 197.8 | 173.0 | 0.8746 |
+| D89 target | Allen | QB | 329.4 | 284.9 | 0.8649 |
+| D90 dynasty | **McCaffrey** | **RB** | 276.7 | 233.8 | **0.8450** |
+
+Two consequences:
+
+1. **A near-uniform positive rescaling of the value base cannot reorder the board.** That is
+   exactly what D89 §14 and D90 §10 observed without explaining — "lowers every score, preserves
+   the ordering, `vorp` identical by construction". So O1 was never *capable* of changing the #1
+   pick through this channel, at any projection error. The +75 threshold is a property of the
+   terms O1 does **not** touch (daVORP, opportunity cost, the multipliers).
+
+2. **To the extent the rescaling is not uniform, it points the wrong way.** The factor is the
+   position's availability rate, and **RB's measured rate (85.3%) is the lowest of the six
+   positions**. So O1 discounts elite RB value *more* than any other position — structurally, as a
+   consequence of RBs missing the most time, not as a tuning choice. Taken at face value that makes
+   the elite-RB problem marginally **worse**, not better.
+
+   *Honest limit on point 2:* a single player's factor is a 200-draw Monte Carlo average, so it
+   carries roughly ±2.4% of sampling noise; the McCaffrey-vs-St.-Brown gap (0.845 vs 0.875) is
+   about one standard error of that. The *expectation* argument is solid; this one observed pair
+   is consistent with it rather than proof of it.
+
+> **The RB question is formally closed, and D91 adds no new reason to reopen it.** D88's and D89's
+> answer stands, and now has a mechanism: the weekly roster-utility objective operates on the
+> marginal-lineup term, which at an empty roster is a positive per-position rescale — and no
+> positive rescale can rescue a ranking error. Fixing elite-RB under-projection is a
+> **projection-layer** problem; no decision-layer objective of this shape can reach it.
