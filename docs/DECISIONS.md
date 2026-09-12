@@ -6637,3 +6637,143 @@ D84/D85/D89/D90's headline contrasts on two pinned vintages and report the sprea
 cheap: does a closed-form `1 − rate^slots` marginal value reproduce O1's picks at 1× cost? A1 says
 the availability differential is inert, so it very likely does — but that needs a new scoring path
 and its own pre-registration, which is why D91 did not run it.
+
+---
+
+## D92 — The historical board is IMMUTABLE: D91's vintage finding is retracted, and the real irreproducibility is an uncommitted runner. Nothing ships.
+
+*Branch `claude/o1-advantage-attribution-azp7k7`. Full report:
+`docs/D92_BOARD_VINTAGE_INSTRUMENT.md`. **`models/` and `league/` byte-identical to Y1; the only
+`src/` change is two additive research files no production path imports.*** 1338 tests pass.
+
+An instrumentation/reproducibility phase. The objective did not change and D91's Option G was not
+implemented.
+
+### 1. Retraction: D91's central claim was my measurement error
+
+D91 reported that the historical ECR board is mutable (533 vs 458 market-ranked players in 2020)
+and built its headline on it. **D89's column counts market-ranked players *inside the projected
+board*; D91 counted every `market_rank` entry**, a superset including hundreds of ranked players
+with no projection. Measured consistently, the board reproduces exactly — 458/490/496/484/515/480
+and coverage 74.8/77.0/76.2/79.3/85.5/76.3 to the decimal — and so does **every** other published
+board figure: composition (36 values), consumption demand (24), best K rank, best DST rank,
+uncertainty counts, ECR dispersion counts, page types. **~90 published input values, all matching.**
+
+D91 §9, §12 and its "between-board natural experiment" (r = +0.601) all rest on that error: there
+was only ever **one board**, so none of them compares two vintages. D91's per-draft measurements
+stand; its board-vintage explanation does not.
+
+### 2. Proven from upstream, not inferred
+
+`db_fpecr.parquet` is committed **weekly** to the public `dynastyprocess/data` repo. A blobless
+clone shows the blob at commit `9338630` (2026-09-11T04:31:15Z) hashes to
+`a966176d2966591c4986833aefafb4c74e86f848ca1ba708f43e6a9e79e29525` — byte-for-byte the
+`snapshot_registry` row and the file on disk. The previous board commit is 2026-09-04 and the next
+is after D91; **D88 (14:39), D89 (17:46), D90 (21:19) and D91 (next day 11:54) all read the same
+bytes**, and `db_playerids.csv` likewise (last changed 04:55, also before D89).
+
+### 3. The decisive measurement: the file is append-only with respect to history
+
+Four vintages materialised from upstream git (2026-07-03, 08-28, 09-04, 09-11). Hashing exactly the
+`(player, position, rank)` map the draft consumes:
+
+| series | league | Jul/Aug board-seasons 2020–2025 | across all four vintages |
+|---|---|---|---|
+| `ro` | target_league | 6 | **IDENTICAL** |
+| `do` | dynasty_1qb | 6 | **IDENTICAL** |
+| `dsf` | legacy_2qb_dynasty | 5 | **IDENTICAL** |
+
+**17/17 historical board-seasons identical.** Positive control, so this is not a broken diff: the
+same hash over the **live** 2026 season *does* move — 95 players added, 478 of 482 common ranks
+changed, mean |Δrank| 14.2 — while season 2024 shows **0 added, 0 removed, 0 rank changes**. The
+file grows 1.78M → 1.83M rows in ten weeks purely by appending new scrapes.
+
+**So no backtest over 2020–2025 can depend on board vintage**, and the brief's two-vintage
+Y1-vs-O1 comparison is degenerate. D92 did **not** run it (≈8 h of compute to re-derive a logical
+certainty) and says so rather than presenting a completed comparison.
+
+### 4. Determinism and training also check out
+
+Rosters and every gate-bearing metric are invariant across `PYTHONHASHSEED` 0–5 in separate
+processes; only `bench_contribution` moves (2.20 points at one seed) — D89 defect #4's FLEX
+tie-break, which enters no gate. A full retrain on identical data reproduced the assembled board
+**bit-identically in all seven seasons**, so `random_seed=42` holds despite `thread_count` being
+unset. D91's own recorded values re-run exactly.
+
+### 5. Established cause: the runner was never committed
+
+Every documented input reproduces; the simulation is deterministic; **and yet D89's published
+control-arm behaviour does not come back, in either format**:
+
+| published Y1 figure | D89 | now |
+|---|---|---|
+| target first RB / WR / TE round | 4.15 / 1.58 / 6.70 | **5.27 / 1.27 / 5.87** |
+| target kickers drafted | 3.45 | **2.98** |
+| legacy first QB / TE round | 1.88 / 5.90 | **2.20 / 6.54** |
+
+Neither available opponent strategy closes the gap (both give identical early rounds, both
+differing from D89), and the aggregation matches the harness's own `first_round_by_position`.
+Identical inputs + a deterministic transformation + different outputs ⇒ **the transformation
+differed**, and D88/D89/D90 each ran their grid from a script that was never committed. This is
+worse than a mutable board: a board can be pinned by hash; uncommitted code leaves nothing to pin.
+
+**Which** runner difference it was **cannot be determined** — the code no longer exists — and no
+specific story is offered, because any would be invention.
+
+**Consequence:** D86–D90's published draft-layer numbers, **including the +49.0 six phases have
+cited, are not reproducible and should not be quoted as measurements of this system.**
+
+### 6. The instrument, now versioned
+
+* `src/alpha_squad/evaluation/board_vintage.py` — a vintage is a verifiable triple (upstream board
+  sha256, upstream identity-map sha256, per-season hash of `load_season_projections`, which spans
+  three tables neither upstream hash implies). `assert_vintage()` makes it a precondition. A
+  database timestamp deliberately does not appear: the ingest deletes-and-reinserts and the raw
+  path is day-partitioned, so a timestamp does not determine content. 20 tests.
+* `scripts/d92_paired_grid.py` — the paired grid, committed, stamping git HEAD, argv, the board
+  vintage and measured s/pick onto every result, and **keeping the per-pick candidate rankings
+  D89/D90 discarded**.
+
+Two tests exist because the first `--expect-vintage` run failed for a real design reason: the hash
+had been computed over six seasons while the run touched one. **A vintage must name the board, not
+the slice**, so `assert_vintage` verifies over the canonical window regardless of the caller's
+subset.
+
+Canonical vintage for this board, 2020–2025:
+`74b2ea7d680ebe4dfdf4f9d98568810f5a43d4bfde7e9e4428fcc46fac33f4de`.
+
+### 7. Reproducible baseline, cost, and 2026
+
+On that vintage: `target_league` **+28.0**, CI [−40.7, +96.7], **94% of it 2022** (drop it → +1.9);
+`dynasty_1qb` **+31.5**, CI [+4.6, +58.4], all six seasons positive. Measured cost: Y1 **0.032
+s/pick**, O1 **6.249 s/pick** (≈195×) — ≈6 s for a live recommendation, immaterial in a real draft.
+No new shortlist was created; D87's was measured and rejected there.
+
+2026, re-run after the retrain and identical to D91: **#1 and #20 identical in both arms** (Smith-
+Njigba, Allen); first divergence is a **0.2-point tie** under Y1 at #21 (Love 306.6 vs McBride
+306.4) which O1 separates by 12.6; Y1 finishes 4 K / 1 TE, O1 2 K / 3 TE. `dynasty_1qb`: #1/#20/#21
+all identical, first divergence round 9, one kicker becomes one running back.
+
+**G7 is not relaxed and no gate was invented.** Noted as an observation, not a proposal: G6 passes
+in the target format only in the letter, since dropping 2022 leaves +1.9.
+
+### 8. Decision
+
+**DO NOT SHIP. Y1 remains production.** Outcome **E** on the brief's rule — another source of
+non-reproducibility identified; fix the instrumentation, leave production alone.
+
+**Next:** re-measure O1 once through the committed runner with `--expect-vintage`, and treat that as
+the **first reproducible draft-layer number this project has** — a replication is no longer "more
+of the same", it is the first time two comparable numbers would exist. Then, and only then, revisit
+Option G pre-registered against that baseline. Cheap second item: make the raw snapshot path
+vintage-addressable (partition by upstream commit or content hash, not by day) so two same-day
+captures cannot overwrite each other.
+
+**Answering D92's two questions directly.** *Is O1's improvement dependent on the ECR board?*
+**No — definitively excluded**, by hash across four published versions, three series and seventeen
+season-boards with a positive control. *Is it a real improvement whose size is noisy?* **Not yet
+answerable**: there is one reproducible measurement per format, the target one is 94% a single
+season, and the +49.0 it is usually compared against is not reproducible. **One measurement is not
+a measurement of noise.** *Do we have a trustworthy instrument?* **Substantially yes, for the first
+time — but only prospectively.** Board, projections, simulation and now the runner are all pinned
+and verified; **every phase before D92 remains unreproducible.**

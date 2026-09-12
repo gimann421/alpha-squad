@@ -213,3 +213,280 @@ page_type`), restricted to July/August scrapes in the **backtest window 2020–2
 > figures agree exactly. D91's §9, §12 and the "between-board natural experiment" (r = +0.601) all
 > rest on that error: there was only ever **one board**, so none of them compares two vintages.
 > D91's per-draft measurements stand; its board-vintage explanation does not.
+
+---
+
+## 7. Vintage sensitivity, quantified (Phase 7)
+
+The brief asks for board size, common/added/removed players, rank changes and top-20 movement per
+vintage pair. Over the **backtest window those are all zero**, so the table is only informative
+alongside a case where they are not. V0 (2026-07-03) vs V3 (2026-09-11), ten weeks apart, `ro`:
+
+| | season **2024** (historical) | season **2026** (live) |
+|---|---|---|
+| players, V0 → V3 | 619 → 619 | 482 → 577 |
+| added in V3 | **0** | **95** |
+| removed | **0** | 0 |
+| common players whose rank moved | **0** | **478 of 482** |
+| mean \|rank change\| | — | **14.2** (max 146) |
+| top-20 overlap | 20/20 | 19/20 |
+
+**A historical season is frozen; the live season churns.** That is the whole of Phase 7: there is
+no vintage sensitivity to attribute for 2020–2025, because there is no vintage difference.
+
+---
+
+## 8. Controlled O1 vs Y1 by vintage (Phases 5, 6) — and what I deliberately did not run
+
+The brief's design is: run the identical experiment on two vintages, changing only the board.
+**On this data that comparison is degenerate, and running it would be a tautology.** The chain is:
+
+1. the Jul/Aug rows for 2020–2025 are hash-identical across four vintages, in all three series (§6);
+2. so `_preseason_overall_market` — a deterministic `row_number()` over exactly those rows —
+   returns the identical board (§6, verified directly at board level, 17/17 season-series);
+3. the projection half comes from model training, which is bit-reproducible (§5.2);
+4. and the simulation is deterministic (§5.1).
+
+Identical inputs through a deterministic transformation give identical outputs. **A two-vintage
+draft comparison would consume roughly eight hours of compute to re-derive that, and I did not run
+it.** What I ran instead is the check that actually carries the claim — a direct hash comparison of
+the `(player, position, rank)` map the draft consumes, at every historical season in every series.
+
+This is stated plainly rather than presented as a completed comparison: **D92 does not contain a
+two-vintage Y1-vs-O1 result, because the two vintages are the same board.**
+
+### The reproducible baseline, measured through the committed runner
+
+What D92 *can* offer is a baseline that is reproducible by construction. On board vintage
+`74b2ea7d680ebe4dfdf4f9d98568810f5a43d4bfde7e9e4428fcc46fac33f4de`:
+
+| format | primary Δ (O1 − Y1) | 95% CI | season-long Δ | worst LOSO | largest season's share |
+|---|---|---|---|---|---|
+| `target_league` | **+28.0** | [−40.7, +96.7] | +31.4 | **+1.9** (drop 2022) | **2022 = 94%** |
+| `dynasty_1qb` | **+31.5** | **[+4.6, +58.4]** | +22.3 | +24.9 (drop 2020) | 2020 = 34% |
+
+These are D91's measurements, and the committed runner reproduces them **across every season**.
+Six seasons x slot 3 x both arms, re-run through `scripts/d92_paired_grid.py` with
+`--expect-vintage`, compared against D91's artifacts on drafted roster plus all four metrics:
+
+| season | O0 primary | O1 primary | match |
+|---|---|---|---|
+| 2020 | 1552.36 | 1533.16 | **bit-identical** |
+| 2021 | 2024.46 | 2025.36 | **bit-identical** |
+| 2022 | 1801.78 | 1995.18 | **bit-identical** |
+| 2023 | 2086.98 | 1998.82 | **bit-identical** |
+| 2024 | 1953.58 | 1916.52 | **bit-identical** |
+| 2025 | 1776.12 | 1823.42 | **bit-identical** |
+
+**12/12 cells identical on rosters and on `weekly_no_foresight`, `weekly_hindsight`, `season_long`
+and `total_roster_points`.** So the baseline above is not merely recorded, it is regenerable: the
+committed runner, the pinned vintage and D91's numbers are one consistent object.
+
+---
+
+## 9. Attribution of the D89 → D91 difference (Phase 9)
+
+The brief says not to assert a cause the comparison does not establish, and to separate measured
+causes from hypotheses. Doing that literally:
+
+### Measured, and therefore RULED OUT as causes
+
+| candidate | how it was ruled out |
+|---|---|
+| board vintage | upstream blob sha256 identical to the commit D89 read; historical rows identical across four vintages (§4, §6) |
+| player-universe change | identity-map sha256 identical; board composition matches all 36 published values (§6) |
+| projection change | full retrain reproduced the board **bit-identically**, all seven seasons (§5.2) |
+| scoring / metric inputs | weekly rows, uncertainty counts, ECR dispersion, consumption demand, best K/DST ranks — all exact (§6) |
+| randomness | rosters and every gate-bearing metric invariant across `PYTHONHASHSEED` 0–5 (§5.1) |
+| database contamination | one `source_snapshot_id` in `market_snapshot`, matching the registry (§2) |
+| D91 measurement error | D91's recorded values re-run exactly (§5.3) |
+
+### Measured, and therefore ESTABLISHED
+
+**D89's and D90's published outputs do not reproduce**, in either format, from the committed code
+and provably identical data:
+
+| published Y1 figure | D89 | this container |
+|---|---|---|
+| target, first RB round | 4.15 | **5.27** |
+| target, first WR round | 1.58 | **1.27** |
+| target, first TE round | 6.70 | **5.87** |
+| target, kickers drafted | 3.45 | **2.98** |
+| legacy, first QB round | 1.88 | **2.20** |
+| legacy, first TE round | 5.90 | **6.54** |
+
+Neither available opponent strategy closes the gap (`market_consensus_roster_aware` and
+`market_consensus` give *identical* early rounds, both differing from D89), and my aggregation
+matches the harness's own `first_round_by_position` semantics.
+
+> **Identical inputs + a deterministic transformation + different outputs ⇒ the transformation
+> differed.** D88, D89 and D90 each ran their grid from a script that was **never committed**.
+> That is the established cause of the irreproducibility, and it is a worse problem than a mutable
+> board: a board can be pinned by hash, but uncommitted code leaves nothing to pin.
+
+### Hypothesis, explicitly NOT established
+
+*Which* runner difference it was — a different candidate pool, a different metric input, a
+different season/slot handling — **cannot be determined**, because the code no longer exists. I can
+say the inputs were identical and the outputs were not; I cannot say which line differed. **Any
+specific story about it would be invention**, so none is offered.
+
+**Consequence, stated so it is not discovered later:** D86–D90's published draft-layer numbers —
+including the **+49.0** that six phases have cited — are **not reproducible and should not be
+quoted as measurements of this system** going forward. They remain a record of what those phases
+observed.
+
+---
+
+## 10. 2026 reality check (Phase 10)
+
+`target_league`, 2026 board on the pinned vintage, slot 1 (whose first three picks *are* overall
+#1/#20/#21 in a 10-team snake). Re-run after the full retrain and **identical to D91's**:
+
+| pick | Y1 | O1 | |
+|---|---|---|---|
+| **#1** | Jaxon Smith-Njigba (WR) 508.1, msv 265.3, vorp 107.7 | **same player**, 471.4 | identical |
+| **#20** | Josh Allen (QB) 316.4, msv 337.4, vorp 73.3 | **same player**, 281.3 | identical |
+| **#21** | **Jeremiyah Love (RB)** 306.6, msv 243.9 | **Trey McBride (TE)** 281.9, msv 169.6 | **differs** |
+
+**The first divergence is a 0.2-point tie under Y1** — Love 306.6 against McBride **306.4** — which
+O1 separates by 12.6. Final rosters share 11/16, and the composition difference is exactly **two
+kickers becoming two tight ends** (Y1: 4 K / 1 TE; O1: 2 K / 3 TE). O1 ends up with Love anyway at
+a later pick; Y1 never gets McBride.
+
+`dynasty_1qb`: #1, #20 and #21 all **identical** (Pickens at #21 in both); first divergence round 9
+(Kittle TE → Jacobs RB); one kicker becomes one running back; rosters share 13/16.
+
+> **Nothing at the top of a 2026 draft changes**, in either format — now the fifth consecutive
+> phase to find that, and the first to find it on a hash-pinned board.
+
+---
+
+## 11. Computational cost (Phase 11) — measured, not estimated
+
+Recorded by the committed runner on this container (4 cores):
+
+| arm | s/pick | s/draft (16 picks) | vs Y1 |
+|---|---|---|---|
+| **O0 (Y1)** | **0.032** | 0.5 | 1.0× |
+| **O1, full board** | **6.249** | 100 | **≈195×** |
+| O1 with D87's research-only `shortlist_k=10` | not run | — | D87 measured it and **rejected it**: ranked by Y1 it re-imports Y1's K/DST bias and flips sign across formats |
+
+No new shortlist was created. A single live recommendation costs ≈ **6 s**, which is immaterial
+during a real draft; the 195× multiplier matters only for batch experiments, where it is the
+difference between a one-hour and an eight-hour grid.
+
+---
+
+## 12. Gate results (Phase 12)
+
+No gate was added, relaxed, re-thresholded, or invented around an observed result. **G7 is not
+relaxed.** On the pinned vintage, with the caveat that these are one reproducible measurement
+rather than a replication:
+
+| gate | threshold | `target_league` | `dynasty_1qb` |
+|---|---|---|---|
+| G3 | primary worse in ≤ 1 season | **FAIL** (3/6) | **PASS** (0/6) |
+| G6 | LOSO margin stays positive | PASS (+1.9 … +37.7) — **but see below** | **PASS** (+24.9 … +37.4) |
+| G8 | clustered 95% CI excludes zero | **FAIL** [−40.7, +96.7] | **PASS** [+4.6, +58.4] |
+| G9 | primary margin ≥ 25.0 | **PASS** (+28.0) | **PASS** (+31.5) |
+| G10 | season-long margin ≥ −25.0 | **PASS** (+31.4) | **PASS** (+22.3) |
+| **G7** | **cross-format sign** | **PASS on sign** (+28.0 / +31.5, both positive in the two formats where the mechanism can operate) — legacy remains structurally untestable per D90 | |
+
+**G6 passes in the target format only in the letter.** Dropping 2022 leaves **+1.9**, because 2022
+is 94% of the margin. A gate that reports PASS on a result carried by one season is not measuring
+what it was written to measure — recorded as an observation about G6, **not** as a proposal to
+change it.
+
+---
+
+## 13. Ship / do not ship
+
+> ### **DO NOT SHIP. Y1 remains production.**
+
+`src/` contains **two additive research files** (`evaluation/board_vintage.py`, its test) and one
+script; `models/` (`73b408e9…`) and `league/` (`d4cfd00e…`) are unchanged from the Y1 baseline; no
+pre-existing file was modified and **no production path imports either new file**. 1338 tests pass
+(1318 before, +20 new); ruff clean.
+
+D92 was never a shipping phase. The objective did not change and Option G was not implemented.
+
+---
+
+## 14. Most important next research question
+
+> **Re-measure O1 once, through the committed runner, on the pinned vintage — and treat that as
+> the first reproducible draft-layer number this project has.**
+
+D86–D90's numbers are not reproducible (§9), so the research line currently has **one** usable
+measurement per format, both from D91 and both now re-verifiable. A replication is no longer
+"more of the same": it is the first time two comparable numbers would exist. Concretely:
+
+1. Run `scripts/d92_paired_grid.py` for both 1-QB formats with `--expect-vintage`, full grid, and
+   commit the summary (not the artifact — `reports/` is gitignored).
+2. Then, and only then, revisit D91's Option G (a non-degenerate, startable-slot-aware marginal
+   value for bench candidates), pre-registered against that baseline.
+
+The second-most valuable item is cheap and closes a real gap: **make the raw snapshot path
+vintage-addressable** — partition by the upstream commit or the content hash rather than by day,
+so two same-day captures cannot overwrite each other and `market_snapshot` can hold more than one
+vintage. §2 records both weaknesses; neither is fixed here.
+
+---
+
+## 15. Plain-English trust assessment
+
+**The board was never the problem, and I was wrong in D91 to say it was.** DynastyProcess publishes
+its ranking history weekly and only ever *adds* to it — the rows describing the 2022 preseason are
+the same today as they were ten weeks ago, byte for byte, and I verified that against four separate
+published versions with a control to prove the check works. The number I used in D91 to claim
+otherwise was a mistake: I counted a different set of players than D89 did. Corrected, every one of
+roughly ninety published figures lines up exactly.
+
+**What is genuinely broken is bookkeeping, not data.** The programs that produced D88, D89 and
+D90's headline numbers were never saved. Everything they read still exists and still reproduces;
+the code that turned it into results does not. So those numbers — including the **+49** that six
+phases have quoted — cannot be regenerated, and the honest thing is to stop citing them as
+measurements. D92's fix is unglamorous: the runner is now committed, it stamps every result with a
+hash of the board it read, and it can refuse to run against the wrong board.
+
+**Nothing about the advice changes.** On a hash-pinned 2026 board, Y1 and O1 make the same pick at
+#1 and #20 in both formats. The one difference at #21 is a **0.2-point tie** under Y1 that O1 breaks
+the other way, and the endgame difference is still the same one every phase has found: Y1 buys four
+kickers, O1 buys two and spends the rest on tight ends. **Take the kicker you need, then stop** —
+and you still do not need a code change to do that.
+
+**How much to trust the instrument now:** the data, the projections and the simulation are all
+pinned and verified reproducible, which is more than was true yesterday. But **no result published
+before D92 can be compared to one published after it**, and the one reproducible target-format
+number we have (+28.0) is 94% a single season. The instrument is trustworthy going *forward*, not
+backward.
+
+---
+
+## 16. The two questions, answered directly
+
+> **"Is O1 a real improvement whose measured size is noisy, or is the apparent improvement
+> materially dependent on the historical ECR board?"**
+
+**Neither, and the second is now definitively excluded.** The historical ECR board is immutable, so
+no draft-layer result over 2020–2025 can depend on its vintage — proven by hash across four
+published versions, three market series and seventeen season-boards, with a positive control.
+
+On "real improvement whose size is noisy": the honest answer is that **we do not yet have enough
+reproducible measurements to call the size noisy or stable.** O1 is positive in both formats where
+its mechanism can operate on the one pinned vintage (+28.0 target, +31.5 dynasty), and D91 showed
+its behavioural signature is robust and its mechanism is startable-slot count rather than
+availability. But the target-format figure is 94% one season, and the +49.0 it is usually compared
+against is not reproducible and should be retired. **One measurement is not a measurement of
+noise.**
+
+> **"Do we now have a trustworthy experimental instrument for comparing future decision
+> objectives?"**
+
+**Substantially yes, and for the first time — but only prospectively.** Pinned and verified: the
+board (hash-addressable to an upstream commit), the projections (bit-reproducible retrain), the
+simulation (deterministic across hash seeds), and now the runner (committed, provenance-stamping,
+vintage-asserting). The gap that remains is historical: **every phase before D92 is
+unreproducible**, so the instrument cannot be used to re-examine D86–D90's conclusions — only to
+measure honestly from here.

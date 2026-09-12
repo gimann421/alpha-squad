@@ -3,7 +3,51 @@
 Living summary of what is implemented, validated, and outstanding. Updated at the end of every
 milestone. See `docs/TRACEABILITY.md` for the acceptance-criteria-level mapping.
 
-## Status: M43 complete (D91) — **The +49 does not survive a market-board refresh (+28.0, 94% of it one season); O1's availability model is nearly inert and the real mechanism is startable-slot count; Y1's marginal value is degenerate across the entire bench. Nothing shipped.**
+## Status: M44 complete (D92) — **The historical ECR board is IMMUTABLE; D91's vintage finding is RETRACTED. The real irreproducibility is that D88–D90's runner was never committed. The instrument is now versioned. Nothing shipped.**
+
+An instrumentation/reproducibility phase. Full report: `docs/D92_BOARD_VINTAGE_INSTRUMENT.md`.
+`models/` (`73b408e9`) and `league/` (`d4cfd00e`) unchanged from the Y1 baseline; the only `src/`
+change is two additive research files no production path imports. **1338 tests pass** (1318 before).
+
+**D91's central claim was my measurement error, and it is retracted.** D89's published column counts
+market-ranked players *inside the projected board*; D91 counted every `market_rank` entry, a
+superset. Measured consistently, **~90 published D89 input figures reproduce exactly** — board
+composition, consumption demand, best K/DST ranks, uncertainty counts, ECR dispersion, coverage to
+the decimal.
+
+**The board is provably immutable for history.** `db_fpecr.parquet` is committed weekly to a public
+repo; the blob at commit `9338630` (2026-09-11 04:31Z) hashes to `a966176d…` — byte-for-byte the
+registry row and the file on disk — and **D88, D89, D90 and D91 all read the same bytes**. Across
+four vintages spanning ten weeks, **all 17 historical board-seasons in all three market series are
+identical**, while a positive control on the live 2026 season shows real churn (95 players added,
+478 of 482 ranks moved). So no 2020–2025 backtest can depend on vintage, and the brief's
+two-vintage comparison is degenerate — D92 did **not** run it and says so.
+
+**Determinism holds too:** rosters and every gate-bearing metric are invariant across
+`PYTHONHASHSEED` 0–5 (only `bench` moves, 2.20 points, D89 defect #4); a full retrain reproduced the
+board **bit-identically** in all seven seasons.
+
+**Established cause of the D89→D91 difference: the runner was never committed.** Every input
+reproduces, the simulation is deterministic, and yet D89's published Y1 behaviour does not come back
+in *either* format (target first-RB round 4.15 → 5.27; kickers 3.45 → 2.98; legacy first-QB 1.88 →
+2.20). Neither opponent strategy closes the gap. **Which** difference it was cannot be determined —
+the code is gone — so no story is offered. **Consequence: D86–D90's draft-layer numbers, including
+the +49.0 six phases cite, are not reproducible and should not be quoted as measurements.**
+
+**The fix, committed:** `evaluation/board_vintage.py` (a vintage = upstream board sha256 + identity-
+map sha256 + per-season `load_season_projections` hash; `assert_vintage()` makes it a precondition;
+20 tests) and `scripts/d92_paired_grid.py` (the grid, versioned, stamping git HEAD, argv, vintage and
+measured s/pick onto every result, and keeping the per-pick rankings D89/D90 discarded). Canonical
+vintage: `74b2ea7d680ebe4dfdf4f9d98568810f5a43d4bfde7e9e4428fcc46fac33f4de`.
+
+**Baseline on that vintage:** target **+28.0** [−40.7, +96.7] with **94% from 2022**; dynasty
+**+31.5** [+4.6, +58.4], all six seasons positive. Cost: Y1 0.032 s/pick, O1 6.249 s/pick (≈195×,
+≈6 s live). 2026 unchanged: #1/#20 identical in both arms, first divergence a **0.2-point tie**.
+
+**Next:** re-measure O1 once through the committed runner with `--expect-vintage` — the first
+reproducible draft-layer number this project will have — then revisit Option G against it.
+
+### Earlier status: M43 complete (D91) — **The +49 does not survive a market-board refresh (+28.0, 94% of it one season); O1's availability model is nearly inert and the real mechanism is startable-slot count; Y1's marginal value is degenerate across the entire bench. Nothing shipped.**
 
 An architecture diagnosis, not an experiment to ship from. Full report:
 `docs/D91_O1_ADVANTAGE_ATTRIBUTION.md`. Ablations pre-registered at `b0342e5` **before any of them
