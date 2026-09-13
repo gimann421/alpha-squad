@@ -6777,3 +6777,114 @@ season, and the +49.0 it is usually compared against is not reproducible. **One 
 a measurement of noise.** *Do we have a trustworthy instrument?* **Substantially yes, for the first
 time — but only prospectively.** Board, projections, simulation and now the runner are all pinned
 and verified; **every phase before D92 remains unreproducible.**
+
+---
+
+## D93 — The O-tier control was never the shipped engine; the K/DST mechanism was an artifact of that defect. O1 REJECTED as specified. Nothing ships.
+
+*Branch `claude/o1-advantage-attribution-azp7k7`. Repair `3681970`, corrected pre-registration
+`f11c899`, results `ca8681e`. Full report: `docs/D93_O1_REPLICATION_POWER.md`. **`models/`
+`73b408e9` and `league/` `d4cfd00e` unchanged from the Y1 baseline; the only `src/` changes are one
+added research module and a one-line research-harness repair.*** 1340 tests pass, ruff clean.
+
+### 1. The Phase 0 gate D93's brief mandated, which had never been run
+
+The brief requires the production `recommend_draft_pick` path and forbids a surrogate scorer. Every
+O-tier since D86 runs through `draft_forensics.score_candidate`, a re-implementation.
+`decision_counterfactuals` guards this with `assert_control_reproduces_production`;
+**`draft_forensics` had no end-to-end assertion.** The harness contains both sides: tier `H` is
+"the real, unmodified production `recommend_draft_pick`", tier `O0` is documented as "the shipped
+Y1 engine, byte-identical to L0/Q0/Z0".
+
+**`O0` reproduced production in 0 of 24 cells.** `W1`, `X0`, `Z0`, `S0`, `Q0` and `L0` reproduced it
+in **20 of 20** non-2020 cells. So D79's, D84's and D85's controls are production; **D86's is not.**
+
+| | `O0` | production `H` |
+|---|---|---|
+| kickers drafted | **2.98** | **2.08** |
+| RB | 2.21 | 2.92 |
+| season-long starter pts | — | **+28.6 better** |
+
+### 2. Root cause: the D85 defect, repeated verbatim
+
+`_pick_by_tier` dispatches D67's shipped draft-aware replacement level to an enumerated list —
+X, Y, Z, S, Q, L tiers — and **`O_TIERS` was not in it**. Every O-tier fell back to the **static**
+replacement level, the D65 defect D67 shipped to remove. The comment three lines below the bug
+describes the identical D85 failure.
+
+**`test_o0_is_the_shipped_engine` exists, names this exact risk, and passes for the wrong reason:**
+it calls `score_candidate` *directly* without `dynamic_levels`, so the value is `None` for both
+tiers and all 602 candidates agree. The hoisting lives in `_pick_by_tier`, which the test never
+exercises.
+
+### 3. Repair and the guard that was missing
+
+One line (`or tier in O_TIERS`) plus `TestD93DraftAwareDispatch`, which asserts **through
+`_pick_by_tier`** and loops over **every** tier in `DRAFT_AWARE_REPLACEMENT_TIERS`, exempting only
+tiers whose own spec declares static intent (`V_TIER_SPEC["V0"] is None`, `W_TIER_SPEC["W0"/"W3"][0]
+is None`) — the discriminating property, since the O-tiers had no such declaration. Demonstrated by
+temporarily reverting the fix: **both new guards FAIL while `test_o0_is_the_shipped_engine` still
+PASSES.** After the repair `O0` reproduces production and `Z0` in 12/12 cells across both formats.
+
+### 4. The corrected contrast, pre-registered at `f11c899` before it ran
+
+| | `target_league` | `dynasty_1qb` |
+|---|---|---|
+| **effect** | **+3.8** | **+27.1** |
+| 95% CI | [−43.2, +50.8] | [−7.8, +62.0] |
+| seasons O1 worse | **4/6** | 1/6 |
+| median cell | **−7.9** | +17.3 |
+| worst LOSO | **−11.3** | +18.6 |
+
+against **+28.0** for the same contrast on the defective control.
+
+**P3 confirmed: the mechanism is gone.** ΔnK **−0.67 → −0.03**; reallocation −0.82 → −0.28 (target)
+and −0.03 (dynasty); Y1 capacity breaches **62 → 2** in 60 drafts. On the 2026 board production and
+O1 draft **identical rosters** (QB2 RB3 WR5 TE2 **K2** DST2) where D91 reported four kickers against
+two. All four registered predictions (P1–P4) confirmed.
+
+> **The K/DST mechanism D86–D92 described — and the "take the kicker you need, then stop" advice
+> five plain-English summaries produced — was an artifact of the harness defect. Production already
+> drafts to kicker capacity.**
+
+### 5. The one survivor, and why it is not support
+
+`dynasty_1qb` keeps **+27.1**, 5 of 6 seasons positive, LOSO-stable. The registered secondary
+metrics say it arrives by a route O1 was never theorised to take: **conversion efficiency −0.0001
+(flat), total roster points +36.1, reallocation ≈ 0.** `36.1 × 0.7575` is the whole effect. It is
+pure raw-roster quality with **zero** conversion gain — the opposite of "convert the same roster
+into more lineup points". Recorded as an unexplained open question, not as evidence for O1.
+
+### 6. Power, and why no larger experiment exists
+
+Both sample levers are hard-capped: **6 usable seasons** (no July/August board exists before 2020 in
+either market series) and **10 draft slots** (10-team leagues), with seeds contributing **zero**
+because D92 proved the simulation deterministic. Variance decomposition on the pinned board:
+`target_league` ICC **0.552** (MDE floor 66.1 at infinite slots; would need **30 seasons**),
+`dynasty_1qb` ICC **0.011** (slots *are* the efficient lever there, floor 8.6). **D88's "slots
+cannot help" is true of the target format and does not generalise.**
+
+### 7. Gates and decision
+
+Fails **G8 in both formats** and **G3/G6/G9** in the primary one. G7 passes on sign only. Legacy is
+reported **structurally untestable**, not a pass. No gate added, relaxed or re-thresholded.
+
+**DO NOT SHIP. Verdict C — REJECT O1 as specified, and reject the mechanism as described.** Not D:
+the instrument limitation was found *and repaired* in-phase and the corrected comparison ran. Not B:
+the mechanism is **refuted**, not unresolved.
+
+Cost measured: Y1 **0.026 s/pick**, O1 **4.61 s/pick** (≈177×), ≈4.6 s per live recommendation.
+
+### 8. Next
+
+**Re-check the other published draft-layer conclusions against production the same way.** D85's "Y1
+over-values K 5.34× / DST 8.10×" and D91's causal chain (degenerate marginal value → daVORP decides
+the endgame → kickers hoarded) were both formed while the visible control drafted 2.98 kickers;
+production drafts 2.03. D91's degeneracy *measurement* stands — taken on the shipped
+`marginal_starter_value` directly — but **its last link does not**. Also cheap: give
+`recommend_draft_pick` the D89 `page_type` resolution, so a 2020 backtest stops handing production
+an empty preseason board (§6 of the report; it is why `Z0`/`Q0`/`L0` mismatch in exactly the four
+2020 cells).
+
+**Explicitly not recommended:** Option G, re-weighting O1, a shortlist, more seasons or slots (none
+exist), or treating the dynasty residual as a reason to keep O1 alive.

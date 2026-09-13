@@ -3,7 +3,57 @@
 Living summary of what is implemented, validated, and outstanding. Updated at the end of every
 milestone. See `docs/TRACEABILITY.md` for the acceptance-criteria-level mapping.
 
-## Status: M44 complete (D92) — **The historical ECR board is IMMUTABLE; D91's vintage finding is RETRACTED. The real irreproducibility is that D88–D90's runner was never committed. The instrument is now versioned. Nothing shipped.**
+## Status: M45 complete (D93) — **The O-tier control was never the shipped engine. With that repaired, O1's advantage falls from +28.0 to +3.8 and its K/DST mechanism disappears entirely. O1 REJECTED as specified. Nothing shipped.**
+
+Full report: `docs/D93_O1_REPLICATION_POWER.md`. Repair `3681970`, corrected pre-registration
+`f11c899`, results `ca8681e`. **`models/` `73b408e9` and `league/` `d4cfd00e` unchanged**; the only
+`src/` changes on this branch are one added research module and a one-line research-harness repair.
+**1340 tests pass**, ruff clean.
+
+**The Phase 0 gate D93's brief mandated had never been run.** Every O-tier since D86 scores through
+`draft_forensics.score_candidate`, a re-implementation of production. Tier `H` *is* production
+(`recommend_draft_pick`); tier `O0` is documented as "the shipped Y1 engine". **`O0` reproduced
+production in 0 of 24 cells**, drafting **2.98 kickers against production's 2.08**, while
+`W1/X0/Z0/S0/Q0/L0` reproduced it in **20 of 20** non-2020 cells.
+
+**Root cause: the D85 defect repeated verbatim.** `_pick_by_tier` dispatches D67's draft-aware
+replacement level to an enumerated tier list and **`O_TIERS` was missing**, so every O-tier fell back
+to the D65-era **static** level. `test_o0_is_the_shipped_engine` passes for the wrong reason — it
+calls `score_candidate` directly without `dynamic_levels`, so the value is `None` for every tier
+compared. Repaired, and guarded by a test that asserts **through `_pick_by_tier`** across **every**
+draft-aware tier; reverting the fix makes the new guards fail while the old one still passes.
+
+**The corrected, pre-registered contrast:**
+
+| | `target_league` | `dynasty_1qb` |
+|---|---|---|
+| effect | **+3.8** [−43.2, +50.8] | **+27.1** [−7.8, +62.0] |
+| seasons O1 worse | **4/6** | 1/6 |
+| median cell | **−7.9** | +17.3 |
+| worst LOSO | **−11.3** | +18.6 |
+
+against **+28.0** on the defective control. **The mechanism is gone:** ΔnK **−0.67 → −0.03**, Y1
+capacity breaches **62 → 2**, and on the 2026 board production and O1 draft **identical rosters**
+(K 2 each) where D91 reported four kickers against two. All four registered predictions confirmed.
+**The "take the kicker you need, then stop" story was an artifact of the defect** — production
+already drafts to capacity.
+
+**The one survivor is not support.** `dynasty_1qb`'s +27.1 arrives with conversion efficiency
+**−0.0001 (flat)** and roster points **+36.1** — pure raw-roster quality, zero conversion gain, zero
+reallocation. That is the opposite of O1's rationale. Recorded as an open question.
+
+**Power:** both levers are exhausted — **6 seasons** (no board before 2020) × **10 slots**, seeds
+worth zero. `target_league` ICC **0.552** (floor 66.1, needs 30 seasons); `dynasty_1qb` ICC **0.011**
+(slots *are* the lever there). D88's "slots cannot help" is target-format-specific.
+
+**Verdict C — REJECT** O1 as specified and the mechanism as described. Fails G8 in both formats,
+G3/G6/G9 in the primary. Cost: Y1 0.026 s/pick, O1 4.61 (≈177×).
+
+**Next:** re-check D85's and D91's conclusions against production the same way — both were formed
+while the visible control drafted 2.98 kickers. D91's degeneracy *measurement* stands; its last link
+does not.
+
+### Earlier status: M44 complete (D92) — **The historical ECR board is IMMUTABLE; D91's vintage finding is RETRACTED. The real irreproducibility is that D88–D90's runner was never committed. The instrument is now versioned. Nothing shipped.**
 
 An instrumentation/reproducibility phase. Full report: `docs/D92_BOARD_VINTAGE_INSTRUMENT.md`.
 `models/` (`73b408e9`) and `league/` (`d4cfd00e`) unchanged from the Y1 baseline; the only `src/`
