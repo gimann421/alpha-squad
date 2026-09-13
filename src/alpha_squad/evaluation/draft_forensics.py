@@ -1136,7 +1136,14 @@ def load_season_static(
     # D89: `page_type` defaults to `market/series.py`'s mapping (production behaviour, and what
     # every D86/D87/D88 number was measured with). A caller may pass the season's own page via
     # `preseason_page_type` to reach a season whose board was labelled differently.
-    market_rank = _preseason_overall_market(con, ecr_type, season, page_type=page_type)
+    # D95: loading an empty board is allowed HERE precisely because D89 already decided this
+    # question one layer up -- `assert_usable_market_board` refuses the run only for the
+    # opponent strategies that actually read `market_rank`, so a non-market opponent can still
+    # legitimately measure a season with no board. Raising at load would take that decision
+    # away from the guard that was designed to make it.
+    market_rank = _preseason_overall_market(
+        con, ecr_type, season, page_type=page_type, allow_empty=True
+    )
     # D86: measured on prior seasons only. `measure_availability_rates` returns {} for a
     # position with no data, and the O1 tier raises on an empty dict rather than defaulting.
     availability_rates = measure_availability_rates(
