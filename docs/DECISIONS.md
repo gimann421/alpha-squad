@@ -6924,8 +6924,10 @@ contaminated one appeared to be. That is the honest direction of this correction
 
 Re-verified on the covered window against tier `H`, which calls `league/draft.py::
 recommend_draft_pick` itself — not `score_candidate`, whose omission of `dynamic_levels` is what
-hid the defect for seven phases. `target_league`: **O0 50/50 identical to production**, as are
-L0/Q0/Z0. The O-tier draft-aware dispatch is confirmed active in the tree that produced the grid.
+hid the defect for seven phases. **Both formats are 50/50: `target_league` O0 matches production in
+all 50 covered cells (as do L0/Q0/Z0), and `dynasty_1qb` O0 matches in all 50** (L0 likewise) — the
+cross-format parity gap D94 left open is now closed. The O-tier draft-aware dispatch is confirmed
+active in the tree that produced the grid, and is merged here (§5) so `main` matches.
 
 ### 5. D93's dispatch repair is merged here, and why this phase determined otherwise
 
