@@ -373,3 +373,74 @@ Running it anyway would have produced a number — and D91's artifacts say rough
 but it would not have been an answer to D93's question. **The gate did its job, which is the point
 of having gates run before the experiment rather than after.** What follows measures the defect's
 consequences instead, which is the honest remaining use of the phase.
+
+---
+
+## 9. The defect measured against the correct baseline (Phases 7–9)
+
+24 cells per format (6 seasons × slots 1/4/7/10), board vintage asserted, three arms:
+**`H`** = real production `recommend_draft_pick`, **`O0`** = the D86 "control", **`O1`** = the
+candidate (which **inherits** the same defect).
+
+### 9.1 `target_league`, primary metric `weekly_no_foresight`
+
+| arm | primary | season-long | roster pts | bench | nK | nRB | nTE |
+|---|---|---|---|---|---|---|---|
+| **`H`** production | **1931.5** | 1936.2 | 2578.9 | 418.2 | **2.08** | **2.92** | **2.42** |
+| `O0` defective control | 1922.9 | 1907.6 | 2574.9 | 419.6 | **2.96** | 2.21 | 2.00 |
+| `O1` candidate | 1941.5 | 1929.0 | 2601.3 | 444.7 | 2.29 | 2.50 | 2.54 |
+
+> **Production's roster composition already resembles O1's far more than O0's does.** On kickers,
+> running backs and tight ends alike, `H` sits where O1 was trying to move the control to — and in
+> two of the three it goes further than O1 manages.
+
+Paired contrasts, season-clustered 95% CI:
+
+| contrast | effect | 95% CI |
+|---|---|---|
+| **`O1 − O0`** — what D86–D92 published | **+18.6** | [−47.9, +85.0] |
+| **`O1 − H`** — candidate vs **real production** | **+10.0** | [−78.1, +98.1] |
+| **`O0 − H`** — the harness defect alone | **−8.6** | [−85.0, +67.9] |
+
+**Measured against the correct baseline the candidate's advantage falls from +18.6 to +10.0**, and
+roughly **46%** of the published margin (8.6 of 18.6) is the harness defect rather than the
+objective. Every interval spans zero by a wide margin, exactly as §4's power analysis said it must.
+
+Per-season, `O1 − H` is **+77 / +83 / +90 / −17 / −80 / −92** across 2020→2025 — a monotone decline
+from strongly positive to strongly negative. Noted, not interpreted: it is a post-hoc observation on
+six clusters and D90 §7's monotone pattern already failed to replicate once.
+
+### 9.2 `dynasty_1qb` — the defect generalises, and **its sign flips**
+
+| arm | identical to `H` | mean nK | mean season-long starter pts | vs `H` |
+|---|---|---|---|---|
+| **`H`** production | 24/24 | **2.00** | 2058.0 | — |
+| `Z0` / `Q0` / `L0` | **20/24** (only 2020) | 1.96 | 2084.4 | **+26.4** |
+| **`O0`** | **0/24** | 2.08 | 2104.4 | **+46.5** |
+
+The dispatch omission affects both formats — `O0` never reproduces production in either — but its
+**consequence reverses**: in the target format the defective control is **28.6 points worse** than
+production, in dynasty it is **46.5 points better**. A defect whose sign depends on the format
+cannot be treated as a constant offset that "cancels in the paired difference".
+
+*(`Z0`/`Q0`/`L0` differ from `H` by +26.4 here for the separate, documented 2020 `page_type` reason
+in §6 — four of twenty-four cells — not because of the dispatch bug.)*
+
+### 9.3 Why `O1 − H` is not a clean estimate of the objective either
+
+`O1` is built on the same `score_candidate` path as `O0`, so it carries the same static-replacement
+fallback. `O1 − H` therefore conflates **two** changes: the weekly marginal-value objective (the
+thing under study) and the reverted replacement level (a defect). It is the most decision-relevant
+number currently obtainable, and it is still **not** an estimate of O1's value.
+
+> **The comparison that would answer D93's question — the shipped engine against the shipped engine
+> plus weekly marginal value — has never been run, in any phase.**
+
+### 9.4 RB interaction (Phase 9)
+
+D91 closed this with algebra: at an empty roster O1's marginal term reduces to
+`rate(position) × projection`, a positive per-position rescale, and no positive rescale can reorder
+a board — so O1 cannot reach an elite-RB projection error, and RB's rate being the lowest of the six
+means it discounts elite RBs *most*. **That argument is about `expected_weekly_marginal_value`
+versus `marginal_starter_value` and does not depend on the replacement level**, so it survives this
+phase's finding intact. No RB projection was touched and no new perturbation was run.
