@@ -1971,6 +1971,7 @@ def _pick_by_tier(
         or tier in ALL_S_TIERS
         or tier in Q_TIERS
         or tier in L_TIERS
+        or tier in O_TIERS
     ):
         # D68/D70: identical to W1. The projections `static` carries are the treatment; the
         # replacement rule they are measured against is the shipped one, unchanged.
@@ -1983,6 +1984,17 @@ def _pick_by_tier(
         # D79: the Z-tiers hold that same shipped replacement rule fixed and vary the VALUE BASE
         # instead -- the mirror image of D65-D67, which held the value base fixed and varied the
         # replacement rule.
+        # D93: the O-tiers were omitted here and the identical D85 failure recurred, undetected
+        # for seven phases. O0 -- documented as "byte-identical to L0/Q0/Z0" -- drafted 2.96
+        # kickers against production's 2.08 and scored 28.6 season-long starter points below it,
+        # while Z0/Q0/L0 reproduced production in 20 of 20 non-2020 cells. So every O-tier number
+        # in D86-D92, control and candidate alike, was measured on the D65-era static level.
+        # `test_o0_is_the_shipped_engine` did not catch it because it calls `score_candidate`
+        # DIRECTLY without `dynamic_levels`, leaving it None for both tiers so they agreed for the
+        # wrong reason -- the hoisting lives HERE, in `_pick_by_tier`, which that test never
+        # exercises. `TestD93DraftAwareDispatch` now asserts through this function, and asserts it
+        # for EVERY tier in DRAFT_AWARE_REPLACEMENT_TIERS, so a future tier family cannot repeat
+        # this a third time.
         dynamic_levels = consumption_replacement(static.consumption_demand)(
             league, available, static.projections, static.positions
         )
