@@ -515,3 +515,249 @@ the MDE number is not assumed.
 > **P4 — most likely outcome.** A small margin with an interval spanning zero: verdict **B** or
 > **C**, not **A**. Registered so a null cannot be reported as a surprise, and so a positive
 > result cannot be claimed as predicted.
+
+---
+
+## 11. The corrected result (Phases 7, 8, 10) — all four predictions confirmed
+
+Registered grid, repaired dispatch, board vintage asserted, 60 paired cells per format,
+`git HEAD f11c899`.
+
+### 11.1 Primary
+
+| | `target_league` | `dynasty_1qb` |
+|---|---|---|
+| **effect (O1 − Y1)** | **+3.8** | **+27.1** |
+| season-clustered 95% CI | **[−43.2, +50.8]** | **[−7.8, +62.0]** |
+| MDE (re-estimated) | 47.0 | 34.9 |
+| SD of season means | 44.8 | 33.3 |
+| cells won by O1 | 27/60 | 36/60 |
+| median cell | **−7.9** | +17.3 |
+| seasons O1 worse | **4/6** | 1/6 |
+| worst leave-one-season-out | **−11.3** | +18.6 |
+| per season | −12 / +79 / +29 / −15 / −8 / −50 | +9 / +70 / +51 / −24 / +39 / +17 |
+
+**For comparison, the same contrast on the defective control was +28.0 [−40.7, +96.7].**
+
+### 11.2 P3 — the mechanism is gone
+
+| | defective `Y1` | defective O1 | **corrected `Y1`** | **corrected O1** |
+|---|---|---|---|---|
+| kickers drafted | 2.98 | 2.32 (**−0.67**) | **2.03** | **2.00** (**−0.03**) |
+| picks off ≤1-slot positions | — | −0.82 | — | **−0.28** |
+| Y1 capacity breaches (60 drafts) | **62** | — | **2** | — |
+
+In `dynasty_1qb` it vanishes entirely: ΔnK **+0.05**, ΔnRB −0.03, ΔnTE +0.03, reallocation
+**−0.03**.
+
+> **The K/DST mechanism that D86–D92 described, and that five plain-English summaries reduced to
+> "take the kicker you need, then stop", was an artifact of the dispatch defect.** Production
+> already drafts to kicker capacity — 2.03 per draft, with **2 capacity breaches in 60 drafts**
+> against the defective control's 62. There was almost nothing for O1 to correct, and the corrected
+> numbers say it corrects almost nothing.
+
+### 11.3 What the dynasty residual actually is — and it is not the theorised mechanism
+
+`dynasty_1qb` keeps **+27.1**, and the registered secondary metrics say it arrives by a route O1
+was never theorised to take:
+
+| | value |
+|---|---|
+| conversion efficiency (primary ÷ roster points) | **−0.0001** — flat |
+| total roster points | **+36.1** |
+| positional reallocation | **−0.03 / +0.03** — none |
+
+`+36.1 × 0.7575 ≈ +27.3`, which is the whole effect. **O1's dynasty gain is pure raw-roster
+quality with zero conversion gain and zero reallocation** — the opposite of "convert the same
+roster into more lineup points", which was the entire rationale. It is a real, reproducible
+residual and it is **not** evidence for the weekly roster-utility story.
+
+### 11.4 Prediction scorecard
+
+| | prediction | outcome |
+|---|---|---|
+| **P1** | `O0` reproduces production | **CONFIRMED** — 16/16 picks on the 2026 board; 12/12 historical cells |
+| **P2** | margin smaller than +28.0 | **CONFIRMED** — +3.8 |
+| **P3** | the mechanism largely disappears | **CONFIRMED** — ΔnK −0.67 → **−0.03** |
+| **P4** | small margin, CI spans zero, verdict B or C | **CONFIRMED** |
+
+---
+
+## 12. Gate table (Phase 11) — registered gates, none added, relaxed or re-thresholded
+
+| gate | threshold | `target_league` | `dynasty_1qb` | `legacy_2qb_dynasty` |
+|---|---|---|---|---|
+| G1 | no dedicated position zeroed more than control | **PASS** (0 v 0) | **PASS** (0 v 0) | structurally untestable |
+| G2 | roster infeasibility ≤ control | **PASS** (0 v 0) | **PASS** (0 v 0) | — |
+| G3 | primary worse in ≤ 1 season | **FAIL (4/6)** | **PASS** (1/6) | — |
+| G4 | no position drafted > 2 rounds earlier | **PASS** (max 0.05 rd) | **PASS** (0.03 rd) | — |
+| G5 | no increase in capacity breaches | **PASS** (0 v 2) | **PASS** (0 v 5) | — |
+| G6 | LOSO margin stays positive | **FAIL (−11.3)** | **PASS** (+18.6) | — |
+| G8 | clustered 95% CI excludes zero | **FAIL** [−43.2, +50.8] | **FAIL** [−7.8, +62.0] | — |
+| G9 | primary margin ≥ 25.0 | **FAIL (+3.8)** | **PASS** (+27.1) | — |
+| G10 | season-long margin ≥ −25.0 | **PASS** (+11.9) | **PASS** (+36.9) | — |
+| **G7** | **cross-format sign** | both positive (+3.8 / +27.1) — **PASS on sign**, but the primary format's is indistinguishable from zero | | |
+
+`legacy_2qb_dynasty` is reported as **structurally untestable** for K/DST-touching gates (§7), not
+as a pass.
+
+---
+
+## 13. 2026 reality check (Phase 12), on the repaired engine
+
+`target_league`, 2026 board, slot 1 (whose first three picks are overall #1/#20/#21):
+
+| pick | production `H` | `O0` | `O1` | |
+|---|---|---|---|---|
+| **#1** | Jaxon Smith-Njigba (WR) | same | same | **identical** |
+| **#20** | Josh Allen (QB) | same | same | **identical** |
+| **#21** | Jeremiyah Love (RB) 358.5 | **same, 358.5** | same, 321.2 | **identical** |
+
+**`O0` now matches production on all 16 picks (16/16).** And the full roster composition is
+**identical across all three arms** — QB 2, RB 3, WR 5, TE 2, **K 2**, DST 2.
+
+> On the defective engine D91 reported Y1 taking **four** kickers against O1's two. On the repaired
+> engine **production and O1 both take two.** The kicker difference at the top of a real 2026 draft
+> does not exist.
+
+First divergence is **round 9**: Y1 takes Tucker Kraft (TE), O1 takes Courtland Sutton (WR) — a
+swap between two *multi-slot* positions, not a K/DST decision. Final rosters share 13/16.
+
+---
+
+## 14. Computational cost (Phase 13), measured
+
+| arm | s/pick | s/draft | vs Y1 |
+|---|---|---|---|
+| `O0` (= production Y1) | **0.026** | 0.4 | 1.0× |
+| `O1` full board | **4.61** | 74 | **≈177×** |
+
+Reproducible: both formats' runs report the same figures (0.0263/4.615 and 0.0259/4.588). Memory
+is unremarkable — the Monte Carlo holds only the roster and a values dict. Cost scales linearly in
+candidate count (each candidate gets `DEFAULT_AVAILABILITY_DRAWS = 200` lineup allocations). A
+single live recommendation is ≈ 4.6 s, immaterial in a real draft. No optimisation was attempted and
+no new shortlist was created.
+
+---
+
+## 15. Ship / do not ship (Phase 14)
+
+> ### **DO NOT SHIP. Y1 remains production. Verdict: C — REJECT, as specified.**
+
+Not **A**: G8 fails in both formats, G3/G6/G9 fail in the primary one.
+
+Not **D**: the instrument limitation was found *and repaired* inside this phase, and the corrected
+comparison ran. The board is pinned, the simulation is deterministic, the control is now verified
+against production, and the guard that was missing is in place.
+
+Not **B**: B is for a candidate that is "directionally and mechanistically encouraging" where the
+benchmark cannot resolve it. **The mechanism is refuted, not unresolved.** ΔnK went −0.67 → −0.03;
+positional reallocation −0.82 → −0.28 (target) and −0.03 (dynasty); the 2026 kicker difference
+disappeared entirely. The primary format's effect fell to **+3.8** with a **negative median cell**,
+**4 of 6 seasons worse**, and a **leave-one-season-out that goes negative**.
+
+**C**, therefore — and specifically: *reject O1 as specified and reject the mechanism as described.*
+The one thing that survives is the `dynasty_1qb` residual of **+27.1**, which is real, reproducible,
+5-of-6-seasons positive — and which §11.3 shows arrives entirely through raw roster quality with
+**zero** conversion gain and **zero** reallocation. That is not the hypothesis O1 was built on, so
+it cannot be counted as support for it. It is an unexplained finding, recorded as the phase's open
+question rather than as a reason to keep the candidate alive.
+
+**Production integrity:** `models/` `73b408e9` and `league/` `d4cfd00e` unchanged; the only `src/`
+changes on this branch are one added research module and a one-line research-harness repair. 1340
+tests pass, ruff clean.
+
+---
+
+## 16. Most important remaining uncertainty (Phase 17)
+
+**Why `dynasty_1qb` returns +27.1 through raw roster quality alone.** It is reproducible, positive
+in 5 of 6 seasons, LOSO-stable, and arrives with *zero* conversion gain and *zero* positional
+reallocation — so none of the explanations this research line has developed accounts for it. It is
+also below resolution: its CI is [−7.8, +62.0] and §4 shows the sample is exhausted, so it cannot
+be settled by more of the same data.
+
+The secondary uncertainty is the one D92 left and D93 sharpened: **seven phases of results rested
+on a control nobody had checked against production.** The repair and the new guard close this
+instance; what remains unknown is whether other research modules carry the same class of drift.
+`decision_counterfactuals` has `assert_control_reproduces_production`; `draft_forensics` now has a
+dispatch-level guard; nothing systematically checks the rest.
+
+---
+
+## 17. Next research question (Phase 18)
+
+> **Re-check the *other* published draft-layer conclusions against production, the same way Phase 0
+> checked this one — starting with the ones that shaped current beliefs.**
+
+D85's "Y1 over-values K 5.34× and DST 8.10×" and D91's causal chain (degenerate marginal value →
+daVORP decides the endgame → kickers get hoarded) were both built while the visible evidence was a
+control that drafted **2.98** kickers. Production drafts **2.03**. D91's degeneracy *measurement*
+stands — it was taken on the shipped `marginal_starter_value` directly — but **its last link does
+not**: the degeneracy does not produce kicker hoarding in production, because production's
+draft-aware replacement level changes what daVORP says. That chain should be re-measured on the
+repaired engine before any of it is used to motivate a future change.
+
+Cheap and worth doing alongside it: give `recommend_draft_pick` the D89 `page_type` resolution
+(§6), so a historical backtest of 2020 stops handing production an empty preseason board.
+
+**Explicitly not recommended:** implementing Option G, re-weighting O1, adding a shortlist, more
+seasons or slots (§4.2 proves none exist), or treating the dynasty residual as a reason to keep O1.
+
+---
+
+## 18. Plain-English trust assessment (Phase 19)
+
+**The kicker story was a bug in the measuring instrument, and I should say that plainly.** For seven
+phases this project has reported that Alpha's draft engine over-buys kickers and that a better
+objective would stop it. The engine that over-bought kickers was never the one in production — it
+was a research copy that had silently lost a 2023 fix, so it valued late-round players against the
+wrong baseline. **Real production drafts two kickers, which is exactly the right number**, and on
+the 2026 board it and the candidate draft identical rosters down to the last slot.
+
+**With that corrected, the candidate's advantage mostly evaporates.** In the format this product
+targets it falls from +28 to **+3.8 points a season** — smaller than the measurement error, worse
+than production in four of six seasons, and negative at the median draft. The mechanism it was
+supposed to work through is gone: it now changes the kicker count by **0.03**.
+
+**One thing did not evaporate**, and honesty requires flagging it rather than burying it: in the
+dynasty format the candidate is still **+27** points ahead, consistently. But when you look at *how*,
+it is not doing what it was designed to do — it is simply drafting players who scored more, with no
+improvement at all in turning a roster into weekly points. That is an unexplained result, not a
+vindication, and it is not a reason to ship.
+
+**What to trust now:** the instrument, more than before. The board is pinned by hash, the simulator
+is deterministic, the control is verified against real production, and the guard that should have
+caught this defect exists and has been shown to fail when the bug is reintroduced. **What not to
+trust:** any draft-layer number published between D86 and D92, and the parts of D85's and D91's
+reasoning that depend on production over-drafting kickers. It does not.
+
+---
+
+## 19. The three questions, answered directly
+
+> **"With the D92 instrument, is O1's advantage reproducible?"**
+
+**No — it largely disappears once the control is actually production.** The D92 instrument pins the
+board and the simulator, and it reproduced D91's numbers bit-identically; what neither D92 nor any
+earlier phase checked is that the *control arm* was the shipped engine. It was not. Against the real
+engine the target-format advantage falls from +28.0 to **+3.8** [−43.2, +50.8], and the mechanism
+that explained it collapses from ΔnK −0.67 to **−0.03**.
+
+> **"If reproducible, is it large and stable enough to justify replacing Y1?"**
+
+**No.** It fails G8 in both formats and G3/G6/G9 in the primary one. In the target format it is
+worse than production in 4 of 6 seasons, negative at the median draft, and leave-one-season-out
+takes it negative. The dynasty residual (+27.1) is the only survivor and it arrives through a route
+that contradicts O1's rationale.
+
+> **"If not, what is the exact reason we cannot decide?"**
+
+**On the primary format there is no longer much to decide** — the effect is +3.8 against an MDE of
+47.0, and §4.2 proves the sample that produced that MDE is the entire available population (6
+seasons × 10 slots, with seeds contributing nothing because the simulation is deterministic). So it
+is not that a bigger experiment would settle it; **no bigger experiment exists**.
+
+**On the dynasty residual we genuinely cannot decide**, for the same structural reason: +27.1 with a
+CI of [−7.8, +62.0] and no remaining sample to add. That one is a real open question, and the
+honest statement is that this benchmark cannot resolve it — not that O1 earned it.
