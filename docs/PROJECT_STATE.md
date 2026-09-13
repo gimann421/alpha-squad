@@ -3,7 +3,36 @@
 Living summary of what is implemented, validated, and outstanding. Updated at the end of every
 milestone. See `docs/TRACEABILITY.md` for the acceptance-criteria-level mapping.
 
-## Status: M44 complete (D92) — **The historical ECR board is IMMUTABLE; D91's vintage finding is RETRACTED. The real irreproducibility is that D88–D90's runner was never committed. The instrument is now versioned. Nothing shipped.**
+## Status: M45 complete (D95) — **A season before 2021 has no preseason market board under any shipped series, and an empty board was not inert: production silently fell through to drafting by alphabetical player_id. `_preseason_overall_market` now refuses it by name.**
+
+Root cause: every shipped series' `page_type` label was introduced by the upstream DynastyProcess
+mirror on **2020-10-16** (verified from the raw parquet's `fp_page` column, which the ingested
+`market_snapshot` table does not carry) — the same FantasyPros pages exist earlier under different
+labels (`ro/redraft-offense` carries `fp_page='ppr-cheatsheets'`, the same page `ro/redraft-overall`
+carries from 2021), so no shipped series (`ro`, `rsf`, `do`, `dsf`) has a **preseason** (Jul/Aug)
+board before 2021. `_preseason_overall_market` returned `{}` for such a season rather than raising,
+and empty is not inert: `opportunity_cost.py::best_by_market_rank` scores every player
+`float("inf")` and falls through to its `player_id` tie-break, so "best available by consensus"
+silently becomes "first alphabetically" — propagating into the opponent replay, the D67 demand
+target and the draft-aware replacement level, with every number staying finite. D89 had already
+drawn exactly this line for the simulated opponent (`EmptyMarketBoardError`, after finding the `dsf`
+series had no 2020 board) but never generalized it to `ro` or enforced it at the query itself.
+
+`MarketSeries` now carries `first_preseason_season` (2021, measured per series) and
+`_preseason_overall_market` raises `MissingMarketBoardError` naming season, ecr_type, page_type,
+series label and reason — scoped only to a page_type *resolved from the series*, so a caller naming
+one explicitly (`preseason_page_type`'s pre-rename-label lookup) is left alone. The pre-rename 2020
+rows are **deliberately not substituted**: a different `(ecr_type, page_type)` pair is a different
+series by D56's definition, and adopting one would silently change what every historical number
+means — that is a series-definition decision needing its own pre-registration.
+
+**Production impact: none for any valid input.** 64 `recommend_draft_pick` calls across 2024 and
+live 2026 (all 16 rounds, two draft slots) produce byte-identical output — matching sha256, every
+candidate score to 9 decimals — against this same commit without the fix. 2019/2020 requests now
+fail loudly instead of silently. `models/` (`73b408e9`) and `league/` (`d4cfd00e`) unchanged.
+**1345 tests pass** (1338 before), ruff clean. Full report: `docs/DECISIONS.md` D95.
+
+### Earlier status: M44 complete (D92) — **The historical ECR board is IMMUTABLE; D91's vintage finding is RETRACTED. The real irreproducibility is that D88–D90's runner was never committed. The instrument is now versioned. Nothing shipped.**
 
 An instrumentation/reproducibility phase. Full report: `docs/D92_BOARD_VINTAGE_INSTRUMENT.md`.
 `models/` (`73b408e9`) and `league/` (`d4cfd00e`) unchanged from the Y1 baseline; the only `src/`

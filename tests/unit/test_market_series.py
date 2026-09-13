@@ -12,8 +12,9 @@ import duckdb
 import pytest
 
 from alpha_squad.league.context import LeagueContext
-from alpha_squad.market.edge import _preseason_overall_market
+from alpha_squad.market.edge import MissingMarketBoardError, _preseason_overall_market
 from alpha_squad.market.series import (
+    ALL_SERIES,
     DYNASTY_1QB,
     DYNASTY_SUPERFLEX,
     REDRAFT_1QB,
@@ -144,3 +145,83 @@ class TestPreseasonBoardIsOneRankSpace:
         _seed(con, "rb_1qb", "RB", 1.0, page_type="redraft-overall", ecr_type="ro")
         assert set(_preseason_overall_market(con, "ro", 2025)) == {"rb_1qb"}
         assert set(_preseason_overall_market(con, "rsf", 2025)) == {"qb_sf"}
+
+
+class TestSeasonsBeforeTheSeriesExistsAreRefused:
+    """D95. Every shipped series' page labels were introduced by the upstream mirror on
+    2020-10-16, so none of them has a PRESEASON board before 2021. Asking for one used to
+    return `{}`, and an empty board is not inert: `best_by_market_rank` scores every player
+    `float("inf")` and falls through to its `player_id` tie-break, so the market consensus
+    silently becomes alphabetical order.
+
+    Measured consequence (D94): all ten target-format 2020 cells diverged from production,
+    for every research tier at once -- a defect that looked like a tier bug for four phases.
+    D89 had already drawn this exact line for the simulated opponent after finding `dsf` had
+    no 2020 board; it was never enforced at the query, which is what this covers.
+    """
+
+    def test_a_season_before_the_series_raises(self, con):
+        with pytest.raises(MissingMarketBoardError) as exc:
+            _preseason_overall_market(con, "ro", 2020)
+        message = str(exc.value)
+        # The diagnostic has to name every field needed to act on it without re-deriving them.
+        assert "2020" in message
+        assert "ro" in message
+        assert "redraft-overall" in message
+        assert REDRAFT_1QB.label in message
+        assert "2021" in message
+
+    def test_it_raises_even_when_another_page_carries_that_season(self, con):
+        """The 2020 rows DO exist upstream, under the pre-rename label `redraft-offense`
+        (fp_page `ppr-cheatsheets`, the same FantasyPros page `redraft-overall` carries from
+        2021). They are deliberately not substituted: a different (ecr_type, page_type) pair
+        is a different series by D56's definition, and adopting one would silently change what
+        every historical number means."""
+        _seed(con, "wr1", "WR", 1.0, page_type="redraft-offense", season=2020)
+        with pytest.raises(MissingMarketBoardError):
+            _preseason_overall_market(con, "ro", 2020)
+        # Reaching the old label requires naming it, which is a deliberate act by the caller.
+        explicit = _preseason_overall_market(con, "ro", 2020, page_type="redraft-offense")
+        assert set(explicit) == {"wr1"}
+
+    def test_every_shipped_series_refuses_2020(self, con):
+        """Not a `ro` quirk: the relabel hit all four boards at once, so every shipped league
+        config can reach this. `rsf` and `dsf` have no 2020 preseason rows under ANY label."""
+        for series in ALL_SERIES:
+            with pytest.raises(MissingMarketBoardError):
+                _preseason_overall_market(con, series.ecr_type, 2020)
+
+    def test_the_first_covered_season_is_allowed_through(self, con):
+        """The neighbouring valid configuration: 2021 is the first covered season and must
+        behave exactly as before -- the guard must not be off by one."""
+        _seed(con, "rb1", "RB", 1.0, page_type="redraft-overall", season=2021)
+        assert set(_preseason_overall_market(con, "ro", 2021)) == {"rb1"}
+        assert REDRAFT_1QB.covers(2021)
+        assert not REDRAFT_1QB.covers(2020)
+
+    def test_a_covered_season_with_no_rows_still_returns_empty(self, con):
+        """Scope limit, stated as a test rather than left implicit: this contract refuses a
+        season the series does not COVER. A covered season whose rows are simply missing (an
+        ingestion gap) is still returned empty, and the D89 opponent guard remains the thing
+        that catches it downstream. Widening the check to every empty result would reject the
+        many unit fixtures that legitimately exercise the scorer with no market table."""
+        assert _preseason_overall_market(con, "ro", 2025) == {}
+
+    def test_allow_empty_opts_out_for_callers_that_tolerate_absence(self, con):
+        """`compute_edges_for_season` and `load_season_static` both genuinely tolerate an
+        absent board and say so at the call site."""
+        assert _preseason_overall_market(con, "ro", 2020, allow_empty=True) == {}
+
+    def test_an_unknown_ecr_type_is_unaffected(self, con):
+        """No registered series means no coverage window to enforce; the live FantasyPros
+        capture must keep working."""
+        _seed(
+            con,
+            "p1",
+            "WR",
+            1.0,
+            page_type="live-draft-overall",
+            ecr_type="draft_overall",
+            season=2020,
+        )
+        assert set(_preseason_overall_market(con, "draft_overall", 2020)) == {"p1"}

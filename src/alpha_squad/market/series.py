@@ -31,9 +31,17 @@ class MarketSeries:
     ecr_type: str
     page_type: str
     label: str
+    #: First season this series has a PRESEASON (Jul/Aug) board for. Every consumer is
+    #: preseason-scoped (D54), so a season before this has no board at all -- not a sparse one.
+    #: Measured from the real snapshot, not assumed; see `FIRST_PRESEASON_SEASON` (D95).
+    first_preseason_season: int = 2021
 
     def __str__(self) -> str:  # pragma: no cover - trivial
         return f"{self.ecr_type}/{self.page_type}"
+
+    def covers(self, season: int) -> bool:
+        """Whether this series has a preseason board for `season` at all."""
+        return season >= self.first_preseason_season
 
 
 # The four boards this deployment ingests, each pinned to the single page_type that actually
@@ -48,6 +56,25 @@ class MarketSeries:
 # exists only in months 9-12 -- so the preseason Jul/Aug scoping every consumer here already
 # applies (D54's leakage-safe pattern) excludes them by construction. A future non-preseason
 # consumer would need to filter on fp_page as well; none exists today.
+#
+# D95: every one of those four page_type labels was introduced by the upstream mirror on
+# 2020-10-16. Before that date the SAME FantasyPros pages were mirrored under different
+# labels (`ro/redraft-offense` carries fp_page `ppr-cheatsheets`; `do/dynasty-offense` carries
+# `dynasty-overall`), which is why no shipped series has a PRESEASON board before 2021 --
+# measured, per series, in the table below. Requesting an earlier season is a data-contract
+# violation, not a sparse board: see `market/edge.py::MissingMarketBoardError`.
+#
+#   series            first preseason (Jul/Aug) board    2020 preseason rows under old label
+#   ro/redraft-overall   2021                            533 players (ro/redraft-offense)
+#   rsf/redraft-op       2021                            none under any label
+#   do/dynasty-overall   2021                            474 players (do/dynasty-offense)
+#   dsf/dynasty-op       2021                            none under any label
+#
+# The pre-rename rows are deliberately NOT wired in as a fallback. They are a different
+# (ecr_type, page_type) pair, and adopting one would change what every historical number
+# means -- a series-definition decision that needs its own pre-registration, not a silent
+# substitution (D56's rule).
+FIRST_PRESEASON_SEASON = 2021
 REDRAFT_1QB = MarketSeries("ro", "redraft-overall", "redraft PPR overall (1QB)")
 REDRAFT_SUPERFLEX = MarketSeries("rsf", "redraft-op", "redraft PPR superflex (2QB)")
 DYNASTY_1QB = MarketSeries("do", "dynasty-overall", "dynasty overall (1QB)")

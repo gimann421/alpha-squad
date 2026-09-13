@@ -6777,3 +6777,83 @@ season, and the +49.0 it is usually compared against is not reproducible. **One 
 a measurement of noise.** *Do we have a trustworthy instrument?* **Substantially yes, for the first
 time — but only prospectively.** Board, projections, simulation and now the runner are all pinned
 and verified; **every phase before D92 remains unreproducible.**
+
+---
+
+## D95 — The pre-2021 empty preseason market board is a data-contract violation; production now refuses it
+
+**Context.** A parallel research line on this branch (D93/D94, not yet merged to `main`) found that
+every target-format 2020 backtest cell diverged from production at once, independent of which
+scoring tier was used — a signature pointing at one shared input rather than a tier-specific bug.
+
+**Root cause.** Every shipped market series' `page_type` label was introduced by the upstream
+DynastyProcess mirror on **2020-10-16**. Before that date the *same* FantasyPros pages were mirrored
+under different labels. Verified from the raw parquet's `fp_page` column, which the ingested
+`market_snapshot` table does not carry:
+
+| ecr_type | page_type | fp_page | span |
+|---|---|---|---|
+| `ro` | `redraft-offense` | `ppr-cheatsheets` | 2020-01-04 → 2020-09-03 |
+| `ro` | `redraft-overall` | `/nfl/rankings/ppr-cheatsheets.php` | 2021-01-01 → 2026-09-04 |
+| `do` | `dynasty-offense` | `dynasty-overall` | 2019-12-27 → 2020-10-12 |
+| `do` | `dynasty-overall` | `/nfl/rankings/dynasty-overall.php` | 2020-10-16 → 2026-09-11 |
+
+`ppr-cheatsheets` and `/nfl/rankings/ppr-cheatsheets.php` are the same page under a bare slug and a
+full URL path. So this is a **label discontinuity, not missing data** for `ro`/`do`; it is missing
+data entirely for `rsf`/`dsf`, which have no 2020 preseason rows under any label. No shipped series
+(`ro`, `rsf`, `do`, `dsf`) has a **preseason** (Jul/Aug) board before **2021** — measured directly,
+not assumed, and true for every one of the four series at once, not a `ro` quirk.
+
+**Why empty was never inert.** `_preseason_overall_market` returned `{}` for a missing season and
+never raised. With `market_rank` empty, `opportunity_cost.py::best_by_market_rank` scores every
+player `float("inf")` and falls through to its `player_id` tie-break: "best available by consensus"
+silently becomes "first alphabetically." That propagates into the opponent replay, the D67 demand
+target, and therefore the draft-aware replacement level — every number stays finite and the run
+looks successful. `next_pick_survival_probability` separately returns `None` for every player when
+no market dispersion is on record, so the survival multiplier is uniformly 1.0 in the same case.
+
+`evaluation/draft_forensics.py::EmptyMarketBoardError`/`assert_usable_market_board` had **already**
+drawn exactly this line, one layer up, for the simulated opponent — found after the `dsf` series was
+discovered to have no 2020 board, and that cell was dropped rather than measured. It was never
+generalized to `ro`, and was never enforced at the query itself, so `league/draft.py`'s production
+path kept silently accepting an empty board.
+
+**Contract chosen: B — empty is invalid and must raise**, scoped precisely to the series' own
+coverage window. `MarketSeries` gains `first_preseason_season` (2021, measured); a new
+`covers(season)` method states the window as code rather than leaving it implicit.
+`market/edge.py::_preseason_overall_market` raises the new `MissingMarketBoardError`, naming season,
+ecr_type, page_type, series label and reason. The window applies **only** to a page_type resolved
+*from* the series — a caller naming one explicitly (`draft_forensics.py::preseason_page_type`'s
+pre-rename-label lookup for a season the default label doesn't cover) is deliberately reaching a
+specific board and is left alone; that distinction was caught by a test, not by inspection.
+`compute_edges_for_season` and `load_season_static` both pass `allow_empty=True` because they
+already tolerate an absent board by design — the former returns no edges rather than fabricating
+one, the latter defers the decision to the D89 guard above it, which was designed to make it.
+
+**Option C (fall back to the pre-rename label) deliberately rejected.** The 2020 rows exist under
+the old label for `ro`/`do`, but a different `(ecr_type, page_type)` pair is a different series by
+D56's own definition; adopting one would silently change what every historical number means. That is
+a series-definition decision needing its own pre-registration, not a drive-by substitution.
+
+**Scope limit, stated rather than implied.** A *covered* season whose rows are simply missing (an
+ingestion gap, not a pre-series request) still returns empty; the D89 opponent-side guard remains
+the downstream catch for that case. Widening the check to every empty result would have meant
+rewriting roughly fifty unrelated unit fixtures that legitimately exercise the scorer with no market
+table at all — not a minimal change, and not what this defect calls for. A fresh audit at this
+commit shows no such gap exists today: 2021–2026 are populated for all four series.
+
+**Tests added** (`tests/unit/test_market_series.py::TestSeasonsBeforeTheSeriesExistsAreRefused`,
+7 new tests): a pre-series raise with the full diagnostic; raising *even when* the pre-rename label
+carries rows for that season, with the explicit page_type still reachable; all four series refuse
+2020 at once; the 2021 boundary is not off-by-one; a covered-but-empty season still returns empty
+(the stated scope limit); the `allow_empty` opt-out; an unregistered ecr_type is unaffected. No
+existing test was weakened.
+
+**Production impact: none for valid input.** 64 real `recommend_draft_pick` calls across 2024 and
+live 2026 — all 16 rounds, two draft slots — produce byte-identical output (matching sha256, every
+candidate score to 9 decimals) with and without this fix. 2019/2020 requests now fail loudly.
+`models/` (`73b408e9`) and `league/` (`d4cfd00e`) unchanged.
+
+**What this does not do.** It does not merge D93's research-harness dispatch repair or D94's
+production-parity findings — those remain on the research branch, unmerged, and are a separate
+decision. It does not change the O1 objective question, any projection, or any positional valuation.
