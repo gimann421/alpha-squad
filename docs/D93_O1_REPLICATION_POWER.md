@@ -444,3 +444,74 @@ a board — so O1 cannot reach an elite-RB projection error, and RB's rate being
 means it discounts elite RBs *most*. **That argument is about `expected_weekly_marginal_value`
 versus `marginal_starter_value` and does not depend on the replacement level**, so it survives this
 phase's finding intact. No RB projection was touched and no new perturbation was run.
+
+---
+
+## 10. The instrument repair, and the corrected experiment **pre-registered before it ran**
+
+### 10.1 The repair
+
+`or tier in O_TIERS` added to `_pick_by_tier`'s draft-aware-replacement dispatch, plus
+`TestD93DraftAwareDispatch`. Research/evaluation code only; `models/` and `league/` untouched.
+
+Verified behaviourally: **`O0` now reproduces both production (`H`) and `Z0` in 12/12 cells across
+both 1-QB formats**, drafting 2 kickers to match production, where before it matched production in
+**0/24**.
+
+Verified as a guard, by temporarily reverting the fix:
+
+| test | with the bug | with the fix |
+|---|---|---|
+| `test_every_draft_aware_tier_actually_receives_a_draft_aware_level` (new) | **FAILS** | passes |
+| `test_o0_reproduces_the_shipped_engine_THROUGH_pick_by_tier` (new) | **FAILS** | passes |
+| `test_o0_is_the_shipped_engine` (pre-existing) | **PASSES** | passes |
+
+The pre-existing guard passing while the bug is present is the direct demonstration that it was
+blind to the defect it was written to prevent. The new loop covers **every** tier in
+`DRAFT_AWARE_REPLACEMENT_TIERS`, exempting only tiers whose own spec declares static intent
+(`V_TIER_SPEC["V0"] is None`; `W_TIER_SPEC["W0"/"W3"][0] is None`) — which is the discriminating
+property, since the O-tiers had no such declaration anywhere.
+
+### 10.2 Pre-registration of the corrected contrast (registered at commit `3681970`, before running)
+
+For the first time in this research line, O1 can be compared against a control that *is* the
+shipped engine. That is a **different experiment** from the one §8 registered, so it gets its own
+registration rather than being slipped in after a defect was found.
+
+| element | value |
+|---|---|
+| code | HEAD `3681970` (dispatch repaired, guards in place) |
+| board vintage | `74b2ea7d680ebe4dfdf4f9d98568810f5a43d4bfde7e9e4428fcc46fac33f4de`, asserted as a precondition |
+| formats | `target_league` (primary), `dynasty_1qb` (secondary) — analysed separately, never pooled |
+| seasons | 2020–2025 (the whole population, §6) |
+| slots | 1–10 (the whole census, §4.2) |
+| arms | `O0` (now verified == production `recommend_draft_pick`) and `O1` |
+| primary metric | `weekly_no_foresight` |
+| interval | season-clustered, `t(5)`, per §3 |
+| gates | D84's, imported unchanged. **G7 is not relaxed.** No gate added or re-thresholded |
+| economic threshold | 25.0 |
+| stopping rule | **the sample is exhausted** (§4.2). No additional seasons, slots or seeds will be sought whatever the result |
+| exclusions | 2015–2019 (no board), 2026 (unplayed). 2020 **is included**: both arms read the D89-resolved `page_type`, so the O0-vs-O1 contrast is unaffected by the production `page_type` defect in §6 |
+
+**Variance is re-estimated from the corrected runs**, not carried over: §4's ICC and MDE were
+measured on the defective engine and may not survive the repair. The decision rule is registered;
+the MDE number is not assumed.
+
+### 10.3 Predictions, recorded before any corrected result was seen
+
+> **P1.** `O0` reproduces production on the corrected path. *(Already verified on 12 cells; a
+> subset is re-verified inside the registered run.)*
+>
+> **P2 — direction.** O1's margin against the **corrected** control is **smaller** than the
+> +18.6 (24-cell) / +28.0 (60-cell) measured against the defective one, because §9.1 attributes
+> about **46%** of that margin to the defect itself.
+>
+> **P3 — the mechanism should largely disappear.** This is the sharp one. O1's signature
+> achievement was kicker restraint, and the corrected control **already drafts to capacity**
+> (2.08, and exactly 2.00 in the cells checked). There is almost nothing left for O1 to remove, so
+> `ΔnK` should collapse toward zero. If it does, then the K/DST mechanism six phases described was
+> **an artifact of the defect**, not a property of the objective.
+>
+> **P4 — most likely outcome.** A small margin with an interval spanning zero: verdict **B** or
+> **C**, not **A**. Registered so a null cannot be reported as a surprise, and so a positive
+> result cannot be claimed as predicted.
