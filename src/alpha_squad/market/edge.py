@@ -90,11 +90,37 @@ def _edge_id(player_id: str, season: int, ecr_type: str, model_version: str) -> 
     return f"edge_{digest}"
 
 
+class MissingMarketBoardError(RuntimeError):
+    """A season/series pair that carries no preseason market board at all (D95).
+
+    Raised at LOAD time rather than tolerated, because every consumer degrades silently
+    instead of failing: with the board empty, `opportunity_cost.py::best_by_market_rank`
+    scores every player `float("inf")` and falls through to its `player_id` tie-break, so
+    "best available by consensus" becomes "first alphabetically". Opponent replays, the D67
+    demand target and therefore the draft-aware replacement level are then all computed
+    against a draft nobody plays -- while every number stays finite and the run looks
+    successful. That is a fabricated observation, which this project forbids outright.
+
+    D89 established exactly this contract one layer up, for the simulated opponent
+    (`evaluation/draft_forensics.py::EmptyMarketBoardError`), after the `dsf` series' missing
+    2020 board was found. It was never applied at the query itself, so production's
+    `league/draft.py::recommend_draft_pick` kept accepting an empty board -- measured in D94,
+    where all 10 target-format 2020 cells diverged from every research tier. This is that same
+    contract, enforced where the board is actually loaded.
+
+    Pass `allow_empty=True` for a caller that genuinely tolerates an absent board and says so
+    (see `compute_edges_for_season`, and `load_season_static`, which defers the decision to
+    D89's opponent-scoped guard).
+    """
+
+
 def _preseason_overall_market(
     con: duckdb.DuckDBPyConnection,
     ecr_type: str,
     season: int,
     page_type: str | None = None,
+    *,
+    allow_empty: bool = False,
 ) -> dict[str, tuple[str, float]]:
     """Latest Jul/Aug snapshot per player for one board in `season` -> (position, ecr_rank).
 
@@ -109,12 +135,39 @@ def _preseason_overall_market(
     existing caller is scoped correctly without having to thread a new argument through.
     An `ecr_type` with no known series (the live FantasyPros capture, a test fixture) has
     only one page by construction and stays unscoped -- filtering it on a page_type nothing
-    wrote would silently return an empty board."""
+    wrote would silently return an empty board.
+
+    Raises `MissingMarketBoardError` when the board comes back EMPTY, unless the caller passes
+    `allow_empty=True`. See that class for why empty is never a usable state (D95)."""
+    # Only a page_type RESOLVED from the series carries that series' coverage window. A caller
+    # naming one explicitly is deliberately reaching a specific board -- `preseason_page_type`
+    # resolving 2020 to its pre-rename label is exactly that -- so the window does not apply.
+    resolved_from_series = page_type is None
+    try:
+        series = series_for_ecr_type(ecr_type)
+    except ValueError:
+        series = None
     if page_type is None:
-        try:
-            page_type = series_for_ecr_type(ecr_type).page_type
-        except ValueError:
-            page_type = None
+        page_type = series.page_type if series is not None else None
+    # D95: a season before the series exists has NO preseason board under its own label.
+    # Refused here rather than returned empty -- see MissingMarketBoardError.
+    if (
+        resolved_from_series
+        and series is not None
+        and not series.covers(season)
+        and not allow_empty
+    ):
+        raise MissingMarketBoardError(
+            f"no preseason (Jul/Aug) market board exists for season {season}: series "
+            f"{series} ({series.label}), ecr_type '{ecr_type}', page_type '{page_type}'. "
+            f"This series' first preseason board is {series.first_preseason_season} -- the "
+            "upstream mirror relabelled every page on 2020-10-16, so earlier seasons are "
+            "either absent entirely or carried under a different (ecr_type, page_type) pair. "
+            "An empty board is not a usable state: every consumer falls through to ordering "
+            "by player_id, so market consensus silently becomes alphabetical order. Exclude "
+            "the season from the evaluation, or pass allow_empty=True if this caller "
+            "genuinely tolerates an absent board."
+        )
     where = "ecr_type = ? AND year(scrape_date) = ? AND month(scrape_date) IN (7, 8)"
     params: list[object] = [ecr_type, season]
     if page_type is not None:
@@ -293,7 +346,10 @@ def classify_action(
 def compute_edges_for_season(
     con: duckdb.DuckDBPyConnection, target_season: int, ecr_type: str = DEFAULT_ECR_TYPE
 ) -> list[EdgeRecord]:
-    market = _preseason_overall_market(con, ecr_type, target_season)
+    # Tolerates an absent board by design: a season with no preseason consensus simply has no
+    # model-vs-market edges to report, which is a real answer rather than a degraded one --
+    # nothing here falls through to a player_id ordering (D95).
+    market = _preseason_overall_market(con, ecr_type, target_season, allow_empty=True)
     if not market:
         return []
 

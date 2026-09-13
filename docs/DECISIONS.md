@@ -6888,3 +6888,132 @@ an empty preseason board (§6 of the report; it is why `Z0`/`Q0`/`L0` mismatch i
 
 **Explicitly not recommended:** Option G, re-weighting O1, a shortlist, more seasons or slots (none
 exist), or treating the dynasty residual as a reason to keep O1 alive.
+
+---
+
+## D94 — Production-parity recheck after D92 (diagnostic only, no production change)
+
+D93 repaired the O-tier dispatch. D94 asked what survives, re-verifying every claim through the
+**actual production path** (`league/draft.py::recommend_draft_pick`, tier `H`) rather than
+`score_candidate`.
+
+**Parity, 60 paired cells per arm (2020–2025 × 10 slots, target format, board `74b2ea7d…`):**
+
+| arm | identical to production | nK | nDST | starter pts vs H |
+|---|---|---|---|---|
+| `O0` **unrepaired** (`origin/main`) | **0/60** — never, in any season | 3.18 | 2.06 | **−35.40** |
+| `O0` **repaired** (D93) | 50/60 (every non-2020 cell) | 2.04 | 1.54 | **0.00** |
+| `L0`/`Q0`/`Z0` | 50/60, identical pattern | 2.04 | 1.54 | 0.00 |
+
+So D93's one-line repair **fully** restores parity: `O0` lands exactly on `L0`/`Q0`/`Z0`, 16/16
+players shared. The defect was independently confirmed at source rather than on testimony —
+`DRAFT_AWARE_REPLACEMENT_TIERS` already listed `*O_TIERS`, so the code *declared* the O-tiers
+draft-aware while the dispatch chain never gave them a draft-aware level.
+
+**A second defect the repair does not touch.** All ten 2020 cells diverge for *every* tier, at
+identical magnitude (−7.48, 12.0/16 shared, first divergence round 1.9) — one common cause, not a
+tier bug. Root cause in D95 below.
+
+**Claim status, re-measured through production:**
+
+- **D85's "Y1 over-values K 5.34×, DST 8.10×" — VALID.** Reproduced *exactly* on the 2026 board
+  from production's own functions (SEA D/ST 110.8/95.2 → 8.10×; Aubrey 182.4/140.4 → 5.34×). It is
+  algebra over the shipped `msv + w·daVORP` value base and never touched the O-tiers.
+- **D91's marginal-value degeneracy — VALID.** Rounds 1–2: 0/40 top candidates at `msv` 0 (39.5
+  distinct values). Rounds 13–16: **40/40 at exactly 0, one distinct value** — the term is a
+  constant and cannot discriminate. Reproduces identically in `dynasty_1qb`, so it is structural.
+- **Every O-tier number in D86–D92 — INVALID**, measured against a control that was never
+  production.
+
+**Component ablation, 380 parity-verified production states** (each verified to pick what
+`recommend_draft_pick` picks before any ablation was read): daVORP changes the pick in 206/380 and
+owns the endgame (160/192 late rounds); `msv` owns the opening (89/188 early, 31/192 late);
+**opportunity cost is nearly inert at 31/380** (17/384 in dynasty). Capacity binds only late (0
+early, 52 late).
+
+**K/DST mechanism, end to end.** Production drafts 2.04 K (needs 1, cap 2) and 1.54 DST, earliest
+round 8. Late-draft `msv` is 0 for every real candidate, so daVORP alone decides — *except* a K/DST
+facing an empty mandatory slot, whose `msv` jumps to its **full projection** (~100–180) against a
+daVORP of ~0. That spike is what drafts the kicker, and it is **load-bearing**: it is the only thing
+filling the mandatory slot.
+
+**The pre-registered fix for that conflation does nothing.** On 50 non-2020 paired cells, `L1`
+(explicit endgame legality constraint, Y1 valuation) is **50/50 byte-identical to production** — the
+constraint never binds. `L3` (constraint + arm-C valuation) gives +49.74 starter points with a
+season-clustered 95% CI of **[−110.4, +209.9]** and still drafts 2.02 K. Nothing here clears the
+25.0-point economic threshold, or zero.
+
+**Projection-error interaction (diagnostic perturbations, production projections untouched):** elite
+RB ±20% moves RB count only 5.25→6.00 and +5% and +20% produce the *same* positional change — the
+decision layer **partially mitigates** RB underprojection. QB is inert upward (0.5/16 picks at
++5%/+10%) but −20% collapses elite QB count 1.50→0.50 — it **inherits and amplifies** QB
+overprojection downward.
+
+**Verdict: DO NOT SHIP.** After correcting the parity defect there is **no** evidence the decision
+objective itself needs to change. The kicker over-draft that motivated the objective search was
+substantially an artifact — 3.18 kickers was the broken control; production takes 2.04.
+
+**Retracted by D95 (below):** D94 also reported production as non-deterministic on exact score
+ties. That was wrong, and the error was in D94's own diagnostic.
+
+---
+
+## D95 — The 2020 empty preseason board is a data-contract violation; production now refuses it
+
+**Root cause.** Every shipped series' `page_type` label was introduced by the upstream
+DynastyProcess mirror on **2020-10-16**. Before that date the *same* FantasyPros pages were mirrored
+under different labels. Verified from the raw parquet's `fp_page` column, which the DuckDB
+`market_snapshot` table does not carry:
+
+| ecr_type | page_type | fp_page | span |
+|---|---|---|---|
+| `ro` | `redraft-offense` | `ppr-cheatsheets` | 2020-01-04 → 2020-09-03 |
+| `ro` | `redraft-overall` | `/nfl/rankings/ppr-cheatsheets.php` | 2021-01-01 → 2026-09-04 |
+| `do` | `dynasty-offense` | `dynasty-overall` | 2019-12-27 → 2020-10-12 |
+| `do` | `dynasty-overall` | `/nfl/rankings/dynasty-overall.php` | 2020-10-16 → 2026-09-11 |
+
+`ppr-cheatsheets` and `/nfl/rankings/ppr-cheatsheets.php` are the same page under a bare slug and a
+full URL path. So this is a **label discontinuity, not missing data** — for `ro` and `do`. It is
+missing data for `rsf`/`dsf`, which have no 2020 preseason rows under any label.
+
+**Why empty was never inert.** With `market_rank` empty, `opportunity_cost.py::best_by_market_rank`
+scores every player `float("inf")` and falls through to its `player_id` tie-break: "best available
+by consensus" silently becomes "first alphabetically". That propagates into the opponent replay, the
+D67 demand target and therefore the draft-aware replacement level — every number stays finite and
+the run looks successful. `next_pick_survival_probability` separately returns `None` for every
+player, so the survival multiplier is uniformly 1.0. **D89 had already drawn exactly this line** for
+the simulated opponent (`EmptyMarketBoardError`, after finding `dsf` had no 2020 board, and that
+cell was dropped). It was never generalised to `ro`, and was never enforced at the query, so
+production kept accepting it.
+
+**Contract chosen: B — empty is invalid and must raise**, scoped precisely to the series' own
+coverage window. `MarketSeries` gains `first_preseason_season` (2021 for all four, measured);
+`_preseason_overall_market` raises `MissingMarketBoardError` naming season, ecr_type, page_type,
+series label and reason. The window applies **only** to a page_type resolved *from* the series — a
+caller naming one explicitly (D89's `preseason_page_type`) is deliberately reaching a specific board
+and is left alone. That distinction was found by a test, not by inspection.
+
+**Option C (fall back to the pre-rename label) deliberately rejected.** A different
+`(ecr_type, page_type)` pair is a different series by D56's definition; adopting one would silently
+change what every historical number means. It is a series-definition decision that needs its own
+pre-registration, not a drive-by substitution.
+
+**Scope limit, stated rather than implied.** A *covered* season whose rows are simply missing still
+returns empty; the D89 opponent guard remains the downstream catch. Widening the check to every
+empty result would reject ~50 unit fixtures that legitimately exercise the scorer with no market
+table, which is not a minimal change. The audit shows no covered-but-empty season exists today
+(2021–2026 populated for all four series).
+
+**Tie-breaking (D94's claim) — RETRACTED.** `league/draft.py:427` sorts by `(-score, player_id)`
+and `draft_forensics.py:2129/2169` do the same; D54 already fixed this and pins it with a
+regression test. Production and the harness are both deterministic on exact ties. The
+non-determinism D94 observed was in D94's own ablation replica, which used a bare `max()` with no
+tie-break. No production defect exists; nothing to schedule.
+
+**Prior-phase validity.** D84–D92 are **VALID EXCEPT 2020** on this axis (2020 cells measured
+production against an alphabetical opponent). D93's corrected contrast included 2020 in all six
+seasons, so its headline numbers are **contaminated on 1 of 6 seasons** and should be restated on
+2021–2025 before being relied on. D94's 50 non-2020 cells are unaffected.
+
+**Production impact: none for any valid input.** 2021–2026 load identically; 2019/2020 now fail
+loudly. `models/` and `league/` untouched.

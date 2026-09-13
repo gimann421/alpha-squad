@@ -3,7 +3,31 @@
 Living summary of what is implemented, validated, and outstanding. Updated at the end of every
 milestone. See `docs/TRACEABILITY.md` for the acceptance-criteria-level mapping.
 
-## Status: M45 complete (D93) — **The O-tier control was never the shipped engine. With that repaired, O1's advantage falls from +28.0 to +3.8 and its K/DST mechanism disappears entirely. O1 REJECTED as specified. Nothing shipped.**
+## Status: M46 complete (D94+D95) — **After the parity repair there is no evidence the draft objective needs to change. The remaining defect was a data contract, now fixed: production refuses a season whose market board does not exist instead of silently drafting alphabetically.**
+
+D94 (diagnostic, no code change) re-verified every published draft-layer claim through the real
+`recommend_draft_pick`. D93's repair restores parity **completely** — `O0` goes from **0/60** cells
+matching production to **50/60**, landing exactly on `L0`/`Q0`/`Z0`; the 10 misses are all 2020 and
+hit *every* tier. D85's K 5.34× / DST 8.10× amplification and D91's marginal-value degeneracy both
+**reproduce in production** (rounds 13–16: 40/40 top candidates at `msv` exactly 0), but the K/DST
+spike is **load-bearing** — it is the only thing filling the mandatory slot — and the pre-registered
+fix for it (`L1`) is **50/50 byte-identical to production**. daVORP drives the endgame (160/192 late
+picks); opportunity cost is nearly inert (31/380). **DO NOT SHIP an objective change.**
+
+D95 traced the 2020 misses to a data-contract violation: every series' `page_type` label was
+introduced upstream on 2020-10-16, so no shipped series has a preseason board before 2021, and an
+empty board made `best_by_market_rank` fall through to its `player_id` tie-break — market consensus
+became **alphabetical order**, silently. `MarketSeries` now carries `first_preseason_season` and
+`_preseason_overall_market` raises `MissingMarketBoardError`. The pre-rename 2020 rows are
+deliberately **not** substituted (D56: a different `(ecr_type, page_type)` is a different series).
+**D94's exact-tie non-determinism claim is retracted** — production sorts `(-score, player_id)`;
+the flaw was in D94's own diagnostic. D84–D92 are **VALID EXCEPT 2020**; D93's six-season headline
+is contaminated on 1 of 6 and should be restated on 2021–2025.
+
+Full reports: `docs/DECISIONS.md` (D94, D95). **`models/` `73b408e9` and `league/` `d4cfd00e`
+unchanged.** 1347 tests pass, ruff clean.
+
+### Earlier status: M45 complete (D93) — **The O-tier control was never the shipped engine. With that repaired, O1's advantage falls from +28.0 to +3.8 and its K/DST mechanism disappears entirely. O1 REJECTED as specified. Nothing shipped.**
 
 Full report: `docs/D93_O1_REPLICATION_POWER.md`. Repair `3681970`, corrected pre-registration
 `f11c899`, results `ca8681e`. **`models/` `73b408e9` and `league/` `d4cfd00e` unchanged**; the only
