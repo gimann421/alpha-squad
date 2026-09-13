@@ -1578,3 +1578,100 @@ class TestD89FlexTieBreakIsOrderDependent:
         for _ in range(5):
             starters = compute_league_starters(league, points, positions, teams=1)["starters"]
             assert "rb2" in starters and "wr2" not in starters
+
+
+class TestD93DraftAwareDispatch:
+    """D93: the guard that would have caught the O-tier dispatch omission.
+
+    `test_o0_is_the_shipped_engine` asserts on `score_candidate` called directly, without passing
+    `dynamic_levels`. That leaves the value `None` for every tier compared, so they agree for the
+    wrong reason. The draft-aware replacement level is hoisted in `_pick_by_tier`, and it is that
+    dispatch which omitted `O_TIERS` -- so every O-tier ran on the D65-era STATIC level for seven
+    phases while a test named "is the shipped engine" passed.
+
+    These assert through `_pick_by_tier`, and they assert it for EVERY tier that declares itself
+    draft-aware rather than for one tier family, so the next family cannot repeat it.
+    """
+
+    def _static(self, con):
+        from alpha_squad.evaluation.draft_forensics import load_season_static
+
+        _seed_league_season(con, 2023)
+        league = _small_league()
+        return league, load_season_static(con, league, 2023)
+
+    def test_every_draft_aware_tier_actually_receives_a_draft_aware_level(self, con):
+        """The load-bearing one. A tier in `DRAFT_AWARE_REPLACEMENT_TIERS` claims to be scored
+        against the shipped draft-aware replacement level; this asserts the dispatch in
+        `_pick_by_tier` really hands it one, rather than silently falling back to static."""
+        from alpha_squad.evaluation.draft_forensics import (
+            DRAFT_AWARE_REPLACEMENT_TIERS,
+            V_TIER_SPEC,
+            W_TIER_SPEC,
+            _pick_by_tier,
+        )
+
+        # A tier may run on the static level only if its OWN spec declares that intent: V0 is
+        # "the shipped N4 formula with production's STATIC replacement -- control", and W0/W3 are
+        # D67's static controls. That is the discriminating property -- the O-tiers had no such
+        # declaration anywhere, they were simply missing from the dispatch.
+        deliberately_static = {t for t, v in V_TIER_SPEC.items() if v is None} | {
+            t for t, v in W_TIER_SPEC.items() if v[0] is None
+        }
+
+        league, static = self._static(con)
+        available = set(static.projections)
+        reverted = []
+        for tier in DRAFT_AWARE_REPLACEMENT_TIERS:
+            if tier in deliberately_static:
+                continue
+            try:
+                _, scored = _pick_by_tier(
+                    static,
+                    con,
+                    league,
+                    2023,
+                    available,
+                    [],
+                    tier,
+                    current_pick_overall=1,
+                    next_pick_overall=5,
+                    roster_player_ids=[],
+                    picks_remaining=len(league.dedicated_slots()) + 2,
+                )
+            except RuntimeError:
+                continue  # a tier that refuses to run without extra inputs (e.g. O1's rates)
+            if not scored:
+                continue
+            # `score_candidate` only emits this reason when `dynamic_levels` was supplied.
+            if not any("draft-aware replacement" in r for r in scored[0].reasons):
+                reverted.append(tier)
+        assert not reverted, (
+            f"tiers in DRAFT_AWARE_REPLACEMENT_TIERS silently reverted to the STATIC replacement "
+            f"level because _pick_by_tier's dispatch omits them: {reverted}. This is the D85 "
+            f"defect and the D93 recurrence; add them to the dispatch at the `elif tier in "
+            f"X_TIERS or ...` branch."
+        )
+
+    def test_o0_reproduces_the_shipped_engine_THROUGH_pick_by_tier(self, con):
+        """The same claim `test_o0_is_the_shipped_engine` makes, asserted on the path a real draft
+        takes. This one fails when the dispatch omits O_TIERS; the other does not."""
+        from alpha_squad.evaluation.draft_forensics import _pick_by_tier
+
+        league, static = self._static(con)
+        available = set(static.projections)
+        kwargs = dict(
+            current_pick_overall=1, next_pick_overall=5, roster_player_ids=[], picks_remaining=8
+        )
+        chosen = {}
+        scores = {}
+        for tier in ("O0", "L0", "Q0", "Z0"):
+            pick, scored = _pick_by_tier(static, con, league, 2023, available, [], tier, **kwargs)
+            chosen[tier] = pick
+            scores[tier] = {s.player_id: s.score for s in scored}
+        for tier in ("L0", "Q0", "Z0"):
+            assert chosen["O0"] == chosen[tier], (
+                f"O0 chose {chosen['O0']} but {tier} chose {chosen[tier]} through _pick_by_tier"
+            )
+            for player_id, score in scores[tier].items():
+                assert scores["O0"][player_id] == pytest.approx(score, abs=1e-9), player_id

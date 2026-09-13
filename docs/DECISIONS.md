@@ -6857,3 +6857,114 @@ candidate score to 9 decimals) with and without this fix. 2019/2020 requests now
 **What this does not do.** It does not merge D93's research-harness dispatch repair or D94's
 production-parity findings — those remain on the research branch, unmerged, and are a separate
 decision. It does not change the O1 objective question, any projection, or any positional valuation.
+
+---
+
+## D96 — Instrument cleanup: the benchmark window now matches the board contract, and D93 is restated on 2021-2025
+
+Bookkeeping and instrument hygiene. **No objective research, no new experiment, and no new grid
+was run** — the restatement below is a re-aggregation of cells D93 already measured.
+
+### 1. The valid historical evaluation contract
+
+**2021-2025.** D95 established that no shipped market series has a PRESEASON (Jul/Aug) board
+before 2021: the upstream mirror relabelled every page on 2020-10-16, so 2020's rows live under a
+different `(ecr_type, page_type)` pair, which D56 defines as a different series. `BACKTEST_SEASONS`
+is narrowed from `(2020, ..., 2025)` to `(2021, ..., 2025)` to say so, and a new test asserts the
+window as a *property* over `ALL_SERIES` (`series.covers(season)` for every season, every series)
+rather than as a literal, so registering a series with a later start date fails loudly instead of
+silently widening the benchmark.
+
+Narrowing the window **changes `compute_board_vintage`'s combined hash**, deliberately: the
+population a vintage covers is part of the board identity it names. Per-season hashes are
+unchanged. Pre-D96 recorded combined hashes describe the six-season window and will not match;
+that is the correct outcome, not a regression.
+
+### 2. The bypass D95 could not close, and why it needed closing here
+
+D95 scoped its guard to a page_type **resolved from the series**, leaving an explicitly-named one
+alone — correct, because naming a page is a deliberate act. But `scripts/d92_paired_grid.py` names
+one on every run: it calls `preseason_page_type`, which resolves 2020 to the pre-rename label, and
+passes it explicitly. So the benchmark runner could still measure a season production itself
+refuses, against a different market series. **That is exactly how every 2020 cell in D89-D93 came
+to exist.** The runner now refuses an uncovered season before any draft runs, and defaults its
+`--seasons` to `BACKTEST_SEASONS` rather than carrying its own copy of the window.
+
+### 3. D93 restated — the authoritative D93 result is 2021-2025
+
+Source: D93's corrected grid, `git_head f11c899` (which contains the dispatch repair `3681970`),
+board vintage `74b2ea7d…`, 60 paired cells per format. Ten cells per format (all of 2020) are
+dropped as never-legal. Same arms, metrics, gates, slots, opponent and estimator; nothing tuned.
+
+| quantity | OLD (published, 6 seasons — **contaminated**) | **CORRECTED (2021-2025 — authoritative)** |
+|---|---|---|
+| `target_league` effect | +3.8 | **+7.0** |
+| — 95% CI (season-clustered) | [−43.2, +50.8] | **[−54.1, +68.2]** |
+| — MDE | 47.0 | **61.2** |
+| — seasons where O1 is worse | 4 of 6 | **3 of 5** |
+| — Δ n-kickers (the claimed mechanism) | −0.03 | **−0.04** |
+| `dynasty_1qb` effect | +27.1 | **+30.7** |
+| — 95% CI | [−7.8, +62.0] | **[−13.9, +75.2]** |
+| — MDE | 34.9 | **44.6** |
+| — Δ n-kickers | +0.05 | **+0.02** |
+
+The dropped 2020 clusters were `target −12.3` and `dynasty +9.4`.
+
+**The conclusion does not change, and must not be read as strengthened.** Both CIs still span
+zero. `target_league` stays far below the 25.0-point economic threshold. `dynasty_1qb`'s +30.7 is
+nominally above that threshold but is now **below its own MDE of 44.6** — i.e. formally
+unresolvable, which is a different statement from "an effect exists." The claimed K/DST mechanism
+remains ≈0 in both formats. **O1 stays REJECTED as specified; Y1 remains production.**
+
+**Dropping a contaminated cluster cost power rather than buying confidence** (MDE 47.0 → 61.2
+target, 34.9 → 44.6 dynasty). The corrected instrument is *less* able to resolve an effect than the
+contaminated one appeared to be. That is the honest direction of this correction.
+
+### 4. Production parity, through the real engine
+
+Re-verified on the covered window against tier `H`, which calls `league/draft.py::
+recommend_draft_pick` itself — not `score_candidate`, whose omission of `dynamic_levels` is what
+hid the defect for seven phases. `target_league`: **O0 50/50 identical to production**, as are
+L0/Q0/Z0. The O-tier draft-aware dispatch is confirmed active in the tree that produced the grid.
+
+### 5. D93's dispatch repair is merged here, and why this phase determined otherwise
+
+The repair was left unmerged through D94/D95 as a separate decision. D96's trust check forced it:
+on `main`, `_pick_by_tier`'s draft-aware chain still omitted `O_TIERS`, so **any experiment run
+from `main` today would silently reproduce the original defect** — the control would revert to the
+D65-era static replacement level while claiming to be the shipped engine. An instrument-hygiene
+phase cannot declare the instrument trustworthy and leave that in place. The repair is 12 lines in
+`evaluation/`, touches no production path, and arrives with the guard that asserts EVERY tier in
+`DRAFT_AWARE_REPLACEMENT_TIERS` receives a draft-aware level, through `_pick_by_tier`. Verified by
+reverting the one line: exactly the two D93 guard tests fail and nothing else.
+
+### 6. Season-configuration audit
+
+| location | classification | action |
+|---|---|---|
+| `board_vintage.BACKTEST_SEASONS` | C — benchmark config | narrowed to 2021-2025 |
+| `d92_paired_grid.py` seasons default + explicit page_type | C — benchmark config | guard added; default reads the contract |
+| `replication_design` D87-D90 | A — historical record | untouched; `ACTIVE_DESIGN` → new `D96_RESTATEMENT` |
+| `EXCLUDED_SEASONS` 2020/2019 entries | A — historical record | untouched; annotated as superseded on the "2020 IS usable" point |
+| `cli.py` `season_start=2020` (ingest, ML walk-forward) | A — correct historical | untouched; 2020 *stats* are real and are not the draft board |
+| `evaluation/config.py` `ESTABLISHED_ML_SEASON_RANGE` | A — ML, not the draft board | untouched |
+| `projection_calibration` / `projection_specification` | A — already 2021+ | untouched (`FIRST_RESIDUAL_SEASON = 2021`) |
+| `draft_forensics::preseason_page_type` docstrings | E — documentation | left; the function is still correct for a deliberate caller |
+| `models/established/season_level.py` ECR feature | **open, out of scope** | see below |
+
+### 7. Open instrument issue, recorded not fixed
+
+`models/established/season_level.py` builds M6's `preseason_ecr_rank` feature with raw SQL that
+filters `ecr_type='ro'` **with no `page_type` filter**, so it merges the PPR draft board with the
+separately-ranked IDP board (and, for 2020, the pre-rename pages) and takes whichever row has the
+later `scrape_date`. That is the D56 merged-rank-space problem, still live in the *feature* path.
+It is deliberately NOT fixed here: it lives in `models/`, which this phase may not modify, and
+changing it would change projections. Recorded as the next data-contract question.
+
+### 8. Also recorded
+
+- **D94's exact-tie non-determinism claim is retracted.** `league/draft.py:427` sorts
+  `(-score, player_id)` and `draft_forensics.py:2129/2169` do the same; D54 already fixed and
+  pinned this. The non-determinism was in D94's own ablation replica, which used a bare `max()`.
+- D84-D92 are **VALID EXCEPT 2020** on this axis. D93's six-season headline is superseded by §3.
+- No conclusion about the O1 objective is strengthened by this correction (§3).

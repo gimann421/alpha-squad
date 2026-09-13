@@ -3,7 +3,46 @@
 Living summary of what is implemented, validated, and outstanding. Updated at the end of every
 milestone. See `docs/TRACEABILITY.md` for the acceptance-criteria-level mapping.
 
-## Status: M45 complete (D95) — **A season before 2021 has no preseason market board under any shipped series, and an empty board was not inert: production silently fell through to drafting by alphabetical player_id. `_preseason_overall_market` now refuses it by name.**
+## Status: M46 complete (D96) — **The benchmark window now agrees with the board contract (2021–2025), the last bypass that could reach 2020 is closed, and D93 is restated on the covered window. The restatement does not change D93's verdict: O1 stays REJECTED, Y1 remains production.**
+
+Instrument hygiene only — no objective research and **no new grid was run**. The restatement is a
+re-aggregation of cells D93 already measured (`git_head f11c899`, vintage `74b2ea7d…`).
+
+**The valid historical evaluation population is 2021–2025.** `BACKTEST_SEASONS` is narrowed from
+six seasons to five, and a test now asserts the window as a *property* over `ALL_SERIES`
+(`series.covers(season)`) rather than as a literal, so a later-starting series fails loudly instead
+of silently widening the benchmark. This deliberately changes `compute_board_vintage`'s combined
+hash — the population a vintage covers is part of the board identity it names.
+
+**The bypass D95 could not close is now closed.** D95 correctly left an *explicitly named*
+page_type alone, but `scripts/d92_paired_grid.py` names one on every run via `preseason_page_type`,
+which resolves 2020 to the pre-rename label. That is exactly how every 2020 cell in D89–D93 came to
+exist. The runner now refuses an uncovered season before any draft runs.
+
+**D93 restated** (OLD 6-season, contaminated → **CORRECTED 2021–2025, authoritative**):
+`target_league` **+3.8 → +7.0**, CI [−54.1, +68.2], MDE 47.0 → **61.2**; `dynasty_1qb`
+**+27.1 → +30.7**, CI [−13.9, +75.2], MDE 34.9 → **44.6**. Both CIs still span zero; the claimed
+K/DST mechanism stays ≈0 in both formats; dynasty's +30.7 now sits *below its own MDE*, i.e.
+formally unresolvable. **Dropping the contaminated cluster cost power rather than buying
+confidence** — the corrected instrument resolves *less* than the contaminated one appeared to.
+Nothing here strengthens the case for O1.
+
+**Production parity re-verified through the real engine:** `target_league` O0 is **50/50 identical
+to tier `H`** (`recommend_draft_pick` itself, not `score_candidate`), as are L0/Q0/Z0.
+
+**D93's O-tier dispatch repair is merged here.** Left separate through D94/D95, but D96's trust
+check forced it: on `main` the draft-aware chain still omitted `O_TIERS`, so any experiment run
+from `main` would silently revert its control to the D65-era static replacement level. 12 lines in
+`evaluation/`, no production path, with the guard that asserts every tier in
+`DRAFT_AWARE_REPLACEMENT_TIERS` gets a draft-aware level through `_pick_by_tier`.
+
+**Open, recorded not fixed:** `models/established/season_level.py` builds M6's `preseason_ecr_rank`
+with no `page_type` filter, merging the PPR and IDP boards — the D56 problem, still live in the
+*feature* path. Out of scope here (`models/` is untouched by mandate).
+
+`models/` (`73b408e9`) and `league/` (`d4cfd00e`) unchanged. Full record: `docs/DECISIONS.md` D96.
+
+### Earlier status: M45 complete (D95) — **A season before 2021 has no preseason market board under any shipped series, and an empty board was not inert: production silently fell through to drafting by alphabetical player_id. `_preseason_overall_market` now refuses it by name.**
 
 Root cause: every shipped series' `page_type` label was introduced by the upstream DynastyProcess
 mirror on **2020-10-16** (verified from the raw parquet's `fp_page` column, which the ingested

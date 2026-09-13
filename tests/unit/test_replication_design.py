@@ -89,8 +89,8 @@ class TestNoShortlistInAPowerPhase:
     def test_d87_is_recorded_as_the_one_approximation(self) -> None:
         assert rd.D87_SHORTLIST.shortlist_k == 10
 
-    def test_the_active_design_is_d90_and_is_full_board(self) -> None:
-        assert rd.ACTIVE_DESIGN is rd.D90_THIRD_FORMAT
+    def test_the_active_design_is_d96_and_is_full_board(self) -> None:
+        assert rd.ACTIVE_DESIGN is rd.D96_RESTATEMENT
         assert rd.ACTIVE_DESIGN.shortlist_k is None
 
     def test_no_design_in_the_lineage_ever_carries_a_shortlist_except_d87(self) -> None:
@@ -224,7 +224,6 @@ class TestD90ThirdFormat:
 
     def test_the_selected_format_is_the_dynasty_1qb_league(self) -> None:
         assert rd.D90_THIRD_FORMAT.formats == ("dynasty_1qb",)
-        assert rd.ACTIVE_DESIGN is rd.D90_THIRD_FORMAT
 
     def test_the_selected_format_has_both_a_kicker_and_a_defense_slot(self) -> None:
         """Criterion 2. Note `DEF` normalises to `DST` via SLOT_POSITION_ALIASES -- checking for

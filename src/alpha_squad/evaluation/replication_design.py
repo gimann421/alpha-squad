@@ -203,7 +203,31 @@ D90_THIRD_FORMAT = ReplicationDesign(
     formats=("dynasty_1qb",),
 )
 
-ACTIVE_DESIGN = D90_THIRD_FORMAT
+#: D96. The same design as D89/D90 in every field except the season population, which drops 2020.
+#:
+#: This is a RESTATEMENT, not a new experiment: no arm, metric, gate, slot or opponent changes,
+#: and no new cell was measured to produce it. 2020 is dropped because it was never a legal cell.
+#: No shipped series has a preseason board before 2021 (`market/series.py::first_preseason_season`,
+#: measured); D89-D93 reached 2020 only by resolving the upstream's pre-2020-10-16 page label,
+#: which is a different `(ecr_type, page_type)` pair and therefore a different market series under
+#: D56. D95 made production refuse that season outright; D96 makes the benchmark agree.
+#:
+#: The D87-D90 designs above are deliberately left byte-identical. They are the historical record
+#: of what those phases pre-registered and ran, and `EXCLUDED_SEASONS` is deliberately NOT given
+#: `("target_league", 2020)` / `("dynasty_1qb", 2020)` entries, because that would retroactively
+#: rewrite what D89 and D90 measured. The two entries below that assert 2020 IS usable for those
+#: two formats -- `("dynasty_1qb", 2019)` and `("legacy_2qb_dynasty", 2020)` -- are SUPERSEDED on
+#: that specific point and must not be used to justify a 2020 cell; they are kept because deleting
+#: a recorded pre-registration is worse than annotating one.
+D96_RESTATEMENT = ReplicationDesign(
+    phase="D96",
+    seasons=(2021, 2022, 2023, 2024, 2025),
+    slots=(1, 2, 3, 4, 5, 6, 7, 8, 9, 10),
+    shortlist_k=None,
+    formats=("target_league", "dynasty_1qb"),
+)
+
+ACTIVE_DESIGN = D96_RESTATEMENT
 
 #: Every league format any phase in this lineage has benchmarked. Used to validate that an
 #: exclusion names a real format; not itself a design field.
@@ -214,6 +238,19 @@ KNOWN_FORMATS: tuple[str, ...] = (*PREREGISTERED_FORMATS, "dynasty_1qb")
 #: series -- `ro` (redraft overall) and `dsf` (dynasty superflex) -- whose historical coverage
 #: differs. A season usable in one is not automatically usable in the other, and D89 learned
 #: that the hard way.
+#:
+#: SUPERSEDED IN PART BY D95/D96. Two entries below argue that 2020 IS usable for their format
+#: because its board is published under the upstream's pre-2020-10-16 page label
+#: (`redraft-offense` / `dynasty-offense`). That reasoning is now rejected: a different
+#: `(ecr_type, page_type)` pair is a different market series under D56, and NO shipped series has
+#: a preseason board before 2021 (`market/series.py::first_preseason_season`). 2020 is excluded
+#: for every format, enforced upstream of this dict by `market/edge.py::MissingMarketBoardError`
+#: and by the paired-grid runner's own coverage check -- which is the stronger guarantee, because
+#: a design that forgets to list an exclusion still cannot reach the season.
+#:
+#: The entries are kept verbatim rather than edited: they are a recorded pre-registration, and
+#: annotating one is better than rewriting what a past phase actually committed to. They must not
+#: be cited to justify a 2020 cell.
 EXCLUDED_SEASONS: dict[tuple[str, int], str] = {
     ("target_league", 2019): (
         "no preseason market board: 174 projected board players and 0% market-rank coverage under "
