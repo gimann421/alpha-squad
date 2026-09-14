@@ -3,7 +3,51 @@
 Living summary of what is implemented, validated, and outstanding. Updated at the end of every
 milestone. See `docs/TRACEABILITY.md` for the acceptance-criteria-level mapping.
 
-## Status: M46 complete (D96) — **The benchmark window now agrees with the board contract (2021–2025), the last bypass that could reach 2020 is closed, and D93 is restated on the covered window. The restatement does not change D93's verdict: O1 stays REJECTED, Y1 remains production.**
+## Status: M47 complete (D97) — **The decision-layer investigation is CLOSED. The value Alpha leaves on the table is projection error, not decision error, and no decision-layer candidate is even detectable on this instrument. Y1 remains production; nothing shipped.**
+
+Diagnostic only — no production change, and **no candidate was run**, because the phase's own
+criteria rejected every hypothesis before one was tested. Instrument: D95/D96 contract, vintage
+`ca3e2d8a…`, 2021-2025 × 10 slots, both 1-QB formats, production reached through tier `H`.
+
+**The decomposition.** Three arms, identical drafts, differing only in the ranking key: `NAIVE`
+(classic VBD on projections), `PROD` (shipped Y1), `ORACLE` (realized points, *same rule as
+NAIVE*). So `NAIVE→PROD` isolates the decision rule and `NAIVE→ORACLE` isolates the projections:
+
+| contrast | target_league | dynasty_1qb |
+|---|---|---|
+| `PROD − NAIVE` (all of Y1's machinery) | **+213.8** [+34.4, +393.2] | **+35.7** [−174.3, +245.8] |
+| `ORACLE − NAIVE` (perfect projections) | **+998.4** [+742.5, +1254.3] | **+740.4** [+530.6, +950.1] |
+| `ORACLE − PROD` (headroom left) | **+784.6** [+612.7, +956.4] | **+704.6** [+455.0, +954.3] |
+
+Perfect projections are worth **~4.7×** everything the decision layer has ever been worth, and the
+decision layer is worth statistically nothing in dynasty.
+
+**Why.** Production takes its first QB in round **2.1**; perfect foresight waits until **7.1**.
+That is explained entirely by measured per-position projection bias — top-6 projected QBs are
+projected at +61.6 VORP and realize **−3.6** (biased high in 5 of 5 seasons); TE +38.2 → +3.0;
+K +18.4 → −5.8; RB is the least biased (+85.1 → +72.0). The bias ranking predicts `ORACLE`'s
+reallocation (RB +1.02, K −0.64) exactly. And the value is *present* — the actual top-6 QBs
+returned +69.7 — the projections just cannot identify them: **top-6 overlap is 23-40% at every
+position**, and QB/TE/K capture ~0% of the available surplus.
+
+**Components** (restated, 2021-2025, parity-verified): `daVORP` owns the endgame (138/160 late),
+`msv` the opening (73/160 early), `capacity` binds only late as a constraint, `opportunity_cost`
+moves 9%/5% of picks — and is **calibrated, not broken** (corr 0.88 QB / 0.76 WR / 0.73 RB against
+the drop that actually occurred; it understates magnitude 20-65%). Left alone.
+
+**Power is the decisive fact.** MDE is **172-250 points** and cannot be lowered: 5 season clusters
+and 10 slots are both hard caps, and seeds contribute zero. Y1's whole apparatus is worth +213.8 —
+barely above its own MDE. Any incremental decision-layer refinement would need to be worth roughly
+as much as all of Y1 just to be *detectable*. Projection headroom is 3-4× the MDE.
+
+**Next direction — projections:** (1) per-position calibration of M6, starting with QB/TE/K;
+(2) the D56 defect still live in the feature path (D96 §7) — `models/established/season_level.py`
+builds `preseason_ecr_rank` with **no `page_type` filter**, feeding M6's most valuable feature a
+merged PPR+IDP rank space; (3) optimise top-6 *identification*, not MAE.
+
+`models/` (`73b408e9`) and `league/` (`d4cfd00e`) unchanged. Full record: `docs/DECISIONS.md` D97.
+
+### Earlier status: M46 complete (D96) — **The benchmark window now agrees with the board contract (2021–2025), the last bypass that could reach 2020 is closed, and D93 is restated on the covered window. The restatement does not change D93's verdict: O1 stays REJECTED, Y1 remains production.**
 
 Instrument hygiene only — no objective research and **no new grid was run**. The restatement is a
 re-aggregation of cells D93 already measured (`git_head f11c899`, vintage `74b2ea7d…`).
