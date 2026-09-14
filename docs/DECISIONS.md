@@ -7126,3 +7126,118 @@ D97 explains why: **the decision layer is not the binding constraint.**
    says is binding, and it is the cheapest place to start.
 3. **Top-6 identification**, not point accuracy — capture rate, not MAE, is the metric that moves
    draft value.
+
+---
+
+## D98 — The D56 concern in the projection feature path is a FALSE ALARM. Close it; do not "fix" it.
+
+Input-integrity check before any calibration work. **No production change, no model change, no
+retraining** — the measurement says none is warranted, and the obvious "fix" would be a regression.
+`models/` `73b408e9` and `league/` `d4cfd00e` untouched. 1350 tests pass, ruff clean.
+
+### 1. The feature path, traced through executed code
+
+`market_snapshot` → the subquery inside `models/established/season_level.py` →
+`preseason_ecr_rank` → `FEATURES` → M6 (`models/uncertainty/run.py` imports
+`load_season_level_data` and `FEATURES` directly) → `uncertainty_predictions` →
+`league/replacement.py::load_season_projections` → the board Alpha drafts against. So this
+subquery **is** the production projection feature path, not an adjacent one.
+
+```sql
+LEFT JOIN (
+    SELECT player_id, ecr_rank, year(scrape_date) AS yr,
+           row_number() OVER (PARTITION BY player_id, year(scrape_date)
+                              ORDER BY scrape_date DESC) AS rn
+    FROM market_snapshot WHERE ecr_type = 'ro' AND month(scrape_date) IN (7, 8)
+) m ON m.player_id = s1.player_id AND m.yr = s1.season + 1 AND m.rn = 1
+```
+
+Training (`load_season_level_data`) and inference (`load_season_level_projection_data`) carry the
+**identical** subquery — no train/serve skew. Missing ECR imputes to 999, not 0.
+
+### 2. The D56 concern reproduced, and why it does not fire
+
+The concern: no `page_type` filter, so `ro`'s PPR draft board and its separately-ranked IDP board
+could merge into one rank space, with `ORDER BY scrape_date DESC` arbitrating. Measured on real
+data rather than inferred from the schema:
+
+| target season | rows reaching the model | from `redraft-overall` | from `redraft-idp` | IDP share |
+|---|---|---|---|---|
+| 2021 | 398 | 398 | 0 | **0.0%** |
+| 2022 | 406 | 406 | 0 | **0.0%** |
+| 2023 | 395 | 395 | 0 | **0.0%** |
+| 2024 | 431 | 431 | 0 | **0.0%** |
+| 2025 | 386 | 386 | 0 | **0.0%** |
+
+The IDP rows are numerous in the raw scan (959 distinct players in 2021) but **none of them
+survive**: an IDP-page player is a defensive player, has no QB/RB/WR/TE row in
+`player_season_stats`, and is dropped by the join. The merge the concern describes requires an
+*offensive* player to be ranked on the IDP page and to win the tie-break. Across 2021-2026 exactly
+**two** players ever hold same-date rows on both pages:
+
+- one has no offensive stat line at all, so never reaches the model;
+- the other (an RB) is tied only on 2026-07-03 and 2026-07-10, and both are **superseded by a later
+  August `redraft-overall` scrape**, so the tie never wins. Production and the corrected feature
+  return the same value for him in 2022, 2023, 2024, 2025 and 2026.
+
+### 3. The decisive test: corrected feature vs production feature, row by row
+
+Corrected semantics per D56/D95/D96 — the page that carries *this season's* PPR draft board,
+resolved from data via `preseason_page_type`, never a hardcoded label:
+
+| target | page resolved | rows | differing ECR values | max \|Δrank\| |
+|---|---|---|---|---|
+| 2020 | `redraft-offense` | 366 | **0** | 0.00 |
+| 2021-2025 | `redraft-overall` | 398/406/395/431/386 | **0** | 0.00 |
+| 2026 (live) | `redraft-overall` | 403 | **0** | 0.00 |
+
+**Zero differing feature values in any season, including live 2026.** Identical inputs give
+identical predictions, so the offline model-sensitivity test (Phase 7) and the top-6 identification
+test (Phase 5) both have an analytically exact answer: **prediction delta 0.000, MAE delta 0.000,
+top-6 overlap delta 0** at every position. Nothing to retrain, nothing to compare.
+
+### 4. The naive fix would be a REGRESSION
+
+Adding the obvious `page_type = 'redraft-overall'` filter destroys 2020's feature entirely:
+
+| target season | ECR values today | ECR values with a `'redraft-overall'` filter |
+|---|---|---|
+| **2020** | **366** | **0** |
+| 2021 | 398 | 398 |
+| 2022 | 406 | 406 |
+| 2025 | 386 | 386 |
+
+2020's board is published under the pre-2020-10-16 label `redraft-offense` (`fp_page`
+`ppr-cheatsheets` — the *same* FantasyPros page, established in D95). Filtering on the post-rename
+label would silently replace every 2020 training row's ECR with the 999 "no market opinion"
+sentinel. That is a real loss of training signal dressed as a cleanup, and it is precisely the
+mistake this phase existed to avoid.
+
+### 5. Verdict — outcome B
+
+**D56 is CLOSED for the projection feature path. DO NOT SHIP a change.** The feature is
+semantically correct as computed: it resolves to the right board in every season including the
+pre-rename one, carries no IDP contamination, and is bit-identical to the properly-scoped
+definition. Calibration work may safely use the existing feature.
+
+**Two latent fragilities recorded, neither a current defect and neither justifying a change now:**
+
+1. The absence of a `page_type` filter makes correctness *contingent* on IDP-page players lacking
+   offensive stat lines. If the upstream ever ranks an offensive player on the IDP page with a
+   later scrape date than the overall page, contamination would begin silently. Today: zero
+   occurrences in six seasons.
+2. `ORDER BY scrape_date DESC` has no deterministic tie-break. Ties exist (two players) but are
+   always superseded by a later single-page scrape, so the ordering never decides anything. This
+   is the same class as the D54 defect, currently inert.
+
+Both would be addressed by scoping the subquery to `preseason_page_type`'s resolution rather than
+by a hardcoded label — a change that is **provably a no-op on all six seasons of real data** (§3),
+which is exactly why it is not worth making on its own. It belongs with the next change that
+touches this file, not as a standalone production edit to `models/`.
+
+### 6. Next
+
+D97's ranking stands, minus its item 2. The highest-value projection question is unchanged and now
+unblocked: **per-position calibration of M6, starting with QB/TE/K**, where the top-6 projected
+players capture ~0% of available surplus and are biased high in 5 of 5 seasons — and optimising
+top-6 *identification* rather than MAE.

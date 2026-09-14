@@ -3,7 +3,41 @@
 Living summary of what is implemented, validated, and outstanding. Updated at the end of every
 milestone. See `docs/TRACEABILITY.md` for the acceptance-criteria-level mapping.
 
-## Status: M47 complete (D97) — **The decision-layer investigation is CLOSED. The value Alpha leaves on the table is projection error, not decision error, and no decision-layer candidate is even detectable on this instrument. Y1 remains production; nothing shipped.**
+## Status: M48 complete (D98) — **The D56 concern in the projection feature path is a FALSE ALARM. The ECR feature is already semantically correct, the obvious "fix" would be a regression, and calibration is unblocked. Nothing shipped.**
+
+Input-integrity check before calibration. **No production change, no model change, no retraining.**
+`models/` (`73b408e9`) and `league/` (`d4cfd00e`) untouched; 1350 tests pass, ruff clean.
+
+`models/established/season_level.py`'s ECR subquery **is** the production projection feature path —
+M6 imports `load_season_level_data` and `FEATURES` from it directly — and training and inference
+carry the identical query, so there is no train/serve skew.
+
+**The concern does not fire.** Of the ECR rows that actually reach the model, **0.0% come from the
+IDP page in every season 2021–2025** (398/398, 406/406, 395/395, 431/431, 386/386 from
+`redraft-overall`). IDP-page players are defensive, have no QB/RB/WR/TE row in
+`player_season_stats`, and are dropped by the join. Across 2021–2026 exactly **two** players ever
+hold same-date rows on both pages: one never reaches the model, and the other's ties (July 2026)
+are always superseded by a later August `redraft-overall` scrape.
+
+**Decisive test:** the semantically-correct feature — the page carrying *this* season's PPR board,
+resolved via `preseason_page_type` — is compared row by row against production's. **Zero differing
+values in every season 2020–2026, including live 2026.** Identical inputs, so prediction delta,
+MAE delta and top-6 overlap delta are all analytically **exactly zero**.
+
+**The naive fix would be a regression.** A `page_type = 'redraft-overall'` filter destroys 2020's
+feature (**366 ECR values → 0**), replacing them with the 999 "no market opinion" sentinel: 2020's
+board is published under the pre-rename label `redraft-offense`, the *same* FantasyPros page (D95).
+
+**Recorded, not fixed:** two latent fragilities — no `page_type` filter (correctness is contingent
+on IDP players lacking offensive stat lines) and no deterministic tie-break on `scrape_date`. Both
+are currently inert, both would be fixed by scoping to `preseason_page_type`, and that change is
+**provably a no-op on six seasons of real data** — so it belongs with the next change that touches
+this file, not as a standalone edit to `models/`.
+
+**Next:** D97's ranking stands minus its item 2 — per-position calibration of M6 starting with
+QB/TE/K, optimising top-6 *identification* rather than MAE. Full record: `docs/DECISIONS.md` D98.
+
+### Earlier status: M47 complete (D97) — **The decision-layer investigation is CLOSED. The value Alpha leaves on the table is projection error, not decision error, and no decision-layer candidate is even detectable on this instrument. Y1 remains production; nothing shipped.**
 
 Diagnostic only — no production change, and **no candidate was run**, because the phase's own
 criteria rejected every hypothesis before one was tested. Instrument: D95/D96 contract, vintage
