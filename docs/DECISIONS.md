@@ -7321,3 +7321,124 @@ anything, establish whether M6 is under-using what it has — D69 flagged an une
 with a trending availability measure, and `prior_games` is already in the feature set. That
 distinguishes "the model discards signal it has" from "the information is not in the data", which
 decides whether a projection change is worth attempting at all.
+
+## D100 — M6 is beaten at top-6 identification by one of its own raw input features. PROMISING BUT UNRESOLVED.
+
+Diagnostic only. **No production change, nothing shipped, no retraining, no draft run, no PR**;
+`models/` `73b408e9` and `league/` `d4cfd00e` untouched. Full report:
+`docs/D100_FEATURE_SIGNAL_DIAGNOSTIC.md`. Board vintage `ca3e2d8a`.
+
+### 1. Four features, about two dimensions
+
+Verified against the implementation, not the docs. `prior_ppg`, `prior_games`,
+`prior_weighted_total` and `preseason_ecr_rank` (the only one where *lower* is better; missing →
+999) are all strictly pre-S. But **corr(`prior_ppg` × `prior_games`, `prior_weighted_total`) =
+0.972** and corr(`prior_ppg`, `prior_weighted_total`) = 0.906: three of the four are alternative
+encodings of *how much the player produced last year*, and ECR is the only independent dimension.
+D78 had already measured ECR as M6's most valuable feature (dropping it costs +1.83 MAE).
+
+**M6 models QB/RB/WR/TE only** (`uncertainty/run.py::POSITIONS`, confirmed against
+`uncertainty_predictions`). **There is no M6 model for K or DST**, so D100's question is undefined
+at K — D97's K identification failure is untouched by anything in this phase's scope.
+
+### 2. The primary result
+
+Pooled over 20 position-seasons, on M6's own prediction set (enforced, so every method is scored on
+the identical pool):
+
+| method | top-6 overlap (of 6) | AUC | Spearman |
+|---|---|---|---|
+| **M6 (incumbent)** | **1.950** | 0.8990 | 0.7670 |
+| `U_ecr` — ECR rank alone, no model | **2.750** | **0.9253** | **0.7895** |
+| `U_wtotal` | 2.600 | 0.8909 | 0.7344 |
+| `U_ppg` | 2.400 | 0.8850 | 0.6896 |
+| `U_games` | **0.900** | 0.7301 | 0.5591 |
+
+**M6 is beaten on all three metrics by one of its own input features used raw, with no fitting at
+all.** Paired over seasons: Δ = +3.20 summed over four positions, **4 wins, 1 tie, 0 losses**;
+11W/8T/1L across the 20 position-seasons. The shipped `ecr_implied` isotonic rank→points map
+reproduces the same +3.20 (t = 2.76), as D99's monotone argument requires — though its ties (25–32
+of 48 top-12 slots) make it a signal-existence proof, not a usable board.
+
+**The negative control is null.** `D_gbm` — M6's own CatBoost, M6's own features, only the split
+changed — gains +0.50 (walk-forward) and +1.60 (LOSO), CIs spanning zero. Retraining M6's
+functional form with more data, including a non-causal split allowed to see the future, does not
+close the gap. **The features and the data quantity are constant across that comparison; the
+target and loss are what change.** Within (season, position) M6's output tracks
+`prior_weighted_total` at ρ 0.94–0.97 and ECR at 0.92–0.94: it is a blend of two correlated,
+differently-wrong rankings, and blending shrinks toward the middle exactly where the top-6 lives.
+**D78's conclusion that the top-of-board compression is mostly correct behaviour stands for what it
+measured (point accuracy); D100 shows the same compression carries an identification cost D78 never
+measured.**
+
+### 3. Where the signal is — and is not
+
+| position | mean Δ (`U_ecr` − M6) | record |
+|---|---|---|
+| WR | **+1.60** | 4W 1T 0L |
+| RB | **+0.80** | 4W 1T 0L |
+| TE | +0.60 | 2W 3T 0L |
+| QB | +0.20 | 1W 3T **1L** |
+
+**The signal is at WR and RB and is absent at QB** — the opposite of where D97 said the value was.
+`prior_games` is anti-signal (0.90 of 6 pooled; **0.00 at RB in every season**) and dilutes every
+aggregation it enters (R2 2.30 < R3 2.55 < R4 2.65). **D69's availability/durability thread is
+closed: it carries no top-6 identification signal and should not be the basis of a future arm.**
+
+### 4. Ceiling — both H3 and H4 are partly true, and H3 is larger
+
+| component of the 6.00 gap | overlap | share |
+|---|---|---|
+| found by M6 today | 1.95 | — |
+| extractable from the four features, not extracted by M6 | **+0.80** | **13%** |
+| not extractable from the four features, even under LOSO | +2.70 | 45% |
+| structurally unreachable (true top-6 not in M6's pool — rookies, no prior season) | +0.55 | 9% |
+
+Called a **feature-only diagnostic ceiling**, never an oracle. Cheating on season order buys almost
+nothing: the best LOSO diagnostic (2.65) does not beat the zero-parameter ECR rank (2.75).
+
+### 5. Power — what this evidence does not support
+
+Five season clusters; t(4,.975) = 2.776. **Fourteen methods were compared against M6, and no single
+comparison survives multiplicity correction** (Bonferroni over 14 needs t ≈ 5.6; `U_ecr` has 3.00).
+What survives scrutiny is the pattern — 0 losing seasons, a null negative control, a mechanism
+predicted in advance — not any one interval. Base rates are 3.4% (WR) to 9.5% (QB), so one player
+moves overlap by a whole unit. 2023 is null at every position; dropping 2021 cuts `U_ecr`'s Δ from
++3.20 to +2.50.
+
+### 6. No downstream draft run, no 2026 check
+
+Phase 10's conditions are met only partially, and one is decisive: **the hypothesis cannot be
+tested without building a new projection, which this phase forbids.** `U_ecr` is a rank, not points;
+`ecr_implied` would give a degenerate board. Independently, D97's between-season SD of 144.5 gives
+an MDE of ~180 starter points at k=5, which a +0.80-of-6 identification change is not established
+to clear.
+
+### 7. Next — the repository already names the experiment
+
+D78's **Y2** ("drop training seasons whose preseason board does not exist") is the fix for the ECR
+sentinel defect D100's evidence points at: no Jul/Aug `ro` rows exist before 2020, so every training
+row targeting 2016–2019 carries `preseason_ecr_rank = 999` regardless of the player (~44% of the RB
+rows behind a 2026 projection). Y2 was rejected on G6; **Y3 = Y1 + Y2 passed all seven gates** and
+was deliberately deferred under the lowest-numbered-arm rule, recorded by D78 as "a candidate for a
+future phase with its own pre-registration."
+
+**Every one of D78's seven gates is an MAE / RMSE / Spearman / top-decile-bias gate. Not one is an
+identification gate** — even though `evaluation_results` already carries `top12_hit_rate` and
+`top24_hit_rate`. G4 is whole-pool Spearman, which D100 shows is nearly blind here: M6 and `U_ecr`
+differ by 0.02 in Spearman and 41% in top-6 overlap. D78 also rejected **on MAE alone** the
+loss-function and output-transform family this mechanism implicates.
+
+> **Smallest next experiment: re-run D78's existing Y0–Y3 arms unchanged with a pre-registered
+> top-6 identification metric added alongside the seven gates — stating in advance whether
+> identification may override an MAE gate.** No new feature, no new data, no new model code;
+> `projection_specification.py` already implements the arms.
+
+### 8. Repository
+
+`scripts/research/d100_feature_signal.py` is committed with unit tests
+(`tests/unit/test_d100_feature_signal.py`) that pin its rebuilt estimator to
+`uncertainty/run.py::_new_model`, require every production feature to have a declared direction,
+and enforce the pre-registered universe — so the diagnostic breaks loudly rather than drifting if
+M6 changes. Its own test caught a real flaw during the phase (the universe argument was validated
+only after the whole database load).

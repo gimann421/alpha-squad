@@ -3,7 +3,50 @@
 Living summary of what is implemented, validated, and outstanding. Updated at the end of every
 milestone. See `docs/TRACEABILITY.md` for the acceptance-criteria-level mapping.
 
-## Status: M49 complete (D99) — **Per-position calibration CANNOT improve top-6 identification, for a structural reason: these calibrations are monotone within a position and identification depends on within-position order. REJECT. Nothing shipped.**
+## Status: M50 complete (D100) — **M6 is beaten at top-6 identification by one of its own raw input features. Some of the signal is already in the feature set and discarded (13% of the gap); most of it is genuinely absent (45%). PROMISING BUT UNRESOLVED. Nothing shipped.**
+
+Diagnostic only. **No production change, no retraining, no draft run, no PR**; `models/`
+(`73b408e9`) and `league/` (`d4cfd00e`) untouched; 1360 tests pass, ruff clean. Full report:
+`docs/D100_FEATURE_SIGNAL_DIAGNOSTIC.md`.
+
+**The headline.** On M6's own prediction set over 2021–2025 × QB/RB/WR/TE, `preseason_ecr_rank`
+used **raw, with no model at all** finds **2.75 of 6** realized top-6 players against M6's
+**1.95** — and also beats M6 on AUC (0.925 vs 0.899) and Spearman (0.790 vs 0.767). Paired over
+seasons: **4 wins, 1 tie, 0 losses**; 11W/8T/1L across the 20 position-seasons. The shipped
+`ecr_implied` isotonic map reproduces the same +3.20.
+
+**The negative control is null**, which is what makes this more than noise: `D_gbm` — M6's own
+CatBoost, M6's own features, only the training split changed, including a non-causal split allowed
+to see the future — gains +0.50 to +1.60 with CIs spanning zero. Features and data quantity are
+constant; the target and loss are what change. M6's output tracks `prior_weighted_total` at ρ
+0.94–0.97 and ECR at 0.92–0.94: a blend of two correlated, differently-wrong rankings, and blending
+shrinks toward the middle exactly where the top-6 lives.
+
+**Four features, about two dimensions.** corr(`prior_ppg` × `prior_games`, `prior_weighted_total`)
+= **0.972**. Three of the four are encodings of last year's production; ECR is the only independent
+dimension. **`prior_games` is anti-signal** (0.90 of 6; **0.00 at RB in every season**) and dilutes
+every aggregation it enters — **D69's availability/durability thread is closed.**
+
+**Where the signal is not.** WR **+1.60** and RB **+0.80** (neither ever negative); TE +0.60, weak;
+**QB +0.20 — absent**; **K undefined, because M6 has no kicker model at all**. That is the opposite
+of where D97 said the value was.
+
+**Ceiling — both H3 and H4 are partly true, H3 larger.** Of the 6.00 gap: 1.95 found by M6, **+0.80
+extractable but discarded (13%)**, +2.70 not in these features even under LOSO (45%), +0.55
+structurally unreachable (rookies / no prior season, 9%).
+
+**Why not SHIP.** Fourteen methods were compared; **none survives multiplicity correction** at five
+clusters. 2023 is null everywhere, QB is null throughout, and the hypothesis cannot be tested
+without building a new projection — which this phase forbids. No draft run, no 2026 check.
+
+**Next — the repository already names it.** D78's **Y3** (= Y1 + the Y2 ECR-sentinel repair) passed
+all seven gates and was deliberately deferred under the lowest-numbered-arm rule. **Every one of
+those seven gates is MAE / RMSE / Spearman / top-decile bias; not one is an identification gate**,
+though `evaluation_results` already carries `top12_hit_rate`. Smallest next experiment: **re-run
+D78's existing Y0–Y3 arms unchanged with a pre-registered top-6 identification metric added, stating
+in advance whether identification may override an MAE gate.**
+
+### Earlier status: M49 complete (D99) — **Per-position calibration CANNOT improve top-6 identification, for a structural reason: these calibrations are monotone within a position and identification depends on within-position order. REJECT. Nothing shipped.**
 
 Research only. **No production change**; `models/` (`73b408e9`) and `league/` (`d4cfd00e`)
 untouched; 1350 tests pass, ruff clean. Full report: `docs/D99_PROJECTION_CALIBRATION.md`.
