@@ -68,8 +68,20 @@ BOARD_SOURCE = "dynastyprocess"
 #: raw, and six decimals is far finer than any difference that could change a pick.
 PROJECTION_DECIMALS = 6
 
-#: Seasons every draft-layer phase since D89 measures over.
-BACKTEST_SEASONS: tuple[int, ...] = (2020, 2021, 2022, 2023, 2024, 2025)
+#: The covered historical backtest window: seasons every draft-layer phase measures over.
+#:
+#: D96 narrowed this from `(2020, ..., 2025)` to match the market-board data contract. No shipped
+#: series has a PRESEASON (Jul/Aug) board before 2021 -- the upstream mirror relabelled every page
+#: on 2020-10-16, so 2020's rows live under a different `(ecr_type, page_type)` pair, which D56
+#: defines as a different series and D95 refuses to substitute. D89-D93 measured 2020 anyway, by
+#: resolving that pre-rename label explicitly; every 2020 cell in those phases therefore compared
+#: a board production itself cannot serve, and D93's six-season headline is contaminated by it.
+#:
+#: Narrowing the window CHANGES `compute_board_vintage`'s combined hash, deliberately: a vintage
+#: is an identity for the board a phase measured, and the population it covers is part of that
+#: identity. Pre-D96 recorded combined hashes describe the six-season window and will not match;
+#: that is the correct outcome, not a regression. The per-season hashes are unchanged.
+BACKTEST_SEASONS: tuple[int, ...] = (2021, 2022, 2023, 2024, 2025)
 
 #: The vintage D88, D89, D90, D91 and D92 all ran against, verified three ways in D92: the blob at
 #: dynastyprocess/data commit 9338630 (2026-09-11T04:31:15Z), the `snapshot_registry` row, and the

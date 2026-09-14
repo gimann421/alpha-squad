@@ -24,6 +24,8 @@ from alpha_squad.evaluation.board_vintage import (
     compute_board_vintage,
     registry_source_hash,
 )
+from alpha_squad.market.edge import MissingMarketBoardError
+from alpha_squad.market.series import ALL_SERIES
 from alpha_squad.models.uncertainty.run import MODEL_VERSION as UNCERTAINTY_MODEL_VERSION
 from alpha_squad.storage.db import init_db
 
@@ -170,7 +172,25 @@ class TestComputeBoardVintage:
         assert v.as_dict()["combined_hash"] == v.combined_hash
 
     def test_default_seasons_are_the_backtest_window(self):
-        assert BACKTEST_SEASONS == (2020, 2021, 2022, 2023, 2024, 2025)
+        assert BACKTEST_SEASONS == (2021, 2022, 2023, 2024, 2025)
+
+    def test_every_backtest_season_is_covered_by_every_shipped_series(self):
+        """D96. The benchmark window and the market-board data contract must agree, or a phase
+        measures a season production itself refuses. 2020 was in this tuple through D93 and is
+        the reason D93's six-season headline is contaminated: no shipped series has a preseason
+        board before 2021, so those cells were drafted against the upstream's pre-2020-10-16
+        page label -- a different `(ecr_type, page_type)` pair, i.e. a different series (D56).
+
+        Asserted as a property over `ALL_SERIES` rather than as a literal, so registering a new
+        series with a later start date fails here instead of silently widening the window."""
+        for series in ALL_SERIES:
+            for season in BACKTEST_SEASONS:
+                assert series.covers(season), (
+                    f"{series} has no preseason board for {season} "
+                    f"(first covered: {series.first_preseason_season})"
+                )
+        assert 2020 not in BACKTEST_SEASONS
+        assert min(BACKTEST_SEASONS) == max(s.first_preseason_season for s in ALL_SERIES)
 
 
 class TestAssertVintage:
@@ -228,3 +248,57 @@ class TestVintageIdentifiesTheBoardNotTheSlice:
         full = compute_board_vintage(con).combined_hash
         one = compute_board_vintage(con, seasons=(2022,)).combined_hash
         assert full != one, "a season-scoped hash must not be confusable with the full-window one"
+
+
+class TestBenchmarkRunnerRefusesUncoveredSeasons:
+    """D96 regression. The paired-grid runner is the one place that can still reach a season
+    outside the contract, because it resolves each season's OWN `page_type` via
+    `preseason_page_type` and passes it EXPLICITLY -- which is precisely the case D95's
+    `_preseason_overall_market` guard leaves alone, since naming a page is a deliberate act.
+
+    For a benchmark it is not deliberate, it is the defect: `preseason_page_type` resolves 2020
+    to the upstream's pre-2020-10-16 label, so the grid would measure a season production itself
+    refuses, against what D56 defines as a different market series. That is how every 2020 cell
+    in D89-D93 came to exist, and it is why D93's six-season headline is contaminated.
+    """
+
+    @staticmethod
+    def _runner():
+        import importlib.util
+        from pathlib import Path
+
+        path = Path(__file__).resolve().parents[2] / "scripts" / "d92_paired_grid.py"
+        spec = importlib.util.spec_from_file_location("d92_paired_grid", path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+
+    def test_the_runner_defaults_its_seasons_to_the_covered_window(self):
+        """The runner must not carry its own copy of the window; it has to read the one the
+        contract defines, so narrowing the contract narrows the benchmark automatically."""
+        runner = self._runner()
+        assert runner.BACKTEST_SEASONS is BACKTEST_SEASONS
+
+    def test_naming_an_uncovered_season_explicitly_is_still_refused(self, tmp_path):
+        """The guard must fire on the ARGUMENT, not merely on the default -- a default is a
+        convenience, a contract is not."""
+        runner = self._runner()
+        # The runner opens the database read-only, so it needs a real file.
+        db_path = tmp_path / "d96.duckdb"
+        seeded = duckdb.connect(str(db_path))
+        init_db(seeded)
+        seeded.close()
+        with pytest.raises(MissingMarketBoardError) as exc:
+            runner.run(
+                db=str(db_path),
+                league_id="target_league",
+                seasons=[2020, 2021],
+                slots=[1],
+                arms=["O0"],
+                out_path=str(tmp_path / "unused.json"),
+                expect_vintage=None,
+                keep_traces=False,
+            )
+        message = str(exc.value)
+        assert "2020" in message
+        assert "2021" not in message.split("first covered season")[0]

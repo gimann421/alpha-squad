@@ -18,7 +18,7 @@ its results, so two phases' numbers can be compared only when they are actually 
 
     # the D89/D90/D91/D92 board, target format, full grid
     uv run python scripts/d92_paired_grid.py --league target_league \
-        --seasons 2020,2021,2022,2023,2024,2025 --slots 1-10 --arms O0,O1 \
+        --seasons 2021,2022,2023,2024,2025 --slots 1-10 --arms O0,O1 \
         --out reports/d92_target.json
 
 Cost: Y1 (`O0`) is ~0.02 s/pick; `O1` is ~3-5 s/pick because its marginal value is a 200-draw
@@ -37,7 +37,11 @@ from pathlib import Path
 
 import duckdb
 
-from alpha_squad.evaluation.board_vintage import assert_vintage, compute_board_vintage
+from alpha_squad.evaluation.board_vintage import (
+    BACKTEST_SEASONS,
+    assert_vintage,
+    compute_board_vintage,
+)
 from alpha_squad.evaluation.draft_forensics import (
     load_season_static,
     preseason_page_type,
@@ -52,6 +56,7 @@ from alpha_squad.evaluation.weekly_objective import (
     weekly_lineup_points_no_foresight,
 )
 from alpha_squad.league.context import resolve_league
+from alpha_squad.market.edge import MissingMarketBoardError
 from alpha_squad.market.series import resolve_market_series
 
 #: The opponent field D89/D90 recorded and D91/D92 reproduce. Named here rather than defaulted at
@@ -105,7 +110,8 @@ def run(
 ) -> dict:
     con = duckdb.connect(db, read_only=True)
     league = resolve_league(league_id, con=con)
-    ecr_type = resolve_market_series(league).ecr_type
+    series = resolve_market_series(league)
+    ecr_type = series.ecr_type
 
     # Verified/recorded over the canonical backtest window rather than this run's season subset,
     # so a one-season diagnostic and a six-season replication quote the SAME vintage when they
@@ -116,6 +122,24 @@ def run(
     else:
         vintage = compute_board_vintage(con)
         print(f"board vintage recorded: {vintage.combined_hash}", flush=True)
+
+    # D96: refuse a season the series has no preseason board for, BEFORE any draft runs.
+    # This check has to live here rather than being inherited from D95's contract, because the
+    # line below deliberately resolves the season's OWN page_type and passes it explicitly --
+    # which is exactly the case D95 leaves alone, since naming a page is a deliberate act. For a
+    # benchmark it is not: `preseason_page_type` resolves 2020 to the upstream's pre-rename
+    # label, so without this the grid would happily measure a season production itself refuses,
+    # against a board that is a different market series by D56's definition. That is how every
+    # 2020 cell in D89-D93 came to be measured. See docs/DECISIONS.md D95/D96.
+    uncovered = [s for s in seasons if not series.covers(s)]
+    if uncovered:
+        raise MissingMarketBoardError(
+            f"seasons {uncovered} have no preseason board for series {series} "
+            f"({series.label}); its first covered season is {series.first_preseason_season}. "
+            "The pre-2020-10-16 rows are a different (ecr_type, page_type) pair and must not be "
+            "substituted into a benchmark. Restrict --seasons to the covered window "
+            f"(see BACKTEST_SEASONS = {BACKTEST_SEASONS})."
+        )
 
     rows: list[dict] = []
     picks_timed: dict[str, list[float]] = {a: [] for a in arms}
@@ -209,7 +233,9 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--db", default="data/alpha_squad.duckdb")
     ap.add_argument("--league", default="target_league")
-    ap.add_argument("--seasons", default="2020,2021,2022,2023,2024,2025")
+    # D96: the covered backtest window. 2020 is NOT in it -- no shipped series has a preseason
+    # board before 2021 (D95), and the run() guard refuses it even if named explicitly.
+    ap.add_argument("--seasons", default=",".join(str(s) for s in BACKTEST_SEASONS))
     ap.add_argument("--slots", default="1-10")
     ap.add_argument("--arms", default="O0,O1")
     ap.add_argument("--out", required=True)
