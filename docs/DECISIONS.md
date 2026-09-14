@@ -6970,3 +6970,159 @@ changing it would change projections. Recorded as the next data-contract questio
   pinned this. The non-determinism was in D94's own ablation replica, which used a bare `max()`.
 - D84-D92 are **VALID EXCEPT 2020** on this axis. D93's six-season headline is superseded by §3.
 - No conclusion about the O1 objective is strengthened by this correction (§3).
+
+---
+
+## D97 — Where is the draft engine leaving value? Not in the decision layer. Close the investigation.
+
+Diagnostic only. **No production change, no candidate proposed, no experiment run** — the phase's
+own criteria rejected every hypothesis before one was tested, which is the outcome it was allowed
+to reach. Y1 remains production. Instrument: the D95/D96 contract, board vintage `ca3e2d8a…`,
+2021-2025 × 10 slots, both shipped 1-QB formats, production reached through tier `H`
+(`recommend_draft_pick` itself).
+
+### 1. The decomposition that answers the question
+
+Three arms on the identical draft — same season, slot, nine market-consensus opponents, same
+endgame mandatory-slot rule. Only the ranking key differs:
+
+| arm | ranks by | isolates |
+|---|---|---|
+| `NAIVE` | projection over static replacement (classic VBD) | the crudest competent decision layer |
+| `PROD` | the full shipped Y1 score | production |
+| `ORACLE` | **realized** points over realized replacement | perfect foresight, same decision rule as NAIVE |
+
+`NAIVE→PROD` holds the *inputs* fixed and swaps the decision rule. `NAIVE→ORACLE` holds the
+*decision rule* fixed and swaps projections for truth. That is the whole decomposition:
+
+| contrast | target_league | dynasty_1qb | meaning |
+|---|---|---|---|
+| `PROD − NAIVE` | **+213.8** CI [+34.4, +393.2] | **+35.7** CI [−174.3, +245.8] | what Y1's entire scoring apparatus buys |
+| `ORACLE − NAIVE` | **+998.4** CI [+742.5, +1254.3] | **+740.4** CI [+530.6, +950.1] | what perfect projections buy |
+| `ORACLE − PROD` | **+784.6** CI [+612.7, +956.4] | **+704.6** CI [+455.0, +954.3] | headroom remaining |
+
+**Perfect projections are worth ~4.7× everything the decision layer has ever been worth** in the
+target format, and the decision layer is worth statistically nothing in dynasty (31/50 cells, CI
+spans zero). The residual ~785 points is projection-shaped by construction: `ORACLE` and `NAIVE`
+run the *same* decision rule and differ only in whether the numbers are true.
+
+### 2. The positional divergence, and its cause
+
+`ORACLE` vs `PROD` per draft: RB **+1.02**, WR +0.28, TE −0.34, DST −0.30, K **−0.64**, QB −0.02 —
+but the QB *timing* differs enormously: production takes its first QB in round **2.1**, the
+perfect-foresight drafter waits until round **7.1** (dynasty: 1.9 vs 6.1). In round 2, 39 of 50
+production drafts take a QB; `ORACLE` takes none.
+
+That is not a decision defect. Measured per-position bias of the top 6 by projection, 2021-2025:
+
+| pos | projected VORP | realized VORP | bias | seasons biased high |
+|---|---|---|---|---|
+| **QB** | +61.6 | **−3.6** | **+65.2** | 5 of 5 |
+| WR | +111.5 | +76.2 | +35.3 | — |
+| **TE** | +38.2 | **+3.0** | +35.2 | 5 of 5 |
+| **K** | +18.4 | **−5.8** | +24.1 | 5 of 5 |
+| RB | +85.1 | +72.0 | **+13.1** | — |
+| DST | +8.4 | +3.8 | +4.5 | — |
+
+The bias ranking (QB ≫ WR ≈ TE > K > RB > DST) **predicts `ORACLE`'s reallocation exactly**: it
+moves picks toward the least-biased position (RB) and away from the most-biased ones (QB timing,
+K, TE). The decision layer is faithfully maximising its inputs; the inputs are wrong in a
+position-dependent way.
+
+### 3. It is an identification failure, not absent value
+
+The value at QB is *there* — the actual top 6 QBs returned **+69.7** realized VORP. Production's
+projections simply cannot say which six:
+
+| pos | realized VORP of the *projected* top 6 | of the *actual* top 6 | capture | top-6 overlap |
+|---|---|---|---|---|
+| QB | −3.6 | +69.7 | **−5%** | 33% |
+| RB | 72.0 | 147.8 | 49% | 27% |
+| WR | 76.2 | 154.3 | 49% | 27% |
+| TE | 3.0 | 63.5 | 5% | 37% |
+| K | −5.8 | 27.4 | −21% | 23% |
+| DST | 3.8 | 27.9 | 14% | 40% |
+
+Top-6 identification runs 23-40% everywhere. RB/WR capture about half the available surplus;
+QB/TE/K capture **none**. A drafter whose QB projections have ~0% capture *should* wait on QB —
+which is precisely the behaviour perfect information produces.
+
+### 4. Components (restated on 2021-2025, parity-verified states only)
+
+320 production picks per format. `daVORP` dominates and owns the endgame (138/160 late picks);
+`msv` owns the opening (73/160 early, 23/160 late); `capacity` binds only late (0 early, 52 late),
+correctly, as a constraint rather than a value; `opportunity_cost` is near-inert — **30/320 (9%)**
+target, **16/320 (5%)** dynasty. Consistent across both formats.
+
+### 5. Opportunity cost: calibrated, not broken
+
+The term makes a falsifiable claim, so it was tested as a calibration rather than by its
+influence. Replaying production's own drafts and comparing its prediction against the drop that
+actually occurred by our next turn, in its own static-VORP units (360 position-decisions):
+
+| pos | mean predicted | mean actual | ratio | correlation |
+|---|---|---|---|---|
+| QB | 6.18 | 8.69 | 0.71 | **0.88** |
+| WR | 10.73 | 13.59 | 0.79 | **0.76** |
+| RB | 6.57 | 12.34 | 0.53 | **0.73** |
+| TE | 1.82 | 4.93 | 0.37 | 0.52 |
+| K / DST | ~0 | ~0.8 | ~0 | — |
+
+**Answer A, with a measured caveat.** It is directionally calibrated where it matters (corr
+0.73-0.88) and systematically understates magnitude by 20-65%. Correcting the magnitude would be
+an arbitrary multiplier on a term that moves 9% of picks — unresolvable by construction (§6).
+Leave it alone.
+
+### 6. Power, and why no decision-layer candidate is worth running
+
+| format | contrast | effect | between-season SD | MDE (5 clusters) |
+|---|---|---|---|---|
+| target_league | `PROD − NAIVE` | +213.8 | 144.5 | **179.4** |
+| target_league | `ORACLE − PROD` | +784.6 | 138.4 | **171.8** |
+| dynasty_1qb | `PROD − NAIVE` | +35.7 | 169.2 | **210.0** |
+| dynasty_1qb | `ORACLE − PROD` | +704.6 | 201.1 | **249.6** |
+
+Both sample levers are hard-capped: **5 season clusters** (no shipped series has a preseason board
+before 2021, D95/D96) and **10 slots** (10-team league), with seeds contributing zero (D92: the
+simulation is deterministic). So the MDE is **~172-250 points and cannot be lowered.**
+
+**That is the decisive fact.** Y1's *entire* decision apparatus is worth +213.8 — barely above its
+own MDE, and +35.7 in dynasty, below it. Any incremental decision-layer refinement would have to be
+worth roughly as much as everything Y1 already does merely to be *detectable*. Projection headroom
+(705-785) is 3-4× the MDE and comfortably resolvable.
+
+### 7. The hypothesis that was considered and rejected
+
+**Per-position reliability shrinkage** — shrink each position's projected VORP toward zero in
+proportion to its measured out-of-sample capture rate (QB ~0%, K ~0%, TE 5%, RB/WR ~49%), estimated
+walk-forward. It is economically interpretable, grounded in §2-§3, not player-specific, and its
+factor would be estimated rather than tuned. It was rejected on two independent grounds:
+
+1. **It is a projection calibration wearing a decision-layer costume.** The defect it corrects is a
+   biased projection; the repository already has `evaluation/projection_calibration.py` for exactly
+   this. Implementing it in the decision layer fixes the right problem in the wrong place, which is
+   the failure mode this phase was explicitly told not to manufacture.
+2. **It is not detectable.** Its plausible effect is a fraction of the +213.8 the whole apparatus is
+   worth, against an MDE of 172-250.
+
+No other hypothesis met the criteria. Per the phase's own stopping rule, none was run.
+
+### 8. Verdict
+
+**DO NOT SHIP. Close the decision-layer investigation.** Y1 is production-correct, its components
+behave as designed, its one near-inert term is calibrated rather than broken, and the value it
+leaves on the table is projection error that no decision rule can reach. Nine value bases (D85), a
+weekly objective (D86-D93), and legality separation (D85/D94) have now all failed to beat it, and
+D97 explains why: **the decision layer is not the binding constraint.**
+
+**Highest-value next direction — projections, in this order:**
+
+1. **Per-position calibration of M6**, starting with QB/TE/K, where the top-6 projected players
+   capture ~0% of available surplus and are biased high in 5 of 5 seasons.
+2. **The D56 defect still live in the feature path** (recorded in D96 §7): `models/established/
+   season_level.py` builds `preseason_ecr_rank` with **no `page_type` filter**, merging the PPR
+   draft board with the separately-ranked IDP board. M6's most valuable feature is being fed a
+   merged rank space. This is a concrete, already-identified data-contract bug in the layer D97
+   says is binding, and it is the cheapest place to start.
+3. **Top-6 identification**, not point accuracy — capture rate, not MAE, is the metric that moves
+   draft value.
