@@ -3,7 +3,54 @@
 Living summary of what is implemented, validated, and outstanding. Updated at the end of every
 milestone. See `docs/TRACEABILITY.md` for the acceptance-criteria-level mapping.
 
-## Status: M50 complete (D100) — **M6 is beaten at top-6 identification by one of its own raw input features. Some of the signal is already in the feature set and discarded (13% of the gap); most of it is genuinely absent (45%). PROMISING BUT UNRESOLVED. Nothing shipped.**
+## Status: M51 complete (D101) — **D78's recorded "Y3 passes all seven gates" does not reproduce: Y3 FAILS G6 at WR, and is also worse than Y1 at top-6 identification. DO NOT SHIP. The training-set axis is closed.**
+
+Research only. **No production change, no retraining, no draft run, no PR**; `models/`
+(`73b408e9`) and `league/` (`d4cfd00e`) untouched; 1370 tests pass, ruff clean. Full report:
+`docs/D101_Y0_Y3_IDENTIFICATION.md`.
+
+D100's recommended experiment was run with the arms unmodified — training frames from the shipped
+`select_training_rows`, fits from the shipped `_fit_predict`, and a parity check that re-derives
+`measure_arm`'s own metrics from the retained predictions and aborts on any disagreement.
+
+**The decisive finding arrived before identification did.** On the current snapshot **Y1 passes all
+seven gates, Y2 fails G6 at RB, and Y3 FAILS G6 at WR** — where D78 recorded Y3 as passing. Code
+drift is ruled out (D79's only edit is a default-preserving refactor, verified by diff);
+nondeterminism is ruled out (three repeat fits identical to nine decimals); data/library drift is
+the remaining explanation and the pre-D78 database is unrecoverable (D91). **Any future citation of
+"Y3 passes all seven gates" must be re-derived, not quoted.**
+
+**G6's prose and its code are different statistics** — "mean |top-decile signed bias|" versus the
+`|mean|` the code computes. Y2's failure set changes between readings ([RB] vs [RB, WR] — D78's own
+narrative matches the prose, not the code); **Y3 fails at WR under both**, so the ambiguity does not
+change the answer. Gates were evaluated as coded and unchanged.
+
+**Identification: Y1 wins.** top6_hit_rate Y0 0.3438, **Y1 0.3750**, Y2 0.3229, Y3 0.3646.
+**Y3 − Y1 = −0.0104** (5W/6T/5L cells, 1W/1T/2L seasons); no position consistently favours Y3.
+AUC and Spearman rank Y3 first while hit rate ranks Y1 first — D100's point on new data, and the
+reason **G4's Spearman gate cannot be treated as a proxy for identification.** Every interval spans
+zero; declared exploratory in advance.
+
+**Population.** The registered window is 2022–2025, not 2021–2025: ECR coverage is 0.000 for
+2016–2019, so at target 2021 both Y2 and Y3 fall back to their controls **exactly** (verified
+byte-identical). Y2 also falls back in all four 2022 cells, so it is treated in only 3 of its 4
+registered seasons.
+
+**A harness defect was found and fixed**: season win/loss counting used a bare `> 0`, and 2024's
+cancelling cells average to 6.94e-18, which was counted as a win. Fixed with an explicit tolerance
+and a regression test carrying the real counts; all numbers are post-fix.
+
+**Verdict: DO NOT SHIP.** The D78 selection rule re-applied re-selects **Y1 — already in
+production**. Y1 = class B, Y2 = class D, Y3 = class C, and Y3 satisfies **neither** condition
+required to prefer it over Y1. No arm is justified for downstream draft testing.
+
+**Next — settle the criterion, do not invent Y4.** D79, D100 and D101 have now hit the same wall
+from three directions: the gates measure pool-wide accuracy over ~150 players while the product
+consumes the top ~20. Smallest next experiment, on measurement frames that already exist: pre-register
+whether the projection criterion is pool-wide accuracy or top-of-board identification, and which of
+G6's two readings is binding. That unblocks D79's E2 arm without fitting anything new.
+
+### Earlier status: M50 complete (D100) — **M6 is beaten at top-6 identification by one of its own raw input features. Some of the signal is already in the feature set and discarded (13% of the gap); most of it is genuinely absent (45%). PROMISING BUT UNRESOLVED. Nothing shipped.**
 
 Diagnostic only. **No production change, no retraining, no draft run, no PR**; `models/`
 (`73b408e9`) and `league/` (`d4cfd00e`) untouched; 1360 tests pass, ruff clean. Full report:

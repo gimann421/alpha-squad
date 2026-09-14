@@ -7442,3 +7442,122 @@ loss-function and output-transform family this mechanism implicates.
 and enforce the pre-registered universe — so the diagnostic breaks loudly rather than drifting if
 M6 changes. Its own test caught a real flaw during the phase (the universe argument was validated
 only after the whole database load).
+
+## D101 — D78's recorded "Y3 passes all seven gates" does not reproduce. Y3 fails G6, and is also worse than Y1 at identification. DO NOT SHIP.
+
+Research only. **No production change, nothing shipped, no retraining, no draft run, no PR**;
+`models/` `73b408e9` and `league/` `d4cfd00e` untouched. Full report:
+`docs/D101_Y0_Y3_IDENTIFICATION.md`. Board vintage `ca3e2d8a`. CatBoost 1.2.10.
+
+D100's recommended experiment — re-run Y0-Y3 with an identification metric added beside the seven
+gates — was run. The arms were not modified: each arm's training frame comes from the shipped
+`select_training_rows` and each fit from the shipped `_fit_predict`, and the harness re-derives
+`measure_arm`'s own MAE/RMSE/Spearman/top-decile bias from the retained per-player predictions and
+aborts on any disagreement, so the predictions scored for identification are provably the
+predictions the gates are computed on.
+
+### 1. The decisive finding arrived before identification did
+
+**D78 recorded Y3 as passing all seven gates. On the current snapshot Y3 FAILS G6 at WR.**
+
+| arm | MAE now | D78's table | Δ | verdict now | D78's verdict |
+|---|---|---|---|---|---|
+| Y0 | 41.983 | 41.879 | +0.104 | control | control |
+| **Y1** | 40.638 | 40.725 | −0.087 | **PASSES all seven** | PASSES all seven |
+| Y2 | 40.694 | 40.495 | +0.199 | FAILS G6 (RB) | FAILS G6 (RB and WR) |
+| **Y3** | **39.411** | 39.687 | −0.276 | **FAILS G6 (WR)** | **PASSES all seven** |
+
+Three causes were tested. **Code drift is ruled out**: `projection_specification.py` has exactly two
+commits and D79's is a pure refactor (adds `control: Arm = PREREGISTERED_CONTROL` and threads it
+through, preserving every D78 call site) — verified by reading the diff. **Run-to-run
+nondeterminism is ruled out**: three repeat calls to `measure_arm` on three cells were identical to
+nine decimals. **Data or library drift is the remaining explanation**, and the pre-D78 database is
+unrecoverable (D91), so it is recorded as unresolved rather than guessed at. **Any future citation
+of "Y3 passes all seven gates" must be re-derived, not quoted.**
+
+Y3's failure decomposed (signed top-decile bias at WR): Y0 +15.97 / −2.01 / −38.31 / −61.35
+(|mean| 21.424) vs Y3 +10.16 / +1.92 / **−51.44** / −59.23 (|mean| 24.644). Y3 is better in two
+seasons and the single 2024 cell decides the gate — reported plainly, and still a failure.
+
+### 2. G6's prose and its code are different statistics
+
+The registration says "the 4-season mean **|top-decile signed bias|**" = mean(|x|); the code computes
+`pivot_table(...).abs()` = |mean(x)|. They differ wherever the bias changes sign across seasons,
+which it does at WR and TE. Under |mean| Y2 fails at [RB]; under mean(|·|) it fails at [RB, WR] —
+and **D78's own narrative says "worse at RB and WR", matching the prose, not the code.** Y3 fails at
+WR under *both* readings, so this ambiguity does not change D101's answer. The gates were evaluated
+**as coded and unchanged**, per the brief; the prose reading is recorded as a sensitivity only.
+
+### 3. Identification — Y1 wins, Y3 does not
+
+| arm | top6_hit_rate | AUC | Spearman |
+|---|---|---|---|
+| Y0 | 0.3438 | 0.8912 | 0.7659 |
+| **Y1** | **0.3750** | 0.9029 | 0.7773 |
+| Y2 | 0.3229 | 0.8929 | 0.7721 |
+| Y3 | 0.3646 | **0.9053** | **0.7823** |
+
+Paired, exploratory, every interval spanning zero: Y1−Y0 **+0.0313** (7W/5T/4L cells; 2W/1T/1L
+seasons); Y3−Y0 +0.0208 (5W/6T/5L); **Y3−Y1 −0.0104** (5W/6T/5L cells; **1W/1T/2L** seasons);
+Y2−Y0 −0.0208. Per-position Y3−Y1 in hits: QB +0.25, RB −0.25, WR 0.00, TE −0.25 — **no position
+consistently favours Y3**, and QB's edge is one player in one season.
+
+**AUC/Spearman and top-6 hit rate disagree about Y3 vs Y1.** Not a contradiction — D100's point on
+new data: whole-pool statistics over 60-190 players are dominated by the bulk, top-6 membership is
+an extreme-tail event, and an arm can order the pool better while identifying the top six slightly
+worse. **Consequence for the project: G4's Spearman gate cannot be treated as a proxy for
+identification.**
+
+### 4. Population — the registered window is 2022-2025, and 2021 is structurally empty
+
+Measured ECR coverage is **0.000 for 2016-2019**, 0.878-0.947 for 2020-2024. At target 2021 Y2 has
+zero eligible training seasons and Y3 has one (below `MIN_TRAIN_SEASONS = 2`), so **both fall back
+to their controls exactly** — confirmed on outputs, Y2 byte-identical to Y0 and Y3 to Y1 (5 and 7
+hits, 44.531 and 41.870 MAE). 2021 is reported as a labelled transparency panel and enters no
+decision. Separately, **Y2 also falls back in all four cells of 2022** (the shipped `fell_back` flag
+says so), because the module's "earliest season with at least one eligible training season"
+rationale is off by one against its own two-season rule — so Y2 is treated in only 3 of its 4
+registered seasons.
+
+### 5. A defect in this phase's own harness, found and fixed
+
+Self-check 6 failed in the harness, not the arms: season win/loss counts used a bare `> 0`. The
+per-cell deltas are differences of sixths, so 2024's Y1-vs-Y0 counts (QB 3v3, RB 3v3, WR 1v2,
+TE 3v2) average to `6.94e-18`, not `0.0`, and were counted as a **win** — overstating Y1's season
+record as 3W/1L when it is 2W/1T/1L. Fixed with an explicit `SIGN_TOLERANCE = 1e-12` routed through
+one helper, plus a regression test carrying the real counts (the naive
+`mean([1/6, −1/6, 1/6, −1/6])` is exactly 0.0 and does not reproduce it). All reported numbers are
+post-fix.
+
+Checks that passed: pool parity 16/16 identical across arms; **zero differing cells against
+`uncertainty_predictions`**, so D100's definition is reproduced on the identical population; gate
+parity to 1e-9; leakage guard active; no 2020, no 2026.
+
+### 6. Verdict and classification
+
+**DO NOT SHIP.** The D78 selection rule re-applied to current data re-selects **Y1 — already in
+production** — so the correct outcome is that production does not move. Y1 = **class B** (passes all
+seven gates; best identification, but the gain over control is weak and unresolved). Y2 = **class D**
+(fails G6; identification worse than control; under-treated). Y3 = **class C** (identification up
+versus control on all three metrics, gates fail) — and it satisfies **neither** of the two
+conditions the phase required to prefer it over Y1.
+
+**The identification question about the registered training-set arms is closed.** No arm is
+justified for downstream draft testing; Y1 leads both axes and is already live.
+
+### 7. Next — settle the criterion, do not invent Y4
+
+D79 recorded its monotone-constraint arm as failing six of seven gates on pool-wide MAE while fixing
+the defect in "the twenty players a draft actually consumes". D100 found the same mismatch from the
+feature side. D101 finds it a third time, in the AUC-versus-hit-rate disagreement.
+
+> **Smallest next experiment: on the measurement frames D78, D79 and D101 have already produced — no
+> new fits, no new data — pre-register (a) whether the projection criterion is pool-wide accuracy or
+> top-of-board identification, or an explicit weighting of both, and (b) whether G6 reads
+> `mean(|signed bias|)` as its prose says or `|mean(signed bias)|` as its code does.**
+
+Decision-first, so it cannot be accused of choosing a criterion to suit a result — provided it is
+registered before any arm is re-scored. It unblocks D79's E2 arm, which is currently rejected on a
+criterion that D100/D101 suggest does not match what the draft consumes.
+
+Explicitly not recommended: a Y4, a widened population, or carrying any arm to the draft benchmark.
