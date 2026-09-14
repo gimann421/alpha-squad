@@ -3,7 +3,39 @@
 Living summary of what is implemented, validated, and outstanding. Updated at the end of every
 milestone. See `docs/TRACEABILITY.md` for the acceptance-criteria-level mapping.
 
-## Status: M48 complete (D98) — **The D56 concern in the projection feature path is a FALSE ALARM. The ECR feature is already semantically correct, the obvious "fix" would be a regression, and calibration is unblocked. Nothing shipped.**
+## Status: M49 complete (D99) — **Per-position calibration CANNOT improve top-6 identification, for a structural reason: these calibrations are monotone within a position and identification depends on within-position order. REJECT. Nothing shipped.**
+
+Research only. **No production change**; `models/` (`73b408e9`) and `league/` (`d4cfd00e`)
+untouched; 1350 tests pass, ruff clean. Full report: `docs/D99_PROJECTION_CALIBRATION.md`.
+
+**The experiment already existed.** `evaluation/projection_calibration.py` was committed in D68
+before any arm was fitted and pre-registers exactly the forms D99 proposed (X0 control, X1
+additive, X2 affine, X3 rank-band, X4 empirical-Bayes). D68's outcome: every arm improved MAE
+(63.29 → 61.83–62.88) and every arm failed its gates. **K and DST are excluded from all arms**
+(D57), so D97's "start with QB/TE/K" is only answerable for QB and TE.
+
+**The primary result is structural.** X1/X2/X4 are monotone increasing within a position, so they
+cannot reorder it, and top-6-by-position is a pure function of that order. Stated as H0 before
+running and confirmed exactly: cells where per-position top-6 differs from control, of 30 —
+**X1 0/30, X2 0/30, X4 0/30, X3 1/30**. D97's identification failure is a within-position *ranking*
+failure; these calibrations rescale without reordering. **D97's recommendation #1 is closed as
+specified — it targets the wrong mechanism.**
+
+**What calibration can move:** cross-position allocation. First-QB overall rank on treated seasons:
+control 5.0, X1/X4 5.0 (**inert by construction** — a uniform additive shift leaves
+`draft_aware_vorp` invariant), X2 **10.3**, X3 **11.0**, oracle 10.0. A real signal in D97's
+predicted direction — but not the primary metric, and both arms were already rejected by D68.
+
+**Power closes the thread:** only 3 of 5 seasons are treatable (2021/2022 are control by
+construction), giving MDE **~345–360 points** — larger than Y1's entire decision apparatus
+(+213.8). Phases 7–8 were not run, per the pre-registered stopping rule.
+
+**Next:** the identification failure is a ranking problem, so a fix needs new *information*, not a
+rescaling. Smallest next question — do M6's existing four features already separate the realized
+top-6 from the projected top-6 out-of-sample? That distinguishes "the model discards signal it has"
+from "the information is not in the data".
+
+### Earlier status: M48 complete (D98) — **The D56 concern in the projection feature path is a FALSE ALARM. The ECR feature is already semantically correct, the obvious "fix" would be a regression, and calibration is unblocked. Nothing shipped.**
 
 Input-integrity check before calibration. **No production change, no model change, no retraining.**
 `models/` (`73b408e9`) and `league/` (`d4cfd00e`) untouched; 1350 tests pass, ruff clean.

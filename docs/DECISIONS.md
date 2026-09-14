@@ -7241,3 +7241,83 @@ D97's ranking stands, minus its item 2. The highest-value projection question is
 unblocked: **per-position calibration of M6, starting with QB/TE/K**, where the top-6 projected
 players capture ~0% of available surplus and are biased high in 5 of 5 seasons — and optimising
 top-6 *identification* rather than MAE.
+
+---
+
+## D99 — Per-position calibration cannot improve top-6 identification. REJECT, for a structural reason.
+
+Research only. **No production change, nothing shipped**, `models/` `73b408e9` and `league/`
+`d4cfd00e` untouched. Full report: `docs/D99_PROJECTION_CALIBRATION.md`.
+
+### 1. The experiment already existed
+
+`evaluation/projection_calibration.py` was committed in **D68** before any arm was fitted, and
+pre-registers exactly the forms D99 proposed: `X0` control, `X1` per-position additive, `X2`
+per-position affine, `X3` rank-band additive, `X4` empirical-Bayes shrinkage. D68's recorded
+outcome: **every arm improved MAE (63.29 → 61.83-62.88) and every arm failed its gates (G3/G4),
+every G3 failure at TE or WR.** K and DST are excluded from all arms by that pre-registration
+(D57: year-over-year K r=0.41, DST r=0.29). So **K cannot be calibrated with existing
+infrastructure**, and D97's "start with QB/TE/K" is only answerable for QB and TE.
+
+### 2. The primary result is structural, not statistical
+
+`X1`, `X2` and `X4` apply a per-position map that is **monotone increasing** in the projection.
+A monotone map cannot reorder players within a position, and top-6-by-position is a pure function
+of that order. Stated as H0 before running; confirmed exactly.
+
+Cells (of 30 = 3 treated seasons × 6 positions) where per-position top-6 overlap differs from
+control: **X1 0/30, X2 0/30, X4 0/30, X3 1/30** (2024 QB, 2→3 — one player crossing one band
+edge). Spearman unmoved (QB 0.738 → 0.735-0.740). MAE moves slightly; **X2 damages TE 27.17 →
+42.17**, consistent with D68's G3 failures.
+
+**D97's identification failure is a within-position RANKING failure. These calibrations rescale a
+position without ever reordering it.** No amount of data changes that. D97's recommendation #1 is
+closed as specified: it targets the wrong mechanism for the problem D97 itself found.
+
+### 3. What calibration can move, and why it still does not advance
+
+Cross-position allocation is not invariant, and that is D97's actual mechanism (production's first
+QB at round 2.1 vs the oracle's 7.1). On treated seasons, first-QB **overall rank**:
+
+| arm | first QB rank | QBs in top 24 | top-24 members changed |
+|---|---|---|---|
+| X0 control | 5.0 | 3.33 | — |
+| X1 / X4 | 5.0 | 3.33 | 0.67 / **0.00** |
+| X2 | **10.3** | 3.00 | 1.67 |
+| X3 | **11.0** | 2.33 | 2.33 |
+| *oracle (realized board)* | *10.0* | — | — |
+
+`X1`/`X4` are **inert by construction**: a uniform additive shift moves that position's replacement
+level by the same constant, leaving `draft_aware_vorp` unchanged (D69 recorded this property;
+confirmed here at 0/24). `X2`/`X3` do move allocation toward the oracle — a real signal, honestly
+reported — but it is not the primary metric, both arms were already rejected by D68's gates, and
+promoting it now by inventing a gate is the protocol violation this phase forbids.
+
+### 4. Power — the open thread is unresolvable on this instrument
+
+Only **3 of 5 seasons are treatable** (2021 has 0 training seasons, 2022 has 1 — control by
+construction, declared in D68 before measurement). Using D97's measured between-season SD:
+
+| contrast | k=5 | k=3 |
+|---|---|---|
+| PROD − NAIVE | MDE 179.4 | **MDE 359.0** |
+| ORACLE − PROD | MDE 171.8 | **MDE 343.8** |
+
+An MDE of ~345-360 points is **larger than Y1's entire decision apparatus (+213.8)** and 14× the
+25-point economic threshold. The §3 signal cannot be separated from noise by any experiment
+available today. The downstream draft test (Phase 7) and 2026 check (Phase 8) were therefore **not
+run**, per the pre-registered stopping rule — no arm cleared identification.
+
+### 5. Next
+
+The identification failure is a ranking problem, so a fix needs new *information*, not a rescaling.
+Smallest next question, diagnostic and cheap (no retraining, no new source):
+
+> **Do M6's existing four features already contain signal that separates the realized top-6 from
+> the projected top-6 within a position, out-of-sample?**
+
+D97 measured ~0% capture at QB/TE/K while the realized QB top-6 holds +69.7 VORP. Before adding
+anything, establish whether M6 is under-using what it has — D69 flagged an unexplained association
+with a trending availability measure, and `prior_games` is already in the feature set. That
+distinguishes "the model discards signal it has" from "the information is not in the data", which
+decides whether a projection change is worth attempting at all.
