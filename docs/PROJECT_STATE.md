@@ -3,7 +3,56 @@
 Living summary of what is implemented, validated, and outstanding. Updated at the end of every
 milestone. See `docs/TRACEABILITY.md` for the acceptance-criteria-level mapping.
 
-## Status: M53 complete (D103) — **Pick-level regret is concentrated EARLY (181.5 vs 107.4), the weekly objective REDUCES regret everywhere rather than exposing late-round value, and perfect information is worth +795.3 with the rule held at Y1. D — NOT CONFIRMED. Nothing ships.**
+## Status: M54 complete (D104) — **The best real preseason ranking recovers only +9.7% of the oracle gap in target and is NEGATIVE (−18.4%) in dynasty, while changing 57–64% of all picks. The draft objective looks FLAT near Y1. B — SMALL / UNCERTAIN. Nothing ships.**
+
+Research only. **No production change, no model fitted, no ECR tuning, no 2026, no PR, nothing
+merged**; `models/` (`73b408e9`) and `league/` (`d4cfd00e`) byte-identical and **no `src/` file
+changed at all**. Full report: `docs/D104_ECR_FLOOR.md`.
+
+**Phase 0 rejected the repository's own ECR→value transform before any result.**
+`ecr_implied_baseline` (a) collapses the top of the board — the 2023 top-24 holds **4 distinct
+values at RB, largest tie group 12** — so the engine would pick **alphabetically** exactly where
+regret is concentrated; (b) **hardcodes `ecr_type='ro'`**, so dynasty would be fed the redraft board
+(D56 violation); (c) covers only 66–75% of the board. Used instead: a **within-position permutation
+of Y1's own values** into preseason ECR order, which preserves the value multiset exactly (asserted
+at runtime, pinned by test), keeps the universe identical, and introduces no ties.
+
+**ORACLE_Y1 reproduces D103 exactly** (+795.3 / +717.0), so the instrument is sound.
+
+**The decomposition** (realized roster value, Y1 rule held fixed, 20 drafts per arm per format):
+
+| contrast | target_league | dynasty_1qb |
+|---|---|---|
+| **Y1 → FP_ECR_Y1** | **+77.3**, 5W/0T/0L, CI [−44.1, +198.6] | **−132.1**, 1W/0T/4L, CI [−371.1, +107.0] |
+| FP_ECR_Y1 → ORACLE_Y1 | +718.0 | +849.1 |
+| Y1 → ORACLE_Y1 | +795.3 | +717.0 |
+| **recovered fraction** | **+9.7%** | **−18.4%** |
+
+Both below D97's 172–250 floor → **UNRESOLVED by the pre-registered stopping rule**, the positive
+one included. The **sign flips across formats**, so no mechanism is demonstrated.
+
+**The key number: 57–64% of picks change, from round 1 in every draft, and value barely moves.**
+The draft outcome is remarkably **insensitive to within-position board ordering** — exactly what
+D103's "92–96% luck-shaped" predicts.
+
+**The distinction the phase existed to test:** *"FantasyPros identifies better players"* (D100:
+2.75 vs 1.95 of 6) **does not imply** *"FantasyPros produces better draft picks."* This is the
+clearest demonstration the project has that **projection proxy metrics do not transfer to pick
+quality**, and it retires the reasoning chain running from D97 through D100.
+
+**Direction challenged:** the evidence now says the problem is **NOT projections** in the sense the
+last six phases assumed. D103 put the decision residual at ~86–113 pts/draft; D104 puts the best
+available preseason-information gain at +77.3/−132.1. **Neither lever shows reachable headroom above
+the measurement floor.** The new hypothesis: **the draft objective is FLAT near Y1's operating
+point**, which would explain why ten value bases, a weekly objective and legality separation all
+failed — a property of the problem, not a failure of the search.
+
+**Next:** test the flatness directly — dispersion of realized value across deliberately scrambled
+within-position boards at increasing intensity, rule held fixed. If scrambled boards land in the
+same ±130-point band ECR does, the projection direction closes on **positive** evidence rather than
+repeated nulls.
+
+### Earlier status: M53 complete (D103) — **Pick-level regret is concentrated EARLY (181.5 vs 107.4), the weekly objective REDUCES regret everywhere rather than exposing late-round value, and perfect information is worth +795.3 with the rule held at Y1. D — NOT CONFIRMED. Nothing ships.**
 
 Research + instrumentation. **No production decision-rule change, no model fitted, no 2026, no
 PR, nothing merged**; `models/` (`73b408e9`) and `league/` (`d4cfd00e`) byte-identical; 1392 tests

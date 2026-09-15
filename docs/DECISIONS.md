@@ -7805,3 +7805,102 @@ the rule held at Y1 would put a **floor** under the same contrast; the gap betwe
 +795.3 is the only honest estimate of what better projections could buy. Reuses the machinery added
 here; no model, no fitting, no new data. Not recommended: O2/O3, another value base, a lookahead
 optimizer, projection-proxy tuning, or 2026.
+
+## D104 — The best real preseason ranking recovers <10% of the oracle gap in one format and is NEGATIVE in the other. B — SMALL / UNCERTAIN.
+
+Research only. **No production change, no model fitted, no ECR tuning, no 2026, no PR, nothing
+merged**; `models/` `73b408e9` and `league/` `d4cfd00e` byte-identical, and **no `src/` file changed
+at all**. Full report: `docs/D104_ECR_FLOOR.md`. Board vintage `ca3e2d8a`.
+
+### 1. Phase 0 rejected the repository's own ECR->value transform, before any result
+
+`market_implied.py::ecr_implied_baseline` was inspected and rejected on three measured grounds:
+
+1. **It destroys the ordering under test.** Its isotonic step function leaves the 2023 top-24 with
+   **4 distinct values at RB (largest tie group 12)**, 6 at WR, 9 at QB. The engine breaks ties on
+   `player_id`, so the arm would pick **alphabetically** among 4-12 tied players exactly in rounds
+   1-5 where D103 measured regret to be concentrated — the D91/D95 degeneracy class.
+2. **It hardcodes `ecr_type='ro'`** and ignores the resolved series, so `dynasty_1qb` (`do`/
+   `dynasty-overall`) would be fed the REDRAFT board — a D56 violation removing half the population.
+3. **Coverage is 66-75%** and QB/RB/WR/TE only, so substituting it changes the candidate universe.
+
+**Used instead:** `ecr_ordered_static` re-assigns, within position, Y1's OWN projected values to
+players in preseason ECR order (`values` sorted desc -> players sorted by ecr_rank asc, `player_id`
+tie-break; unranked players keep their Y1 value). The **multiset of values per position is exactly
+Y1's** — asserted at runtime and pinned by test — so replacement levels, scarcity, consumption
+demand and the positional scale are unchanged, the universe is identical, and no tie is introduced.
+Only WHICH player holds which value changes. The board is `SeasonStatic.market_rank`: the resolved
+series, correct `page_type`, July/August scrapes of the target season only.
+
+**Leakage audit:** `market_implied`'s missing `page_type` filter changes **0/496, 0/500, 0/481,
+0/549 and 1/488** player values across 2021-2025 — inert, consistent with D98, recorded as the same
+latent fragility D96 §7 flagged. D104's own path filters correctly.
+
+### 2. ORACLE_Y1 reproduces D103 exactly
+
+target **+795.3**, dynasty **+717.0** — identical to D103's recorded values. Deterministic.
+
+### 3. The decomposition (realized roster value, Y1 rule held fixed, 20 drafts/arm/format)
+
+| contrast | target_league | dynasty_1qb |
+|---|---|---|
+| **Y1 -> FP_ECR_Y1** | **+77.3** CI [−44.1, +198.6], **5W/0T/0L** | **−132.1** CI [−371.1, +107.0], **1W/0T/4L** |
+| FP_ECR_Y1 -> ORACLE_Y1 | +718.0 CI [+504.1, +931.9] | +849.1 CI [+714.7, +983.5] |
+| Y1 -> ORACLE_Y1 | +795.3 | +717.0 |
+| **recovered fraction** | **+9.7%** | **−18.4%** |
+
+Both below D97's 172-250 measurement floor, so both are **UNRESOLVED by the stopping rule fixed in
+advance** — the positive one included. **The sign flips across formats**, which under the project's
+own G7 generalization reasoning (D89/D90) means no mechanism is demonstrated.
+
+### 4. THE KEY NUMBER: 57-64% of picks change and value barely moves
+
+| format | picks changed | EARLY | MIDDLE | LATE | first divergence |
+|---|---|---|---|---|---|
+| target | **183/320 (57.2%)** | 57.0% | 52.0% | 61.7% | round 1, 20/20 drafts |
+| dynasty | **206/320 (64.4%)** | 63.0% | 66.0% | 64.2% | round 1, 20/20 drafts |
+
+Reordering the board changes **more than half of every draft from pick 1**, and realized value moves
+by **<10% of the oracle gap** — negatively in dynasty. The draft outcome is remarkably **insensitive
+to within-position ordering**, exactly as D103's "92-96% luck-shaped" predicts.
+
+*Honest confound:* the permutation is within-position but its effect is not purely so — re-assigning
+skill values changes their standing against the **untouched** K/DST baselines, producing RB->K 17,
+WR->K 14, TE->K 12 (target) and RB->DST 15 (dynasty) swaps. A limitation of holding K/DST fixed
+(the right choice, since no ECR board ranks them), reported not smoothed over.
+
+### 5. The distinction the phase existed to test
+
+> "FantasyPros identifies better players" != "FantasyPros produces better draft picks."
+
+D100 established the former (2.75 vs 1.95 of 6, plus AUC and Spearman). **D104 tested the latter
+directly and it does not follow.** This is the clearest demonstration this project has that
+**projection proxy metrics do not transfer to pick quality**, and it retires the reasoning chain
+running from D97 through D100.
+
+### 6. Challenging the direction, as required
+
+**The evidence now says the problem is NOT projections**, in the sense the last six phases assumed.
+D103 put the decision-shaped residual at ~86-113 pts/draft (below the floor); D104 puts the best
+*available* preseason-information gain at +77.3/−132.1 (also below the floor). **Neither lever has
+demonstrated reachable headroom above the measurement floor.**
+
+**Does the decision rule deserve another look? No — but for a new reason.** §4 is the pivot:
+changing 57-64% of picks moves realized value almost not at all. That is evidence the draft
+objective is **FLAT near Y1's operating point** — many quite different boards yield roughly the same
+roster value. A flat objective means neither better ordering nor a cleverer rule buys much, and it
+explains why ten value bases, a weekly objective and legality separation have all failed. **The
+plateau looks like a property of the problem, not a failure of the search.**
+
+### 7. Next — test the flatness directly, do not pick another ranking
+
+> **Measure the dispersion of realized roster value across deliberately perturbed boards — random
+> within-position permutations of Y1's values at increasing intensity, rule held fixed. If heavily
+> scrambled boards land inside the same ~±130-point band ECR does, the objective is flat and no
+> ranking-side work can pay — closing the projection direction on POSITIVE evidence rather than on
+> repeated nulls. If value degrades sharply with scramble intensity, Y1's ordering is doing real
+> work and ECR simply is not better at it.**
+
+Reuses D104's machinery with a different permutation; no model, no fitting, no new data. Not
+recommended: a new projection model, ECR tuning, another value base, O2/O3, a lookahead optimizer,
+or 2026.
