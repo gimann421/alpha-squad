@@ -13,6 +13,9 @@
 >    decision-rule effect under oracle information is about −11 / −12 points. D97's reading of
 >    `ORACLE − PROD` as information-shaped was close to right.
 >
+> 3. **§1's "PR #19 … open, not merged" is stale.** PR #19 was closed as superseded during D96;
+>    only PR #23 (D98) is open. The same stale line appears in D99–D101's status tables.
+>
 > The rest of this report — the definitions, the metric audit, the information boundary, and the
 > instrumentation recommendations — stands, and D103 implemented all three of its §16 items.
 
