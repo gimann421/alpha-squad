@@ -1,5 +1,21 @@
 # D102 — Defining the pick-level objective
 
+> **SUPERSEDED IN TWO PLACES BY D103** (`docs/D103_PICK_LEVEL_OBJECTIVE.md`), which ran the
+> experiment this report recommended and refuted two of its claims:
+>
+> 1. **§6a / §9's "under season-long scoring the endgame row is not measurable at all" is WRONG.**
+>    Late-round regret measures 107.4 under season-long — 59% of the early figure, not a
+>    degeneracy. `compute_league_starters` allocates the best ten of sixteen *by season total*, so
+>    a late pick who turns out well does enter the lineup. What season-long cannot see is
+>    **insurance** value (covering a starter's missing weeks), not late-pick value as such.
+> 2. **§10's expectation of "a large and negative" interaction from Y1's uncertainty machinery is
+>    WRONG.** With the rule held at Y1, the information effect is +795.3 / +717.0; the implied
+>    decision-rule effect under oracle information is about −11 / −12 points. D97's reading of
+>    `ORACLE − PROD` as information-shaped was close to right.
+>
+> The rest of this report — the definitions, the metric audit, the information boundary, and the
+> instrumentation recommendations — stands, and D103 implemented all three of its §16 items.
+
 **Verdict: DO NOT SHIP** (a definition phase has nothing to ship). Nothing was fitted, no model,
 arm, or production path was touched.
 

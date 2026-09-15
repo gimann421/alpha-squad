@@ -7693,3 +7693,115 @@ two claims is where four phases went.
 Until (1)-(3), "projections or decision logic?" is **unresolved**, and four phases have been spent
 acting as though it were not. Explicitly not recommended: another value base, a Y4, a lookahead
 optimizer, further projection-proxy work, or any use of 2026.
+
+## D103 — Pick-level regret is concentrated EARLY, the weekly objective REDUCES it everywhere, and information dominates. D — NOT CONFIRMED.
+
+Research + instrumentation. **No production decision-rule change, no model fitted, no 2026, no PR,
+nothing merged**; `models/` `73b408e9` and `league/` `d4cfd00e` byte-identical. The only `src/`
+change is `evaluation/draft_oracle.py`, an instrument. Full report:
+`docs/D103_PICK_LEVEL_OBJECTIVE.md`. Board vintage `ca3e2d8a`.
+
+### 1. Production equivalence is now pinned (Part 1)
+
+`draft_oracle.py` claimed L0/Q0/Z0 were "asserted byte-identical to `recommend_draft_pick` by
+existing tests". **No such test existed** — `test_l0_is_the_shipped_engine` compares L0 only to its
+sibling replicas Q0/Z0, and the only test touching production pinned tier `H` on the FIRST pick of
+a synthetic league. `TestShippedTierIsProduction` now walks whole drafts at every slot comparing the
+CHOSEN PLAYER against tier H at every audited state, continuing on production's pick so a
+divergence cannot fork the state. The real-data companion agreed 240/240 in D102.
+
+### 2. The objective is selectable and D86 still reproduces (Part 2)
+
+`SEASON_LONG` stays the default (pinned by test), `WEEKLY_NO_FORESIGHT` reuses the tested
+`weekly_lineup_points_no_foresight` and refuses to run without the weekly table rather than
+silently scoring something else under the same name. Demonstration test: two rosters differing only
+in which backup QB sits on the bench score **identically** under season-long and **differ** under
+weekly.
+
+### 3. Regret by phase — EARLY, in every cell (Parts 3-4)
+
+2021-2025 x slots {1,4,7,10} x 16 rounds x both formats = 320 audited picks per format per
+objective. **D86's exact slot set is unrecorded** (its runner was a scratchpad script), so a
+discrepancy against D86's 116.2 is expected, not a defect.
+
+| format / objective | all | EARLY 1-5 | MIDDLE 6-10 | LATE 11-16 |
+|---|---|---|---|---|
+| target / season_long | **134.8** | **181.5** | 121.0 | 107.4 |
+| target / weekly | **107.4** | **162.5** | 89.1 | 76.7 |
+| dynasty / season_long | **141.8** | **181.1** | 144.2 | 107.0 |
+| dynasty / weekly | **103.1** | **147.6** | 98.1 | 70.2 |
+
+Worst round is **round 2** (198.3). Alpha's pick equals the oracle's in only 2.2-4.7% of picks, and
+**0%** of rounds 1-5. Candidate spread decays 357.8 (rd 1) to 133.6 (rd 16), closely reproducing
+D86's 343.7 -> 113.0.
+
+### 4. TWO D102 CLAIMS ARE REFUTED BY THIS PHASE'S OWN DATA
+
+**(a) "Season-long scoring makes late-pick regret near-degenerate by construction" — WRONG.** Late
+regret is **107.4** under season-long, 59% of the early figure. The mechanism D102 invoked was also
+wrong: `compute_league_starters` allocates the best ten of sixteen *by season total*, so a late pick
+who turns out well does enter the lineup. What season-long cannot see is **insurance** value, not
+late-pick value as such.
+
+**(b) The weekly objective REDUCES regret everywhere, it does not reveal hidden late value.**
+WEEKLY − SEASONLONG: target **−27.4** CI [−53.8, −1.0], late **−30.6** CI [−59.9, −1.3]; dynasty
+**−38.7** CI [−59.9, −17.5], late **−36.8** CI [−62.9, −10.7]. A weekly lineup adapts, so swapping
+one player moves the summed weekly total less than a single season-long allocation — the objective
+**compresses** the spread between candidates. **The experiment D102 recommended was run and its
+motivating hypothesis did not survive.** Weekly remains the more faithful `U` (it is the only one
+that sees a bye, an injury or the bench, 17.8% of realized points per D86), but it makes every pick
+matter less rather than exposing late-round value.
+
+### 5. Attribution — luck dominates, structure replicates D86 (Part 4D)
+
+| | target SL | target WK | dynasty SL | dynasty WK |
+|---|---|---|---|---|
+| oracle's player simply SCORED MORE | 95.5% | 92.9% | 95.2% | 92.1% |
+| scored NO MORE and still won (**structural**) | 4.5% | 7.1% | 4.8% | 7.9% |
+| **cross-position** error | 74.8% | 73.1% | 75.5% | 78.4% |
+| oracle's player's median rank on Alpha's own board | 73 | 34 | 102 | 51 |
+
+Per draft: **0.70 structural picks x 129.6 = ~91 pts/draft** (target, season-long) — **an
+independent replication of D86's ~90 on a different slot set.** Weekly raises the structural SHARE
+(4.5% -> 7.1%, ~108 pts/draft) while lowering total regret, which is the one respect in which it
+does what D102 hoped.
+
+### 6. ORACLE_Y1 — and a second correction to D102 (Part 5)
+
+The missing 2x2 cell: oracle INFORMATION with the Y1 DECISION RULE. What it may change is narrow
+and pinned by test — projections and their derived VORP only; the market board, opponent model,
+confidence/dispersion and consumption demand are held fixed.
+
+| format | PROD | ORACLE_Y1 | information effect, rule held at Y1 |
+|---|---|---|---|
+| target_league | 1983.6 | 2778.9 | **+795.3** CI [+579.1, +1011.4], **5/5** |
+| dynasty_1qb | 2094.9 | 2811.9 | **+717.0** CI [+432.8, +1001.3], **5/5** |
+
+Against D97's `ORACLE − PROD` of +784.6/+704.6, the implied decision-rule effect under oracle
+information is **about −11/−12 points — indistinguishable from zero. D102 hypothesised Y1's
+uncertainty machinery would be actively harmful under certainty and that the confound was large; it
+is not, so D97's reading of that residual as information-shaped was close to right.** Limit: D97's
+ORACLE ran on 10 slots and this ran on 4, so the ~11 is a cross-run difference; the clean within-run
+statement is the information effect alone.
+
+### 7. Diagnosis (Part 7): predominantly A, small persistent B, with an honest limit
+
+92-96% of divergences are the oracle's player simply scoring more; his median rank on Alpha's own
+board is 73 of ~610; and perfect information is worth +795.3/+717.0 with the rule unchanged. The
+structural residual is real, cross-position dominated (75%), and worth ~86-113 pts/draft — **below
+D97's ~172-250 measurement floor.** The limit that stops A being proven: "scored more" **conflates
+bad information with unavoidable variance**, and this instrument cannot separate them, so no share
+of the 92-96% may be quoted as projection error.
+
+### 8. Verdict and next
+
+**D — NOT CONFIRMED.** The measurement is established, validated and reproducible; no decision-rule
+opportunity is confirmed, and none is detectable on this instrument. No 2026 check was run.
+
+Recommended next phase, **documented only**: ORACLE_Y1 uses realized outcomes and is an upper bound
+on nothing achievable. Substituting the best PRESEASON-AVAILABLE ranking already in the repository
+(the FantasyPros consensus board, which D100 measured as beating M6 at top-6 identification) with
+the rule held at Y1 would put a **floor** under the same contrast; the gap between that floor and
++795.3 is the only honest estimate of what better projections could buy. Reuses the machinery added
+here; no model, no fitting, no new data. Not recommended: O2/O3, another value base, a lookahead
+optimizer, projection-proxy tuning, or 2026.

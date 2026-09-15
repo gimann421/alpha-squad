@@ -3,7 +3,64 @@
 Living summary of what is implemented, validated, and outstanding. Updated at the end of every
 milestone. See `docs/TRACEABILITY.md` for the acceptance-criteria-level mapping.
 
-## Status: M52 complete (D102) — **The pick-level objective is already instrumented (D86's `draft_oracle.py`) and has been measured with the roster-value function D86 itself disproved. The project has never validly measured late-pick quality. Definition phase; nothing ships.**
+## Status: M53 complete (D103) — **Pick-level regret is concentrated EARLY (181.5 vs 107.4), the weekly objective REDUCES regret everywhere rather than exposing late-round value, and perfect information is worth +795.3 with the rule held at Y1. D — NOT CONFIRMED. Nothing ships.**
+
+Research + instrumentation. **No production decision-rule change, no model fitted, no 2026, no
+PR, nothing merged**; `models/` (`73b408e9`) and `league/` (`d4cfd00e`) byte-identical; 1392 tests
+pass (1370 baseline + 22 new), ruff clean. The only `src/` change is `evaluation/draft_oracle.py`,
+an instrument. Full report: `docs/D103_PICK_LEVEL_OBJECTIVE.md`.
+
+**Production equivalence is now pinned.** `draft_oracle.py` claimed L0/Q0/Z0 were asserted
+byte-identical to `recommend_draft_pick` by existing tests; **no such test existed**.
+`TestShippedTierIsProduction` now walks whole drafts at every slot comparing the chosen player
+against tier `H` at every audited state.
+
+**The objective is selectable and D86 still reproduces.** `SEASON_LONG` stays the default (pinned
+by test); `WEEKLY_NO_FORESIGHT` reuses the tested weekly objective and refuses to run without its
+data. Two rosters differing only in a bench QB score identically under season-long and differ under
+weekly.
+
+**Regret by phase — EARLY in every cell** (320 audited picks per format per objective,
+2021–2025 × slots {1,4,7,10} × both formats):
+
+| format / objective | all | EARLY 1–5 | MIDDLE 6–10 | LATE 11–16 |
+|---|---|---|---|---|
+| target / season_long | 134.8 | **181.5** | 121.0 | 107.4 |
+| target / weekly | 107.4 | **162.5** | 89.1 | 76.7 |
+| dynasty / season_long | 141.8 | **181.1** | 144.2 | 107.0 |
+| dynasty / weekly | 103.1 | **147.6** | 98.1 | 70.2 |
+
+Worst round is **round 2** (198.3); Alpha matches the oracle in 0% of rounds 1–5.
+
+**TWO D102 CLAIMS ARE REFUTED.** (a) "Season-long makes late regret near-degenerate by
+construction" is **wrong** — late regret is 107.4, and the allocator picks the best ten of sixteen
+*by season total*, so a good late pick does enter the lineup; what season-long cannot see is
+**insurance** value. (b) The weekly objective **reduces** regret everywhere (−27.4 target, −38.7
+dynasty; late −30.6, −36.8) because a weekly lineup adapts and so **compresses** the candidate
+spread. **The experiment D102 recommended was run and its motivating hypothesis did not survive.**
+
+**Attribution:** 92–96% of divergences are the oracle's player simply scoring more (his median rank
+on Alpha's own board is 73 of ~610); the structural residual is 4.5–7.9%, worth **~91 pts/draft** —
+**an independent replication of D86's ~90 on a different slot set** — against D97's ~172–250
+measurement floor. 75% of divergences are cross-position.
+
+**ORACLE_Y1 corrects D102 again.** Information effect with the rule held at Y1: **+795.3** (target,
+CI [+579.1, +1011.4], 5/5) and **+717.0** (dynasty, 5/5). The implied decision-rule effect under
+oracle information is ~−11/−12 points — **D102 predicted Y1's hedging would be actively harmful
+under certainty; it is not**, so D97's reading was close to right. (Cross-run slot sets, so the ~11
+is indicative.)
+
+**Diagnosis:** predominantly **A** (bad information / unavoidable variance), small persistent **B**
+below the detection floor. The honest limit: "scored more" conflates bad information with
+unavoidable variance and this instrument cannot separate them, so no share of the 92–96% may be
+quoted as projection error.
+
+**Next (documented only, not started):** ORACLE_Y1 is an upper bound on nothing achievable.
+Substituting the best **preseason-available** ranking already in the repo (the FantasyPros
+consensus board) with the rule held at Y1 would put a **floor** under the same contrast; the gap
+between that floor and +795.3 is the only honest estimate of what better projections could buy.
+
+### Earlier status: M52 complete (D102) — **The pick-level objective is already instrumented (D86's `draft_oracle.py`) and has been measured with the roster-value function D86 itself disproved. The project has never validly measured late-pick quality. Definition phase; nothing ships.**
 
 Definition / research only. **No production change, no model fitted, no arm created or modified, no
 draft simulation, no 2026, no PR**; `models/` (`73b408e9`) and `league/` (`d4cfd00e`) untouched;
