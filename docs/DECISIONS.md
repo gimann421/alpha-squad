@@ -7869,7 +7869,23 @@ skill values changes their standing against the **untouched** K/DST baselines, p
 WR->K 14, TE->K 12 (target) and RB->DST 15 (dynasty) swaps. A limitation of holding K/DST fixed
 (the right choice, since no ECR board ranks them), reported not smoothed over.
 
-### 5. The distinction the phase existed to test
+### 5. Pick-level regret corroborates it (D103's instrument, unchanged)
+
+`target_league`, season-long, 320 audited picks per arm. Lower is better.
+
+| arm | all | EARLY | MIDDLE | LATE | alpha = oracle |
+|---|---|---|---|---|---|
+| Y1 | **134.8** | 181.5 | 121.0 | **107.4** | 2.2% |
+| FP_ECR_Y1 | **139.8** | 180.6 | 119.4 | **122.8** | 1.2% |
+
+**FP_ECR_Y1 − Y1 = +5.0 mean regret — slightly WORSE**, CI [−33.2, +43.3], t=0.36, better in 2/5
+seasons, and it matches the oracle less often (1.2% vs 2.2%). The damage is concentrated **LATE**
+(107.4 -> 122.8) and at **TE 119->140, K 113->123, DST 117->123** — exactly the cross-position
+confound of §4: holding K/DST fixed while re-assigning skill values pulls the engine toward kickers
+and defenses in the endgame. Read subject to the limitation that each arm is scored against its OWN
+oracle, so this corroborates §3 rather than independently establishing it.
+
+### 6. The distinction the phase existed to test
 
 > "FantasyPros identifies better players" != "FantasyPros produces better draft picks."
 
@@ -7878,7 +7894,7 @@ directly and it does not follow.** This is the clearest demonstration this proje
 **projection proxy metrics do not transfer to pick quality**, and it retires the reasoning chain
 running from D97 through D100.
 
-### 6. Challenging the direction, as required
+### 7. Challenging the direction, as required
 
 **The evidence now says the problem is NOT projections**, in the sense the last six phases assumed.
 D103 put the decision-shaped residual at ~86-113 pts/draft (below the floor); D104 puts the best
@@ -7892,7 +7908,7 @@ roster value. A flat objective means neither better ordering nor a cleverer rule
 explains why ten value bases, a weekly objective and legality separation have all failed. **The
 plateau looks like a property of the problem, not a failure of the search.**
 
-### 7. Next — test the flatness directly, do not pick another ranking
+### 8. Next — test the flatness directly, do not pick another ranking
 
 > **Measure the dispersion of realized roster value across deliberately perturbed boards — random
 > within-position permutations of Y1's values at increasing intensity, rule held fixed. If heavily

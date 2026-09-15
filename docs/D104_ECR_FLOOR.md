@@ -189,8 +189,6 @@ kickers. It is a real limitation of the isolation and is reported rather than sm
 
 ## 6. Pick-level regret (secondary — with an interpretive limit)
 
-*(Reported in §11; the run was still completing at the time of writing.)*
-
 **An important limitation, stated before the numbers:** running D103's `audit_draft` on the
 ECR-informed board changes **both** the audited policy **and** the rollout continuation. Each arm
 is therefore scored against **its own** oracle, so regret here is *arm-relative* — a lower number
@@ -292,7 +290,33 @@ O2/O3, a lookahead optimizer, or any use of 2026.
 
 ## 11. Pick-level regret results
 
-*(Filled in on completion; see §6 for why this is secondary.)*
+D103's `audit_draft`, unchanged, `target_league`, season-long objective, 2021–2025 × slots
+{1, 4, 7, 10} × both arms = 320 audited picks per arm. Lower is better.
+
+| arm | all picks | EARLY 1–5 | MIDDLE 6–10 | LATE 11–16 | alpha = oracle |
+|---|---|---|---|---|---|
+| Y1 | **134.8** | 181.5 | 121.0 | **107.4** | 2.2% |
+| FP_ECR_Y1 | **139.8** | 180.6 | 119.4 | **122.8** | 1.2% |
+
+**FP_ECR_Y1 − Y1 = +5.0 mean regret** (i.e. slightly *worse*), 95% CI [−33.2, +43.3], t = 0.36,
+better in only **2 of 5 seasons**. The arm also matches the oracle's pick less often (1.2% vs 2.2%).
+
+Mean regret at picks where each position was taken:
+
+| arm | QB | RB | WR | TE | K | DST |
+|---|---|---|---|---|---|---|
+| Y1 | 164 | 113 | 157 | **119** | **113** | **117** |
+| FP_ECR_Y1 | 166 | 111 | 164 | **140** | **123** | **123** |
+
+**Two readings, both consistent with §4.** First, the pick-level metric shows **no improvement** —
+the point estimate is in the wrong direction and the interval spans zero, matching a whole-draft
+effect of +77.3 whose interval also spans zero. Second, the damage is concentrated **LATE**
+(107.4 → 122.8) and at **TE/K/DST**, which is exactly the cross-position confound flagged in §5:
+re-assigning skill values while holding K/DST fixed pulls the engine toward kickers and defenses in
+the endgame, and those picks carry higher regret.
+
+Read subject to §6's limitation — each arm is scored against its own oracle — so this corroborates
+the §4 verdict rather than independently establishing it.
 
 ## 12. Reproduction
 

@@ -35,6 +35,11 @@ one included. The **sign flips across formats**, so no mechanism is demonstrated
 The draft outcome is remarkably **insensitive to within-position board ordering** — exactly what
 D103's "92–96% luck-shaped" predicts.
 
+**Pick-level regret corroborates it.** Target format, 320 audited picks per arm: Y1 **134.8**,
+FP_ECR_Y1 **139.8** — **+5.0, slightly worse**, CI [−33.2, +43.3], better in 2/5 seasons. Damage is
+concentrated LATE (107.4 → **122.8**) and at TE/K/DST, the cross-position confound of holding K/DST
+fixed while re-assigning skill values.
+
 **The distinction the phase existed to test:** *"FantasyPros identifies better players"* (D100:
 2.75 vs 1.95 of 6) **does not imply** *"FantasyPros produces better draft picks."* This is the
 clearest demonstration the project has that **projection proxy metrics do not transfer to pick
