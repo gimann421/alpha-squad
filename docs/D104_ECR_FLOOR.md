@@ -1,5 +1,17 @@
 # D104 — How much of the measured oracle gap does a real preseason ranking recover?
 
+> **§9's closing hypothesis is SUPERSEDED BY D105** (`docs/D105_OBJECTIVE_SENSITIVITY.md`), which
+> tested it directly. D104 proposed that "the draft objective is FLAT near Y1's operating point".
+> **It is not flat — it is thresholded.** A fully scrambled within-position board costs −565.8
+> (target) / −631.9 (dynasty), worse in 5 of 5 seasons. The correct statement is narrower: the
+> objective has a broad **robustness plateau**, and every ranking source tested — Y1 and ECR alike —
+> lives inside it. D105 also explains D104's null: ECR improves predictive ranking quality by
+> +0.024 Spearman, about one-tenth of the smallest rung of D105's ladder.
+>
+> Everything else in this report — the Phase 0 rejection of `ecr_implied_baseline`, the
+> decomposition, the 57–64% pick churn, and the "identifies better players ≠ produces better picks"
+> conclusion — stands.
+
 **Verdict: B — SMALL / UNCERTAIN ACHIEVABLE HEADROOM.** The strongest legitimate preseason ranking
 in this repository, substituted into the Y1 decision rule with the rule held fixed, recovers
 **+77.3 points (9.7% of the measured oracle gap) in `target_league`** — directionally consistent

@@ -3,7 +3,53 @@
 Living summary of what is implemented, validated, and outstanding. Updated at the end of every
 milestone. See `docs/TRACEABILITY.md` for the acceptance-criteria-level mapping.
 
-## Status: M54 complete (D104) — **The best real preseason ranking recovers only +9.7% of the oracle gap in target and is NEGATIVE (−18.4%) in dynasty, while changing 57–64% of all picks. The draft objective looks FLAT near Y1. B — SMALL / UNCERTAIN. Nothing ships.**
+## Status: M55 complete (D105) — **The objective is NOT flat, it is THRESHOLDED. 88% of picks can change for 46 points, but a full scramble costs 566. The decision surface is steep; the value surface is a plateau, and every ranking source tested lives inside it. B — ROBUST. Nothing ships.**
+
+Research only. **No production change, no retraining, no ECR tuning, no 2026, no PR, nothing
+merged**; `models/` (`73b408e9`) and `league/` (`d4cfd00e`) byte-identical and **no `src/` file
+changed at all**. Full report: `docs/D105_OBJECTIVE_SENSITIVITY.md`.
+
+**The ladder.** Within position, players re-ordered by `(1−α)·rank_Y1 + α·rank_random`, with Y1's
+**own values** re-assigned down that order — the same machinery as D104's ECR substitution, so the
+two sit on one comparison. α=0 reproduces Y1 exactly (0.0% pick divergence end-to-end); α=1 is a
+uniform permutation. It degrades **predictive** quality, not just agreement with Y1: Spearman vs
+realized 0.753 → 0.718 → 0.527 → 0.242 → **0.003**.
+
+**The curve is thresholded:**
+
+| α | Spearman vs realized | **picks changed** | **value vs Y1** (target) |
+|---|---|---|---|
+| 0.25 | 0.718 | **66.2%** | −41.1 |
+| 0.50 | 0.527 | **88.4%** | **−46.5** |
+| 0.75 | 0.242 | 90.6% | −115.0 |
+| 1.00 | 0.003 | 98.4% | **−565.8**, 5/5 seasons, CI [−829, −303] |
+
+Dynasty matches: −39.5 / −60.0 / −217.7 / **−631.9**.
+
+**The decisive result is the decoupling.** At α=0.50 the engine takes a different player at seven
+of every eight picks, from pick 1, and value moves **46.5 points** — below the floor and smaller
+than the seed-to-seed SD of that level (160). **The decision surface is steep; the value surface is
+flat.** A decision rule cannot extract value from ordering differences the outcome does not reward.
+
+**D104's null is explained, and my D104 "flat objective" hypothesis is RETRACTED.** Scrambling
+destroys 566–632 points — larger than anything measured on the decision side — so the objective is
+not flat. The correct statement is narrower: **it has a broad robustness plateau, and every ranking
+source tested lives inside it.** ECR improves predictive Spearman by **+0.024**, one-tenth of the
+smallest rung; its value effect is the size of the noise.
+
+This reframes ten value bases, a weekly objective, legality separation, per-position calibration,
+identification work and a real market ranking as failing for **one structural reason** rather than
+as six separate disappointments.
+
+**What it would take:** a ranking change must move predictive Spearman by roughly **±0.5** to reach
+the 86–113 pt scale of D103's decision residual. Stated as the extrapolation it is — the ladder
+measures degradation, and symmetry is not established.
+
+**Next:** re-run this exact ladder under the **weekly no-foresight** objective. If the plateau
+persists it is a property of the draft and ranking-side work closes on positive evidence; if the
+weekly objective resolves L1/L2, the **objective** is what to fix, not the projections.
+
+### Earlier status: M54 complete (D104) — **The best real preseason ranking recovers only +9.7% of the oracle gap in target and is NEGATIVE (−18.4%) in dynasty, while changing 57–64% of all picks. The draft objective looks FLAT near Y1. B — SMALL / UNCERTAIN. Nothing ships.**
 
 Research only. **No production change, no model fitted, no ECR tuning, no 2026, no PR, nothing
 merged**; `models/` (`73b408e9`) and `league/` (`d4cfd00e`) byte-identical and **no `src/` file

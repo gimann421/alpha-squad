@@ -7920,3 +7920,108 @@ plateau looks like a property of the problem, not a failure of the search.**
 Reuses D104's machinery with a different permutation; no model, no fitting, no new data. Not
 recommended: a new projection model, ECR tuning, another value base, O2/O3, a lookahead optimizer,
 or 2026.
+
+## D105 — The objective is NOT flat: it is THRESHOLDED. 88% of picks can change for 46 points, but a full scramble costs 566. B — ROBUST.
+
+Research only. **No production change, no retraining, no ECR tuning, no 2026, no PR, nothing
+merged**; `models/` `73b408e9` and `league/` `d4cfd00e` byte-identical and **no `src/` file changed
+at all**. Full report: `docs/D105_OBJECTIVE_SENSITIVITY.md`. Board vintage `ca3e2d8a`.
+
+### 1. The perturbation, pre-registered before any result
+
+Within each position, players are re-ordered by `key(p) = (1-alpha)*rank_Y1(p) +
+alpha*rank_random(p)` and **Y1's own values** are re-assigned down that order. `alpha=0` reproduces
+Y1 exactly (pinned by test, and confirmed end-to-end by 0.0% pick divergence); `alpha=1` is a
+uniform within-position permutation. Ladder L0..L4 = 0.00/0.25/0.50/0.75/1.00. **Deliberately the
+same machinery as D104's `ecr_ordered_static`** — only the ordering key differs — which is what puts
+ECR and the scramble on one comparison. The value multiset per position is preserved (asserted at
+runtime), the universe is identical, and the decision rule, survival, opportunity cost, capacity and
+continuation are untouched.
+
+Seeds (0,1,2,3,4) pre-registered, string-seeded so the stream is stable across processes (verified
+by a test that starts a second interpreter). **Seeds are NOT independent clusters** — seasons are
+(k=5); seeds are averaged within a season and every interval is across the five season means.
+
+### 2. The ladder is valid: it degrades PREDICTIVE quality, not just agreement with Y1
+
+| arm | alpha | Spearman vs Y1 | **Spearman vs REALIZED** |
+|---|---|---|---|
+| L0 | 0.00 | 1.000 | **0.753** |
+| L1 | 0.25 | 0.953 | 0.718 |
+| L2 | 0.50 | 0.699 | 0.527 |
+| L3 | 0.75 | 0.294 | 0.242 |
+| L4 | 1.00 | 0.025 | **0.003** |
+| **FP_ECR_Y1** | — | 0.931 | **0.777** target / 0.745 dynasty |
+
+This is also the registered x-axis — a **measured** quantity, not an invented score, which is how
+ECR is placed on the same scale. **ECR is +0.024 more predictive than Y1; the smallest rung is
+−0.035.**
+
+### 3. THE CURVE IS THRESHOLDED, and the flatness hypothesis is REJECTED
+
+target_league (L0 = 1983.6), value vs L0:
+
+| arm | alpha | vs L0 | 95% CI | seasons worse | vs floor |
+|---|---|---|---|---|---|
+| L1 | 0.25 | −41.1 | [−148.8, +66.7] | 4/5 | below |
+| L2 | 0.50 | **−46.5** | [−192.8, +99.8] | 3/5 | below |
+| L3 | 0.75 | −115.0 | [−330.8, +100.7] | 3/5 | below |
+| **L4** | **1.00** | **−565.8** | **[−829.1, −302.6]** | **5/5** | **ABOVE** |
+| FP_ECR_Y1 | — | +77.3 | [−44.1, +198.6] | 0/5 | below |
+
+dynasty_1qb: L1 −39.5, L2 −60.0, L3 **−217.7** (in band), **L4 −631.9** CI [−940.4, −323.4], 5/5.
+
+Losing 30% of predictive ordering quality (0.753 -> 0.527) costs **46.5 points**. Losing the rest
+costs a further **519**. The marginal value of ranking quality is an order of magnitude larger in
+the bottom half of the range than the top.
+
+*Caveat:* `ORACLE_Y1` (+795.3/+717.0) replaces the VALUES, not just the order, so it is **not a
+point on this ordering-quality curve**. It remains the ceiling anchor, not evidence about the slope.
+
+### 4. THE DECISIVE RESULT: the decision surface is steep, the value surface is flat
+
+| arm | alpha | **picks changed** | **value vs L0** |
+|---|---|---|---|
+| L0 | 0.00 | **0.0%** | +0.0 |
+| L1 | 0.25 | **66.2%** | −41.1 |
+| L2 | 0.50 | **88.4%** | **−46.5** |
+| L3 | 0.75 | 90.6% | −115.0 |
+| L4 | 1.00 | **98.4%** | **−565.8** |
+
+**Perturbing the board until a different player is taken at seven of every eight picks, from pick 1,
+costs 46.5 points** — below the floor and smaller than the seed-to-seed SD of the same level (160).
+The engine is **not** insensitive; it faithfully re-ranks. What is flat is the **value** surface it
+sits on. Divergence is WR-dominated at every level; K appears only at L1 (2-4 cases), so the K/DST
+drift that affected D104's ECR arm is negligible here.
+
+### 5. D104's null is explained, and my D104 hypothesis is RETRACTED
+
+**The objective is not flat — I said at the end of D104 that it might be, and that is wrong.**
+Scrambling destroys 566-632 points, larger than anything this project has measured on the decision
+side. The correct and narrower statement: **the objective has a broad robustness plateau, and every
+ranking source tested lives inside it.** ECR moves predictive Spearman by one-tenth of the smallest
+rung, and its value effect is the size of the noise. **D104's null was not a failure of ECR; it was
+the objective being unable to resolve a change that small.**
+
+This reframes ten value bases, a weekly objective, legality separation, per-position calibration,
+identification work and a real market ranking as failing **for one structural reason** rather than
+as six separate disappointments.
+
+### 6. What it would take, and the honest limit
+
+To reach the 86-113 pt scale of D103's decision residual, a ranking change must move predictive
+Spearman by roughly **+-0.5**. ECR moves it by **0.024**. *Stated as the extrapolation it is:* the
+ladder measures DEGRADATION; symmetry in the improvement direction is not established. The only
+measured improvement-side anchor is ORACLE_Y1, which needs perfect information and changes values
+rather than ordering.
+
+### 7. Next — test whether the plateau is the draft or the ruler
+
+> **Re-run this exact ladder under the WEEKLY no-foresight objective.** If the plateau persists it
+> is a property of the draft and ranking-side work closes on POSITIVE evidence. If the weekly
+> objective resolves L1/L2 where season-long cannot, the plateau is partly a measurement artifact
+> and the OBJECTIVE, not the projections, is the thing to fix.
+
+Reuses D105's machinery with `--objective weekly_no_foresight`; no model, no fitting, no new data.
+Not recommended: a new projection model, ECR tuning, another value base, O2/O3, a lookahead
+optimizer, or 2026.
