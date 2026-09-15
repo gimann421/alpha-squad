@@ -3,7 +3,52 @@
 Living summary of what is implemented, validated, and outstanding. Updated at the end of every
 milestone. See `docs/TRACEABILITY.md` for the acceptance-criteria-level mapping.
 
-## Status: M51 complete (D101) — **D78's recorded "Y3 passes all seven gates" does not reproduce: Y3 FAILS G6 at WR, and is also worse than Y1 at top-6 identification. DO NOT SHIP. The training-set axis is closed.**
+## Status: M52 complete (D102) — **The pick-level objective is already instrumented (D86's `draft_oracle.py`) and has been measured with the roster-value function D86 itself disproved. The project has never validly measured late-pick quality. Definition phase; nothing ships.**
+
+Definition / research only. **No production change, no model fitted, no arm created or modified, no
+draft simulation, no 2026, no PR**; `models/` (`73b408e9`) and `league/` (`d4cfd00e`) untouched;
+1370 tests pass, ruff clean. Full report: `docs/D102_PICK_LEVEL_OBJECTIVE.md`.
+
+**The metric the north-star needs already exists.** `evaluation/draft_oracle.py` measures
+`regret(p) = max_c V(c) − V(chosen)` where `V(c)` is the final roster's realized value after taking
+`c` and playing on with the shipped engine. Its information boundary is correct and structurally
+pinned (outcomes score a finished roster and nothing else). The engine likewise already prices picks
+*marginally* — `marginal_starter_value`, `daVORP`, `positional_opportunity_cost` — so §6/§7 of the
+brief describe the existing design, not a gap.
+
+**The defect is the roster-value function.** `_score_roster` uses season totals and one lineup
+allocation — the objective D86's own Phase 1 proved **prices the bench at exactly zero**, while
+measuring **17.8% of realized points** coming from players it never starts. **Rounds 13–16 are bench
+picks, so late-pick regret is near-degenerate by construction: the project has never validly
+measured the segment the objective explicitly names.** `weekly_objective.weekly_lineup_points_no_foresight`
+already exists and is a one-call-site substitution.
+
+**Validation run (240/240).** `draft_oracle.py` claims L0/Q0/Z0 are pinned to `recommend_draft_pick`
+by tests; **no such test exists** (L0 is compared only to its sibling replicas). Checked
+empirically: **L0 and H agree on 240 of 240 real pick states**, so the D86 lineage is sound — the
+property holds, only the guarantee is missing.
+
+**The oracle gap is not identified.** D97's `ORACLE − PROD = +784.6` confounds information with
+decision rule; the missing 2×2 cell is **`ORACLE_Y1`** (perfect projections, production rule). Note
+`survival`/`confidence`/`opportunity_cost` are uncertainty machinery with nothing to hedge under
+certainty, so a large negative interaction is plausible.
+
+**Challenge to D97–D101: the diagnosis stands, the prescription does not.** "The decision layer is
+not binding" is independently corroborated by D86 (~90 pts/draft structural vs ~128 MDE) and is
+**not overturned**. But "resolvable" was conflated with "achievable", and **D98–D101 never measured
+a draft pick** — four phases on MAE/Spearman/AUC/top-6, none shown monotone in pick quality, and
+D101 proved they are not monotone in each other. D86 had explicitly listed projection work under
+"Not recommended next".
+
+**Hierarchy:** (1) pick quality via `regret_weekly`, reported **by draft phase** and decomposed into
+luck / decision / information / uncertainty; (2) resulting roster, weekly no-foresight, as
+validation only; (3) projections — **demoted and conditional** on moving the pick metric;
+(4) MAE/RMSE/Spearman/AUC/top-6 — **diagnostic only**.
+
+**Next (D103), all diagnostic:** pin `L0 == H`; re-score the existing 320 oracle pick states with
+the weekly no-foresight objective and report regret by draft phase; add the `ORACLE_Y1` cell.
+
+### Earlier status: M51 complete (D101) — **D78's recorded "Y3 passes all seven gates" does not reproduce: Y3 FAILS G6 at WR, and is also worse than Y1 at top-6 identification. DO NOT SHIP. The training-set axis is closed.**
 
 Research only. **No production change, no retraining, no draft run, no PR**; `models/`
 (`73b408e9`) and `league/` (`d4cfd00e`) untouched; 1370 tests pass, ruff clean. Full report:

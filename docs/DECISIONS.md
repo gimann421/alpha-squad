@@ -7561,3 +7561,135 @@ registered before any arm is re-scored. It unblocks D79's E2 arm, which is curre
 criterion that D100/D101 suggest does not match what the draft consumes.
 
 Explicitly not recommended: a Y4, a widened population, or carrying any arm to the draft benchmark.
+
+## D102 — The pick-level objective is already instrumented, and it has been measured with the wrong roster-value function. Definition phase; nothing ships.
+
+Definition / research only. **No production change, no model fitted, no arm created or modified, no
+draft simulation, no 2026, no PR**; `models/` `73b408e9` and `league/` `d4cfd00e` untouched. Full
+report: `docs/D102_PICK_LEVEL_OBJECTIVE.md`.
+
+### 1. What a good pick is, and which of the three targets is primary
+
+At state `S_p = (roster, available, league, information)`, a pick's value is
+`V_π(c | S_p) = E[U(final roster) | take c, continue with π]`, and pick quality is the shortfall
+against the best available option: `regret(p) = max_c V_π(c) − V_π(chosen)`. **A pick's value is
+only defined relative to a continuation policy and a roster-value function `U`; neither is free.**
+
+Of the three candidate targets — (A) ex ante decision quality, (B) ex post realized value,
+(C) counterfactual pick value — **C is primary and A is what C estimates. B is rejected on measured
+grounds:** D86 found `Spearman(engine score, final roster value) = −0.033` over 320 pick states and
+**~90% of regret is the realized-points gap** (104.1 of 116.2). A quantity that is ~90% luck cannot
+steer a decision rule.
+
+**Pick-level primary, roster-level as downstream validation — CONFIRMED**, not on taste: one pick
+moves the final roster by ~2.6% (1 SD = 53.2 of 2036), so a roster total cannot distinguish "many
+good picks and one disaster" from "mediocre picks and luck", and cannot see an early/late trade-off
+at all.
+
+### 2. The counterfactual best-pick metric ALREADY EXISTS
+
+`evaluation/draft_oracle.py` (D86) is exactly it: `V(c)` = realized starter points of the final
+roster after taking `c` and playing the rest with the shipped engine; oracle = `argmax_c V(c)`;
+**`regret` = `max_c V(c) − V(alpha's pick)`**; slate = union of Alpha's top-10, the realized top-10
+and the projection top-5. Its information boundary is correct and structurally pinned — outcomes
+enter only when scoring a finished roster, never the policy, opponent model or continuation
+(`assert_no_realized_inputs_in_policy`). **Nothing about that boundary needs changing.**
+
+The engine likewise already implements marginal-not-absolute pick value (`marginal_starter_value`
+prices displacement, `daVORP` moves replacement with the board, `positional_opportunity_cost` prices
+the drop expected by our next turn) and the rollout oracle correctly matches it, because a candidate
+who would have survived is simply taken later in the rollout — the property `pick_attribution.py`'s
+single-pick swap explicitly lacks.
+
+### 3. THE DEFECT: it is scored with the objective D86 itself disproved
+
+`_score_roster` uses `compute_league_starters` on `total_fantasy_points_ppr` — **season totals, one
+lineup allocation.** D86's own Phase 1 proved that objective cannot see a bye or an injury and
+therefore **prices the bench at exactly zero**, while measuring **17.8% of realized points** coming
+from players it never starts and a bench player entering the lineup in **16.2 of 17 weeks**.
+
+**Rounds 13–16 are bench picks, so under this scoring their regret is near-degenerate by
+construction. The project has never had a valid measurement of late-pick quality** — precisely the
+segment the north-star objective names. The fix needs no new data and no new idea:
+`weekly_objective.weekly_lineup_points_no_foresight` already exists and is tested; it is a
+one-call-site substitution.
+
+### 4. Validation run: the rollout policy is production (240/240)
+
+`draft_oracle.py` claims `L0`/`Q0`/`Z0` are "asserted byte-identical to `recommend_draft_pick` by
+existing tests". **No such test exists** — `test_l0_is_the_shipped_engine` compares L0 only to its
+sibling replicas Q0/Z0, and the only test touching production pins tier **H** on the first pick of a
+synthetic league. Checked empirically rather than assumed: over 2021–2025 × slots {1,5,10} × 16
+rounds, **L0 vs H agree on 240 of 240 real pick states.** The property holds; only the guarantee is
+missing. The D86 lineage is sound, which narrows the finding to the scoring function.
+
+### 5. The oracle gap is not identified
+
+D97 read `ORACLE − PROD = +784.6` as projection headroom. **It is not a clean quantity**: `ORACLE`
+has perfect information *and* the NAIVE rule, `PROD` has Y1 information *and* the Y1 rule, so the
+residual confounds both. The 2×2 is missing its fourth cell — **`ORACLE_Y1`, perfect projections fed
+to the production rule** — which would give information value (`ORACLE_Y1 − PROD`) and rule value
+under certainty (`ORACLE_Y1 − ORACLE`) separately. There is a specific reason to expect a large
+negative interaction: **survival, confidence and opportunity cost are uncertainty-management
+machinery, and there is nothing to hedge under perfect information.**
+
+Two further limits: +784.6 is the value of **perfect** information, an upper bound on nothing
+achievable (D100 later bounded the reachable identification slice at +0.80 of 6 with **45% of the
+gap absent from the data**); and `ORACLE` is a whole-draft policy, so it is not a pick-level
+quantity at all — **D86's pick-level structural residual is 16/320 (5%), ~90 pts/draft, against a
+~128-point MDE.**
+
+### 6. Attribution taxonomy, computable from the existing instrument
+
+| category | signature | status |
+|---|---|---|
+| D evaluation artifact (luck) | oracle's player **scored more** | **~90%** of regret |
+| B bad decision logic | oracle's player scored **no more** and still won | **16/320 (5%)**, ~90 pts/draft |
+| A bad information | oracle's player identifiable ex ante, projection missed him | **not separable** — needs `ORACLE_Y1` |
+| C unavoidable uncertainty | `V(c)` flat across the slate | computable, not yet reported |
+
+Never infer "fix projections" from the existence of projection error, nor "fix the engine" from a
+pick that underperformed. **D dominates, B is below the measurement floor, and A is unquantified.**
+
+### 7. Challenge to D97-D101 (mandatory section)
+
+**D97's diagnosis stands; its prescription does not; the execution drifted from both.** "The
+decision layer is not binding" is independently corroborated by D86's pick-level instrument (~90
+pts/draft vs ~128 MDE), and two instruments agreeing is real evidence — **I do not overturn it.**
+But:
+
+1. `ORACLE − PROD` does not measure projection headroom (§5).
+2. **"Resolvable" was conflated with "achievable"** — that the *bound* exceeds the MDE says nothing
+   about any reachable improvement, and D100 later bounded the reachable part far lower.
+3. **D98–D101 never measured a draft pick.** Four phases optimized MAE, Spearman, AUC and top-6
+   identification, none shown monotone in pick quality — and D101 proved they are not monotone in
+   *each other* (AUC/Spearman rank Y3 first, hit rate ranks Y1 first). **D100's top-6 emphasis is a
+   proxy for a proxy.**
+4. **D86 explicitly listed projection work under "Not recommended next"**, and D97 reversed that
+   without re-running the pick-level instrument. No phase since has run it either.
+
+**Does D97-D101 establish that improving projections will improve individual picks? No.** It
+establishes that *perfect* projections would draft differently and better. The gap between those
+two claims is where four phases went.
+
+### 8. Hierarchy, and the smallest next instrumentation
+
+1. **Maximize the quality of every pick** — `regret_weekly(p)`, reported **by draft phase**
+   (rounds 1-4 / 5-8 / 9-12 / 13-16, justified by D86's slate spread decaying 343.7 → 113.0 and by
+   D97's phase-dependent components) and decomposed by §6. Segmentation and decomposition are part
+   of the objective, not presentation.
+2. **Resulting roster**, scored weekly no-foresight — validation, never the target.
+3. **Information quality — demoted and conditional**: a projection change earns attention when it
+   moves `regret_weekly`, not MAE/Spearman/AUC/top-6.
+4. **MAE, RMSE, Spearman, AUC, top-6, top-decile bias — DIAGNOSTIC only.** Every projection metric
+   in the audit lands here; that is the substantive result of the audit.
+
+> **Smallest next work (D103), all diagnostic, no fitting: (1) pin `L0 == H` with a test; (2) give
+> `draft_oracle._score_roster` the weekly no-foresight objective as a parameter, season-long kept as
+> default so every D86 number stays reproducible, and re-run the existing 320 pick states reporting
+> regret by draft phase — the project's first valid measurement of late-pick quality; (3) add the
+> `ORACLE_Y1` cell to identify the §5 decomposition.**
+
+Until (1)-(3), "projections or decision logic?" is **unresolved**, and four phases have been spent
+acting as though it were not. Explicitly not recommended: another value base, a Y4, a lookahead
+optimizer, further projection-proxy work, or any use of 2026.
