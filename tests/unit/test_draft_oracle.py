@@ -18,19 +18,33 @@ from pathlib import Path
 import duckdb
 import pytest
 
-from alpha_squad.evaluation.draft_forensics import load_season_static, simulate_forensic_draft
+from alpha_squad.evaluation.draft_forensics import (
+    _pick_by_tier,
+    load_season_static,
+    simulate_forensic_draft,
+)
 from alpha_squad.evaluation.draft_oracle import (
+    SEASON_LONG,
     SHIPPED_TIER,
+    WEEKLY_NO_FORESIGHT,
     OracleCandidate,
     OraclePick,
+    _score_roster,
     assert_no_realized_inputs_in_policy,
     audit_draft,
     candidate_slate,
     draft_order,
+    make_roster_scorer,
     rollout,
 )
-from alpha_squad.evaluation.draft_simulation import MARKET_CONSENSUS_ROSTER_AWARE
+from alpha_squad.evaluation.draft_simulation import (
+    MARKET_CONSENSUS_ROSTER_AWARE,
+    _actual_points_for,
+)
+from alpha_squad.evaluation.opening_audit import snake_overall_pick
+from alpha_squad.evaluation.weekly_objective import load_weekly_points
 from alpha_squad.league.context import LeagueContext
+from alpha_squad.league.opportunity_cost import roster_aware_market_pick
 from alpha_squad.league.roster import unfilled_dedicated_slots
 from alpha_squad.models.baselines.kicking_defense import MODEL_NAME as KDST_MODEL_NAME
 from alpha_squad.models.uncertainty.run import MODEL_VERSION as UNCERTAINTY_MODEL_VERSION
@@ -429,3 +443,227 @@ class TestD89FixtureSeedsTheLeaguesOwnBoard:
         _seed(con)
         static = load_season_static(con, _league(), 2023)
         assert_usable_market_board(static, MARKET_CONSENSUS_ROSTER_AWARE)
+
+
+class TestShippedTierIsProduction:
+    """D103 Part 1. The module docstring claims `L0`/`Q0`/`Z0` are "asserted byte-identical to
+    `recommend_draft_pick` by existing tests". Before D103 no such test existed:
+    `test_l0_is_the_shipped_engine` compares L0 only to its SIBLING REPLICAS Q0 and Z0, so a
+    drift common to all three would pass silently, and the only test touching production
+    (`test_tier_h_matches_a_direct_recommend_draft_pick_call`) pins tier H on the FIRST pick
+    alone.
+
+    That matters because `SHIPPED_TIER` is the rollout policy: every regret number the oracle has
+    ever produced assumes it is production. These tests close the gap by walking whole drafts and
+    comparing the CHOSEN PLAYER -- not a score -- at every state the instrument actually reaches,
+    with tier `H` (a direct pass-through to `recommend_draft_pick`) as the reference.
+
+    Scope, stated rather than implied: this runs on the offline fixture board, because the suite
+    never opens the real database. The same comparison over the real 2021-2025 population
+    (5 seasons x slots {1,5,10} x 16 rounds) was run as a research check and agreed on 240 of 240
+    pick states; it is reproducible via `scripts/research/d103_pick_regret.py --parity`."""
+
+    def _replay_comparing_tiers(
+        self, con, league, season, static, draft_slot, replica_tier=SHIPPED_TIER
+    ):
+        """Play one draft with production (tier H) and, at every one of OUR pick states, ask
+        `replica_tier` (by default `SHIPPED_TIER`) for its pick from the identical pool, roster
+        and pick numbers.
+
+        Mirrors `audit_draft`'s loop exactly -- same snake geometry, same fair opponent, same
+        `picks_remaining` -- so the states compared are the states the oracle audits."""
+        total_rounds = int(league.roster["roster_size"])
+        my_picks = [snake_overall_pick(r, draft_slot, league.teams) for r in range(1, total_rounds + 1)]
+        avail = set(static.projections)
+        mine: list[str] = []
+        opps: dict[int, list[str]] = {s: [] for s in range(1, league.teams + 1) if s != draft_slot}
+        compared = 0
+
+        for current, round_no, slot in draft_order(league):
+            if not avail:
+                break
+            picks_remaining = total_rounds - round_no + 1
+            if slot != draft_slot:
+                pick = roster_aware_market_pick(
+                    avail, static.market_rank, static.positions, league, opps[slot], picks_remaining
+                )
+                opps[slot].append(static.positions.get(pick, "UNKNOWN"))
+                avail.discard(pick)
+                continue
+
+            nxt = next((p for p in my_picks if p > current), None)
+            my_positions = [static.positions.get(p, "UNKNOWN") for p in mine]
+            kwargs = dict(
+                roster_player_ids=list(mine),
+                picks_remaining=picks_remaining,
+            )
+            production, _ = _pick_by_tier(
+                static, con, league, season, set(avail), list(my_positions), "H", current, nxt,
+                **kwargs,
+            )
+            replica, _ = _pick_by_tier(
+                static, con, league, season, set(avail), list(my_positions), replica_tier,
+                current, nxt, **kwargs,
+            )
+            assert replica == production, (
+                f"round {round_no} slot {draft_slot}: {replica_tier} chose {replica!r} but "
+                f"production (tier H / recommend_draft_pick) chose {production!r}"
+            )
+            compared += 1
+            # Continue on PRODUCTION's pick, so a divergence cannot hide by forking the state.
+            mine.append(production)
+            avail.discard(production)
+        return compared
+
+    @pytest.mark.parametrize("draft_slot", [1, 2, 3, 4])
+    def test_shipped_tier_picks_identically_to_production_at_every_state(self, con, draft_slot):
+        _seed(con)
+        league = _league()
+        static = load_season_static(con, league, 2023)
+        compared = self._replay_comparing_tiers(con, league, 2023, static, draft_slot)
+        assert compared == int(league.roster["roster_size"]), "every round must be compared"
+
+    def test_the_comparison_would_catch_a_divergence(self, con):
+        """A parity test that cannot fail is not a parity test.
+
+        Tier `A` is a genuinely different objective (the earliest forensic tier, not the shipped
+        score), so running the SAME replay against it must trip the SAME assertion. Checked over
+        a whole draft rather than one pick: two different objectives can agree on the obvious
+        first pick and diverge later, and it is the later states this guard has to protect."""
+        _seed(con)
+        league = _league()
+        static = load_season_static(con, league, 2023)
+        with pytest.raises(AssertionError, match="chose"):
+            self._replay_comparing_tiers(con, league, 2023, static, 1, replica_tier="A")
+
+
+def _seed_weeks(con, season=2023, n_per_position=8, absent="QB_7", missing_after_week=8):
+    """Weekly participation rows consistent with `_seed`'s season totals, plus a deliberate gap.
+
+    Every player's season total is spread evenly over 17 weeks, EXCEPT `absent`, who disappears
+    after `missing_after_week`. `absent` defaults to the highest-REALIZED player at QB, because
+    `_seed` reverses the projection order (realized = 100 + 25i), so index 7 is the one a
+    season-long lineup allocator actually starts. That is what makes the gap meaningful: under
+    the season-long objective the starter never vacates the slot and every bench player is worth
+    exactly zero, while under the weekly objective a backup really does enter the lineup for
+    weeks 9-17. `player_week_stats` carries a foreign key to `players`, so the spine goes first."""
+    for position in ("QB", "RB", "WR", "TE"):
+        for i in range(n_per_position):
+            player_id = f"{position}_{i}"
+            con.execute(
+                "INSERT INTO players (player_id, gsis_id, display_name, position) "
+                "VALUES (?, ?, ?, ?) ON CONFLICT DO NOTHING",
+                [player_id, f"gsis_{player_id}", player_id, position],
+            )
+            weekly_points = (100.0 + i * 25) / 17.0
+            last_week = missing_after_week if player_id == absent else 17
+            for week in range(1, last_week + 1):
+                game_id = f"{season}_{week:02d}_TST"
+                con.execute(
+                    "INSERT INTO games (game_id, season, week, game_type, game_date, "
+                    "home_team, away_team) VALUES (?, ?, ?, 'REG', ?, 'TST', 'OPP') "
+                    "ON CONFLICT DO NOTHING",
+                    [game_id, season, week, f"{season}-09-01"],
+                )
+                con.execute(
+                    "INSERT INTO player_week_stats (player_id, season, week, game_id, game_date, "
+                    "team, position, fantasy_points_ppr, source_snapshot_id) "
+                    "VALUES (?, ?, ?, ?, ?, 'TST', ?, ?, 'test')",
+                    [player_id, season, week, game_id, f"{season}-09-01", position, weekly_points],
+                )
+
+
+class TestObjectiveSelection:
+    """D103 Part 2. The oracle can now be told which roster-value function scores a rollout.
+
+    `SEASON_LONG` stays the default so every published D86 number reproduces byte for byte; the
+    tests that matter are that the default really is unchanged, that the alternative really does
+    differ where D86 said it must, and that a caller cannot silently get the wrong one."""
+
+    def test_season_long_scorer_is_exactly_the_pre_d103_behaviour(self, con):
+        _seed(con)
+        league, static = _league(), load_season_static(con, _league(), 2023)
+        drafted = ["QB_0", "RB_0", "WR_0", "TE_0", "RB_1", "WR_1", "TE_1"]
+        actual = _actual_points_for(con, 2023, drafted)
+        scorer = make_roster_scorer(SEASON_LONG, league, static)
+        assert scorer(drafted, actual) == _score_roster(league, drafted, static.positions, actual)
+
+    def test_default_rollout_is_unchanged_by_the_new_parameter(self, con):
+        """The reproducibility guarantee: `scorer=None` must be the old code path."""
+        _seed(con)
+        league, static = _league(), load_season_static(con, _league(), 2023)
+        kwargs = dict(
+            draft_slot=1,
+            after_pick_overall=1,
+            available=set(static.projections) - {"QB_0"},
+            drafted=["QB_0"],
+            opponent_rosters={s: [] for s in (2, 3, 4)},
+            actual=_actual_points_for(con, 2023, sorted(static.projections)),
+        )
+        explicit = make_roster_scorer(SEASON_LONG, league, static)
+        assert rollout(con, league, 2023, static, **kwargs) == rollout(
+            con, league, 2023, static, scorer=explicit, **kwargs
+        )
+
+    def test_weekly_objective_refuses_to_run_without_the_weekly_table(self, con):
+        _seed(con)
+        with pytest.raises(ValueError, match="weekly participation table"):
+            make_roster_scorer(WEEKLY_NO_FORESIGHT, _league(), load_season_static(con, _league(), 2023))
+
+    def test_unknown_objective_is_refused(self, con):
+        _seed(con)
+        with pytest.raises(ValueError, match="unknown objective"):
+            make_roster_scorer("best_guess", _league(), load_season_static(con, _league(), 2023))
+
+    def test_the_two_objectives_differ_exactly_where_the_bench_matters(self, con):
+        """The measurement D103 exists to make possible.
+
+        Two rosters differing ONLY in which backup QB occupies a bench slot. The season-long
+        objective scores them IDENTICALLY -- the starter never vacates the slot, so the bench is
+        worth exactly zero and the choice cannot register. The weekly objective separates them,
+        because for weeks 9-17 the starter is absent and the backup really plays. That gap is
+        precisely what makes late-pick regret measurable."""
+        _seed(con)
+        _seed_weeks(con, absent="QB_7")
+        league, static = _league(), load_season_static(con, _league(), 2023)
+        weekly = load_weekly_points(con, 2023)
+        season_scorer = make_roster_scorer(SEASON_LONG, league, static)
+        weekly_scorer = make_roster_scorer(WEEKLY_NO_FORESIGHT, league, static, weekly)
+
+        # `_seed` reverses the projection order, so index 7 is the best realized player and index
+        # 0/1 are genuine bench fodder under BOTH objectives. RB_6 fills FLEX.
+        core = ["QB_7", "RB_7", "WR_7", "TE_7", "RB_6"]
+        better_backup = [*core, "QB_1", "WR_1"]
+        worse_backup = [*core, "QB_0", "WR_1"]
+        actual = _actual_points_for(con, 2023, sorted(set(better_backup + worse_backup)))
+
+        season_better, _, _ = season_scorer(better_backup, actual)
+        season_worse, _, _ = season_scorer(worse_backup, actual)
+        weekly_better, _, _ = weekly_scorer(better_backup, actual)
+        weekly_worse, _, _ = weekly_scorer(worse_backup, actual)
+
+        assert season_better == season_worse, (
+            "the season-long objective must be blind to which bench QB was taken -- this is the "
+            "defect D86 measured and D102 said makes late-pick regret unmeasurable"
+        )
+        assert weekly_better > weekly_worse, (
+            "the weekly objective must reward the backup who covers the starter's missing weeks"
+        )
+        assert weekly_better != season_better, "the two objectives must not coincide here"
+
+    def test_audit_draft_accepts_the_weekly_objective_end_to_end(self, con):
+        _seed(con)
+        _seed_weeks(con)
+        league, static = _league(), load_season_static(con, _league(), 2023)
+        weekly = load_weekly_points(con, 2023)
+        picks = audit_draft(
+            con, league, 2023, 1, static, rounds=(1,),
+            objective=WEEKLY_NO_FORESIGHT, weekly=weekly,
+        )
+        assert picks and picks[0].candidates
+        assert picks[0].regret >= 0.0
+        assert picks[0].alpha is not None
+        season_picks = audit_draft(con, league, 2023, 1, static, rounds=(1,))
+        weekly_values = {c.player_id: c.rollout_starter_points for c in picks[0].candidates}
+        season_values = {c.player_id: c.rollout_starter_points for c in season_picks[0].candidates}
+        assert weekly_values != season_values, "the objective must actually change the rollout value"

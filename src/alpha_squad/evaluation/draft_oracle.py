@@ -28,10 +28,17 @@ because Alpha will never play optimally afterwards.
 
 So this measures the **one-step oracle under a fixed continuation policy**:
 
-    V(c) = realized starter points of the final roster, if I take `c` now and then play the
+    V(c) = realized value of the final roster, if I take `c` now and then play the
            REST of the draft exactly the way the shipped engine plays it
 
-and the oracle pick is `argmax_c V(c)`. This is the right diagnostic because it isolates the one
+and the oracle pick is `argmax_c V(c)`.
+
+**Which roster-value function `V` uses (D103).** `objective=SEASON_LONG` is the default and is
+what every pre-D103 measurement used -- realized SEASON-TOTAL starter points, one lineup
+allocation -- so D86's recorded numbers reproduce unchanged. `objective=WEEKLY_NO_FORESIGHT`
+scores the same roster week by week instead, which is the only way the bench can carry value;
+see the block comment below for why the choice is not cosmetic. Every D103 number is labelled
+with the objective that produced it. This is the right diagnostic because it isolates the one
 decision under test while holding everything downstream constant: a difference between `V(alpha's
 pick)` and `max_c V(c)` is attributable to *this pick* and to nothing else. It is a lower bound on
 the value of a better objective (a better objective would also improve the continuation), and that
@@ -54,6 +61,7 @@ continuation at the shipped policy is what makes the residual attributable to th
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 
 import duckdb
@@ -64,14 +72,51 @@ from alpha_squad.evaluation.draft_forensics import (
 )
 from alpha_squad.evaluation.draft_simulation import _actual_points_for
 from alpha_squad.evaluation.opening_audit import snake_overall_pick
+from alpha_squad.evaluation.weekly_objective import (
+    FANTASY_WEEKS,
+    weekly_lineup_points_no_foresight,
+)
 from alpha_squad.league.context import LeagueContext
 from alpha_squad.league.opportunity_cost import roster_aware_market_pick
 from alpha_squad.league.replacement import compute_league_starters
 from alpha_squad.league.roster import unfilled_dedicated_slots
 
-#: The shipped engine, as a `draft_forensics` tier. `L0`/`Q0`/`Z0` are asserted byte-identical to
-#: `recommend_draft_pick` by existing tests, so a rollout under this tier is the production policy.
+#: The shipped engine, as a `draft_forensics` tier. Pinned to tier `H` -- a direct pass-through to
+#: `recommend_draft_pick` -- at every pick state of a whole draft by
+#: `tests/unit/test_draft_oracle.py::TestShippedTierIsProduction` (D103 Part 1), so a rollout under
+#: this tier is the production policy. Before D103 that pinning did not exist: the older
+#: `test_l0_is_the_shipped_engine` compared L0 only against its sibling replicas Q0/Z0.
 SHIPPED_TIER = "L0"
+
+# --------------------------------------------------------------------------------------------
+# WHICH ROSTER-VALUE FUNCTION SCORES A ROLLOUT (D103 Part 2)
+#
+# `V(c)` is only defined relative to a roster-value function `U`, and the choice is not cosmetic.
+# D86 Phase 1 measured that the SEASON-LONG objective -- season totals with one lineup allocation
+# -- cannot see a bye or an injury and therefore prices the bench at exactly zero, while 17.8% of
+# realized points come from players it never starts and a bench player enters the lineup in 16.2
+# of 17 weeks. Rounds 11-16 are bench picks, so under season-long scoring their regret is
+# near-degenerate BY CONSTRUCTION and late-pick quality is not measurable at all (D102 §6a).
+#
+# `SEASON_LONG` therefore stays the DEFAULT so every published D86 number remains reproducible
+# byte for byte, and `WEEKLY_NO_FORESIGHT` is available explicitly. It reuses the already-tested
+# `weekly_objective.weekly_lineup_points_no_foresight` rather than introducing a new objective:
+# the lineup each week is chosen by PRESEASON PROJECTION among the players who actually appeared
+# that week, which is the pessimistic bracket (`weekly_lineup_points` is the optimistic one).
+#
+# The information boundary is unchanged by either choice. Both are applied only to a FINISHED
+# roster, after every decision in the rollout has been made by a policy that reads projections
+# alone; `assert_no_realized_inputs_in_policy` still pins that structurally.
+# --------------------------------------------------------------------------------------------
+
+#: D86's objective. Season totals, one lineup allocation. Every pre-D103 oracle number used this.
+SEASON_LONG = "season_long"
+#: The weekly objective, lineup set by preseason projection among that week's actual participants.
+WEEKLY_NO_FORESIGHT = "weekly_no_foresight"
+OBJECTIVES: tuple[str, ...] = (SEASON_LONG, WEEKLY_NO_FORESIGHT)
+
+#: `(drafted, actual) -> (roster value, total points, unfilled mandatory slots)`.
+RosterScorer = Callable[[list[str], dict[str, float]], tuple[float, float, int]]
 
 
 @dataclass
@@ -193,6 +238,51 @@ def _score_roster(
     )
 
 
+def make_roster_scorer(
+    objective: str,
+    league: LeagueContext,
+    static: SeasonStatic,
+    weekly: dict[tuple[str, int], float] | None = None,
+    weeks: tuple[int, ...] = FANTASY_WEEKS,
+) -> RosterScorer:
+    """The roster-value function a rollout is scored with. See the module header for why the
+    choice matters and why `SEASON_LONG` remains the default.
+
+    `WEEKLY_NO_FORESIGHT` needs the weekly participation table, so `weekly` is required for it --
+    passing `None` is refused rather than silently falling back to a different objective, which
+    would make two runs incomparable while both claiming the same name."""
+    if objective not in OBJECTIVES:
+        raise ValueError(f"unknown objective {objective!r}; expected one of {OBJECTIVES}")
+
+    if objective == SEASON_LONG:
+
+        def score_season_long(
+            drafted: list[str], actual: dict[str, float]
+        ) -> tuple[float, float, int]:
+            return _score_roster(league, drafted, static.positions, actual)
+
+        return score_season_long
+
+    if weekly is None:
+        raise ValueError(
+            f"{WEEKLY_NO_FORESIGHT} needs the weekly participation table; pass "
+            "`weekly=load_weekly_points(con, season)`"
+        )
+
+    def score_weekly(drafted: list[str], actual: dict[str, float]) -> tuple[float, float, int]:
+        # `actual` is unused for the value: the weekly objective reads per-week rows instead of
+        # season totals. It stays in the signature so the two scorers are interchangeable.
+        del actual
+        value = weekly_lineup_points_no_foresight(
+            league, drafted, static.positions, weekly, static.projections, weeks
+        )
+        total = sum(weekly.get((p, w), 0.0) for p in drafted for w in weeks)
+        drafted_positions = [static.positions.get(p, "UNKNOWN") for p in drafted]
+        return value, total, sum(unfilled_dedicated_slots(league, drafted_positions).values())
+
+    return score_weekly
+
+
 def draft_order(league: LeagueContext) -> list[tuple[int, int, int]]:
     """Every (overall pick, round, slot) of a full snake draft, in overall-pick order.
 
@@ -222,8 +312,12 @@ def rollout(
     opponent_rosters: dict[int, list[str]],
     actual: dict[str, float],
     rollout_tier: str = SHIPPED_TIER,
+    scorer: RosterScorer | None = None,
 ) -> tuple[float, float, int]:
     """Finish the draft from a mid-draft state and score the result on REALIZED points.
+
+    `scorer` selects the roster-value function; `None` keeps D86's season-long objective, so
+    every pre-D103 number reproduces unchanged. See `make_roster_scorer`.
 
     `after_pick_overall` is the overall number of the pick that has just been made (the candidate
     under test); the rollout resumes at the next pick in the snake and plays to the end. Mirrors
@@ -276,7 +370,9 @@ def rollout(
     missing = [p for p in mine if p not in actual]
     if missing:
         actual = {**actual, **_actual_points_for(con, season, missing)}
-    return _score_roster(league, mine, static.positions, actual)
+    if scorer is None:
+        return _score_roster(league, mine, static.positions, actual)
+    return scorer(mine, actual)
 
 
 def audit_draft(
@@ -291,6 +387,8 @@ def audit_draft(
     top_realized: int = 10,
     top_projection: int = 5,
     rollout_tier: str = SHIPPED_TIER,
+    objective: str = SEASON_LONG,
+    weekly: dict[tuple[str, int], float] | None = None,
 ) -> list[OraclePick]:
     """Walk ONE real production-path draft and, at each audited pick, measure what every
     candidate on the slate would have been worth by the end.
@@ -302,7 +400,12 @@ def audit_draft(
 
     `rounds` limits which rounds are audited (rollout cost is the whole remaining draft per
     candidate); `None` audits every round.
+
+    `objective` selects the roster-value function every rollout is scored with, defaulting to
+    D86's `SEASON_LONG` so pre-D103 measurements reproduce exactly. `WEEKLY_NO_FORESIGHT`
+    additionally requires `weekly` (see `make_roster_scorer`).
     """
+    scorer = make_roster_scorer(objective, league, static, weekly)
     total_rounds = int(league.roster.get("roster_size", 0))
     my_picks = [snake_overall_pick(r, draft_slot, league.teams) for r in range(1, total_rounds + 1)]
     avail = set(static.projections)
@@ -374,6 +477,7 @@ def audit_draft(
                     opponent_rosters=opps,
                     actual=realized,
                     rollout_tier=rollout_tier,
+                    scorer=scorer,
                 )
                 record.candidates.append(
                     OracleCandidate(
