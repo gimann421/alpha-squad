@@ -234,8 +234,32 @@ rungs cannot be resolved, and it is a property of the draft, not of the estimato
 
 ## 8. Regret ladder (secondary)
 
-*(See §9. Reported subject to the limitation in §2: each level is scored against its own perturbed
-oracle, so regret here is arm-relative and corroborates rather than establishes.)*
+D103's `audit_draft`, unchanged. `target_league`, season-long, levels L0/L2/L4, seed 0, slots
+{1, 10}. Lower is better.
+
+| arm | α | all picks | EARLY 1–5 | MIDDLE 6–10 | LATE 11–16 | alpha = oracle |
+|---|---|---|---|---|---|---|
+| L0 | 0.00 | **126.2** | 164.6 | 110.9 | 107.1 | 2.5% |
+| L2 | 0.50 | **137.3** | 191.6 | 117.7 | 108.3 | 1.2% |
+| L4 | 1.00 | **228.4** | 280.5 | 215.8 | 195.3 | 1.2% |
+
+**The same threshold shape as the value curve.** L0 → L2 costs **+11.1** mean regret; L2 → L4 costs
+a further **+91.1**. Half the ladder's information loss is nearly free in regret terms; the second
+half is not.
+
+**The artifact anticipated in §2 did not materialise, which is worth stating.** The concern was
+that a scrambled board also scrambles the *oracle's* rollouts, making each level's oracle weaker
+and potentially pushing regret **down** as degradation rises — an arm-relative confound that would
+have made this table uninterpretable. Regret instead rises monotonically and in the same direction
+as the absolute value curve, so the two agree and this corroborates §4 rather than contradicting
+it. The limitation still means the magnitudes are not comparable across levels on a common yardstick
+— only their ordering is.
+
+Degradation is concentrated **early** (164.6 → 280.5, +115.9) more than late (107.1 → 195.3,
++88.2), consistent with D103's finding that regret and candidate spread are largest in rounds 1–5.
+
+*(L0 reads 126.2 here against D103's 134.8 because this reduced run uses slots {1, 10} rather than
+{1, 4, 7, 10}; the comparison within this table is like-for-like.)*
 
 ## 9. Results appendix
 

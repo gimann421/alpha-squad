@@ -31,6 +31,10 @@ of every eight picks, from pick 1, and value moves **46.5 points** — below the
 than the seed-to-seed SD of that level (160). **The decision surface is steep; the value surface is
 flat.** A decision rule cannot extract value from ordering differences the outcome does not reward.
 
+**Pick-level regret corroborates, with the same threshold shape** (target, L0/L2/L4): all-picks
+regret **126.2 → 137.3 → 228.4** — L0→L2 costs +11.1, L2→L4 a further +91.1. The feared artifact
+(a scrambled board also weakening the oracle, pushing regret *down*) **did not appear**.
+
 **D104's null is explained, and my D104 "flat objective" hypothesis is RETRACTED.** Scrambling
 destroys 566–632 points — larger than anything measured on the decision side — so the objective is
 not flat. The correct statement is narrower: **it has a broad robustness plateau, and every ranking

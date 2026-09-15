@@ -7994,7 +7994,23 @@ The engine is **not** insensitive; it faithfully re-ranks. What is flat is the *
 sits on. Divergence is WR-dominated at every level; K appears only at L1 (2-4 cases), so the K/DST
 drift that affected D104's ECR arm is negligible here.
 
-### 5. D104's null is explained, and my D104 hypothesis is RETRACTED
+### 5. The regret ladder corroborates, and the feared artifact did not appear
+
+`audit_draft` unchanged, target_league, L0/L2/L4, seed 0, slots {1,10}:
+
+| arm | alpha | all | EARLY | MIDDLE | LATE |
+|---|---|---|---|---|---|
+| L0 | 0.00 | **126.2** | 164.6 | 110.9 | 107.1 |
+| L2 | 0.50 | **137.3** | 191.6 | 117.7 | 108.3 |
+| L4 | 1.00 | **228.4** | 280.5 | 215.8 | 195.3 |
+
+Same threshold shape: L0->L2 costs **+11.1** regret, L2->L4 a further **+91.1**. The anticipated
+artifact — a scrambled board also scrambles the ORACLE's rollouts, which could have pushed regret
+DOWN as degradation rose — **did not materialise**; regret rises monotonically and agrees with the
+absolute value curve. Degradation is concentrated EARLY (+115.9) more than LATE (+88.2), matching
+D103.
+
+### 6. D104's null is explained, and my D104 hypothesis is RETRACTED
 
 **The objective is not flat — I said at the end of D104 that it might be, and that is wrong.**
 Scrambling destroys 566-632 points, larger than anything this project has measured on the decision
@@ -8007,7 +8023,7 @@ This reframes ten value bases, a weekly objective, legality separation, per-posi
 identification work and a real market ranking as failing **for one structural reason** rather than
 as six separate disappointments.
 
-### 6. What it would take, and the honest limit
+### 7. What it would take, and the honest limit
 
 To reach the 86-113 pt scale of D103's decision residual, a ranking change must move predictive
 Spearman by roughly **+-0.5**. ECR moves it by **0.024**. *Stated as the extrapolation it is:* the
@@ -8015,7 +8031,7 @@ ladder measures DEGRADATION; symmetry in the improvement direction is not establ
 measured improvement-side anchor is ORACLE_Y1, which needs perfect information and changes values
 rather than ordering.
 
-### 7. Next — test whether the plateau is the draft or the ruler
+### 8. Next — test whether the plateau is the draft or the ruler
 
 > **Re-run this exact ladder under the WEEKLY no-foresight objective.** If the plateau persists it
 > is a property of the draft and ranking-side work closes on POSITIVE evidence. If the weekly
