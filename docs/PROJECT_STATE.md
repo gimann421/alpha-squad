@@ -3,7 +3,47 @@
 Living summary of what is implemented, validated, and outstanding. Updated at the end of every
 milestone. See `docs/TRACEABILITY.md` for the acceptance-criteria-level mapping.
 
-## Status: M55 complete (D105) — **The objective is NOT flat, it is THRESHOLDED. 88% of picks can change for 46 points, but a full scramble costs 566. The decision surface is steep; the value surface is a plateau, and every ranking source tested lives inside it. B — ROBUST. Nothing ships.**
+## Status: M56 complete (D106) — **The D105 plateau is OBJECTIVE-INDEPENDENT. Under the weekly no-foresight objective the intermediate ladder stays inside the noise band in both formats, while the severe end separates MORE. H1. The projection/ranking sensitivity branch stops here. Nothing ships.**
+
+Research only. **No production change, no retraining, no ECR tuning, no new model, no 2026, no PR,
+nothing merged**; `models/` (`73b408e9`) and `league/` (`d4cfd00e`) byte-identical; the only
+non-doc/test change is one argparse constraint in the research layer. 1427 tests pass, ruff clean.
+Full report: `docs/D106_WEEKLY_SENSITIVITY.md`.
+
+**Everything identical to D105 except the realized-value objective.** Two isolation properties
+newly pinned by test: the weekly lineup is set from **unperturbed** Y1 projections for every arm
+(so the test measures draft quality, not lineup quality), and **pick divergence is
+objective-independent** — `_pick_by_tier` takes no objective parameter — so D105's picks-changed
+table carries over by construction rather than re-measurement.
+
+| α | target D105 | **target D106** | dynasty D105 | **dynasty D106** |
+|---|---|---|---|---|
+| 0.50 | −46.5 | **−30.6** | −60.0 | **−84.3** |
+| 1.00 | −565.8 | **−621.0** | −631.9 | **−721.3** |
+| FP_ECR_Y1 | +77.3 | **+48.4** | −132.1 | **−202.4** |
+
+At α=0.50 the delta is below its seed SD **and** below the 172–250 floor in both formats under both
+objectives. **Both H0 criteria fail → H1.**
+
+**My stated prior was half wrong.** I predicted weekly would compress the whole ladder; it
+compresses the *intermediate* region at target (plateau ratio 8.2% → 4.9%) but **amplifies the
+endpoint** (+9.8% target, +14.1% dynasty). **Weekly makes the threshold sharper, not shallower.**
+
+**ECR gets worse under the more faithful objective** — target +77.3 → +48.4 (0/5 → 2/5 seasons
+worse), dynasty −132.1 → **−202.4**, now worse in 5/5. D104's negative result strengthens.
+
+**This closes the projection/ranking direction** as the explanation for the missing improvement, and
+the sensitivity branch stops per the pre-registered rule. It does **not** mean the objective is
+defective: the evidence supports a **thresholded decision environment** where only improvements
+large enough to move predictive Spearman by ~±0.5 can register. ECR moves it by 0.024.
+
+**Cumulative position (D97–D106):** decision residual ~86–113 pts (below floor); perfect information
+worth ~+670–795 but the best available ranking recovers ≤10% and is negative in dynasty; the value
+surface is a plateau under **both** objectives; the decision surface is steep. **Y1 operates where
+neither better rankings nor a better rule produces a measurable gain** — a conclusion about the
+problem, now supported rather than assumed.
+
+### Earlier status: M55 complete (D105) — **The objective is NOT flat, it is THRESHOLDED. 88% of picks can change for 46 points, but a full scramble costs 566. The decision surface is steep; the value surface is a plateau, and every ranking source tested lives inside it. B — ROBUST. Nothing ships.**
 
 Research only. **No production change, no retraining, no ECR tuning, no 2026, no PR, nothing
 merged**; `models/` (`73b408e9`) and `league/` (`d4cfd00e`) byte-identical and **no `src/` file

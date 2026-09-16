@@ -8041,3 +8041,95 @@ rather than ordering.
 Reuses D105's machinery with `--objective weekly_no_foresight`; no model, no fitting, no new data.
 Not recommended: a new projection model, ECR tuning, another value base, O2/O3, a lookahead
 optimizer, or 2026.
+
+## D106 — The D105 plateau is OBJECTIVE-INDEPENDENT. Weekly scoring makes the threshold sharper, not shallower. H1; stop the sensitivity branch.
+
+Research only. **No production change, no retraining, no ECR tuning, no new model, no 2026, no PR,
+nothing merged**; `models/` `73b408e9` and `league/` `d4cfd00e` byte-identical. The only non-doc,
+non-test change is one argparse constraint in the research layer. Full report:
+`docs/D106_WEEKLY_SENSITIVITY.md`. Board vintage `ca3e2d8a`.
+
+### 1. The question and the rule, both fixed before any weekly number existed
+
+Does D105's threshold/plateau persist when realized value is scored with
+`weekly_lineup_points_no_foresight`? **H0** = plateau is objective-specific; **H1** = it persists.
+
+The rule, using D105's own scale rather than an invented threshold: **H0 requires the alpha=0.50
+delta to clear BOTH that level's seed-to-seed SD AND the D97 detection floor (172-250).**
+Scale-free companion: **plateau ratio = |delta at 0.50| / |delta at 1.00|.**
+
+**The existing evidence predicted H1**, and that was stated in advance: D103 measured weekly scoring
+REDUCING regret at every draft phase (-27.4 / -38.7) because a weekly lineup adapts and compresses
+differences between rosters. A finding of H0 would have been surprising.
+
+### 2. Everything held identical; one thing changed
+
+Same runner, rule (tier `L0`), seasons 2021-2025, slots, formats, alpha ladder, interpolation,
+seeds (0-4), pools, value-multiset preservation and information boundary. **Only the realized-value
+objective changed.** Two isolation properties, both newly pinned by test:
+
+* **the weekly lineup is set from UNPERTURBED Y1 projections for every arm** (`_play_draft` scores
+  with `scoring_static`; the perturbed board is the DRAFT board) — otherwise a scrambled arm would
+  also set worse lineups and the test would confound draft quality with lineup quality;
+* **pick divergence is objective-independent**, so it was NOT re-run: `_pick_by_tier` takes no
+  objective parameter, so D105's 66.2 / 88.4 / 90.6 / 98.4% carries over BY CONSTRUCTION.
+
+Hardening made before the run: `--objective` was unconstrained and `_play_draft` silently falls
+through to the SEASON-LONG branch for anything it does not recognise, so a typo would have produced
+a season-long run reported as weekly. Now `choices=OBJECTIVES`.
+
+### 3. Result: H1, in both formats
+
+| alpha | target D105 | **target D106** | dynasty D105 | **dynasty D106** |
+|---|---|---|---|---|
+| 0.25 | −41.1 | −43.7 | −39.5 | −69.6 |
+| **0.50** | **−46.5** | **−30.6** | **−60.0** | **−84.3** |
+| 0.75 | −115.0 | −125.5 | −217.7 | −252.5 |
+| **1.00** | **−565.8** | **−621.0** | **−631.9** | **−721.3** |
+| FP_ECR_Y1 | +77.3 | **+48.4** | −132.1 | **−202.4** |
+| ORACLE_Y1 | +795.3 | +767.5 | +717.0 | +671.4 |
+
+At alpha=0.50 the delta is **below its seed SD and below the floor in both formats under both
+objectives** (target 30.6 < 151; dynasty 84.3 < 125). **Both H0 criteria fail. H1 holds.** Baselines
+moved only −1.0% / +0.8%, so this is not a units artifact.
+
+### 4. My stated prior was HALF WRONG, and the correction matters
+
+I predicted weekly would compress the whole ladder. It compresses the INTERMEDIATE region at target
+(plateau ratio **8.2% -> 4.9%**) but **AMPLIFIES the endpoint in both formats**: alpha=1.00 grows
+**+9.8%** at target and **+14.1%** at dynasty in magnitude. Dynasty's ratio rises slightly
+(9.5% -> 11.7%) but stays the same order with alpha=0.50 still inside the noise.
+
+**So the weekly objective does not flatten the curve — it makes the threshold SHARPER.** The plateau
+is more pronounced under the more faithful objective: flatter for longer, then a steeper collapse.
+
+### 5. ECR gets WORSE under the more faithful objective
+
+Target's gain shrinks **+77.3 -> +48.4** and becomes inconsistent (0/5 -> **2/5 seasons worse**);
+dynasty's loss deepens **−132.1 -> −202.4**, now worse in **5 of 5 seasons** and reaching the floor
+band. **D104's negative result strengthens.**
+
+### 6. What this closes, and what it must NOT be read as
+
+**Closes** the projection/ranking direction as the explanation for the missing improvement: two
+objectives, one ladder, the same answer. **Per the pre-registered stopping rule the
+projection/decision-objective sensitivity branch STOPS HERE.** Searching for a third scoring
+objective because the first two produced nulls is exactly the error to avoid.
+
+**Does NOT mean the objective is defective.** An objective insensitive to small ranking changes is
+not broken — it is reporting something true about the problem. The evidence supports a
+**THRESHOLDED DECISION ENVIRONMENT**: only information improvements large enough to move
+within-position predictive Spearman by roughly +-0.5 (D105) can produce a resolvable draft-level
+effect. ECR moves it by **0.024**.
+
+### 7. The cumulative position after D97-D106
+
+With two objectives and three instruments: the decision-shaped residual is ~86-113 pts/draft, below
+the floor (D103, replicating D86); perfect information is worth ~+670 to +795 but the best
+AVAILABLE preseason ranking recovers <=10% and is negative in dynasty (D104, strengthened here); the
+value surface is a plateau in ranking quality under **both** objectives (D105, D106); the decision
+surface is steep — 88% of picks change for ~30-85 points (D105, objective-independent).
+
+**Y1 is operating in a regime where neither better rankings nor a better decision rule can produce a
+measurable gain.** That is a conclusion about the problem, not a failure of the search, and it is now
+supported rather than assumed.
