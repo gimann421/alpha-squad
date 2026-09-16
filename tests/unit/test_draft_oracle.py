@@ -473,7 +473,9 @@ class TestShippedTierIsProduction:
         Mirrors `audit_draft`'s loop exactly -- same snake geometry, same fair opponent, same
         `picks_remaining` -- so the states compared are the states the oracle audits."""
         total_rounds = int(league.roster["roster_size"])
-        my_picks = [snake_overall_pick(r, draft_slot, league.teams) for r in range(1, total_rounds + 1)]
+        my_picks = [
+            snake_overall_pick(r, draft_slot, league.teams) for r in range(1, total_rounds + 1)
+        ]
         avail = set(static.projections)
         mine: list[str] = []
         opps: dict[int, list[str]] = {s: [] for s in range(1, league.teams + 1) if s != draft_slot}
@@ -498,12 +500,28 @@ class TestShippedTierIsProduction:
                 picks_remaining=picks_remaining,
             )
             production, _ = _pick_by_tier(
-                static, con, league, season, set(avail), list(my_positions), "H", current, nxt,
+                static,
+                con,
+                league,
+                season,
+                set(avail),
+                list(my_positions),
+                "H",
+                current,
+                nxt,
                 **kwargs,
             )
             replica, _ = _pick_by_tier(
-                static, con, league, season, set(avail), list(my_positions), replica_tier,
-                current, nxt, **kwargs,
+                static,
+                con,
+                league,
+                season,
+                set(avail),
+                list(my_positions),
+                replica_tier,
+                current,
+                nxt,
+                **kwargs,
             )
             assert replica == production, (
                 f"round {round_no} slot {draft_slot}: {replica_tier} chose {replica!r} but "
@@ -608,7 +626,9 @@ class TestObjectiveSelection:
     def test_weekly_objective_refuses_to_run_without_the_weekly_table(self, con):
         _seed(con)
         with pytest.raises(ValueError, match="weekly participation table"):
-            make_roster_scorer(WEEKLY_NO_FORESIGHT, _league(), load_season_static(con, _league(), 2023))
+            make_roster_scorer(
+                WEEKLY_NO_FORESIGHT, _league(), load_season_static(con, _league(), 2023)
+            )
 
     def test_unknown_objective_is_refused(self, con):
         _seed(con)
@@ -657,8 +677,14 @@ class TestObjectiveSelection:
         league, static = _league(), load_season_static(con, _league(), 2023)
         weekly = load_weekly_points(con, 2023)
         picks = audit_draft(
-            con, league, 2023, 1, static, rounds=(1,),
-            objective=WEEKLY_NO_FORESIGHT, weekly=weekly,
+            con,
+            league,
+            2023,
+            1,
+            static,
+            rounds=(1,),
+            objective=WEEKLY_NO_FORESIGHT,
+            weekly=weekly,
         )
         assert picks and picks[0].candidates
         assert picks[0].regret >= 0.0
@@ -666,4 +692,6 @@ class TestObjectiveSelection:
         season_picks = audit_draft(con, league, 2023, 1, static, rounds=(1,))
         weekly_values = {c.player_id: c.rollout_starter_points for c in picks[0].candidates}
         season_values = {c.player_id: c.rollout_starter_points for c in season_picks[0].candidates}
-        assert weekly_values != season_values, "the objective must actually change the rollout value"
+        assert weekly_values != season_values, (
+            "the objective must actually change the rollout value"
+        )

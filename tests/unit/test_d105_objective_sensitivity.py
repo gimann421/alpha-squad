@@ -29,8 +29,8 @@ import pytest
 from alpha_squad.evaluation.board_vintage import BACKTEST_SEASONS
 from alpha_squad.league.context import LeagueContext
 
-_SCRIPT = Path(__file__).resolve().parents[2] / "scripts" / "research" / (
-    "d105_objective_sensitivity.py"
+_SCRIPT = (
+    Path(__file__).resolve().parents[2] / "scripts" / "research" / ("d105_objective_sensitivity.py")
 )
 
 
@@ -126,8 +126,9 @@ class TestInformationDegradesMonotonically:
                 out = MODULE.perturbed_static(_league(), static, alpha, seed=seed)
                 ids = [p for p in static.projections if static.positions[p] == "WR"]
                 per_seed.append(
-                    MODULE._spearman([out.projections[p] for p in ids],
-                                     [static.projections[p] for p in ids])
+                    MODULE._spearman(
+                        [out.projections[p] for p in ids], [static.projections[p] for p in ids]
+                    )
                 )
             means.append(sum(per_seed) / len(per_seed))
         assert means == sorted(means, reverse=True), means
@@ -141,10 +142,12 @@ class TestNothingElseChanges:
         for alpha in MODULE.LEVELS.values():
             out = MODULE.perturbed_static(_league(), static, alpha, seed=3)
             for position in ("QB", "RB", "WR", "TE", "K"):
-                before = sorted(v for p, v in static.projections.items()
-                                if static.positions[p] == position)
-                after = sorted(v for p, v in out.projections.items()
-                               if out.positions[p] == position)
+                before = sorted(
+                    v for p, v in static.projections.items() if static.positions[p] == position
+                )
+                after = sorted(
+                    v for p, v in out.projections.items() if out.positions[p] == position
+                )
                 assert before == after, (alpha, position)
 
     def test_only_projections_and_vorp_change(self, monkeypatch):
@@ -153,8 +156,11 @@ class TestNothingElseChanges:
         )
         static = _static()
         out = MODULE.perturbed_static(_league(), static, 0.75, seed=1)
-        changed = {f.name for f in dataclasses.fields(static)
-                   if getattr(out, f.name) != getattr(static, f.name)}
+        changed = {
+            f.name
+            for f in dataclasses.fields(static)
+            if getattr(out, f.name) != getattr(static, f.name)
+        }
         assert changed == {"projections", "vorp"}, sorted(changed)
 
     def test_kickers_are_untouched(self):
@@ -200,9 +206,7 @@ class TestDeterminism:
         unlike `hash()` on a str, which is salted per interpreter. Verified by actually starting a
         second interpreter, because that is the property the reproduction claim depends on."""
         code = (
-            "import random;"
-            "r=random.Random('3|2023|WR|0.5');"
-            "print([r.random() for _ in range(3)])"
+            "import random;r=random.Random('3|2023|WR|0.5');print([r.random() for _ in range(3)])"
         )
         first = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
         second = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
@@ -249,9 +253,18 @@ class TestD106ObjectiveSelection:
         from alpha_squad.evaluation.draft_oracle import OBJECTIVES
 
         result = subprocess.run(
-            [sys.executable, str(_SCRIPT), "--mode", "value", "--out", "/tmp/unused",
-             "--objective", "bogus"],
-            capture_output=True, text=True,
+            [
+                sys.executable,
+                str(_SCRIPT),
+                "--mode",
+                "value",
+                "--out",
+                "/tmp/unused",
+                "--objective",
+                "bogus",
+            ],
+            capture_output=True,
+            text=True,
         )
         assert result.returncode != 0
         assert "invalid choice" in result.stderr

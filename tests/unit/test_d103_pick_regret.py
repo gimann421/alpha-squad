@@ -23,9 +23,7 @@ from alpha_squad.evaluation.draft_oracle import SHIPPED_TIER
 
 
 def _load():
-    path = (
-        Path(__file__).resolve().parents[2] / "scripts" / "research" / "d103_pick_regret.py"
-    )
+    path = Path(__file__).resolve().parents[2] / "scripts" / "research" / "d103_pick_regret.py"
     spec = importlib.util.spec_from_file_location("d103_pick_regret", path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -121,9 +119,7 @@ class TestOracleStaticScope:
         """A drafted player who never played really did score nothing. Falling back to the
         projection would quietly re-introduce the very information this arm replaces."""
         static = self._fake_static()
-        monkeypatch.setattr(
-            MODULE, "_actual_points_for", lambda con, season, ids: {"QB_1": 120.0}
-        )
+        monkeypatch.setattr(MODULE, "_actual_points_for", lambda con, season, ids: {"QB_1": 120.0})
         monkeypatch.setattr(
             MODULE, "marginal_value_over_replacement", lambda league, proj, pos: dict(proj)
         )

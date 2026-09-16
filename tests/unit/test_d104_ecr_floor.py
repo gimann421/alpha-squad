@@ -58,18 +58,28 @@ def _static(**overrides):
     from alpha_squad.evaluation.draft_forensics import SeasonStatic
 
     positions = {
-        "wr_a": "WR", "wr_b": "WR", "wr_c": "WR", "wr_unranked": "WR",
-        "rb_a": "RB", "rb_b": "RB",
-        "k_a": "K", "k_b": "K",
+        "wr_a": "WR",
+        "wr_b": "WR",
+        "wr_c": "WR",
+        "wr_unranked": "WR",
+        "rb_a": "RB",
+        "rb_b": "RB",
+        "k_a": "K",
+        "k_b": "K",
     }
     base = dict(
         season=2023,
         ecr_type="ro",
         # Y1 likes wr_a > wr_b > wr_c; ECR below reverses that.
         projections={
-            "wr_a": 300.0, "wr_b": 250.0, "wr_c": 200.0, "wr_unranked": 111.0,
-            "rb_a": 280.0, "rb_b": 240.0,
-            "k_a": 130.0, "k_b": 120.0,
+            "wr_a": 300.0,
+            "wr_b": 250.0,
+            "wr_c": 200.0,
+            "wr_unranked": 111.0,
+            "rb_a": 280.0,
+            "rb_b": 240.0,
+            "k_a": 130.0,
+            "k_b": 120.0,
         },
         positions=positions,
         vorp={p: 0.0 for p in positions},
@@ -77,8 +87,11 @@ def _static(**overrides):
         scarcity_raw={"WR": 1.0, "RB": 2.0, "K": 3.0},
         scarcity_norm={"WR": 0.1, "RB": 0.5, "K": 0.9},
         market_rank={
-            "wr_a": ("WR", 30.0), "wr_b": ("WR", 20.0), "wr_c": ("WR", 10.0),
-            "rb_a": ("RB", 8.0), "rb_b": ("RB", 4.0),
+            "wr_a": ("WR", 30.0),
+            "wr_b": ("WR", 20.0),
+            "wr_c": ("WR", 10.0),
+            "rb_a": ("RB", 8.0),
+            "rb_b": ("RB", 4.0),
         },
         confidence={p: 0.7 for p in positions},
         ecr_dispersion={p: (1.0, 5.0) for p in positions},
@@ -94,10 +107,10 @@ class TestValuePreservation:
         static = _static()
         out, _ = MODULE.ecr_ordered_static(_league(), static)
         for position in ("WR", "RB", "K"):
-            before = sorted(v for p, v in static.projections.items()
-                            if static.positions[p] == position)
-            after = sorted(v for p, v in out.projections.items()
-                           if out.positions[p] == position)
+            before = sorted(
+                v for p, v in static.projections.items() if static.positions[p] == position
+            )
+            after = sorted(v for p, v in out.projections.items() if out.positions[p] == position)
             assert before == after, position
 
     def test_only_projections_and_vorp_change(self, monkeypatch):
@@ -107,7 +120,8 @@ class TestValuePreservation:
         static = _static()
         out, _ = MODULE.ecr_ordered_static(_league(), static)
         changed = {
-            f.name for f in dataclasses.fields(static)
+            f.name
+            for f in dataclasses.fields(static)
             if getattr(out, f.name) != getattr(static, f.name)
         }
         assert changed == {"projections", "vorp"}, sorted(changed)
@@ -163,8 +177,11 @@ class TestOrdering:
         re-run reproduces exactly."""
         static = _static(
             market_rank={
-                "wr_a": ("WR", 10.0), "wr_b": ("WR", 10.0), "wr_c": ("WR", 10.0),
-                "rb_a": ("RB", 8.0), "rb_b": ("RB", 4.0),
+                "wr_a": ("WR", 10.0),
+                "wr_b": ("WR", 10.0),
+                "wr_c": ("WR", 10.0),
+                "rb_a": ("RB", 8.0),
+                "rb_b": ("RB", 4.0),
             }
         )
         out, _ = MODULE.ecr_ordered_static(_league(), static)

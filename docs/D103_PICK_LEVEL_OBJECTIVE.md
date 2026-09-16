@@ -205,6 +205,13 @@ not smoothed over.
 pick equals the oracle's in **0%** of rounds 1–5 in both formats. The only rounds with any hits at
 all are 6–8 and 11 (5–15%).
 
+> **[Corrected in D107 §2 C1; re-verified independently in D108. The original text is left above;
+> this note is authoritative.]** The "in both formats" is wrong, and so is the sentence after it.
+> **`target_league` is 0% of rounds 1–5 under both objectives — that part holds.** `dynasty_1qb` is
+> **5.0%** season-long (rd 1 5%, rd 2 15%, rd 4 5%, rd 7 5%) and **9.0%** weekly, so dynasty does
+> have early-round hits. The overall agreement range quoted elsewhere in this report as 2.2–4.7%
+> is **1.9–4.7%**. Round 2 being the worst round, and the regret-by-phase table, reproduce exactly.
+
 Read carefully, though: "never matches the oracle" in round 1–2 is close to inevitable when the
 slate holds ~20 plausible candidates and outcome variance is enormous. §7D is what distinguishes
 that from a decision defect, and it says most of this is not one.

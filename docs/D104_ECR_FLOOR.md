@@ -184,6 +184,13 @@ Both arms asked at the identical state, pool and roster; the state advances on Y
 | target_league | **183/320 (57.2%)** | 57.0% | 52.0% | 61.7% | round 1, in 20/20 drafts |
 | dynasty_1qb | **206/320 (64.4%)** | 63.0% | 66.0% | 64.2% | round 1, in 20/20 drafts |
 
+> **[Corrected in D107 §2 C2; re-verified independently in D108. The table is left as published;
+> this note is authoritative for the last column.]** The measured first-divergence histogram is
+> **target {1: 11, 2: 5, 3: 3, 5: 1}** and **dynasty {1: 11, 2: 5, 3: 1, 4: 2, 5: 1}** — so **all
+> 20 drafts diverge and all do so within five rounds, but the first divergence is round 1 in 11 of
+> 20, not 20 of 20.** Every other figure in this table reproduces exactly. Read "starting at pick
+> 1" below as "starting in the opening rounds".
+
 Position swaps (Y1 → ECR), target: WR→WR 44, RB→RB 20, QB→QB 19, **RB→K 17, WR→K 14, TE→K 12**,
 TE→TE 10, RB→WR 6. Dynasty: WR→WR 29, RB→WR 20, QB→QB 15, RB→RB 15, **RB→DST 15**, TE→TE 15,
 WR→K 14, WR→TE 13.
@@ -268,6 +275,17 @@ phases assumed.** D97 read a large oracle gap as projection headroom; D100 found
 ECR beats M6; D101 and D102 chased that; D103 showed the decision residual is tiny; **D104 shows the
 information gap is mostly not reachable either.** Continuing the projection path because it was the
 previous recommendation would be exactly the error the brief warns against.
+
+> **[Too strong. Superseded by D107 §6.1, re-affirmed in D108 §4; this note is authoritative.]**
+> D105/D106 went on to measure a **566–721 point** cost to destroying the projection ordering, so
+> "the problem is NOT projections" must not be carried forward as stated. The defensible form is:
+> *not the projection-quality differences available from the sources tested, at the resolution this
+> instrument has.* Three limits belong beside it permanently — the D105/D106 ladder is
+> **degradation-only** (there is no improvement-side rung), it holds each position's **value
+> multiset fixed** (so it tests within-position *ordering* and says nothing about projection
+> *magnitudes* — the axis of D97's +65.2 QB top-6 bias and D99's X2/X3 arms), and it was run
+> against **one** real alternative ranking source. The section's own hedge, "at least not in the
+> sense the last six phases assumed", is the part that survives.
 
 **Does the decision rule deserve another look despite D103?** On this evidence, **no — but for a
 new reason.** §5 is the pivot: changing 57–64% of picks moves realized value by almost nothing.
