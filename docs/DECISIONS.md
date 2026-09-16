@@ -8160,3 +8160,113 @@ surface is steep — 88% of picks change for ~30-85 points (D105, objective-inde
 **Y1 is operating in a regime where neither better rankings nor a better decision rule can produce a
 measurable gain.** That is a conclusion about the problem, not a failure of the search, and it is now
 supported rather than assumed.
+
+## D107 — The D86-D106 record reproduces, two statements in it are too strong, and the branch is mature enough to consolidate. A. Nothing ships.
+
+Audit only. **No production logic changed, no model changed, nothing in `league/`, nothing fitted,
+no new sensitivity or projection experiment, no 2026, no new ranking source, no Y1 tuning, no PR,
+nothing merged**; `models/` `73b408e9` and `league/` `d4cfd00e` byte-identical to `origin/main`, and
+**no source file changed in this phase at all**. Full report:
+`docs/D107_RESEARCH_CONSOLIDATION_AUDIT.md`. 1427 tests pass, ruff clean. Board vintage re-derived
+read-only as `ca3e2d8a…`.
+
+### 1. Everything re-derivable reproduced exactly
+
+Each phase's own retained result artifact was re-aggregated independently of its report: D100's five
+methods (M6 1.950 / `U_ecr` 2.750, AUC 0.8990 / 0.9253, 11W/8T/1L, `U_games` 0.00 at RB in all five
+seasons); D101's four arms on all four gate metrics plus **both** G6 readings; D103's regret by
+phase, the weekly−season-long contrasts with clustered CIs, and ORACLE_Y1 **+795.3 / +717.0**;
+D104's decomposition **+77.3 / −132.1** and 183/320 & 206/320; D105's full ladder including the
+**seed-to-seed SD statistic (159.9 against the quoted 160)**; D106's weekly ladder and its
+non-monotone regret arm. No discrepancy except the two below.
+
+### 2. TWO STATEMENTS IN THE RECORD ARE CORRECTED
+
+**(a) D103's "0% of rounds 1-5 in both formats" is false for dynasty.** Target is 0.0% under both
+objectives; `dynasty_1qb` is **5.0%** (season-long: rd 1 5%, rd 2 15%, rd 4 5%, rd 7 5%) and
+**9.0%** (weekly). The overall range quoted as "2.2-4.7%" should read **1.9-4.7%**. The headline —
+regret concentrated early in absolute points — reproduces exactly and is unaffected.
+
+**(b) D104's "first divergence: round 1, in 20/20 drafts" overstates.** The histogram is
+target {1: 11, 2: 5, 3: 3, 5: 1} and dynasty {1: 11, 2: 5, 3: 1, 4: 2, 5: 1}. The correct statement
+is **every one of the 20 drafts diverges, and every one within five rounds; round 1 in 11 of 20.**
+The picks-changed figures and phase splits reproduce exactly.
+
+### 3. The reframing the record was missing: normalised regret runs the OTHER WAY
+
+D103's artifact already stores the candidate slate spread at every pick. Dividing:
+
+| phase | target regret | spread | **ratio** | dynasty ratio |
+|---|---|---|---|---|
+| EARLY 1-5 | 181.5 | 303.8 | **0.614** | 0.606 |
+| MIDDLE 6-10 | 121.0 | 191.2 | 0.645 | 0.748 |
+| LATE 11-16 | 107.4 | 141.8 | **0.739** | **0.925** |
+
+**In absolute points the largest losses are early; as a share of the dispersion actually available
+at the pick, Y1 does best early and worst late.** Both are correct and answer different questions;
+the record carried only the first, and "regret is concentrated EARLY, not late" invites the wrong
+inference about the end of the draft. It is **not** evidence of a defect: D86 measured a random pick
+from the same slate at 122.3 against Alpha's 116.2, so a 0.6-0.9 ratio is near what an uninformed
+draw gives at every phase — which is the D105 plateau seen per-phase.
+
+### 4. The instrument passes all fourteen contract checks, and the parity gap is closed explicitly
+
+2021-2025 window asserted as a property over `ALL_SERIES`; 2020 refused at the query by
+`MissingMarketBoardError` and at the opponent by `EmptyMarketBoardError`; `O_TIERS` inside
+`DRAFT_AWARE_REPLACEMENT_TIERS` with the guard D96 verified by reverting the line; production
+tie-break `(-score, player_id)`; D94's retracted claim load-bearing nowhere; **L0 vs
+`recommend_draft_pick` pinned by whole-draft test**; vintage reproduces to the hash; no 2026 anywhere
+in the benchmark; `oracle_static` changes projections and derived VORP only, pinned by test, and is
+unreachable from the regret path. One precision recorded: the weekly objective is a roster-value
+function `U`, not a policy, and it legitimately uses realized **availability** (never realized
+performance) — the leakage constraint binds on the policy and is enforced there by signature
+inspection.
+
+**One presentational gap closed with a measurement.** The much-quoted **240/240** L0-vs-production
+figure was `target_league`-only (5 seasons x slots {1,5,10} x 16 rounds). Re-running the existing
+read-only `--mode parity` over BOTH formats gives **L0 vs `H` agreeing on 640 of 640 real pick
+states, 0 disagreements** (2021-2025 x slots {1,4,7,10} x 16 rounds x both formats). Future
+citations should use 640/640, not the target-only 240.
+
+### 5. The conclusion chain holds; one closure word is a stopping rule, not a finding
+
+D103's measurement, D104's ECR null, D105's threshold and D106's objective-independence all verify.
+**What must not be over-read is the word "closed".** The branch stops because further experiments
+*of this design* cannot resolve effects of the size available — the pre-registered stopping rule —
+not because ranking quality has been shown irrelevant; D105/D106 measure a **566-721 point** cost to
+destroying it. **D104 §7's "the evidence now says the problem is NOT projections" is too strong**;
+the defensible form is *"not the projection-quality differences available from the sources tested, at
+the resolution this instrument has."* Three limits belong permanently beside every plateau claim:
+the ladder is **degradation-only**, it holds each position's **value multiset fixed** (so it says
+nothing about projection *magnitudes* — the axis of D97's +65.2 QB bias and D99's X2/X3), and it was
+run against **one** real alternative source.
+
+### 6. Decision — **A: consolidate and close the draft-investigation branch. Y1 remains production.**
+
+Not C: no methodological flaw was found; the one the program did surface (regret is **arm-relative**)
+was declared in advance, observed in D106, and already acted on. Not B: for a new draft experiment to
+be justified, some candidate would need a plausible effect **above** the 172-250 floor, and none does
+— a better rule ≤86-113, the best real ranking +77.3/−132.1, calibration 0/30 identification cells at
+MDE 343-360. **Continuing to experiment because the results are null is the error six phases have
+been learning to avoid.**
+
+**What reopens it** — any one, checkable before a phase is spent: (1) **more season clusters**, the
+only lever that moves the floor (slots cannot, D88; seeds cannot, D92) — a calendar dependency, and
+at k=7 the floor falls from ~172 toward ~130; (2) a ranking source that moves **within-position
+predictive Spearman vs realized** by materially more than ECR's **+0.024**, pre-screened with D105's
+existing validity harness before any draft run; (3) a projection change that alters **magnitudes, not
+order** — outside the span of every D99-D106 experiment; (4) a way to **identify the 92-96%**
+"scored more" split between bad information and variance; (5) any failure of the fourteen instrument
+checks, or a drift of `models/`/`league/` off the Y1 hashes; (6) **transaction history** becoming
+available — which opens a different question, not the draft one. Explicitly NOT grounds: another
+value base, a Y4, a lookahead optimizer, a third scoring objective chosen because two produced nulls,
+more projection-proxy work, or 2026.
+
+### 7. Repository
+
+Branch `d106-weekly-sensitivity` at `397e707`; `origin/main` `277204f` is a strict ancestor, 16
+commits behind and 0 ahead; the stack is **linear, zero merge commits**, 22 files, and the **only**
+`src/` file changed across the whole of D98-D106 is `evaluation/draft_oracle.py` (D103's instrument,
+imported by no production path). No commit contains unrelated changes. **PR #23 is the only open PR**
+and is the stack's first commit, so merging the tip would subsume it. Nothing was merged and no PR
+was created or modified.

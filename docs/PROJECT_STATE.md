@@ -3,7 +3,55 @@
 Living summary of what is implemented, validated, and outstanding. Updated at the end of every
 milestone. See `docs/TRACEABILITY.md` for the acceptance-criteria-level mapping.
 
-## Status: M56 complete (D106) — **The D105 plateau is OBJECTIVE-INDEPENDENT. Under the weekly no-foresight objective the intermediate ladder stays inside the noise band in both formats, while the severe end separates MORE. H1. The projection/ranking sensitivity branch stops here. Nothing ships.**
+## Status: M57 complete (D107) — **The D86–D106 record reproduces from its own artifacts, two statements in it were too strong and are corrected, the instrument passes all fourteen contract checks, and the draft-investigation branch is mature enough to consolidate. A. Nothing ships.**
+
+Audit only. **No production logic, no model, nothing in `league/`, nothing fitted, no new
+experiment, no 2026, no new ranking source, no Y1 tuning, no PR, nothing merged**; `models/`
+(`73b408e9`) and `league/` (`d4cfd00e`) byte-identical to `origin/main`, and **no source file
+changed in this phase at all**. 1427 tests pass, ruff clean. Board vintage re-derived read-only as
+`ca3e2d8a…`. Full report: `docs/D107_RESEARCH_CONSOLIDATION_AUDIT.md`.
+
+**Everything re-derivable reproduced exactly** — D100's five methods, D101's four arms on both G6
+readings, D103's regret-by-phase and ORACLE_Y1 (+795.3 / +717.0), D104's decomposition
+(+77.3 / −132.1), D105's ladder including the seed-SD statistic, D106's weekly ladder and its
+self-invalidating regret arm. **All fourteen instrument/data-contract checks pass**, and the one
+presentational gap is closed with a measurement: the much-quoted 240/240 L0-vs-production figure was
+target-only, and re-running the existing read-only `--mode parity` over **both** formats gives
+**640/640 real pick states, 0 disagreements**.
+
+**Two corrections to the record, neither changing a verdict.** (a) D103's *"0% of rounds 1–5 in both
+formats"* is false for dynasty (5.0% season-long, 9.0% weekly; target is 0.0%), and the "2.2–4.7%"
+range should read **1.9–4.7%**. (b) D104's *"first divergence: round 1, in 20/20 drafts"* overstates:
+**all 20 drafts diverge within five rounds; round 1 in 11 of 20.**
+
+**The reframing the record was missing.** Dividing D103's regret by the slate dispersion it already
+stores: **0.614 early → 0.739 late (target), 0.606 → 0.925 (dynasty).** In absolute points the
+largest losses are early; **as a share of the value actually available at the pick, Y1 does best
+early and worst late.** Not a defect — a random pick from the same slate sits at 122.3 against
+Alpha's 116.2 (D86) — but the record carried only the absolute reading.
+
+**"Closed" is a stopping rule, not a finding.** The branch stops because experiments of this design
+cannot resolve effects of the available size, not because ranking quality is irrelevant: destroying
+it costs **566–721 points**. D104 §7's *"the problem is NOT projections"* is too strong. Three limits
+belong beside every plateau claim: the ladder is **degradation-only**, holds each position's **value
+multiset fixed** (so it says nothing about projection *magnitudes*), and ran against **one** real
+alternative source.
+
+**Decision: A — consolidate and close; Y1 remains production.** Not C (no methodological flaw; the
+one the program did surface — regret is arm-relative — was declared, observed, and acted on). Not B
+(every candidate's plausible effect sits below the 172–250 floor). **Reopening** requires one of:
+more season clusters (the only lever that moves the floor — at k=7 it falls toward ~130); a ranking
+source moving within-position predictive Spearman by materially more than ECR's **+0.024**,
+pre-screened before any draft run; a projection change altering **magnitudes, not order**; a way to
+identify the 92–96% "scored more" split; a failure of the fourteen instrument checks; or transaction
+history, which opens a different question.
+
+**Repository.** `d106-weekly-sensitivity` at `397e707`; `origin/main` `277204f` a strict ancestor,
+16 behind / 0 ahead; **linear, zero merge commits**; the only `src/` file changed across all of
+D98–D106 is `evaluation/draft_oracle.py`, imported by no production path. **PR #23 is the only open
+PR** and is the stack's first commit, so merging the tip would subsume it.
+
+### Earlier status: M56 complete (D106) — **The D105 plateau is OBJECTIVE-INDEPENDENT. Under the weekly no-foresight objective the intermediate ladder stays inside the noise band in both formats, while the severe end separates MORE. H1. The projection/ranking sensitivity branch stops here. Nothing ships.**
 
 Research only. **No production change, no retraining, no ECR tuning, no new model, no 2026, no PR,
 nothing merged**; `models/` (`73b408e9`) and `league/` (`d4cfd00e`) byte-identical; the only
