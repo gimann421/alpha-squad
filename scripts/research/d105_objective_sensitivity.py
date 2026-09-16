@@ -111,6 +111,7 @@ from alpha_squad.evaluation.draft_forensics import (
     preseason_page_type,
 )
 from alpha_squad.evaluation.draft_oracle import (
+    OBJECTIVES,
     SEASON_LONG,
     SHIPPED_TIER,
     assert_no_realized_inputs_in_policy,
@@ -506,7 +507,10 @@ def main() -> None:
                     choices=("validity", "value", "divergence", "regret"))
     ap.add_argument("--slots", default=",".join(str(s) for s in DEFAULT_SLOTS))
     ap.add_argument("--seeds", default=",".join(str(s) for s in SEEDS))
-    ap.add_argument("--objective", default=SEASON_LONG)
+    # D106 sanity check: `_play_draft` silently falls through to the season-long branch for any
+    # objective it does not recognise, so an unconstrained string here would let a typo produce a
+    # season-long run labelled as a weekly one. Constrained so the harness refuses instead.
+    ap.add_argument("--objective", default=SEASON_LONG, choices=OBJECTIVES)
     ap.add_argument("--leagues", default=",".join(FORMATS))
     ap.add_argument("--levels", default=",".join(LEVELS))
     args = ap.parse_args()

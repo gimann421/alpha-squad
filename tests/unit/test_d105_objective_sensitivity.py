@@ -236,3 +236,49 @@ class TestRegisteredDesign:
         banned = ("actual", "realized", "outcome", "realised")
         assert not {p for p in params if any(b in p.lower() for b in banned)}
         assert "_actual_points_for" not in inspect.getsource(MODULE.perturbed_static)
+
+
+class TestD106ObjectiveSelection:
+    """D106 added the weekly arm of the same ladder. Three harness properties carry that phase's
+    conclusions and would fail silently rather than loudly if they broke."""
+
+    def test_the_objective_flag_only_accepts_registered_objectives(self):
+        """`_play_draft` falls through to the SEASON-LONG branch for any objective it does not
+        recognise, so an unconstrained `--objective` would let a typo produce a season-long run
+        reported as a weekly one. The flag is constrained so argparse refuses instead."""
+        from alpha_squad.evaluation.draft_oracle import OBJECTIVES
+
+        result = subprocess.run(
+            [sys.executable, str(_SCRIPT), "--mode", "value", "--out", "/tmp/unused",
+             "--objective", "bogus"],
+            capture_output=True, text=True,
+        )
+        assert result.returncode != 0
+        assert "invalid choice" in result.stderr
+        assert set(OBJECTIVES) == {"season_long", "weekly_no_foresight"}
+
+    def test_pick_divergence_is_objective_independent(self):
+        """D106 does NOT re-run the divergence ladder, and this is why: picks come from
+        `_pick_by_tier`, which has no objective parameter at all. The scoring objective cannot
+        reach a draft decision, so D105's picks-changed table carries over unchanged."""
+        import inspect
+
+        from alpha_squad.evaluation.draft_forensics import _pick_by_tier
+
+        params = set(inspect.signature(_pick_by_tier).parameters)
+        assert not {p for p in params if "objective" in p.lower()}
+        assert "objective" not in inspect.getsource(MODULE.run_divergence)
+
+    def test_the_weekly_lineup_is_set_from_UNPERTURBED_projections(self):
+        """The isolation that makes the weekly arm a test of DRAFT quality rather than lineup
+        quality. `_play_draft` scores with `scoring_static`, and the ladder passes the unperturbed
+        `static` there while the perturbed board goes in as the draft board -- so every arm sets
+        its weekly lineup from Y1's own projections and only the drafting differs."""
+        import inspect
+
+        source = inspect.getsource(MODULE.D103._play_draft)
+        assert "scoring_static.projections" in source
+        assert "weekly_lineup_points_no_foresight" in source
+        # the ladder passes the perturbed arm as the BOARD and the untouched static as the SCORER
+        call = inspect.getsource(MODULE.run_value)
+        assert "arm, slot, SHIPPED_TIER, static, weekly, objective" in call
