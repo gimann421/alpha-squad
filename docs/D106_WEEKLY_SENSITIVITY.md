@@ -173,17 +173,51 @@ often positive. **L4 is negative in every season of both formats under both obje
 the only row with no sign flips. The intermediate rungs flip sign season to season, which is
 exactly what "inside the noise band" looks like and why their intervals span zero.
 
-**By draft phase.** See §6.1 — the matched regret ladder. *(The whole-draft value metric is a
-single number per draft and cannot be decomposed by phase; regret can.)*
+**By draft phase — not answerable on this experiment, and §6.1 explains why.** The whole-draft value
+metric is a single number per draft and cannot be decomposed by phase; the regret metric, which
+could, turns out to be invalidated here by an arm-relative artifact that inverts its sign at the
+intermediate rung. **No phase-level claim is made.** Answering it properly would need a
+phase-decomposable *absolute* value metric, which this instrument does not have.
 
 **By position.** Not separately measurable on this experiment without changing it. The value metric
 is whole-roster, and the pick-divergence positional mix is objective-independent (§3b), so D105's
 finding stands unchanged: divergence is WR-dominated at every level, with K appearing only at L1.
 **No position-specific claim is made, and none is warranted.**
 
-### 6.1 Matched regret ladder
+### 6.1 Matched regret ladder — and why it cannot be used here
 
-*(Filled in on completion — same reduced scope D105 used, so the two are like-for-like.)*
+Same reduced scope D105 used (target, L0/L2/L4, seed 0, slots {1, 10}), so the two are
+like-for-like. Lower is better.
+
+| arm | α | all picks | EARLY 1–5 | MIDDLE 6–10 | LATE 11–16 | alpha = oracle |
+|---|---|---|---|---|---|---|
+| L0 | 0.00 | 96.8 | 148.3 | 74.2 | 72.8 | 4.4% |
+| **L2** | **0.50** | **73.2** | **91.8** | 75.9 | **55.5** | **8.1%** |
+| L4 | 1.00 | 154.5 | 186.7 | 144.3 | 136.2 | 1.2% |
+
+**This table is non-monotone, and it contradicts the absolute value measurement.** At α = 0.50 the
+weekly regret *falls* (96.8 → 73.2) while the weekly realized value also falls (−30.6 vs L0). Those
+two statements cannot both describe better drafting. **The regret number is wrong here, and the
+absolute value number is right.**
+
+**This is exactly the arm-relative artifact declared in §2 of the pre-registration**, now observed
+rather than hypothesised. Scrambling the board also scrambles the **oracle's own rollouts**, so
+`max_c V(c)` degrades faster than `V(alpha's pick)` and measured regret shrinks even as the draft
+gets worse. The fingerprint is in the last column: the engine's pick matches the oracle **more**
+often on a degraded board (4.4% → **8.1%**), which is only possible because the oracle got worse.
+
+D105's season-long regret ladder happened to come out monotone, which masked this. **D106 exposes
+it.** Two consequences, both stated rather than worked around:
+
+1. **The pre-registered decision to make absolute realized value the primary outcome is vindicated
+   by direct demonstration**, not merely by argument. Had regret been primary, D106 would have
+   reported that moderate scrambling *improves* drafting.
+2. **Regret cannot answer the "by draft phase" question in this experiment.** The phase columns
+   above are contaminated by the same artifact and are reported only to show the contamination. No
+   phase-level claim is drawn from them.
+
+The one reading that survives is the L0 → L4 direction (96.8 → 154.5), which agrees with the value
+curve — both endpoints are far enough apart that the artifact does not flip the sign.
 
 ## 7. Verdict and direction
 

@@ -32,6 +32,14 @@ endpoint** (+9.8% target, +14.1% dynasty). **Weekly makes the threshold sharper,
 **ECR gets worse under the more faithful objective** — target +77.3 → +48.4 (0/5 → 2/5 seasons
 worse), dynasty −132.1 → **−202.4**, now worse in 5/5. D104's negative result strengthens.
 
+**The matched regret ladder invalidates itself, and vindicates the primary choice.** Weekly regret
+is non-monotone (L0 96.8, L2 **73.2**, L4 154.5) and *contradicts* the value curve at α=0.50, where
+regret falls while realized value also falls. That is the arm-relative artifact declared in the
+pre-registration, now observed: a scrambled board scrambles the **oracle's** rollouts too, and the
+engine matches the oracle *more* often on a degraded board (4.4% → **8.1%**). Had regret been the
+primary outcome, D106 would have reported that moderate scrambling improves drafting. **No
+phase-level claim is made.**
+
 **This closes the projection/ranking direction** as the explanation for the missing improvement, and
 the sensitivity branch stops per the pre-registered rule. It does **not** mean the objective is
 defective: the evidence supports a **thresholded decision environment** where only improvements

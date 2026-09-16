@@ -8109,7 +8109,34 @@ Target's gain shrinks **+77.3 -> +48.4** and becomes inconsistent (0/5 -> **2/5 
 dynasty's loss deepens **−132.1 -> −202.4**, now worse in **5 of 5 seasons** and reaching the floor
 band. **D104's negative result strengthens.**
 
-### 6. What this closes, and what it must NOT be read as
+### 6. The matched regret ladder INVALIDATES ITSELF -- and vindicates the primary choice
+
+Same reduced scope D105 used (target, L0/L2/L4, seed 0, slots {1,10}):
+
+| arm | alpha | all | EARLY | MIDDLE | LATE | alpha = oracle |
+|---|---|---|---|---|---|---|
+| L0 | 0.00 | 96.8 | 148.3 | 74.2 | 72.8 | 4.4% |
+| **L2** | **0.50** | **73.2** | **91.8** | 75.9 | **55.5** | **8.1%** |
+| L4 | 1.00 | 154.5 | 186.7 | 144.3 | 136.2 | 1.2% |
+
+**Non-monotone, and it CONTRADICTS the absolute value measurement:** at alpha=0.50 regret FALLS
+(96.8 -> 73.2) while realized value also falls (-30.6). Both cannot describe better drafting. **The
+regret number is wrong here; the absolute value number is right.**
+
+This is precisely the arm-relative artifact declared in the pre-registration, now **observed rather
+than hypothesised**: scrambling the board also scrambles the ORACLE's rollouts, so `max_c V(c)`
+degrades faster than `V(alpha's pick)`. The fingerprint is the last column -- the engine matches the
+oracle MORE often on a degraded board (4.4% -> **8.1%**), which is only possible because the oracle
+got worse. D105's season-long ladder happened to come out monotone, which masked this; **D106
+exposes it.**
+
+Two consequences: **(a)** the pre-registered choice of absolute realized value as the primary
+outcome is vindicated by direct demonstration, not merely by argument -- had regret been primary,
+D106 would have reported that moderate scrambling IMPROVES drafting; **(b)** regret cannot answer
+the by-draft-phase question here, so **no phase-level claim is made**. Only the L0 -> L4 direction
+(96.8 -> 154.5) survives, and it agrees with the value curve.
+
+### 7. What this closes, and what it must NOT be read as
 
 **Closes** the projection/ranking direction as the explanation for the missing improvement: two
 objectives, one ladder, the same answer. **Per the pre-registered stopping rule the
@@ -8122,7 +8149,7 @@ not broken — it is reporting something true about the problem. The evidence su
 within-position predictive Spearman by roughly +-0.5 (D105) can produce a resolvable draft-level
 effect. ECR moves it by **0.024**.
 
-### 7. The cumulative position after D97-D106
+### 8. The cumulative position after D97-D106
 
 With two objectives and three instruments: the decision-shaped residual is ~86-113 pts/draft, below
 the floor (D103, replicating D86); perfect information is worth ~+670 to +795 but the best
