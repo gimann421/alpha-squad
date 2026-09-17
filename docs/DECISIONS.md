@@ -8480,3 +8480,103 @@ clean** (was 4 files failing). Only source change in the whole D98-D108 stack:
 `evaluation/draft_oracle.py` (D103's instrument, imported by no production path) plus D108's
 formatting-only test-file pass. **Y1 remains production, unchanged by every phase from D85 to
 D108.** D109 not started.
+
+## D109 — Projection and early-draft decision audit (forensic diagnostic)
+
+**Question.** What does Alpha actually believe and do in rounds 1–3, and are the projections and the
+resulting decisions reasonable? Diagnostic only. No production change, no retraining, no
+calibration, no decision-rule change, no PR, nothing merged. `models/` `73b408e9`, `league/`
+`d4cfd00e`, both unchanged. Window 2021–2025; 2026 used nowhere. Full report:
+`docs/D109_PROJECTION_EARLY_DRAFT_AUDIT.md`.
+
+### 1. An instrument-integrity failure — reopening criterion 5 is MET
+
+`data/` is gitignored, so the pipeline was rebuilt from source. The DynastyProcess board and id map
+reproduce **byte-identically** (`matches_d89()` True), training is deterministic in seed *and*
+thread count, and D101's training-row **counts** reproduce exactly (RB 2022 `n_train=549`) — but the
+assembled board hash is `d2955868…`, not D108's `ca3e2d8a…`, and the **control arm Y0 moved too**.
+The nflverse feature/target panel was **restated upstream**. Effect: continuous aggregates reproduce
+to ~0.2% (Y1 MAE 40.544 vs D101's 40.638) while discrete threshold metrics do not — Y1's top-6 hit
+rate 0.4062 vs 0.3750, and **Y1's gate G6 flips PASS → FAIL at RB**. D101's deciding contrast
+(Y3−Y1 = −0.0104) does reproduce.
+
+**`board_vintage.py` hashes the ECR board and the assembled projections but nothing hashes the
+nflverse panel the projections are trained on**, so "the board vintage reproduces" was never
+sufficient to establish that a projection experiment reproduces. This plausibly also explains
+D101's own unresolved non-reproduction of D78. Every D109 number describes vintage `d2955868…`;
+D100–D108 figures must not be quoted against it without re-running them.
+
+### 2. What Alpha does (150 pick states = 5 seasons × 10 slots, covering overall picks 1–30)
+
+R1 WR 56% / QB 24% / RB 20%; R2 WR 40% / QB 38% / TE 20% / **RB 2%**; R3 WR 46% / QB 32% / RB 22%.
+Modal opening `WR-WR-QB` (28%); **no draft in 50 opened with two RBs**; first RB at median round
+**6.0**. Strongly board-dependent: 2021 took **no** WR in round 1, 2023/2024 took WR at all ten
+slots — tracking the ECR top 15 flipping from 9 RB / 5 WR (2021–22) to 5 RB / 10 WR (2025).
+
+### 3. Why — and a D81 finding that does NOT generalise
+
+`msv == projection` in **150/150** early picks, so the value base is `2 × projection − replacement`
+throughout rounds 1–3. R1 mean scores WR 595.3 / RB 425.1 / QB 418.0. **Positional opportunity cost
+is NOT the discriminator on this window** (R1 means RB 14.1, WR 17.9, TE 19.2 — near parity):
+D81's 22× asymmetry (WR 72.3 vs RB 3.3) is a **2026-board property** and must not be quoted for
+2021–2025. The multiplicative terms matter more than recorded anywhere before — `risk` 0.79 (WR) vs
+0.68 (RB) plus survival 1.27 vs 1.19 is a ~24% edge, i.e. **a systematic ~16% penalty on exactly
+the position that is under-projected**. QB is a separate mechanism: replacement drawn at the
+consumption boundary (207.4) and `oc = 0` at the snake turn, where QB takes **10 of 15** picks.
+
+### 4. The projection defect is one of SCALE, and positionally asymmetric
+
+Y1 has **never** projected an RB above **249.1** in five seasons; 41 real RB seasons cleared 250 and
+18 cleared 300. No non-QB projection ever exceeded 300 (41 real ones did). RB reaches 60% of its
+realized maximum, QB 86%. Conditional on market rank (median-based), the projected-minus-realized
+**WR−RB gap error** is **+7.6 / +34.7 / +55.4** at ECR 1–12 / 13–24 / 25–36. Bias inside ECR ≤ 30:
+RB −41.5, TE −17.0, WR −3.0, QB +13.9 — reproducing D97's bias **ordering** (QB ≫ WR > RB) on an
+independently rebuilt board. Compression per se is not the defect (D78: `E[max Y] > max E[Y]`); the
+**asymmetry** is.
+
+### 5. Counterfactual — measured through production, after the analytic method FAILED
+
+An analytic flip threshold from the decomposition failed production validation **3 OK / 6 MISMATCH**
+(all flipping earlier than predicted, because lowering the chosen player's projection also lowers
+his position's opportunity cost). **Discarded, not reported.** Replaced by a pre-registered cell
+ladder: every RB with preseason ECR ≤ 36 raised by Δ, re-run through `recommend_draft_pick` on an
+isolated DB copy, Δ=0 asserted to reproduce the recorded pick.
+
+Median Δ to flip a pick to RB is **90** (R1 120, R2 80, R3 90). Only **23%** flip within the
+measured bias (41.5), **34%** within 55.8. But the **aggregate** modal position flips WR → RB at
+**Δ ≈ 40** — essentially the measured bias. So Y1 is not wrong enough to change most individual
+picks, yet is wrong by just enough to change the strategy it implies. Fragility is very uneven:
+2022 median Δ **20**, 2024 median Δ **120**.
+
+### 6. Realized value (D103's `audit_draft`, `rounds=(1,2,3)`, unchanged instrument)
+
+Regret 191.0 / 155.8 / 157.2 by round; Alpha is the oracle 6% / 2% / 2%. Alpha takes RB **22/150
+(15%)**, the oracle **80/150 (53%)**; Alpha takes QB 47, oracle 13. Largest divergence **WR→RB,
+n=40, regret 200.9**. **Right position/wrong player still costs 131.5** vs 190.4 for a wrong
+position → the positional component is **+58.9/pick ≈ +176.6/draft, inside D97's 172–250 floor** —
+which is why D86–D107 all returned nulls. When Alpha misses, the oracle's player is a **median 22nd**
+on its own board (top-5 just 7%). Caveats: the oracle needs hindsight (2024's oracle pick is an RB
+in 30 of 30 states) and the 131.5/190.4 split is not a clean causal decomposition.
+
+### 7. Verdict — all three categories are real; none dominates
+
+**Projection:** real, a positional *scale* defect (RB ceiling 249.1; gap error growing to +55.4).
+**Decision engine:** real, and it *amplifies* the first — projection counted twice in 150/150 picks,
+plus the `risk` penalty on RB and the QB consumption boundary. **Information:** real and largest —
+131.5 points of regret remain even when the position is right, the market shares most of the RB bias
+(D82: +36.6 vs +45.5), and D82/D83 already measured that added features and shrinkage make the
+elite tail worse. **The sum of what is addressable (~177/draft) sits inside the detection floor.**
+
+### 8. Repository
+
+1427 tests pass, 44 deselected. `ruff check` and `ruff format --check` on `src tests` both clean.
+Added: `docs/D109_PROJECTION_EARLY_DRAFT_AUDIT.md` and six `scripts/research/d109_*.py` runners
+(committed so the transformation is never uncommitted again — D92's lesson). **No `src/` change of
+any kind.** Nothing merged, no PR.
+
+**NEXT PHASE (not started):** does a per-position **monotone** recalibration matching each position's
+projected upper quantiles to its realized upper quantiles — which cannot reorder within a position
+but does change cross-positional magnitudes — improve realized draft value over Y1? This is the one
+axis D99–D106 never spanned (D99 tested such maps on *identification* only; D105/D106 hold each
+position's value multiset fixed), and §5 locates the effect there. It must be pre-registered as
+**probably underpowered** (~177/draft against a 172–250 floor), so a null would not be informative.
