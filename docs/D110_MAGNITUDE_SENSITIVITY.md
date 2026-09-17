@@ -1,7 +1,8 @@
 # D110 — Cross-position magnitude sensitivity
 
-**Status at this commit: PRE-REGISTRATION ONLY. No arm has been run.** Results are appended to
-this document in a later commit; nothing below may be changed once an arm result has been seen.
+**Status: COMPLETE.** The pre-registration below was committed (`a90b2dd`, amended `f37d56a`)
+**before any arm ran**; results are appended at the end and nothing in the pre-registration was
+changed after an arm result was seen.
 
 Diagnostic/sensitivity experiment. No production change, no retraining, no new feature, no
 calibration, no change to the scoring formula, no PR, nothing merged.
@@ -52,7 +53,9 @@ Centred on Y1 = 1.00 and deliberately **coarse**. D109's implied RB correction i
 (a −41.5 point bias on a mean projection of 197.1 inside ECR ≤ 30); the grid brackets that
 generously in **both** directions. No direction is assumed correct.
 
-**Value-scored arms** — 5 seasons × 10 slots = 50 paired drafts each:
+**Value-scored arms** — as first registered, 5 seasons × 10 slots = 50 paired drafts each;
+**reduced to 4 slots (20 drafts) by Amendment 1 below**, on runtime grounds, before any arm
+result existed:
 
 | arm | multipliers | purpose |
 |---|---|---|
@@ -121,3 +124,235 @@ published figures as if they came from identical data. The runner records the vi
 row.
 
 Runner: `scripts/research/d110_magnitude_grid.py` (committed before any arm ran).
+
+---
+
+# Results
+
+*Appended after all 14 arms ran. The pre-registration above is unchanged.*
+
+## BOTTOM LINE
+
+Cross-position projection magnitude is a **very strong lever on what Alpha drafts** and a **non-lever
+on what Alpha is worth**. Scaling RB projections moves the decision surface smoothly and hard — at
+×1.40 the first RB arrives in round 1.80 instead of 4.35 and 42% of all rounds 1–3 picks change —
+yet **no arm produced a realized-value improvement whose confidence interval excludes zero**, and
+8 of the 9 value-scored arms are powered to have seen an effect the size D109 suggested. The only
+statistically significant result in the whole grid is a *harm*: raising QB magnitude 10% costs
+−39.3 points per draft, losing in 5 of 5 seasons. The apparent RB benefit (+30.8 at ×1.20, +81.4 at
+×1.40) is **entirely one season** — remove 2024 and those become −3.6 and +18.7 — and in the single
+draft with the largest gain the first three picks were *identical* to control, with the whole +548
+coming from rounds 4–9. So the hypothesis that the early-round positional tilt is where the value
+is fails on its own evidence.
+
+## WHAT CHANGED
+
+- **The decision surface responds smoothly and monotonically to `m_RB`.** First RB round: 6.20 at
+  ×0.80 → 4.35 at ×1.00 → 3.05 at ×1.15 → 2.15 at ×1.30 → 1.80 at ×1.40. Round-1 RB share: 0% →
+  20% → 55%.
+- **The modal opening flips at ×1.20** (`WR-WR-QB` → `WR-RB-QB`) and again at ×1.40 (`RB-RB-QB`).
+- **Rounds 1–3 picks changed:** 5% at ×1.05, 13% at ×1.15, 18% at ×1.20, 28% at ×1.30, 42% at ×1.40.
+- **Moving WR down works about as well as moving RB up** for changing decisions: `wr_090` alone
+  changes 27% of rounds 1–3 picks and pulls the first RB to 3.75.
+- **Changes are overwhelmingly cross-positional** — 83 of 90 changed picks at ×0.80, 113 of 128 at
+  ×1.40 — which is what the transformation was designed to do, and confirms within-position order
+  was preserved.
+- **`qb_090` barely moves anything** (3% of picks, only 3 of 20 drafts diverge at all), because QB
+  is taken only where it already wins by a wide margin.
+
+## DID IT HELP?
+
+**No.** Not one arm improved realized draft value at 95% confidence, and this is a *powered* null
+for 8 of 9 arms, not an absence of evidence.
+
+| arm | mean Δ vs control | 95% CI (season clusters) | seasons | powered for ~177? |
+|---|---|---|---|---|
+| `rb_080` | −26.8 | [−105.3, +51.7] | 2W/3L | yes |
+| `rb_090` | −5.8 | [−62.6, +51.1] | 2W/3L | yes |
+| `rb_110` | −14.4 | [−35.1, +6.2] | **0W/5L** | yes |
+| `rb_120` | +30.8 | [−84.9, +146.6] | 3W/2L | yes |
+| `rb_140` | +81.4 | [−103.2, +266.0] | 4W/1L | **no** |
+| `qb_090` | +9.1 | [−12.6, +30.9] | 2W/3L | yes |
+| **`qb_110`** | **−39.3** | **[−59.0, −19.7]** | **0W/5L** | yes |
+| `wr_090` | −44.6 | [−99.3, +10.1] | 1W/4L | yes |
+| `gap_rb120_wr090` | +22.1 | [−104.3, +148.5] | 2W/3L | yes |
+
+Control mean is 2019.0 starter points with a draft-to-draft sd of 194.1, so every effect above is
+small relative to the noise a single draft carries.
+
+## WHAT THIS MEANS
+
+Of the seven outcomes pre-registered in the brief, the evidence selects **B — magnitude changes
+many decisions but does not improve realized value** — with **D** attached in a specific and
+unexpected form: what value movement exists comes from **rounds 4–16, not rounds 1–3**. Outcome C
+is firmly rejected (decisions change a lot). Outcome A is rejected for every powered arm.
+
+Three things make this more than a null:
+
+1. **The one significant result points the other way.** `qb_110` is worse, consistently, in every
+   season. That is a *degradation* result, and it corroborates D109's finding that QB is already
+   over-weighted early — the engine does not need more QB magnitude, it has too much.
+2. **The positive RB signal is a single season.** Excluding 2024: `rb_120` +30.8 → −3.6,
+   `rb_140` +81.4 → +18.7, `gap` +22.1 → −13.0. 2024 is the season D109 already flagged as extreme
+   (the hindsight oracle wanted an RB in 30 of 30 early states). One season cannot carry this.
+3. **The early rounds are not where the points are.** In 2024 slot 1 — the largest single gain in
+   the grid, +548 — `rb_140` and control take the **identical** first three picks; the divergence
+   starts at round 4, and the gain is Barkley-class backs in rounds 4–9 replacing WRs. At the clean
+   first-divergence comparison, swapping toward RB is value-neutral to negative (`rb_110` −32.7,
+   `rb_140` −3.1, `rb_120` +4.3).
+
+So the D109 finding stands — Y1's cross-position magnitudes really are wrong — but the inference
+that correcting them would buy early-round draft value does **not** follow, and this experiment is
+powered enough to say so rather than shrug.
+
+One result worth keeping for its own sake: `qb_110`'s **first divergence gains +95.9 realized
+points** (it takes the QB, and the QB outscores the WR/RB it displaced) while the whole draft ends
+**−39.3** worse. Per-pick realized points and draft value are not the same quantity, and this is the
+cleanest demonstration of it in the record.
+
+## RISK MULTIPLIER
+
+Read-only diagnostic; nothing was ablated, and D110's arms hold `confidence` frozen so it stayed a
+control throughout.
+
+- **It is partly a function of the projection it multiplies.**
+  `confidence = clip(1 − (p90 − p10) / (2·|point_prediction|), 0, 1)` puts the point prediction in
+  the denominator. Inside the rounds 1–3 contention set RB scores 0.604 against WR's 0.719, and
+  decomposing that gap shows roughly **half comes from RB simply being projected lower** (148.2 vs
+  129.2 absolute width, but 195.9 vs 234.4 projection). The D109 under-projection is therefore
+  partly self-reinforcing.
+- **It does carry real signal, but it is anti-correlated with bias.** Relative error falls
+  monotonically across confidence quintiles (0.56 → 0.25), so it is not noise. But mean bias runs
+  **−33.1 in the lowest quintile to +22.3 in the highest** — the multiplier marks *down* exactly the
+  players who are under-projected and marks *up* those over-projected, compounding the error
+  instead of hedging it.
+- **Its leverage is wildly unequal across positions.** Within ECR ≤ 36 the multiplier spans
+  **4.28× at RB** (0.168 → 0.719) against **1.13× at QB**. It is doing far more work at the one
+  position D109 identified as under-projected than anywhere else.
+- **It is an explicitly uncalibrated heuristic used as a direct multiplicative factor on value** —
+  its own docstring says "a simple heuristic (not a probability) … deliberately not claimed as
+  calibrated on its own", yet `league/draft.py` multiplies the value base by it unmodified.
+
+## RECOMMENDATION
+
+**Stop treating cross-position projection magnitude as the lever.** It is a real defect and a real
+decision lever, but this phase shows — with adequate power on 8 of 9 arms — that correcting it does
+not convert into realized draft value, and that the value movement it does produce is a
+middle-round side effect concentrated in one season. Pursue the **risk multiplier** instead: it is
+the one component that is uncalibrated by its own documentation, anti-correlated with the very bias
+D109 measured, and swinging RB scores by 4.3× in exactly the round where the WR/RB question is
+decided. It is also cheap to test, because ablating it to a constant is a single research-tier
+change requiring no projection change at all.
+
+---
+
+# Evidence and methodology
+
+## Decision surface — the full RB ladder
+
+`m_RB` against behaviour; 20 paired drafts per rung, all against the same control cells.
+
+| m_RB | R1 RB% | R1–3 RB% | 1st RB round | % R1–3 picks changed | modal opening |
+|---|---|---|---|---|---|
+| 0.80 | 0% | 0% | 6.20 | 20% | `WR-QB-WR` |
+| 0.90 | 5% | 8% | 5.15 | 13% | `WR-WR-QB` |
+| 0.95 | 10% | 13% | 4.80 | 8% | `WR-WR-QB` |
+| **1.00** | **20%** | **15%** | **4.35** | — | **`WR-WR-QB`** |
+| 1.05 | 25% | 18% | 4.10 | 5% | `WR-WR-QB` |
+| 1.10 | 25% | 20% | 3.40 | 7% | `WR-WR-QB` |
+| 1.15 | 30% | 22% | 3.05 | 13% | `WR-WR-QB` |
+| 1.20 | 30% | 27% | 2.60 | 18% | **`WR-RB-QB`** |
+| 1.30 | 35% | 35% | 2.15 | 28% | `WR-RB-QB` |
+| 1.40 | 55% | 43% | 1.80 | 42% | **`RB-RB-QB`** |
+
+**Thresholds, stated no more precisely than the grid supports:**
+
+- **Pick #1 changes late.** At draft slot 1 the control takes WR in 3 of 5 seasons and RB in 2; that
+  split is unchanged through ×1.30 and only becomes RB-majority (3 of 5) at **×1.40**. Moving WR
+  *down* 10% flips it sooner (`wr_090`: RB 2, WR 2, TE 1).
+- **The modal three-round construction flips at ×1.20.**
+- **The first RB comes a full round earlier at about ×1.15**, and two rounds earlier at ×1.30.
+- **Materially reducing WR concentration needs ×1.20+**: rounds 1–3 WR count falls 28 → 22 (×1.20)
+  → 17 (×1.30) → 13 (×1.40) out of 60.
+- Picks **#20/#21** are dominated by the snake turn and QB: #20 is QB in 5 of 5 seasons under
+  control and stays QB-majority through ×1.40. Picks **#40/#41 and #60/#61** move only at ×1.20+.
+
+## Where the value differences live
+
+Realized points of the players *drafted* in each round block, differenced against control
+(diagnostic only — these blocks do not sum to starter points, because starters are a subset):
+
+| arm | R1–3 | R4–6 | R7–16 | all picks | **starters (primary)** |
+|---|---|---|---|---|---|
+| `rb_110` | −5.0 | −22.3 | +35.6 | +8.4 | −14.4 |
+| `rb_120` | +13.9 | +6.0 | +30.6 | +50.5 | +30.8 |
+| `rb_140` | **−0.1** | +32.7 | **+69.2** | +101.8 | +81.4 |
+| `wr_090` | −18.7 | −39.7 | +22.9 | −35.5 | −44.6 |
+| `gap_rb120_wr090` | −7.0 | +5.2 | +50.2 | +48.4 | +22.1 |
+
+`rb_140`'s rounds 1–3 contribution is **−0.1**. The arm that changes 42% of early picks produces
+none of its value there.
+
+## Attribution
+
+First divergence per draft — the only like-for-like comparison, since after it the two drafts face
+different boards:
+
+| arm | drafts diverging | mean round | position changed | Δ realized at that pick | swap |
+|---|---|---|---|---|---|
+| `rb_110` | 16/20 | 6.25 | 16/16 | **−32.7** | RB←WR 11, RB←TE 3, RB←QB 2 |
+| `rb_120` | 18/20 | 4.50 | 18/18 | +4.3 | RB←WR 13, RB←QB 4 |
+| `rb_140` | 20/20 | 3.00 | 20/20 | −3.1 | RB←WR 12, RB←QB 8 |
+| `wr_090` | 16/20 | 3.75 | 16/16 | +21.9 | RB←WR 8, QB←WR 6 |
+| `qb_110` | 11/20 | 2.64 | 11/11 | **+95.9** | QB←WR 6, QB←RB 5 |
+
+## Power
+
+MDE is reported per arm because an arm that changes more picks has a noisier paired difference —
+the manipulations the phase most wanted to measure are the ones it measures worst.
+
+| arm | sd(season) | MDE @95% | powered for ~177? |
+|---|---|---|---|
+| `rb_110` | 16.6 | 20.6 | yes |
+| `qb_110` | 15.8 | 19.6 | yes |
+| `qb_090` | 17.5 | 21.8 | yes |
+| `wr_090` | 44.0 | 54.7 | yes |
+| `rb_090` | 45.8 | 56.9 | yes |
+| `rb_080` | 63.2 | 78.5 | yes |
+| `rb_120` | 93.2 | 115.8 | yes |
+| `gap_rb120_wr090` | 101.8 | 126.4 | yes |
+| **`rb_140`** | **148.7** | **184.6** | **no** (needs 6 season clusters) |
+
+8 of 9 arms could have detected an effect the size D109 suggested. `rb_140`'s +81.4 is the one
+figure in the grid that must be read as underpowered *as well as* 2024-driven.
+
+## Validity checks
+
+- **Control reproduces D109.** 2021 slot 1 returns **2132.0** starter points through
+  `simulate_draft`, byte-identical to what D109's independent `audit_opening` harness reported for
+  the same cell — two different harnesses, same production engine, same number.
+- **Every override verified to reach the engine's own loader**, per position per season, before any
+  draft ran (`verify_arm`); D81 recorded that an override passed as an argument is a silent no-op.
+- **Zero unfilled mandatory starting slots** across all 280 drafts in all 14 arms.
+- **Within-position order preserved by construction** (a positive multiplier is monotone), and
+  confirmed empirically: 83–96% of changed picks are cross-positional.
+- **Pre-registration honoured.** The four decision-surface-only arms (`rb_095/105/115/130`) are
+  reported in the ladder and **never value-scored**, even though Amendment 1 made all arms share
+  the same 4-slot design and the original reason for the restriction lapsed. Adding them to the
+  value comparison after seeing results is exactly what pre-registration exists to prevent; a
+  future phase may value-score them prospectively.
+- **Data vintage** `d2955868…` throughout, recorded on every row. Not comparable with pre-D109
+  published figures (D109 §0: the nflverse panel was restated upstream).
+- `ruff check` and `ruff format --check` clean on `src tests`; `models/` `73b408e9` and `league/`
+  `d4cfd00e` unchanged; working tree otherwise clean.
+
+## A limitation this phase cannot remove
+
+D110 holds `confidence` frozen, which is what makes `risk` a control rather than a confound — but
+it also means the arms measure the **magnitude channel alone**. A genuine recalibration would move
+confidence too: under a multiplier *m* with the absolute interval unchanged,
+`conf' = 1 − (1 − conf)/m`, so an RB ×1.20 correction would additionally lift RB's risk multiplier
+from 0.604 to 0.670 (**+10.9%**, against +6.5% for WR and QB). The arms here therefore *understate*
+a real recalibration by roughly 4% in RB-versus-WR relative terms. That is small against the
+effects measured, and it does not rescue the null — but it is a reason the eventual risk phase and
+any future magnitude work should be run **jointly**, not sequentially.

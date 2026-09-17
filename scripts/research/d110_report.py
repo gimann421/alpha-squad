@@ -246,28 +246,67 @@ def main() -> None:
     print("\n  'd real' is the realized-point difference of the swapped player at that pick.")
     print("  A large per-pick delta that does NOT reach starter points means the change landed")
     print("  on a player who never entered the starting lineup.")
+    print("  CAVEAT: once a draft diverges, every later 'pick i' faces a different board, so the")
+    print("  per-pick deltas above are DESCRIPTIVE, not causal. Only the first divergence in each")
+    print("  draft is a clean like-for-like comparison -- that is the table below.")
+
+    print("\n  FIRST DIVERGENCE ONLY (the one clean like-for-like comparison per draft)")
+    print(f"{'arm':<18}{'drafts':>8}{'diverge rnd':>13}{'pos change':>12}"
+          f"{'d realized':>12}{'arm pos -> ctrl pos (top 3)':>30}")
+    for arm in value_rows:
+        rows = load(arm)
+        cells = [k for k in sorted(rows) if k in ctrl]
+        rnds: list[int] = []
+        deltas: list[float] = []
+        pos_changed = 0
+        swaps: Counter = Counter()
+        for k in cells:
+            a, c = rows[k], ctrl[k]
+            for i in range(min(len(a["picks"]), len(c["picks"]))):
+                if a["picks"][i] == c["picks"][i]:
+                    continue
+                rnds.append(i + 1)
+                deltas.append(a["pick_realized"][i] - c["pick_realized"][i])
+                if a["pick_positions"][i] != c["pick_positions"][i]:
+                    pos_changed += 1
+                    swaps[f"{a['pick_positions'][i]}<-{c['pick_positions'][i]}"] += 1
+                break
+        if not rnds:
+            print(f"{arm:<18}{0:>8}{'-':>13}{'-':>12}{'-':>12}")
+            continue
+        top = " ".join(f"{k}:{v}" for k, v in swaps.most_common(3)) or "(same position)"
+        print(
+            f"{arm:<18}{len(rnds):>8}{statistics.mean(rnds):>13.2f}"
+            f"{f'{pos_changed}/{len(rnds)}':>12}{statistics.mean(deltas):>+12.1f}{top:>30}"
+        )
 
     # ================= PART 6 -- POWER =================
     print("\n" + "=" * 100)
     print("PART 6 -- POWER / DETECTION CHECK")
     print("=" * 100)
-    sds = [v[3] for v in value_rows.values()]
-    if sds:
-        med_sd = statistics.median(sds)
-        mde = T4 * med_sd / math.sqrt(len(SEASONS))
-        print(f"  median sd of the SEASON-level paired difference: {med_sd:.1f}")
-        print(f"  minimum detectable effect, t(4) 95%, n=5 seasons:  {mde:.1f} points/draft")
-        print("  D109's expected wrong-position component:          ~177 points/draft")
-        print(f"  season clusters needed to detect ~177:             "
-              f"{math.ceil((T4 * med_sd / 177) ** 2)}")
-        print()
-        if mde > 177:
-            print("  -> CANNOT reliably distinguish 'no effect' from an effect the size D109")
-            print("     suggested. Any null here is UNDERPOWERED, not evidence that magnitude")
-            print("     does not matter.")
-        else:
-            print("  -> CAN detect an effect of roughly the expected size, so a null is")
-            print("     informative about effects at or above that magnitude.")
+    print("The MDE is NOT one number: an arm that changes more picks has a noisier paired")
+    print("difference, so the arms that move the decision surface most are the least powered.")
+    print("Reported per arm. Target effect = D109's wrong-position component, ~177 pts/draft.\n")
+    print(f"{'arm':<18}{'sd(season)':>12}{'MDE @95%':>11}{'powered for 177?':>19}"
+          f"{'seasons for 177':>17}")
+    n_powered = 0
+    for arm, (_m, _lo, _hi, sd_season) in value_rows.items():
+        mde = T4 * sd_season / math.sqrt(len(SEASONS))
+        powered = mde <= 177.0
+        n_powered += powered
+        need = max(len(SEASONS), math.ceil((T4 * sd_season / 177.0) ** 2))
+        print(
+            f"{arm:<18}{sd_season:>12.1f}{mde:>11.1f}{('YES' if powered else 'NO'):>19}"
+            f"{need if not powered else len(SEASONS):>17}"
+        )
+    if value_rows:
+        print(f"\n  {n_powered} of {len(value_rows)} arms are powered to detect ~177 pts/draft.")
+        print("  For an arm marked NO, a confidence interval spanning zero is UNDERPOWERED and")
+        print("  is NOT evidence that magnitude does not matter. For an arm marked YES, a null")
+        print("  does constrain the effect to be smaller than ~177 for that arm.")
+        print("\n  Note the direction of the problem: the arms with the largest decision change")
+        print("  carry the largest variance, so the experiment is systematically least able to")
+        print("  measure exactly the manipulations it was built to test.")
 
     print("\n  Unfilled mandatory starting slots (a forfeited slot must never be silent):")
     any_unfilled = False

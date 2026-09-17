@@ -8580,3 +8580,93 @@ but does change cross-positional magnitudes — improve realized draft value ove
 axis D99–D106 never spanned (D99 tested such maps on *identification* only; D105/D106 hold each
 position's value multiset fixed), and §5 locates the effect there. It must be pre-registered as
 **probably underpowered** (~177/draft against a 172–250 floor), so a null would not be informative.
+
+## D110 — Cross-position magnitude sensitivity (pre-registered; B — DECISIONS MOVE, VALUE DOES NOT)
+
+**Question.** Is cross-position projection *magnitude* a causal lever in Alpha's early-round
+decisions, and is the effect large enough to matter in realized draft value? Sensitivity
+experiment, not calibration. No production change, no retraining, no new feature, no scoring-formula
+change, no PR, nothing merged. `models/` `73b408e9`, `league/` `d4cfd00e`, unchanged. Full report:
+`docs/D110_MAGNITUDE_SENSITIVITY.md`.
+
+**Pre-registration.** Grid, transformation, primary metric and exclusions committed at `a90b2dd`
+**before any arm ran** (D92's lesson), amended once at `f37d56a`. Transformation is a per-position
+multiplier on Y1 — monotone, so within-position order is preserved exactly — applied to BOTH
+`uncertainty_predictions` and `rookie_predictions` (rookies are 143 of 714 RBs) in an isolated DB
+copy, verified per position per season against the engine's own loader. `confidence` never touched,
+so `risk` stayed a control. Opponents draft by ECR, which no arm moves, so trials are paired by
+(season, slot). Amendment 1 cut 10 slots to 4 (D103's `DEFAULT_SLOTS`) on runtime grounds — 153 s
+per draft under contention put the original design at ~7 hours — justified by D88's finding that
+the floor is bound by season clusters and slots provably cannot lower it. 14 arms, 280 drafts.
+
+### 1. Magnitude IS a strong decision lever
+
+First RB round moves 6.20 (m_RB 0.80) → **4.35 (control)** → 3.05 (1.15) → 1.80 (1.40); round-1 RB
+share 0% → 20% → 55%. Rounds 1–3 picks changed: 5% at 1.05, 18% at 1.20, 42% at 1.40. The modal
+opening flips `WR-WR-QB` → `WR-RB-QB` at **1.20** and → `RB-RB-QB` at 1.40. Moving WR *down* 10%
+does comparable work (27% of early picks change). Pick #1 is the most stubborn: unchanged through
+1.30, RB-majority only at **1.40**. Outcome **C is rejected**.
+
+### 2. It does NOT improve realized value — and this is a POWERED null
+
+No arm's 95% CI over season clusters excludes zero on the positive side. `rb_110` **−14.4**
+[−35.1, +6.2] 0W/5L; `rb_120` +30.8 [−84.9, +146.6]; `rb_140` +81.4 [−103.2, +266.0];
+`wr_090` −44.6; `gap_rb120_wr090` +22.1. **8 of 9 arms are powered to detect ~177 pts/draft**
+(only `rb_140` is not, MDE 184.6). Control mean 2019.0, draft sd 194.1.
+
+**The one significant result is a HARM:** `qb_110` **−39.3 [−59.0, −19.7], 0W/5L** — raising QB
+magnitude 10% is reliably worse, corroborating D109's finding that QB is already over-weighted
+early. `qb_090` is inert (+9.1, 3% of picks change).
+
+### 3. The apparent RB gain is one season, and it is not an early-round effect
+
+Excluding 2024: `rb_120` +30.8 → **−3.6**, `rb_140` +81.4 → **+18.7**, `gap` +22.1 → **−13.0**.
+2024 is the season D109 already flagged as extreme (oracle wanted RB in 30 of 30 early states).
+Worse for the hypothesis: `rb_140`'s rounds 1–3 contribution is **−0.1** points, and in the single
+largest gain in the grid (2024 slot 1, **+548**) `rb_140` and control take the **identical** first
+three picks — the divergence starts at **round 4**. At the clean first-divergence comparison,
+swapping toward RB is value-neutral to negative (`rb_110` −32.7, `rb_140` −3.1, `rb_120` +4.3).
+
+Verdict: outcome **B**, with **D** attached in an unexpected form — what value movement exists
+comes from rounds 4–16, not 1–3. D109's projection finding stands; the inference that correcting it
+buys early-round draft value does not.
+
+**Kept for its own sake:** `qb_110`'s first divergence *gains* **+95.9** realized points at that
+pick while the whole draft ends **−39.3** worse. Per-pick realized points and draft value are not
+the same quantity.
+
+### 4. Risk multiplier — diagnostic only, and it is now the prime suspect
+
+`confidence = clip(1 − (p90−p10)/(2·|point_prediction|), 0, 1)` puts the projection in the
+denominator, so **roughly half** of RB's early-round penalty (0.604 vs WR 0.719) comes from RB
+simply being projected lower — the D109 under-projection is partly self-reinforcing. It carries
+real signal (relative error falls monotonically 0.56 → 0.25 across quintiles) but is
+**anti-correlated with bias** (mean bias −33.1 in the lowest quintile, +22.3 in the highest), so it
+marks down exactly the under-projected players. Its leverage is wildly unequal: within ECR ≤ 36 it
+spans **4.28× at RB** against **1.13× at QB**. And it is documented as "a simple heuristic (not a
+probability) … deliberately not claimed as calibrated on its own", yet multiplies the value base
+directly. Nothing was ablated.
+
+### 5. Validity
+
+Control returns **2132.0** for 2021 slot 1 through `simulate_draft`, byte-identical to D109's
+independent `audit_opening` for the same cell. Zero unfilled mandatory slots in all 280 drafts.
+83–96% of changed picks are cross-positional, as the transformation intends. The four
+decision-surface-only arms were **not** value-scored even though Amendment 1 made the original
+reason lapse — honouring the pre-registration rather than adding arms after seeing results.
+Vintage `d2955868…` throughout; not comparable with pre-D109 figures (D109 §0).
+
+**Limitation this phase cannot remove:** holding `confidence` frozen isolates the magnitude channel
+but understates a real recalibration, which would also move confidence
+(`conf' = 1 − (1−conf)/m`: RB ×1.20 would lift 0.604 → 0.670, +10.9% against +6.5% for WR/QB, so
+~4% in RB-vs-WR relative terms). Small against the measured effects, and it does not rescue the
+null — but risk and magnitude should eventually be tested **jointly**, not sequentially.
+
+### 6. Repository
+
+1427 tests pass, 44 deselected. `ruff check` and `ruff format --check` on `src tests` clean. Added
+`docs/D110_MAGNITUDE_SENSITIVITY.md` and three `scripts/research/d110_*.py` runners. **No `src/`
+change of any kind.** Nothing merged, no PR.
+
+**NEXT PHASE (not started):** does ablating the `risk` multiplier to a constant — changing no
+projection at all — move realized draft value more than any cross-position magnitude arm did?
