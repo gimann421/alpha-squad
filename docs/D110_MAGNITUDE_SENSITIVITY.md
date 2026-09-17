@@ -68,6 +68,24 @@ generously in **both** directions. No direction is assumed correct.
 from D103). Reported *only* as threshold resolution for Part 2, **never** as a value comparison:
 `rb_095`, `rb_105`, `rb_115`, `rb_130`.
 
+### Amendment 1 — slot count reduced from 10 to 4, on runtime grounds
+
+Recorded before any arm-vs-control comparison existed. On the first launch a single draft took
+**153 s** under 5-way contention (against 42.5 s measured solo), which put the 580-draft design at
+roughly **7 hours**. All arms — value-scored included — therefore run at **4 slots (1, 4, 7, 10)**,
+the same `DEFAULT_SLOTS` D103 uses, giving 5 × 4 = **20 paired drafts per arm** and 280 in total.
+
+Justification is the repository's own prior finding, not convenience: **D88 measured that the
+detection floor is bound by the number of independent season clusters and that slots cannot lower
+it** ("MDE floors at ~56 regardless of slots — seasons bind, not slots"), and D89 corrected that
+floor to 51.1 without disturbing the conclusion. Fewer slots make each season mean slightly
+noisier but do not change what the experiment can resolve, and Part 6 re-derives the floor
+empirically on this vintage rather than assuming D88 transfers.
+
+**What had been seen at the time of this amendment:** one number — the control arm's 2021 slot 1
+draft returning 2132.0 starter points, which is the D109 reproduction check, not an arm result.
+No arm had been compared with control, and the grid itself is unchanged.
+
 **Exclusion, stated in advance.** TE gets no arm: D109's TE bias (−17.0) rests on n=8 inside
 ECR ≤ 30, and TE is taken in only 10 of 150 early picks, so a TE arm would buy threshold
 resolution on a cell too small to interpret. A scope decision, not a finding.
