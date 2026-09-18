@@ -1,0 +1,149 @@
+board vintage 63076e2e2bbfbbe5c29fb41265966ac1b8aaa180b3e89ee7742388fcc19d98ad
+upstream ECR blob e270d790165a6c304e5854145332fe9da3caacab3a61e1efea280b57cc5db9a5  (D89 pin a966176d2966591c4986833aefafb4c74e86f848ca1ba708f43e6a9e79e29525)
+seasons (2021, 2022, 2023, 2024, 2025)  slots (1, 4, 7, 10)  objective season_long
+arms ('Y1', 'T1_ALL_w50', 'T2_w50', 'ECR_ALONE')  mode counterfactual
+
+  counterfactual target_league 2021 slot 1 done
+  counterfactual target_league 2021 slot 4 done
+  counterfactual target_league 2021 slot 7 done
+  counterfactual target_league 2021 slot 10 done
+  counterfactual target_league 2022 slot 1 done
+  counterfactual target_league 2022 slot 4 done
+  counterfactual target_league 2022 slot 7 done
+  counterfactual target_league 2022 slot 10 done
+  counterfactual target_league 2023 slot 1 done
+  counterfactual target_league 2023 slot 4 done
+  counterfactual target_league 2023 slot 7 done
+  counterfactual target_league 2023 slot 10 done
+  counterfactual target_league 2024 slot 1 done
+  counterfactual target_league 2024 slot 4 done
+  counterfactual target_league 2024 slot 7 done
+  counterfactual target_league 2024 slot 10 done
+  counterfactual target_league 2025 slot 1 done
+  counterfactual target_league 2025 slot 4 done
+  counterfactual target_league 2025 slot 7 done
+  counterfactual target_league 2025 slot 10 done
+  counterfactual dynasty_1qb 2021 slot 1 done
+  counterfactual dynasty_1qb 2021 slot 4 done
+  counterfactual dynasty_1qb 2021 slot 7 done
+  counterfactual dynasty_1qb 2021 slot 10 done
+  counterfactual dynasty_1qb 2022 slot 1 done
+  counterfactual dynasty_1qb 2022 slot 4 done
+  counterfactual dynasty_1qb 2022 slot 7 done
+  counterfactual dynasty_1qb 2022 slot 10 done
+  counterfactual dynasty_1qb 2023 slot 1 done
+  counterfactual dynasty_1qb 2023 slot 4 done
+  counterfactual dynasty_1qb 2023 slot 7 done
+  counterfactual dynasty_1qb 2023 slot 10 done
+  counterfactual dynasty_1qb 2024 slot 1 done
+  counterfactual dynasty_1qb 2024 slot 4 done
+  counterfactual dynasty_1qb 2024 slot 7 done
+  counterfactual dynasty_1qb 2024 slot 10 done
+  counterfactual dynasty_1qb 2025 slot 1 done
+  counterfactual dynasty_1qb 2025 slot 4 done
+  counterfactual dynasty_1qb 2025 slot 7 done
+  counterfactual dynasty_1qb 2025 slot 10 done
+
+==================================================================================================
+MATCHED PICK-LEVEL COUNTERFACTUAL -- same state, same board, same continuation
+==================================================================================================
+
+  delta = final realized roster value taking the ARM's player minus taking the
+  CONTROL's, with the rest of the draft played identically in both. Positive means the
+  changed pick was genuinely worth more by the end of the draft.
+
+  target_league / T1_ALL_w50: 142 changed picks
+    better 54 (38.0%)   worse 37 (26.1%)   neutral 51
+    delta: mean +0.0   median +0.0   total +2
+    season-clustered mean delta per changed pick +1.35  95% CI [-20.5, +23.2]  seasons better 2/5
+    phase                n      mean   better %
+    EARLY (1-5)         21       6.5     52.4%
+    MIDDLE (6-10)       48       8.4     47.9%
+    LATE (11-16)        73      -7.4     27.4%
+    by CONTROL position:
+      QB    n=4     mean    -34.8  better  0.0%
+      RB    n=25    mean     -2.4  better 28.0%
+      WR    n=41    mean     -6.0  better 39.0%
+      TE    n=38    mean     +9.8  better 47.4%
+      K     n=20    mean     -1.7  better 20.0%
+      DST   n=14    mean     +7.8  better 64.3%
+
+  target_league / T2_w50: 203 changed picks
+    better 67 (33.0%)   worse 63 (31.0%)   neutral 73
+    delta: mean +8.5   median +0.0   total +1722
+    season-clustered mean delta per changed pick +7.52  95% CI [-14.2, +29.3]  seasons better 3/5
+    phase                n      mean   better %
+    EARLY (1-5)         51       6.5     51.0%
+    MIDDLE (6-10)       74      22.3     37.8%
+    LATE (11-16)        78      -3.3     16.7%
+    by CONTROL position:
+      QB    n=26    mean     +8.4  better 42.3%
+      RB    n=26    mean    +33.1  better 50.0%
+      WR    n=56    mean     -6.4  better 35.7%
+      TE    n=30    mean    +31.8  better 40.0%
+      K     n=37    mean     +5.0  better 21.6%
+      DST   n=28    mean     -5.1  better 10.7%
+
+  target_league / ECR_ALONE: 291 changed picks
+    better 126 (43.3%)   worse 121 (41.6%)   neutral 44
+    delta: mean +8.1   median +0.0   total +2365
+    season-clustered mean delta per changed pick +7.96  95% CI [-9.7, +25.6]  seasons better 3/5
+    phase                n      mean   better %
+    EARLY (1-5)         88      12.3     54.5%
+    MIDDLE (6-10)       92      17.6     51.1%
+    LATE (11-16)       111      -3.0     27.9%
+    by CONTROL position:
+      QB    n=36    mean    +28.6  better 55.6%
+      RB    n=49    mean    +25.6  better 49.0%
+      WR    n=90    mean     -7.2  better 41.1%
+      TE    n=48    mean     +7.5  better 37.5%
+      K     n=40    mean     +7.5  better 40.0%
+      DST   n=28    mean     +2.4  better 39.3%
+
+  dynasty_1qb / T1_ALL_w50: 166 changed picks
+    better 74 (44.6%)   worse 41 (24.7%)   neutral 51
+    delta: mean +6.5   median +0.0   total +1074
+    season-clustered mean delta per changed pick +7.03  95% CI [-13.8, +27.9]  seasons better 3/5
+    phase                n      mean   better %
+    EARLY (1-5)         32      45.1     53.1%
+    MIDDLE (6-10)       49       6.9     51.0%
+    LATE (11-16)        85      -8.3     37.6%
+    by CONTROL position:
+      QB    n=15    mean    +49.6  better 46.7%
+      RB    n=36    mean    -16.9  better 30.6%
+      WR    n=50    mean    +12.0  better 42.0%
+      TE    n=21    mean     +1.6  better 57.1%
+      K     n=32    mean     -0.5  better 34.4%
+      DST   n=12    mean    +26.6  better 100.0%
+
+  dynasty_1qb / T2_w50: 216 changed picks
+    better 72 (33.3%)   worse 88 (40.7%)   neutral 56
+    delta: mean +11.3   median +0.0   total +2449
+    season-clustered mean delta per changed pick +13.65  95% CI [-16.6, +43.9]  seasons better 3/5
+    phase                n      mean   better %
+    EARLY (1-5)         59      34.2     54.2%
+    MIDDLE (6-10)       75      22.5     36.0%
+    LATE (11-16)        82     -15.3     15.9%
+    by CONTROL position:
+      QB    n=21    mean    +23.5  better 47.6%
+      RB    n=38    mean    +20.0  better 44.7%
+      WR    n=62    mean    +21.7  better 37.1%
+      TE    n=34    mean     -1.5  better 32.4%
+      K     n=41    mean     -4.3  better 14.6%
+      DST   n=20    mean     +3.9  better 25.0%
+
+  dynasty_1qb / ECR_ALONE: 303 changed picks
+    better 124 (40.9%)   worse 134 (44.2%)   neutral 45
+    delta: mean -0.2   median +0.0   total -70
+    season-clustered mean delta per changed pick -0.04  95% CI [-13.6, +13.6]  seasons better 3/5
+    phase                n      mean   better %
+    EARLY (1-5)         90      13.2     53.3%
+    MIDDLE (6-10)       96       2.6     51.0%
+    LATE (11-16)       117     -12.9     23.1%
+    by CONTROL position:
+      QB    n=38    mean    +13.9  better 50.0%
+      RB    n=58    mean     -1.0  better 44.8%
+      WR    n=100   mean    +10.4  better 43.0%
+      TE    n=46    mean    -24.7  better 39.1%
+      K     n=41    mean     -5.7  better 31.7%
+      DST   n=20    mean    -10.4  better 25.0%

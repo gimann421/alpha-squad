@@ -1,0 +1,23 @@
+{
+  "P1_L0_equals_production": {
+    "states": 640,
+    "agree": 640,
+    "mismatches": []
+  },
+  "P2_w0_is_control": {
+    "checks": 1300,
+    "failures": []
+  },
+  "P3_multiset_preserved": {
+    "checks": 20
+  },
+  "P4_pool_parity": {
+    "checks": 20
+  },
+  "P5_ecr_board": {
+    "assembled_rows": 68870,
+    "assembled_sha256": "9380096cd7c744271fe08f6131a9061bcce6731cdd5882caaa225c331167dc89",
+    "upstream_population_sha256_expected": "c5cfbbeb17aabbf9b903ab55051984f735c4c03daca75a6328272144d378fb7f",
+    "note": "the upstream-blob comparison is in the pre-registration; this is the ASSEMBLED (identity-joined) board's own hash, recorded for future phases"
+  }
+}

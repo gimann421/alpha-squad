@@ -1,0 +1,391 @@
+{
+  "coverage": [
+    {
+      "league": "target_league",
+      "season": 2021,
+      "ecr_type": "ro",
+      "page_type": "redraft-overall",
+      "board": 636,
+      "ranked": 490,
+      "scrape_min": "2021-07-02",
+      "scrape_max": "2021-08-27",
+      "rows": 5147,
+      "by_position": {
+        "QB": [
+          47,
+          70
+        ],
+        "RB": [
+          128,
+          149
+        ],
+        "WR": [
+          169,
+          225
+        ],
+        "TE": [
+          78,
+          115
+        ],
+        "K": [
+          36,
+          45
+        ],
+        "DST": [
+          32,
+          32
+        ]
+      }
+    },
+    {
+      "league": "target_league",
+      "season": 2022,
+      "ecr_type": "ro",
+      "page_type": "redraft-overall",
+      "board": 651,
+      "ranked": 496,
+      "scrape_min": "2022-07-01",
+      "scrape_max": "2022-08-26",
+      "rows": 4614,
+      "by_position": {
+        "QB": [
+          45,
+          75
+        ],
+        "RB": [
+          132,
+          151
+        ],
+        "WR": [
+          168,
+          226
+        ],
+        "TE": [
+          82,
+          120
+        ],
+        "K": [
+          37,
+          47
+        ],
+        "DST": [
+          32,
+          32
+        ]
+      }
+    },
+    {
+      "league": "target_league",
+      "season": 2023,
+      "ecr_type": "ro",
+      "page_type": "redraft-overall",
+      "board": 610,
+      "ranked": 484,
+      "scrape_min": "2023-07-07",
+      "scrape_max": "2023-08-25",
+      "rows": 5132,
+      "by_position": {
+        "QB": [
+          54,
+          74
+        ],
+        "RB": [
+          128,
+          141
+        ],
+        "WR": [
+          158,
+          206
+        ],
+        "TE": [
+          76,
+          113
+        ],
+        "K": [
+          36,
+          44
+        ],
+        "DST": [
+          32,
+          32
+        ]
+      }
+    },
+    {
+      "league": "target_league",
+      "season": 2024,
+      "ecr_type": "ro",
+      "page_type": "redraft-overall",
+      "board": 602,
+      "ranked": 515,
+      "scrape_min": "2024-07-05",
+      "scrape_max": "2024-08-30",
+      "rows": 4651,
+      "by_position": {
+        "QB": [
+          62,
+          70
+        ],
+        "RB": [
+          124,
+          137
+        ],
+        "WR": [
+          179,
+          211
+        ],
+        "TE": [
+          88,
+          113
+        ],
+        "K": [
+          31,
+          39
+        ],
+        "DST": [
+          31,
+          32
+        ]
+      }
+    },
+    {
+      "league": "target_league",
+      "season": 2025,
+      "ecr_type": "ro",
+      "page_type": "redraft-overall",
+      "board": 629,
+      "ranked": 480,
+      "scrape_min": "2025-07-04",
+      "scrape_max": "2025-08-29",
+      "rows": 4452,
+      "by_position": {
+        "QB": [
+          57,
+          73
+        ],
+        "RB": [
+          120,
+          136
+        ],
+        "WR": [
+          161,
+          221
+        ],
+        "TE": [
+          80,
+          124
+        ],
+        "K": [
+          30,
+          43
+        ],
+        "DST": [
+          32,
+          32
+        ]
+      }
+    },
+    {
+      "league": "dynasty_1qb",
+      "season": 2021,
+      "ecr_type": "do",
+      "page_type": "dynasty-overall",
+      "board": 636,
+      "ranked": 459,
+      "scrape_min": "2021-07-02",
+      "scrape_max": "2021-08-27",
+      "rows": 5137,
+      "by_position": {
+        "QB": [
+          51,
+          70
+        ],
+        "RB": [
+          118,
+          149
+        ],
+        "WR": [
+          157,
+          225
+        ],
+        "TE": [
+          69,
+          115
+        ],
+        "K": [
+          32,
+          45
+        ],
+        "DST": [
+          32,
+          32
+        ]
+      }
+    },
+    {
+      "league": "dynasty_1qb",
+      "season": 2022,
+      "ecr_type": "do",
+      "page_type": "dynasty-overall",
+      "board": 651,
+      "ranked": 466,
+      "scrape_min": "2022-07-01",
+      "scrape_max": "2022-08-26",
+      "rows": 4687,
+      "by_position": {
+        "QB": [
+          46,
+          75
+        ],
+        "RB": [
+          127,
+          151
+        ],
+        "WR": [
+          158,
+          226
+        ],
+        "TE": [
+          74,
+          120
+        ],
+        "K": [
+          29,
+          47
+        ],
+        "DST": [
+          32,
+          32
+        ]
+      }
+    },
+    {
+      "league": "dynasty_1qb",
+      "season": 2023,
+      "ecr_type": "do",
+      "page_type": "dynasty-overall",
+      "board": 610,
+      "ranked": 471,
+      "scrape_min": "2023-07-07",
+      "scrape_max": "2023-08-25",
+      "rows": 5122,
+      "by_position": {
+        "QB": [
+          51,
+          74
+        ],
+        "RB": [
+          118,
+          141
+        ],
+        "WR": [
+          161,
+          206
+        ],
+        "TE": [
+          74,
+          113
+        ],
+        "K": [
+          35,
+          44
+        ],
+        "DST": [
+          32,
+          32
+        ]
+      }
+    },
+    {
+      "league": "dynasty_1qb",
+      "season": 2024,
+      "ecr_type": "do",
+      "page_type": "dynasty-overall",
+      "board": 602,
+      "ranked": 471,
+      "scrape_min": "2024-07-05",
+      "scrape_max": "2024-08-30",
+      "rows": 4479,
+      "by_position": {
+        "QB": [
+          65,
+          70
+        ],
+        "RB": [
+          106,
+          137
+        ],
+        "WR": [
+          161,
+          211
+        ],
+        "TE": [
+          75,
+          113
+        ],
+        "K": [
+          32,
+          39
+        ],
+        "DST": [
+          32,
+          32
+        ]
+      }
+    },
+    {
+      "league": "dynasty_1qb",
+      "season": 2025,
+      "ecr_type": "do",
+      "page_type": "dynasty-overall",
+      "board": 629,
+      "ranked": 444,
+      "scrape_min": "2025-07-04",
+      "scrape_max": "2025-08-29",
+      "rows": 4146,
+      "by_position": {
+        "QB": [
+          61,
+          73
+        ],
+        "RB": [
+          104,
+          136
+        ],
+        "WR": [
+          145,
+          221
+        ],
+        "TE": [
+          71,
+          124
+        ],
+        "K": [
+          31,
+          43
+        ],
+        "DST": [
+          32,
+          32
+        ]
+      }
+    }
+  ],
+  "score_ties": {
+    "pick_states": 640,
+    "top_score_exactly_tied": 0
+  },
+  "isotonic": [],
+  "vintage": {
+    "board_sha256": "e270d790165a6c304e5854145332fe9da3caacab3a61e1efea280b57cc5db9a5",
+    "idmap_sha256": "36016b9239e3e7dab9a21d9a855692e374d3b7b98ba000af06a8555886b19ca4",
+    "season_hashes": {
+      "2021": "2ac8b2bea193d4462918c33d52be2159df78e5320ba7e50122d2799c039eb977",
+      "2022": "460ef4239bf746b1203f9d827f5d654d33688ac1a1169bcc4a626f15ee44495e",
+      "2023": "1bb9648229dbff90aaff69358c9cb7b3a9c8d434dabc5f04eefa7bc9871114f4",
+      "2024": "dd26fa9575adbfdfa1463601403a51a8e5f1b772bdbbbbf4285653115743865e",
+      "2025": "dcde837565e6567d7965b191a552efbe516bd0c8485ded9ca48fc5e0fdf0d2ee"
+    },
+    "combined_hash": "63076e2e2bbfbbe5c29fb41265966ac1b8aaa180b3e89ee7742388fcc19d98ad"
+  }
+}

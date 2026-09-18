@@ -8480,3 +8480,170 @@ clean** (was 4 files failing). Only source change in the whole D98-D108 stack:
 `evaluation/draft_oracle.py` (D103's instrument, imported by no production path) plus D108's
 formatting-only test-file pass. **Y1 remains production, unchanged by every phase from D85 to
 D108.** D109 not started.
+
+## D111 — Does ECR add INCREMENTAL value to Alpha's draft decisions? Four positive primaries, all below the floor. The one effect that clears the floor is roster legality, not information.
+
+Research only. **No production change, no `src/` change at all, no model fitted, no ECR weight
+tuned against outcomes, no 2026, nothing merged, no PR.** `models/` and `league/` byte-identical.
+Risk/uncertainty deliberately **frozen** and explicitly **not closed** — see §7. Full report:
+`docs/D111_ECR_INCREMENTAL_VALUE.md`. Artifacts: `docs/d111_artifacts/`.
+
+> **D109 and D110 do not exist in this repository.** The brief that commissioned D111 refers to a
+> D110 projection-magnitude result and a D111 risk result; neither has a branch, a commit, a
+> `DECISIONS.md` entry or a report here, and the log runs D108 → D111. Nothing in this entry
+> depends on them, and none of their findings is restated as if it were on the record.
+
+### 1. The question, and what Phase 0 found before any arm was defined
+
+Not "is ECR a better ranking than Y1" (D100/D104 answered that) but **does ECR ADDED TO Y1 improve
+real draft decisions.** Phase 0 established the fact the phase turns on: the shipped rule
+`score = (msv + vorp + opp_cost) · fit · risk · survival` **already reads ECR twice** — the
+opponent replay inside `positional_opportunity_cost`, and `ecr_best`/`ecr_worst` inside
+`_survival_probability` — but **only ever as a TIMING model**. The opportunity cost is denominated
+in Y1's own VORP points; ECR decides *who leaves the pool*, never *what he is worth*. **The
+incremental question is therefore whether ECR's VALUE opinion adds anything given Y1 already uses
+its AVAILABILITY opinion.**
+
+Seven integration points were enumerated, five rejected on measured grounds, before any arm ran:
+
+| method | decision | measured ground |
+|---|---|---|
+| ECR as an exact-tie-breaker | **REJECT** | a **no-op**: the top decision score is exactly tied in **0 of 640** real pick states |
+| `ecr_implied_baseline` (points-domain average) | **REJECT** | D104's three grounds **re-measured on this vintage**: RB's top 24 holds **4** distinct values (largest tie group **12**); hardcoded `ecr_type='ro'`, so `dynasty_1qb` would get the redraft board (D56 violation); **68.2%** board coverage |
+| additive / multiplicative ECR term | **REJECT** | needs a points-denominated coefficient with nothing to derive it from; inventing or fitting one is forbidden |
+| cross-position (overall) ECR consensus | **REJECT as an arm** | moves each position's value multiset, confounding valuation with information. It is D108 criterion 3's axis and is recorded there |
+| **board-level rank consensus** (T1) | **ACCEPT, PRIMARY** | equal-weight Borda is the unique symmetric combination of two orderings; no free coefficient |
+| **decision-level rank consensus** (T2) | **ACCEPT, SECONDARY** | same argument, different insertion point: ECR as a co-equal voter with Y1's engine untouched |
+
+### 2. The vintage moved — and the half that matters did not
+
+The projection board is **`63076e2e…`**, not D97–D108's `ca3e2d8a…`, which D108 criterion 5 calls
+an instrument-integrity failure. Resolved before any arm was interpreted:
+
+- **The ECR half is bit-identical.** The D89-pinned upstream blob (commit `9338630`, sha256
+  `a966176d…`) was re-fetched and compared row by row over the exact population under test
+  (`ro`+`do`, Jul/Aug, 2021–2025): **69,639 rows, 2,415 players, sha256 `c5cfbbeb…` on both**. The
+  identity map differs by **one added row (Jack Kiser, an LB)** and **zero changed rows**. D92's
+  append-only property holds, and **D111's treatment signal is the information D104 measured.**
+- **The projection half moved**, entirely — `compute_board_vintage` hashes `load_season_projections`
+  — downstream of the nflverse restatement. Absolute levels are therefore not comparable to D104's.
+- **Minor record correction:** `D89_IDMAP_SHA256` (`0174ea89…`) is **not** commit `9338630`'s
+  `db_playerids.csv` (`a02b7dc2…`). `board_vintage.py` only ever claims the commit for the *board*,
+  so nothing published is wrong, but the idmap pin is not commit-addressable.
+
+**Parity passed before any treatment number was read:** `L0 == H` **640/640** (D107's exact
+figure, on the new vintage); every arm at w = 0 byte-identical to the control **1300/1300**;
+multiset and pool parity 20/20 each. **D104 replicates**: `FP_ECR_Y1 − Y1` = **+79.4** target
+(published +77.3) and **−74.9** dynasty (published −132.1); `ORACLE_Y1 − Y1` = +772.4 / +771.0
+(published +795.3 / +717.0).
+
+### 3. The primary result — positive in 4 of 4, unresolved in 4 of 4
+
+`season_long`, season-clustered (k = 5), w = 0.5, the pre-registered primary weight:
+
+| format | T1 board consensus | T2 decision consensus |
+|---|---|---|
+| target | **+21.4** [−100.3, +143.0], 3W/2L | **+80.1** [−23.9, +184.2], 4W/1L |
+| dynasty | **+88.9** **[+5.5, +172.2]**, **5W/0L** | **+72.1** [−248.7, +392.8], 3W/2L |
+
+**All four positive — the first ECR intervention in this program that does not flip sign across the
+two shipped formats.** Every one is **below the pre-registered 172–250 floor → UNRESOLVED**,
+including the dynasty board cell whose CI excludes zero. A nominally significant result below the
+instrument's measurement floor is precisely what the floor exists to catch; it is not promoted.
+Under `weekly_no_foresight` three of four stay positive and **the same dynasty cell again excludes
+zero (+59.7 [+6.0, +113.3], 5/5)**.
+
+**The ladder is the more informative object.** In **6 of 8** ladders the maximum is at an interior
+rung and in **7 of 8** the w = 1 endpoint is below the best interior rung, collapsing to **−209.5 /
+−275.8** where ECR fully displaces Y1. ECR is worth more as a partner than as a replacement — a
+shape an endpoint-only experiment like D104 cannot see. The rungs are individually unresolved, so
+this is a shape claim, not a magnitude claim.
+
+### 4. Pick level — "the player scored more" is not "the roster is worth more"
+
+Pooled over the four primary cells, 727 of 1280 picks changed (**56.8%**):
+
+| instrument | result |
+|---|---|
+| **player level** (realized points of the player taken) | **57.9% improved**, mean **+10.9** |
+| **roster level** (matched counterfactual: same state, same board, same continuation) | **36.7% better, 31.5% worse, 31.8% exactly neutral**, mean **+7.2** |
+
+`target_league`/T1 is the cleanest illustration: **73.9% of changed picks took a player who scored
+more, and the net effect on the roster was +0.0.** Every season-clustered per-pick CI spans zero.
+
+The counterfactual holds board and continuation fixed and varies exactly one player, which is what
+makes it interpretable — D106 established that regret measured against an arm's own oracle is not.
+
+### 5. Where — a phase reversal the player-level view gets backwards
+
+| phase | n | roster-level mean | better % |
+|---|---|---|---|
+| EARLY (1–5) | 163 | **+24.1** | 52.8% |
+| MIDDLE (6–10) | 246 | **+16.6** | 41.9% |
+| LATE (11–16) | 318 | **−8.7** | **24.5%** |
+
+Early positive in 6/6 arm × format cells, late negative in **6/6**. Under *player* scoring the late
+rounds look excellent (target/T1: 60.8% of picks change, 72.6% improve); under *roster* scoring the
+same picks are worth −7.4 each. **A late-round player who scores more individually never reaches
+the lineup, and swapping him in displaces someone who would have** — D86's "the bench is priced at
+zero" from a new direction, and a direct warning that player-scored pick metrics must not justify a
+draft change.
+
+Mechanisms tested and **not** supported: "ECR discriminates where Y1 is indifferent" (the
+small-gap bin is best in two cells and worst in two); "ECR reaches players Y1 cannot see" (**0 of
+727** changed picks took an unranked player). **Correction to D104:** its stated reason for
+excluding K/DST — "no ECR board ranks them" — is false on this data (30–37 kickers, 31–32 defenses
+ranked every season). Including them moves the result by **+4.8 / −12.3**, both CIs spanning zero,
+so D104's *reasoning* was wrong and its *numbers* were not affected.
+
+### 6. The only effect that clears the floor is not about information
+
+`ECR_ALONE − Y1` is **+31.6** (target) and **−60.5** (dynasty), both CIs spanning zero: a consensus
+drafter and Alpha finish within a hundred points of each other in both directions. **Neither "Alpha
+beat ECR" nor "ECR beat Alpha" is supported, and neither phrase is used.**
+
+What *is* resolved is the contrast between the two ECR-alone variants, which differ only in whether
+the drafter must spend its last picks filling mandatory starting slots:
+
+| format | season_long | weekly | t |
+|---|---|---|---|
+| target | **+241.1** [+192.4, +289.8] | **+230.7** | 13.75 / 12.22 |
+| dynasty | **+215.3** [+176.4, +254.2] | **+197.2** | 15.35 / 13.59 |
+
+5/5 seasons in all four cells. **This is the only effect in the phase above the 172–250 floor, and
+it is five to ten times any ECR information effect measured here.** It is a roster-legality effect.
+It also prices the consensus opponent's documented lack of roster awareness
+(`docs/BENCHMARK_SPEC.md` §3) at ~200 points a draft.
+
+### 7. FUTURE RESEARCH QUESTION, recorded and explicitly NOT closed
+
+> **Can a properly constructed player-level / heteroscedastic uncertainty measure improve realized
+> draft value?**
+
+Risk was frozen for D111: `risk_mult` was not modified, removed, recalibrated or jointly varied
+with anything, and no new uncertainty estimate was built. **This question is open.** Prior work
+reported that the current multiplier does not measure player-level uncertainty and that removing it
+produced no detectable improvement; **neither finding shows that a correctly constructed measure
+could not help**, and nothing in D111 bears on it either way.
+
+### 8. Power, and the honest limit
+
+Realized MDE at 80% power for the four primary cells: **111.6, 139.4, 162.9, 429.5**, against
+observed effects of **21.4–88.9**. **The experiment was not powered to resolve an effect of the
+size it observed.** "Not statistically significant" here does **not** mean "ECR has no value" —
+outcome G is *not established*, and the sign consistency plus the ladder shape argue against it.
+D108 criterion 1 already names the only lever: more independent season clusters. Slots provably
+cannot (D88), seeds provably cannot (D92).
+
+**Verdict: B + D, UNRESOLVED AND UNDERPOWERED.** Many picks change; the changed picks are better
+early and worse late; nothing reaches the floor. **Smallest next experiment** (recommendation only,
+not started): does enforcing roster feasibility *earlier* than the last picks carry the +197 to
++241 effect that is the one thing this phase resolved? It is the only measured lever large enough
+for k = 5 to see, it is not an information question, and the rule already exists in
+`league/opportunity_cost.py`.
+
+### 9. Repository
+
+1475 tests pass (1427 + 48 new in `tests/unit/test_d111_ecr_incremental.py`), 44 deselected.
+`ruff check` and `ruff format --check` clean on `src`, `tests` and the new runner. **Zero `src/`
+changes.** Y1 remains production, unchanged by every phase from D85 to D111.

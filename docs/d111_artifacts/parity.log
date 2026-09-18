@@ -1,0 +1,27 @@
+board vintage 63076e2e2bbfbbe5c29fb41265966ac1b8aaa180b3e89ee7742388fcc19d98ad
+upstream ECR blob e270d790165a6c304e5854145332fe9da3caacab3a61e1efea280b57cc5db9a5  (D89 pin a966176d2966591c4986833aefafb4c74e86f848ca1ba708f43e6a9e79e29525)
+seasons (2021, 2022, 2023, 2024, 2025)  slots (1, 4, 7, 10)  objective season_long
+arms ('Y1', 'T1_ALL_w25', 'T1_ALL_w50', 'T1_ALL_w75', 'T1_ALL_w100', 'T1_SKILL_w100', 'T2_w25', 'T2_w50', 'T2_w75', 'T2_w100', 'ECR_ALONE', 'ECR_ALONE_NAIVE', 'ORACLE_Y1')  mode parity
+
+  parity target_league 2021 done
+  parity target_league 2022 done
+  parity target_league 2023 done
+  parity target_league 2024 done
+  parity target_league 2025 done
+  parity dynasty_1qb 2021 done
+  parity dynasty_1qb 2022 done
+  parity dynasty_1qb 2023 done
+  parity dynasty_1qb 2024 done
+  parity dynasty_1qb 2025 done
+
+==================================================================================================
+BASELINE PARITY -- P1..P5
+==================================================================================================
+
+  P1  L0 == production (tier H) at every pick state: 640/640
+  P2  every arm at w = 0 is byte-identical to the control: 1300/1300
+  P3  per-position value multiset preserved: 20/20 (a violation raises SubstitutionError, so reaching here IS the pass)
+  P4  candidate-universe parity:             20/20 (same)
+  P5  assembled ECR board: 68870 rows, sha256 9380096cd7c74427...
+
+  PARITY: PASS -- the treatment arms may be interpreted

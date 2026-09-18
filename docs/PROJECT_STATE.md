@@ -3,6 +3,54 @@
 Living summary of what is implemented, validated, and outstanding. Updated at the end of every
 milestone. See `docs/TRACEABILITY.md` for the acceptance-criteria-level mapping.
 
+## Status: M59 complete (D111) — **ECR as INCREMENTAL information: positive in all four pre-registered primary cells, every one below the detection floor. The only effect that clears the floor is roster legality, not information. Y1 remains production, unchanged by every phase from D85 to D111.**
+
+Research only. **No production change, no `src/` change at all, no model fitted, no ECR weight
+tuned against outcomes, no 2026, nothing merged, no PR.** Risk/uncertainty **frozen** and
+explicitly **not closed**. Full report: `docs/D111_ECR_INCREMENTAL_VALUE.md`; artifacts:
+`docs/d111_artifacts/`.
+
+> D109 and D110 do not exist in this repository — the log runs D108 → D111. Nothing in D111 depends
+> on them.
+
+### WHAT D111 ADDS TO THE DRAFT RESEARCH STATUS
+
+- **Y1 already consumes ECR as a TIMING model** (the opponent replay inside `opp_cost`, and
+  `ecr_best`/`ecr_worst` inside `survival_mult`) and has never consumed it as a **VALUE** opinion.
+  That distinction is the phase's premise and belongs with any future ECR claim.
+- **Adding ECR as a co-equal information source is positive in 4 of 4 primary cells** (+21.4,
+  +80.1, +88.9, +72.1) — the first ECR intervention here that does not flip sign across formats —
+  **and all four are below the 172–250 floor, so all four are UNRESOLVED.** The dynasty board-blend
+  cell's CI excludes zero under both objectives, 5/5 seasons each, and is still not promoted.
+- **ECR is worth more as a partner than as a replacement.** In 6 of 8 ladders the maximum is an
+  interior rung; in 7 of 8 the full-substitution endpoint is worse, collapsing to −209.5/−275.8.
+- **"The changed player scored more" ≠ "the roster is worth more."** 57.9% of changed picks improve
+  at the player level; **36.7%** at the roster level, with **31.8% exactly neutral**. In
+  `target_league`/T1, 73.9% of changed picks took a higher-scoring player for a net roster effect
+  of **+0.0**.
+- **Phase reversal:** roster-level +24.1 early, +16.6 middle, **−8.7 late** (late negative in 6/6
+  cells). The player-level view gets this backwards.
+- **The one effect above the floor: the end-of-draft mandatory-slot rule is worth +241.1 (target) /
+  +215.3 (dynasty) to a pure-ECR drafter**, 5/5 seasons, t ≈ 14–15, replicated under the weekly
+  objective. Roster legality, not information — and it prices the consensus opponent's documented
+  lack of roster awareness at ~200 points a draft.
+- **Underpowered:** realized MDE 111.6–429.5 against observed effects of 21.4–88.9. *"Not
+  significant" does not mean "no value"* — outcome G is **not** established.
+- **D104 replicates on a restated board** (+79.4 / −74.9 vs its +77.3 / −132.1), and its stated
+  reason for excluding K/DST is corrected: `ro` does rank kickers and defenses. Including them
+  changes the result by +4.8 / −12.3, so the reasoning was wrong and the numbers were not.
+- **Board vintage is now `63076e2e…`, not `ca3e2d8a…`** — but the ECR half is **bit-identical** to
+  the D89 pin (69,639 rows, same sha256), so the drift is entirely in Y1's own projections.
+
+**Open, recorded, not closed:** *can a properly constructed player-level / heteroscedastic
+uncertainty measure improve realized draft value?*
+
+**Smallest next experiment** (recommendation only, not started): does enforcing roster feasibility
+*earlier* than the final picks carry the +197 to +241 effect D111 resolved? It is the only measured
+lever large enough for k = 5 to detect, and it is not an information question.
+
+---
+
 ## Status: M58 complete (D108) — **PROGRAM CLOSEOUT. The draft-choice investigation D86–D107 is CLOSED and consolidated. Two repository defects D107 missed are fixed. Y1 remains production, unchanged by every phase from D85 to D108.**
 
 Consolidation/audit only. **No production draft logic, no `models/`, no `league/`, nothing fitted,

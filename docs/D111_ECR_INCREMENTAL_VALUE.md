@@ -4,7 +4,24 @@
 > at §4. Nothing in §1–§3 was edited after a treatment number was seen; corrections, if any, are
 > appended as marked notes rather than made silently.
 
-**Status: PRE-REGISTRATION COMMITTED — results pending.**
+**Verdict: B + D, UNRESOLVED AND UNDERPOWERED.** Adding ECR to Y1 as a co-equal information source
+is **positive in all four pre-registered primary cells** (+21.4 and +80.1 in `target_league`, +88.9
+and +72.1 in `dynasty_1qb`) — a sign consistency D104 never achieved — but **every one sits below
+the pre-registered 172–250 detection floor**, so all four are **UNRESOLVED** by the rule fixed in
+advance. 56.8% of picks change. At the *player* level 57.9% of changed picks improve; at the
+*roster* level only **36.7%** do, and **31.8% make literally no difference at all**.
+
+**The most useful result is a reversal by draft phase.** Measured with a matched counterfactual
+that holds the board and the continuation fixed, ECR's changed picks are worth **+24.1 early,
++16.6 middle and −8.7 late** per pick. Player-level scoring says the opposite, because a late-round
+player who scores more individually still never reaches the lineup.
+
+**The only effect in this phase that clears the detection floor is not about information at all.**
+Giving a pure-ECR drafter the end-of-draft mandatory-slot rule is worth **+241.1 (target) / +215.3
+(dynasty)**, 5/5 seasons, t ≈ 14–15 — five to ten times any ECR information effect measured here.
+
+**No production change. No model fitted. No ECR weight tuned against outcomes. No 2026. Nothing
+merged. No PR. Risk/uncertainty deliberately frozen and explicitly NOT closed.**
 
 ---
 
@@ -258,21 +275,286 @@ Parity was run and had to pass **before** any treatment arm was interpreted.
 
 | | check | result |
 |---|---|---|
-| **P1** | tier `L0` picks identically to tier `H` (a direct pass-through to production's `recommend_draft_pick`) at every pick state of every registered draft — D107's 640/640 check, re-run on this vintage. This is what makes the control production-equivalent | *pending* |
-| **P2** | every arm at w = 0 is **byte-identical** to Y1 — the projection dict, the VORP dict and the chosen player, at every pick state. An arm differing from the control by anything other than the pre-registered ECR input fails here | *pending* |
-| **P3** | every treatment preserves each position's value multiset exactly (`SubstitutionError` otherwise), so replacement levels, scarcity and consumption demand are unchanged | *pending* |
-| **P4** | pool parity: the candidate universe is identical in every arm | *pending* |
-| **P5** | the ECR board hash of §2.1 reproduces, and the vintage is recorded with every artifact | *pending* |
+| **P1** | tier `L0` picks identically to tier `H` (a direct pass-through to production's `recommend_draft_pick`) at every pick state of every registered draft. This is what makes the control production-equivalent | **640/640** — exactly D107's recorded figure, reproduced on the new vintage |
+| **P2** | every arm at w = 0 is **byte-identical** to Y1 — the projection dict, the VORP dict and the chosen player, at every pick state. An arm differing from the control by anything other than the pre-registered ECR input fails here | **1300/1300** |
+| **P3** | every treatment preserves each position's value multiset exactly (`SubstitutionError` otherwise), so replacement levels, scarcity and consumption demand are unchanged | **20/20** (a violation raises, so reaching the end *is* the pass) |
+| **P4** | pool parity: the candidate universe is identical in every arm | **20/20** |
+| **P5** | the ECR board of §2.1 reproduces | assembled board 68,870 rows, sha256 `9380096cd7c74427…`; upstream population hash identical to the D89 pin |
+
+**PARITY: PASS.** It was run to completion and read *before* any treatment number was read.
+
+Two further instrument checks fall out of the arms themselves and both hold exactly:
+
+- **`T2_w100` and `ECR_ALONE_NAIVE` produce identical numbers** in every cell (−209.5 target,
+  −275.8 dynasty), which is the algebraic prediction: the decision-level consensus at full ECR
+  weight *is* best-available-by-ECR over the scored slate.
+- **`T1_SKILL_w100` is D104's `FP_ECR_Y1`**, asserted against D104's own committed function by
+  `tests/unit/test_d111_ecr_incremental.py`.
+
+### 3.1 D104 replicates on a restated Y1 board
+
+| contrast | D104 published (`ca3e2d8a`) | D111 re-measured (`63076e2e`) |
+|---|---|---|
+| `FP_ECR_Y1 − Y1`, target | **+77.3** | **+79.4** |
+| `FP_ECR_Y1 − Y1`, dynasty | **−132.1** | **−74.9** |
+| `ORACLE_Y1 − Y1`, target | +795.3 | **+772.4** |
+| `ORACLE_Y1 − Y1`, dynasty | +717.0 | **+771.0** |
+
+Same signs throughout, and the target-format ECR effect lands within 2.1 points of the published
+figure on an independently rebuilt projection board. D104's null is not a vintage artifact.
 
 ---
 
 ## 4. Results
 
-*Pending — this section is written only after §1–§3 are committed.*
+All effects are season-clustered paired differences (k = 5, t_crit = 2.776), 2021–2025 × slots
+{1, 4, 7, 10} × 20 drafts per arm per format. **No cell was invalid**: every (format, season) pair
+had a populated preseason board, every scrape fell inside July/August of its own season, and no
+position fell below the two-player minimum.
+
+### 4.1 The primary contrast — Y1 + ECR vs Y1
+
+`season_long`, the registered primary objective. **Both primary arms, both formats:**
+
+| format | arm | effect | 95% CI | seasons | realized MDE | vs floor |
+|---|---|---|---|---|---|---|
+| target | **T1_ALL_w50** (board consensus) | **+21.4** | [−100.3, +143.0] | 3W/2L | 162.9 | **UNRESOLVED** |
+| target | **T2_w50** (decision consensus) | **+80.1** | [−23.9, +184.2] | 4W/1L | 139.4 | **UNRESOLVED** |
+| dynasty | **T1_ALL_w50** | **+88.9** | **[+5.5, +172.2]** | **5W/0L** | 111.6 | **UNRESOLVED** |
+| dynasty | **T2_w50** | **+72.1** | [−248.7, +392.8] | 3W/2L | 429.5 | **UNRESOLVED** |
+
+**All four point estimates are positive.** That is the first time in this program that an ECR
+intervention has not flipped sign across the two shipped formats. One cell — the board-level
+consensus in dynasty — has a CI excluding zero and wins in 5 of 5 seasons.
+
+**It is still UNRESOLVED, and the pre-registered rule is what says so.** +88.9 is below the
+172–250 floor. A nominally significant result below the instrument's measurement floor is exactly
+the case the floor exists to catch, and promoting it would be the error D104's stopping rule was
+written to prevent.
+
+The same four cells under the secondary objective:
+
+| format | arm | `weekly_no_foresight` | 95% CI | seasons |
+|---|---|---|---|---|
+| target | T1_ALL_w50 | −4.3 | [−97.9, +89.3] | 3W/2L |
+| target | T2_w50 | +93.3 | [−12.8, +199.5] | 4W/1L |
+| dynasty | **T1_ALL_w50** | **+59.7** | **[+6.0, +113.3]** | **5W/0L** |
+| dynasty | T2_w50 | +13.7 | [−261.1, +288.4] | 3W/2L |
+
+Three of four remain positive, and **the one cell whose CI excludes zero does so under both
+objectives, in the same format, 5/5 seasons each time.** That is the single most durable signal in
+the phase — and it is still below the floor.
+
+### 4.2 The ladder — ECR is worth more as a partner than as a replacement
+
+The pre-registered shape diagnostic. **The primary is w = 0.50 and only w = 0.50; no other rung is
+promoted.**
+
+`season_long`, effect vs Y1:
+
+| format | method | w=0.25 | **w=0.50** | w=0.75 | w=1.00 |
+|---|---|---|---|---|---|
+| target | T1 board | +38.1 | **+21.4** | +49.1 | +84.2 |
+| target | T2 decision | +95.7 | **+80.1** | +32.1 | **−209.5** |
+| dynasty | T1 board | +38.7 | **+88.9** | +44.9 | −87.2 |
+| dynasty | T2 decision | +103.0 | **+72.1** | −94.5 | **−275.8** |
+
+`weekly_no_foresight`:
+
+| format | method | w=0.25 | **w=0.50** | w=0.75 | w=1.00 |
+|---|---|---|---|---|---|
+| target | T1 board | −0.8 | **−4.3** | +35.2 | +42.8 |
+| target | T2 decision | +69.3 | **+93.3** | +16.6 | **−246.8** |
+| dynasty | T1 board | +30.0 | **+59.7** | −7.9 | −164.8 |
+| dynasty | T2 decision | +78.2 | **+13.7** | −135.3 | **−279.2** |
+
+**In 6 of the 8 ladders the maximum is at an interior rung, and in 7 of 8 the w = 1 endpoint is
+below the best interior rung.** The exception is T1/target, which rises monotonically. Where the
+endpoint collapses it collapses hard — −209.5 to −279.2, the largest effects in the phase.
+
+Read carefully, because the individual rungs are unresolved: what the ladder shows is a **shape**,
+not a magnitude. The shape says ECR's value to Alpha is greatest when ECR is a *minority or equal*
+partner and falls, often sharply, when ECR *displaces* Y1. That is the signature of incremental
+information, and it is invisible to an experiment that only measures the endpoint — which is all
+D104 did.
+
+### 4.3 What changed, and did it get better?
+
+Pooled over the four pre-registered primary cells (2 methods × 2 formats):
+
+| | |
+|---|---|
+| picks changed | **727 / 1280 (56.8%)** |
+| **player-level** — arm's player scored more | **57.9% improved**, mean **+10.9** realized points |
+| **roster-level** — matched counterfactual | **36.7% better, 31.5% worse, 31.8% exactly neutral**, mean **+7.2** |
+
+**Those two rows are the finding.** "The changed player scored more" happens in 58% of cases; "the
+roster was worth more by the end of the draft" happens in 37%, and a third of all changed picks
+move final roster value by *nothing at all*. The matched counterfactual is the instrument to
+believe: it holds the state, the board and the continuation fixed and varies exactly one player, so
+the difference is attributable to that pick and nothing else.
+
+Per-arm, `target_league`, the two views side by side:
+
+| arm | picks changed | player-level improved | roster-level better | roster-level mean |
+|---|---|---|---|---|
+| T1_ALL_w50 | 142/320 (44.4%) | **73.9%** (mean +17.7) | **38.0%** | **+0.0** |
+| T2_w50 | 203/320 (63.4%) | 54.2% (mean +9.1) | 33.0% | +8.5 |
+| ECR_ALONE | 291/320 (90.9%) | 51.2% (mean +9.4) | 43.3% | +8.1 |
+
+`dynasty_1qb`:
+
+| arm | picks changed | player-level improved | roster-level better | roster-level mean |
+|---|---|---|---|---|
+| T1_ALL_w50 | 166/320 (51.9%) | 54.2% (mean −0.7) | 44.6% | +6.5 |
+| T2_w50 | 216/320 (67.5%) | 53.7% (mean +17.0) | 33.3% | +11.3 |
+| ECR_ALONE | 303/320 (94.7%) | — | 40.9% | −0.2 |
+
+The target/T1 row is the cleanest single illustration in the phase: **73.9% of changed picks took a
+player who scored more, and the net effect on the roster was +0.0.**
+
+Every season-clustered per-pick CI spans zero (+1.35, +7.52, +7.96, +7.03, +13.65, −0.04), so the
+pick-level result is unresolved too — in the same direction as the primary.
+
+### 4.4 Where ECR helps, and where it hurts
+
+Matched counterfactual, pooled over the four primary cells:
+
+| phase | n | mean delta per changed pick | better % |
+|---|---|---|---|
+| **EARLY (rounds 1–5)** | 163 | **+24.1** | 52.8% |
+| **MIDDLE (rounds 6–10)** | 246 | **+16.6** | 41.9% |
+| **LATE (rounds 11–16)** | 318 | **−8.7** | **24.5%** |
+
+Sign-consistent across all six arm × format cells: early positive in 6/6, middle positive in 5/6,
+**late negative in 6/6**.
+
+**The player-level view says the opposite**, and the disagreement is the point. Under player
+scoring, target/T1's late rounds look excellent — 60.8% of picks change, 72.6% improve. Under
+roster scoring the same picks are worth −7.4 each. A late-round player who scores more individually
+still never reaches the lineup; swapping him in displaces someone who would have. That is D86's
+"the bench is priced at zero" arriving from a new direction, and it is why pick-level metrics that
+score the *player* rather than the *roster* must not be used to justify a draft change.
+
+By pick range (target, T1_ALL_w50): pick 1 changes in 1/5 drafts (+134.9); picks 20–21 in 3/10
+(−36.9); picks 40–41 in 0/10; picks 60–61 in 6/10 (+44.7). Round 1 and round 2 changes are the
+worst single rounds in the divergence table (−51.2 and −112.4 player-level), on small n.
+
+By position, roster-level (pooled direction across the primary cells): the positive cells are QB
+and RB in the decision-consensus arms and TE/DST in the board arm; the consistently negative cells
+are **K (14.6–34.4% better) and DST late**. No position is sign-consistent across all four primary
+cells, so no positional claim is made.
+
+### 4.5 Why? — hypotheses tested, none supported
+
+The brief's candidate mechanisms were measured rather than asserted. **Exploratory; no causal claim.**
+
+- **"ECR discriminates where Y1 is nearly indifferent."** Not supported. Binning changed picks by
+  the Y1 projection gap between the two players, the `<5 points` bin is the *best* bin in two cells
+  (+29.7, +27.2) and the *worst* in the other two (+4.3, +0.3). Inconsistent in sign.
+- **"ECR reaches players Y1 cannot see."** Ruled out by construction and confirmed: **0 of 727
+  changed picks took a player carrying no ECR rank.** The treatment never reaches the unranked tail.
+- **"ECR corrects positional projection bias."** Not testable here, by design — the permutation is
+  within-position and holds every position's value multiset fixed. This is M7's axis, recorded as
+  the follow-up in §1.1.
+- **The K/DST correction is immaterial.** Permuting all six positions rather than D104's four moves
+  the result by **+4.8 (target) / −12.3 (dynasty)**, both CIs spanning zero. D104's *stated reason*
+  for excluding K/DST was factually wrong (§1.5); its *numbers* were not affected.
+
+### 4.6 ECR alone — an independent benchmark, not a scoreboard
+
+| format | objective | `ECR_ALONE − Y1` | 95% CI | seasons |
+|---|---|---|---|---|
+| target | season_long | **+31.6** | [−168.9, +232.1] | 4W/1L |
+| target | weekly | −16.2 | [−132.3, +100.0] | 3W/2L |
+| dynasty | season_long | **−60.5** | [−214.4, +93.4] | 1W/4L |
+| dynasty | weekly | −82.0 | [−248.7, +84.6] | 1W/4L |
+
+A consensus drafter and Alpha finish within a hundred points of each other, in both directions,
+with every interval spanning zero. **Neither "Alpha beat ECR" nor "ECR beat Alpha" is supported by
+this evidence**, and neither phrase is used.
+
+**The result worth carrying forward from this arm is a different one.** `ECR_ALONE` and
+`ECR_ALONE_NAIVE` differ by exactly one thing — whether the drafter must spend its last picks
+filling mandatory starting slots:
+
+| format | objective | `ECR_ALONE − ECR_ALONE_NAIVE` | 95% CI | t | seasons |
+|---|---|---|---|---|---|
+| target | season_long | **+241.1** | [+192.4, +289.8] | 13.75 | 5/5 |
+| dynasty | season_long | **+215.3** | [+176.4, +254.2] | 15.35 | 5/5 |
+| target | weekly | **+230.7** | [+178.3, +283.0] | 12.22 | 5/5 |
+| dynasty | weekly | **+197.2** | [+156.9, +237.5] | 13.59 | 5/5 |
+
+**This is the only effect in the phase that clears the 172–250 detection floor**, it clears it in
+all four cells, and it is five to ten times any ECR information effect measured here. It is a
+*roster-legality* effect, not an information effect. It is also a reminder about the benchmark
+opponent: the consensus bot's documented lack of roster awareness (`docs/BENCHMARK_SPEC.md` §3)
+is worth ~200 points a draft, so the choice between the two consensus variants is not cosmetic.
+
+### 4.7 Power — what this experiment could and could not have detected
+
+Realized MDE at 80% power, `(t₀.₀₂₅,₄ + t₀.₂₀,₄)·sd/√5`, for the four primary cells: **111.6,
+139.4, 162.9, 429.5**. The observed effects are 21.4–88.9.
+
+**So the experiment was not powered to resolve an effect of the size it actually observed.** Three
+of four cells could have detected ~112–163 points; the observed effects are below that in every
+case. This is outcome **H** alongside **B** and **D**, and it is stated rather than buried: *"not
+statistically significant" here does not mean "ECR has no value."*
+
+D108 reopening-criterion 1 already names the only lever that moves this: more independent season
+clusters. Slots provably cannot (D88), seeds provably cannot (D92). With k = 5 and a per-season SD
+of 67–346 points, no amount of within-season sampling reaches a 25–90 point effect.
+
+### 4.8 Against the registered outcome list
+
+| | outcome | supported? |
+|---|---|---|
+| A | Y1+ECR materially improves realized draft value | **No** — all four primaries below the floor |
+| **B** | many picks change without improving value | **Yes, primarily** — 56.8% change, 36.7% better at roster level |
+| C | ECR helps only in specific rounds/positions | partly — the phase split is sign-consistent, positions are not |
+| **D** | ECR improves early decisions but hurts later ones | **Yes** — +24.1 / +16.6 / −8.7, late negative in 6/6 cells |
+| E | ECR helps late but not early | **No** — the player-level view suggests it and the roster-level view refutes it |
+| F | ECR-alone differs from Y1 but adding ECR does not help | partly — ECR-alone is a wash; adding ECR is positive but unresolved |
+| G | ECR adds little or no useful incremental information | **not established** — the sign consistency and the ladder shape argue against it, and the power analysis forbids concluding it |
+| **H** | the experiment is underpowered | **Yes** — MDE 112–430 vs effects of 21–89 |
+
+### 4.9 What this phase does NOT license
+
+- It does **not** show ECR should be added to production. Four unresolved positives are not a ship
+  decision, and the registered stopping rule forbids a downstream run.
+- It does **not** show ECR is useless. That is outcome G, and §4.7 explicitly rules out concluding
+  it at this power.
+- It does **not** overturn D104. D104 replicates here (§3.1). D111 measures a different arm.
+- It does **not** say anything about projection *magnitudes*. Every treatment holds each position's
+  value multiset fixed — D108 reopening-criterion 3's axis remains untested.
+- It does **not** close the risk/uncertainty question, which was frozen throughout (§1.10).
 
 ---
 
-## 5. Reproduction
+## 5. The smallest next experiment
+
+Not a fifth value base, not another ranking source, and not an ECR weight search.
+
+> **Does enforcing roster feasibility earlier — rather than only at the end of the draft — carry
+> the +197 to +241 point effect that is the one thing this phase resolved?**
+
+The reasoning: every information-side lever measured across D97–D111 lands at 20–90 points, below
+a floor of 172–250 that more seasons alone can lower. The mandatory-slot rule clears that floor
+four times over, in both formats and under both objectives, at t ≈ 12–15. It is also *not* an
+information question, so it is not blocked by the power ceiling that blocks everything else here:
+the effect is large enough for k = 5 to see.
+
+It is cheap — the rule already exists in `league/opportunity_cost.py::roster_aware_market_pick`,
+and Y1's own `positional_feasibility_cap` is the natural comparison — and it needs no model, no
+fitting and no new data.
+
+**Recorded as a recommendation only. Not started.** Explicitly *not* recommended: promoting any
+ladder rung, tuning w, a new projection model, ECR in production, or any use of 2026.
+
+## 6. Reproduction
+
+Artifacts are committed under `docs/d111_artifacts/` — the five run reports and every result JSON
+except `d111_divergence.json` (2.9 MB; it regenerates deterministically from the command below).
 
 ```
 uv run python scripts/research/d111_ecr_incremental.py --mode phase0         --out <dir>

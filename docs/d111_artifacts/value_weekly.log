@@ -1,0 +1,151 @@
+board vintage 63076e2e2bbfbbe5c29fb41265966ac1b8aaa180b3e89ee7742388fcc19d98ad
+upstream ECR blob e270d790165a6c304e5854145332fe9da3caacab3a61e1efea280b57cc5db9a5  (D89 pin a966176d2966591c4986833aefafb4c74e86f848ca1ba708f43e6a9e79e29525)
+seasons (2021, 2022, 2023, 2024, 2025)  slots (1, 4, 7, 10)  objective weekly_no_foresight
+arms ('Y1', 'T1_ALL_w25', 'T1_ALL_w50', 'T1_ALL_w75', 'T1_ALL_w100', 'T1_SKILL_w100', 'T2_w25', 'T2_w50', 'T2_w75', 'T2_w100', 'ECR_ALONE', 'ECR_ALONE_NAIVE', 'ORACLE_Y1')  mode value
+
+  value target_league 2021 done
+  value target_league 2022 done
+  value target_league 2023 done
+  value target_league 2024 done
+  value target_league 2025 done
+  value dynasty_1qb 2021 done
+  value dynasty_1qb 2022 done
+  value dynasty_1qb 2023 done
+  value dynasty_1qb 2024 done
+  value dynasty_1qb 2025 done
+
+==================================================================================================
+PRIMARY -- realized whole-draft starter points
+==================================================================================================
+
+  target_league   (n = 20 drafts per arm)
+    Y1                  2004.1  <- CONTROL
+    T1_ALL_w25          2003.4
+    T1_ALL_w50          1999.8  <- PRIMARY TREATMENT
+    T1_ALL_w75          2039.4
+    T1_ALL_w100         2046.9
+    T1_SKILL_w100       2027.5
+    T2_w25              2073.4
+    T2_w50              2097.4  <- PRIMARY TREATMENT
+    T2_w75              2020.7
+    T2_w100             1757.3
+    ECR_ALONE           1988.0  <- independent benchmark
+    ECR_ALONE_NAIVE     1757.3  <- independent benchmark
+    ORACLE_Y1           2722.5  <- hindsight ceiling, NOT achievable
+
+       T1_ALL_w25 - Y1
+            -0.8   95% CI [-75.0, +73.5]   t= -0.03   seasons 2W/0T/3L   MDE(80%)   99.4
+       by season: 2021:-69  2022:-21  2023:-38  2024:+61  2025:+63
+
+    ** T1_ALL_w50 - Y1
+            -4.3   95% CI [-97.9, +89.3]   t= -0.13   seasons 3W/0T/2L   MDE(80%)  125.3
+       by season: 2021:-126  2022:+10  2023:-19  2024:+61  2025:+53
+       against D97's floor (172-250 pts): BELOW the floor -> UNRESOLVED
+
+       T1_ALL_w75 - Y1
+           +35.2   95% CI [-12.2, +82.7]   t=  2.06   seasons 4W/0T/1L   MDE(80%)   63.5
+       by season: 2021:+22  2022:+38  2023:-12  2024:+93  2025:+35
+
+       T1_ALL_w100 - Y1
+           +42.8   95% CI [-32.4, +118.0]   t=  1.58   seasons 4W/0T/1L   MDE(80%)  100.7
+       by season: 2021:+17  2022:+84  2023:+19  2024:-29  2025:+124
+
+       T1_SKILL_w100 - Y1
+           +23.4   95% CI [-73.1, +119.9]   t=  0.67   seasons 2W/0T/3L   MDE(80%)  129.2
+       by season: 2021:-0  2022:+101  2023:-59  2024:-35  2025:+110
+
+       T2_w25 - Y1
+           +69.3   95% CI [+1.2, +137.3]   t=  2.83   seasons 4W/0T/1L   MDE(80%)   91.1
+       by season: 2021:-5  2022:+113  2023:+52  2024:+133  2025:+53
+
+    ** T2_w50 - Y1
+           +93.3   95% CI [-12.8, +199.5]   t=  2.44   seasons 4W/0T/1L   MDE(80%)  142.1
+       by season: 2021:-7  2022:+155  2023:+73  2024:+204  2025:+41
+       against D97's floor (172-250 pts): BELOW the floor -> UNRESOLVED
+
+       T2_w75 - Y1
+           +16.6   95% CI [-138.3, +171.5]   t=  0.30   seasons 3W/0T/2L   MDE(80%)  207.4
+       by season: 2021:-97  2022:+72  2023:-134  2024:+92  2025:+151
+
+       T2_w100 - Y1
+          -246.8   95% CI [-402.2, -91.4]   t= -4.41   seasons 0W/0T/5L   MDE(80%)  208.1
+       by season: 2021:-205  2022:-271  2023:-452  2024:-171  2025:-136
+
+       ECR_ALONE - Y1
+           -16.2   95% CI [-132.3, +100.0]   t= -0.39   seasons 3W/0T/2L   MDE(80%)  155.5
+       by season: 2021:+35  2022:-3  2023:-180  2024:+19  2025:+48
+
+       ECR_ALONE_NAIVE - Y1
+          -246.8   95% CI [-402.2, -91.4]   t= -4.41   seasons 0W/0T/5L   MDE(80%)  208.1
+       by season: 2021:-205  2022:-271  2023:-452  2024:-171  2025:-136
+
+       ORACLE_Y1 - Y1
+          +718.4   95% CI [+581.9, +854.8]   t= 14.62   seasons 5W/0T/0L   MDE(80%)  182.7
+       by season: 2021:+808  2022:+662  2023:+551  2024:+782  2025:+790
+
+
+  dynasty_1qb   (n = 20 drafts per arm)
+    Y1                  2087.5  <- CONTROL
+    T1_ALL_w25          2117.5
+    T1_ALL_w50          2147.2  <- PRIMARY TREATMENT
+    T1_ALL_w75          2079.6
+    T1_ALL_w100         1922.7
+    T1_SKILL_w100       1943.1
+    T2_w25              2165.8
+    T2_w50              2101.2  <- PRIMARY TREATMENT
+    T2_w75              1952.2
+    T2_w100             1808.3
+    ECR_ALONE           2005.5  <- independent benchmark
+    ECR_ALONE_NAIVE     1808.3  <- independent benchmark
+    ORACLE_Y1           2788.4  <- hindsight ceiling, NOT achievable
+
+       T1_ALL_w25 - Y1
+           +30.0   95% CI [-70.7, +130.7]   t=  0.83   seasons 3W/0T/2L   MDE(80%)  134.8
+       by season: 2021:-4  2022:-41  2023:+169  2024:+22  2025:+5
+
+    ** T1_ALL_w50 - Y1
+           +59.7   95% CI [+6.0, +113.3]   t=  3.09   seasons 5W/0T/0L   MDE(80%)   71.8
+       by season: 2021:+46  2022:+23  2023:+133  2024:+35  2025:+62
+       against D97's floor (172-250 pts): BELOW the floor -> UNRESOLVED
+
+       T1_ALL_w75 - Y1
+            -7.9   95% CI [-154.0, +138.2]   t= -0.15   seasons 2W/0T/3L   MDE(80%)  195.6
+       by season: 2021:+170  2022:+42  2023:-130  2024:-81  2025:-40
+
+       T1_ALL_w100 - Y1
+          -164.8   95% CI [-275.9, -53.7]   t= -4.12   seasons 0W/0T/5L   MDE(80%)  148.7
+       by season: 2021:-66  2022:-182  2023:-305  2024:-118  2025:-152
+
+       T1_SKILL_w100 - Y1
+          -144.4   95% CI [-305.9, +17.2]   t= -2.48   seasons 0W/0T/5L   MDE(80%)  216.3
+       by season: 2021:-52  2022:-135  2023:-370  2024:-63  2025:-102
+
+       T2_w25 - Y1
+           +78.2   95% CI [-65.9, +222.4]   t=  1.51   seasons 4W/0T/1L   MDE(80%)  193.1
+       by season: 2021:+52  2022:+67  2023:+259  2024:-65  2025:+78
+
+    ** T2_w50 - Y1
+           +13.7   95% CI [-261.1, +288.4]   t=  0.14   seasons 3W/0T/2L   MDE(80%)  367.9
+       by season: 2021:+97  2022:+206  2023:+206  2024:-169  2025:-272
+       against D97's floor (172-250 pts): BELOW the floor -> UNRESOLVED
+
+       T2_w75 - Y1
+          -135.3   95% CI [-301.7, +31.1]   t= -2.26   seasons 1W/0T/4L   MDE(80%)  222.8
+       by season: 2021:+47  2022:-124  2023:-76  2024:-224  2025:-299
+
+       T2_w100 - Y1
+          -279.2   95% CI [-457.7, -100.8]   t= -4.34   seasons 0W/0T/5L   MDE(80%)  238.9
+       by season: 2021:-71  2022:-286  2023:-443  2024:-223  2025:-374
+
+       ECR_ALONE - Y1
+           -82.0   95% CI [-248.7, +84.6]   t= -1.37   seasons 1W/0T/4L   MDE(80%)  223.1
+       by season: 2021:+136  2022:-87  2023:-209  2024:-78  2025:-173
+
+       ECR_ALONE_NAIVE - Y1
+          -279.2   95% CI [-457.7, -100.8]   t= -4.34   seasons 0W/0T/5L   MDE(80%)  238.9
+       by season: 2021:-71  2022:-286  2023:-443  2024:-223  2025:-374
+
+       ORACLE_Y1 - Y1
+          +700.9   95% CI [+516.6, +885.2]   t= 10.56   seasons 5W/0T/0L   MDE(80%)  246.7
+       by season: 2021:+908  2022:+681  2023:+501  2024:+658  2025:+757
+

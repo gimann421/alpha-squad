@@ -1,0 +1,943 @@
+board vintage 63076e2e2bbfbbe5c29fb41265966ac1b8aaa180b3e89ee7742388fcc19d98ad
+upstream ECR blob e270d790165a6c304e5854145332fe9da3caacab3a61e1efea280b57cc5db9a5  (D89 pin a966176d2966591c4986833aefafb4c74e86f848ca1ba708f43e6a9e79e29525)
+seasons (2021, 2022, 2023, 2024, 2025)  slots (1, 4, 7, 10)  objective season_long
+arms ('Y1', 'T1_ALL_w25', 'T1_ALL_w50', 'T1_ALL_w75', 'T1_ALL_w100', 'T1_SKILL_w100', 'T2_w25', 'T2_w50', 'T2_w75', 'T2_w100', 'ECR_ALONE', 'ECR_ALONE_NAIVE', 'ORACLE_Y1')  mode divergence
+
+  divergence target_league 2021 done
+  divergence target_league 2022 done
+  divergence target_league 2023 done
+  divergence target_league 2024 done
+  divergence target_league 2025 done
+  divergence dynasty_1qb 2021 done
+  divergence dynasty_1qb 2022 done
+  divergence dynasty_1qb 2023 done
+  divergence dynasty_1qb 2024 done
+  divergence dynasty_1qb 2025 done
+
+==================================================================================================
+PICK DIVERGENCE -- what changes, and what the changed players scored
+==================================================================================================
+
+  'realized delta' = realized season points of the arm's player minus the control's,
+  at the SAME state and pool. It is an absolute, arm-independent per-pick outcome.
+
+  target_league / T1_ALL_w25: 95/320 picks changed (29.7%)
+    improved 69/95 (72.6%)   worsened 26/95 (27.4%)   tied 0
+    realized delta on changed picks: mean +21.3   median +17.6   total +2027
+    distribution: p0=-158  p10=-38  p25=-11  p50=+18  p75=+39  p90=+85  p100=+183
+    within-position changes 41/95 (43.2%)   cross-position 54
+      within-position realized delta: mean +17.3
+      cross-position  realized delta: mean +24.4
+    phase             picks  changed       %  mean delta  improved %
+    EARLY (1-5)         100       14  14.0%        16.2      71.4%
+    MIDDLE (6-10)       100       32  32.0%        30.6      84.4%
+    LATE (11-16)        120       49  40.8%        16.8      65.3%
+    round    changed %  mean delta
+    1             10%        -9.8
+    2              5%        76.9
+    3             25%        68.2
+    4             10%        42.3
+    5             20%       -63.9
+    6             35%        32.6
+    7             25%        38.7
+    8             15%        49.9
+    9             60%        20.0
+    10            25%        33.4
+    11            25%        25.1
+    12            55%        18.6
+    13            55%        30.3
+    14            40%        11.6
+    15            30%        -3.1
+    16            40%        10.5
+    by CONTROL position (where Y1 would have picked):
+      RB    n=12    mean delta    +27.6  improved 66.7%
+      WR    n=27    mean delta     +4.2  improved 51.9%
+      TE    n=30    mean delta    +37.6  improved 83.3%
+      K     n=15    mean delta    +13.8  improved 80.0%
+      DST   n=11    mean delta    +22.4  improved 90.9%
+    position swaps (Y1 -> arm), top 8: [(('K', 'K'), 15), (('TE', 'K'), 12), (('WR', 'WR'), 10), (('DST', 'DST'), 9), (('RB', 'WR'), 5), (('TE', 'WR'), 5), (('TE', 'TE'), 5), (('WR', 'RB'), 5)]
+    first divergence round histogram: {1: 2, 2: 1, 3: 4, 4: 2, 5: 4, 7: 2, 8: 1, 9: 4}   drafts with no divergence 0/20
+    picks 1-1: 0/5 changed, mean realized delta +0.0
+    picks 20-21: 2/10 changed, mean realized delta +39.6
+    picks 40-41: 0/10 changed, mean realized delta +0.0
+    picks 60-61: 5/10 changed, mean realized delta +47.2
+
+  target_league / T1_ALL_w50: 142/320 picks changed (44.4%)
+    improved 105/142 (73.9%)   worsened 37/142 (26.1%)   tied 0
+    realized delta on changed picks: mean +17.7   median +15.6   total +2513
+    distribution: p0=-171  p10=-49  p25=-4  p50=+15  p75=+38  p90=+88  p100=+183
+    within-position changes 62/142 (43.7%)   cross-position 80
+      within-position realized delta: mean +29.2
+      cross-position  realized delta: mean +8.8
+    phase             picks  changed       %  mean delta  improved %
+    EARLY (1-5)         100       21  21.0%         9.9      57.1%
+    MIDDLE (6-10)       100       48  48.0%        26.0      83.3%
+    LATE (11-16)        120       73  60.8%        14.5      72.6%
+    round    changed %  mean delta
+    1             20%       -51.2
+    2              5%      -112.4
+    3             40%        52.4
+    4             20%        80.2
+    5             20%       -53.8
+    6             45%        27.2
+    7             50%        18.6
+    8             40%        35.0
+    9             60%        25.5
+    10            45%        25.7
+    11            40%        66.8
+    12            70%        16.8
+    13            75%        23.3
+    14            70%        10.6
+    15            55%        -0.4
+    16            55%       -18.7
+    by CONTROL position (where Y1 would have picked):
+      QB    n=4     mean delta    +74.2  improved 75.0%
+      RB    n=25    mean delta    +19.5  improved 56.0%
+      WR    n=41    mean delta     -4.7  improved 53.7%
+      TE    n=38    mean delta    +32.0  improved 86.8%
+      K     n=20    mean delta    +21.7  improved 100.0%
+      DST   n=14    mean delta    +19.3  improved 92.9%
+    position swaps (Y1 -> arm), top 8: [(('TE', 'K'), 20), (('K', 'K'), 19), (('WR', 'WR'), 13), (('WR', 'K'), 13), (('DST', 'DST'), 13), (('TE', 'TE'), 10), (('RB', 'K'), 8), (('WR', 'RB'), 8)]
+    first divergence round histogram: {1: 4, 2: 1, 3: 5, 4: 3, 5: 2, 6: 1, 7: 2, 8: 2}   drafts with no divergence 0/20
+    picks 1-1: 1/5 changed, mean realized delta +134.9
+    picks 20-21: 3/10 changed, mean realized delta -36.9
+    picks 40-41: 0/10 changed, mean realized delta +0.0
+    picks 60-61: 6/10 changed, mean realized delta +44.7
+
+  target_league / T1_ALL_w75: 204/320 picks changed (63.7%)
+    improved 136/204 (66.7%)   worsened 68/204 (33.3%)   tied 0
+    realized delta on changed picks: mean +16.1   median +15.0   total +3290
+    distribution: p0=-212  p10=-65  p25=-17  p50=+15  p75=+50  p90=+101  p100=+196
+    within-position changes 102/204 (50.0%)   cross-position 102
+      within-position realized delta: mean +14.4
+      cross-position  realized delta: mean +17.9
+    phase             picks  changed       %  mean delta  improved %
+    EARLY (1-5)         100       47  47.0%        14.6      55.3%
+    MIDDLE (6-10)       100       68  68.0%        17.0      73.5%
+    LATE (11-16)        120       89  74.2%        16.2      67.4%
+    round    changed %  mean delta
+    1             60%        16.6
+    2             45%        37.3
+    3             75%        11.2
+    4             25%        24.1
+    5             30%       -22.5
+    6             55%         5.3
+    7             80%        13.0
+    8             60%        32.3
+    9             65%        14.3
+    10            80%        19.8
+    11            60%        73.3
+    12            90%        32.4
+    13            90%        18.4
+    14            70%         4.9
+    15            65%        -3.4
+    16            70%       -26.7
+    by CONTROL position (where Y1 would have picked):
+      QB    n=17    mean delta    +47.6  improved 64.7%
+      RB    n=35    mean delta    +26.2  improved 60.0%
+      WR    n=63    mean delta     -6.6  improved 50.8%
+      TE    n=44    mean delta    +35.8  improved 81.8%
+      K     n=24    mean delta     +3.8  improved 70.8%
+      DST   n=21    mean delta    +14.9  improved 90.5%
+    position swaps (Y1 -> arm), top 8: [(('WR', 'WR'), 31), (('TE', 'K'), 28), (('K', 'K'), 24), (('DST', 'DST'), 19), (('WR', 'K'), 17), (('RB', 'K'), 12), (('TE', 'TE'), 11), (('QB', 'QB'), 11)]
+    first divergence round histogram: {1: 12, 2: 4, 3: 2, 4: 1, 7: 1}   drafts with no divergence 0/20
+    picks 1-1: 2/5 changed, mean realized delta +88.2
+    picks 20-21: 6/10 changed, mean realized delta +14.5
+    picks 40-41: 1/10 changed, mean realized delta +2.2
+    picks 60-61: 6/10 changed, mean realized delta +44.7
+
+  target_league / T1_ALL_w100: 237/320 picks changed (74.1%)
+    improved 159/237 (67.1%)   worsened 78/237 (32.9%)   tied 0
+    realized delta on changed picks: mean +26.3   median +16.0   total +6235
+    distribution: p0=-212  p10=-63  p25=-11  p50=+16  p75=+73  p90=+122  p100=+256
+    within-position changes 120/237 (50.6%)   cross-position 117
+      within-position realized delta: mean +28.5
+      cross-position  realized delta: mean +24.0
+    phase             picks  changed       %  mean delta  improved %
+    EARLY (1-5)         100       58  58.0%        36.8      62.1%
+    MIDDLE (6-10)       100       79  79.0%        29.0      78.5%
+    LATE (11-16)        120      100  83.3%        18.1      61.0%
+    round    changed %  mean delta
+    1             70%        76.9
+    2             55%        68.2
+    3             85%         7.6
+    4             35%        59.6
+    5             45%       -26.8
+    6             85%        38.4
+    7             80%        14.5
+    8             75%        40.6
+    9             75%        32.2
+    10            80%        19.8
+    11            85%        42.9
+    12           100%        29.9
+    13            90%        18.4
+    14            70%         4.9
+    15            70%        -4.8
+    16            85%         8.7
+    by CONTROL position (where Y1 would have picked):
+      QB    n=23    mean delta    +26.1  improved 47.8%
+      RB    n=50    mean delta    +41.2  improved 68.0%
+      WR    n=75    mean delta    +21.6  improved 61.3%
+      TE    n=43    mean delta    +39.3  improved 76.7%
+      K     n=25    mean delta     +1.8  improved 68.0%
+      DST   n=21    mean delta    +10.3  improved 85.7%
+    position swaps (Y1 -> arm), top 8: [(('WR', 'WR'), 39), (('TE', 'K'), 29), (('K', 'K'), 25), (('DST', 'DST'), 19), (('WR', 'K'), 19), (('RB', 'WR'), 15), (('RB', 'K'), 15), (('QB', 'QB'), 13)]
+    first divergence round histogram: {1: 14, 2: 4, 3: 1, 4: 1}   drafts with no divergence 0/20
+    picks 1-1: 3/5 changed, mean realized delta +164.9
+    picks 20-21: 8/10 changed, mean realized delta +19.8
+    picks 40-41: 2/10 changed, mean realized delta -0.8
+    picks 60-61: 8/10 changed, mean realized delta +67.3
+
+  target_league / T1_SKILL_w100: 186/320 picks changed (58.1%)
+    improved 119/186 (64.0%)   worsened 67/186 (36.0%)   tied 0
+    realized delta on changed picks: mean +29.7   median +15.1   total +5517
+    distribution: p0=-212  p10=-84  p25=-17  p50=+15  p75=+96  p90=+135  p100=+256
+    within-position changes 83/186 (44.6%)   cross-position 103
+      within-position realized delta: mean +39.4
+      cross-position  realized delta: mean +21.8
+    phase             picks  changed       %  mean delta  improved %
+    EARLY (1-5)         100       58  58.0%        36.8      62.1%
+    MIDDLE (6-10)       100       50  50.0%        40.4      74.0%
+    LATE (11-16)        120       78  65.0%        17.5      59.0%
+    round    changed %  mean delta
+    1             70%        76.9
+    2             55%        68.2
+    3             85%         7.6
+    4             35%        59.6
+    5             45%       -26.8
+    6             85%        38.4
+    7             80%        24.6
+    8             60%        54.3
+    9             10%       140.8
+    10            15%        13.6
+    11            55%        81.9
+    12            95%        21.7
+    13            80%         5.6
+    14            60%        15.7
+    15            20%        -1.6
+    16            80%       -13.7
+    by CONTROL position (where Y1 would have picked):
+      QB    n=19    mean delta    +37.9  improved 57.9%
+      RB    n=50    mean delta    +43.4  improved 66.0%
+      WR    n=75    mean delta    +14.4  improved 58.7%
+      TE    n=41    mean delta    +39.5  improved 75.6%
+      DST   n=1     mean delta    -68.7  improved  0.0%
+    position swaps (Y1 -> arm), top 8: [(('WR', 'WR'), 41), (('TE', 'K'), 20), (('TE', 'TE'), 17), (('RB', 'WR'), 15), (('WR', 'K'), 14), (('QB', 'QB'), 13), (('RB', 'K'), 13), (('RB', 'RB'), 12)]
+    first divergence round histogram: {1: 14, 2: 4, 3: 1, 4: 1}   drafts with no divergence 0/20
+    picks 1-1: 3/5 changed, mean realized delta +164.9
+    picks 20-21: 8/10 changed, mean realized delta +19.8
+    picks 40-41: 2/10 changed, mean realized delta -0.8
+    picks 60-61: 8/10 changed, mean realized delta +67.3
+
+  target_league / T2_w25: 150/320 picks changed (46.9%)
+    improved 93/150 (62.0%)   worsened 57/150 (38.0%)   tied 0
+    realized delta on changed picks: mean +13.7   median +17.6   total +2049
+    distribution: p0=-189  p10=-115  p25=-51  p50=+18  p75=+76  p90=+136  p100=+299
+    within-position changes 71/150 (47.3%)   cross-position 79
+      within-position realized delta: mean +12.8
+      cross-position  realized delta: mean +14.4
+    phase             picks  changed       %  mean delta  improved %
+    EARLY (1-5)         100       32  32.0%       -20.6      50.0%
+    MIDDLE (6-10)       100       63  63.0%        37.7      66.7%
+    LATE (11-16)        120       55  45.8%         6.1      63.6%
+    round    changed %  mean delta
+    1             10%        72.1
+    2             55%       -18.8
+    3             60%       -40.4
+    4             10%       113.6
+    5             25%       -67.4
+    6             55%        44.7
+    7             55%        19.2
+    8             60%        -8.6
+    9             80%        62.2
+    10            65%        60.0
+    11            55%        -5.0
+    12            50%        18.4
+    13            35%        18.3
+    14            30%        -6.4
+    15            65%        -2.4
+    16            40%        18.1
+    by CONTROL position (where Y1 would have picked):
+      QB    n=19    mean delta    -26.7  improved 42.1%
+      RB    n=23    mean delta    +43.9  improved 47.8%
+      WR    n=29    mean delta    -16.1  improved 55.2%
+      TE    n=23    mean delta    +56.1  improved 87.0%
+      K     n=34    mean delta     -4.3  improved 55.9%
+      DST   n=22    mean delta    +39.5  improved 86.4%
+    position swaps (Y1 -> arm), top 8: [(('WR', 'WR'), 22), (('RB', 'RB'), 13), (('DST', 'DST'), 11), (('TE', 'TE'), 9), (('TE', 'RB'), 9), (('QB', 'QB'), 9), (('RB', 'WR'), 7), (('K', 'K'), 7)]
+    first divergence round histogram: {1: 2, 2: 11, 3: 3, 5: 1, 6: 2, 8: 1}   drafts with no divergence 0/20
+    picks 1-1: 0/5 changed, mean realized delta +0.0
+    picks 20-21: 4/10 changed, mean realized delta -7.6
+    picks 40-41: 1/10 changed, mean realized delta +2.2
+    picks 60-61: 4/10 changed, mean realized delta +60.9
+
+  target_league / T2_w50: 203/320 picks changed (63.4%)
+    improved 110/203 (54.2%)   worsened 93/203 (45.8%)   tied 0
+    realized delta on changed picks: mean +9.1   median +15.0   total +1855
+    distribution: p0=-200  p10=-120  p25=-65  p50=+15  p75=+80  p90=+129  p100=+299
+    within-position changes 69/203 (34.0%)   cross-position 134
+      within-position realized delta: mean +7.1
+      cross-position  realized delta: mean +10.2
+    phase             picks  changed       %  mean delta  improved %
+    EARLY (1-5)         100       51  51.0%       -18.2      51.0%
+    MIDDLE (6-10)       100       74  74.0%        52.4      66.2%
+    LATE (11-16)        120       78  65.0%       -14.0      44.9%
+    round    changed %  mean delta
+    1             25%        31.0
+    2             75%       -37.2
+    3             75%       -25.2
+    4             35%         6.3
+    5             45%       -21.4
+    6             55%        44.7
+    7             65%         8.5
+    8             75%        19.7
+    9             90%        65.2
+    10            85%       106.3
+    11            70%       -12.2
+    12            65%        10.5
+    13            50%        -1.0
+    14            60%       -40.2
+    15            85%       -15.0
+    16            60%       -26.0
+    by CONTROL position (where Y1 would have picked):
+      QB    n=26    mean delta    -52.5  improved 30.8%
+      RB    n=26    mean delta    +59.0  improved 57.7%
+      WR    n=56    mean delta    -18.4  improved 48.2%
+      TE    n=30    mean delta    +40.5  improved 76.7%
+      K     n=37    mean delta     -6.3  improved 45.9%
+      DST   n=28    mean delta    +61.9  improved 71.4%
+    position swaps (Y1 -> arm), top 8: [(('WR', 'WR'), 35), (('RB', 'RB'), 16), (('WR', 'RB'), 15), (('DST', 'QB'), 14), (('TE', 'RB'), 13), (('QB', 'WR'), 11), (('TE', 'TE'), 10), (('K', 'QB'), 10)]
+    first divergence round histogram: {1: 5, 2: 12, 3: 2, 7: 1}   drafts with no divergence 0/20
+    picks 1-1: 1/5 changed, mean realized delta +41.4
+    picks 20-21: 4/10 changed, mean realized delta -65.1
+    picks 40-41: 4/10 changed, mean realized delta +65.3
+    picks 60-61: 5/10 changed, mean realized delta +70.7
+
+  target_league / T2_w75: 249/320 picks changed (77.8%)
+    improved 133/249 (53.4%)   worsened 116/249 (46.6%)   tied 0
+    realized delta on changed picks: mean +11.7   median +14.2   total +2910
+    distribution: p0=-354  p10=-120  p25=-67  p50=+14  p75=+94  p90=+143  p100=+372
+    within-position changes 79/249 (31.7%)   cross-position 170
+      within-position realized delta: mean +24.3
+      cross-position  realized delta: mean +5.8
+    phase             picks  changed       %  mean delta  improved %
+    EARLY (1-5)         100       67  67.0%        -4.1      52.2%
+    MIDDLE (6-10)       100       85  85.0%        45.4      64.7%
+    LATE (11-16)        120       97  80.8%        -7.0      44.3%
+    round    changed %  mean delta
+    1             50%        51.0
+    2             80%       -55.0
+    3             75%       -10.3
+    4             70%        33.4
+    5             60%       -18.5
+    6             80%        -1.0
+    7             70%         1.6
+    8             85%        75.0
+    9             90%        53.1
+    10           100%        81.3
+    11            95%        30.3
+    12            70%        19.3
+    13            75%       -16.9
+    14            90%       -10.3
+    15            95%       -39.2
+    16            60%       -28.1
+    by CONTROL position (where Y1 would have picked):
+      QB    n=34    mean delta    -34.2  improved 41.2%
+      RB    n=35    mean delta    +47.0  improved 60.0%
+      WR    n=74    mean delta     +2.0  improved 51.4%
+      TE    n=39    mean delta    +43.6  improved 66.7%
+      K     n=39    mean delta    -14.1  improved 35.9%
+      DST   n=28    mean delta    +40.3  improved 71.4%
+    position swaps (Y1 -> arm), top 8: [(('WR', 'WR'), 40), (('WR', 'RB'), 25), (('RB', 'RB'), 21), (('QB', 'WR'), 16), (('K', 'RB'), 16), (('TE', 'RB'), 12), (('TE', 'TE'), 11), (('RB', 'WR'), 10)]
+    first divergence round histogram: {1: 10, 2: 8, 3: 2}   drafts with no divergence 0/20
+    picks 1-1: 2/5 changed, mean realized delta +149.0
+    picks 20-21: 5/10 changed, mean realized delta -69.1
+    picks 40-41: 7/10 changed, mean realized delta +44.9
+    picks 60-61: 8/10 changed, mean realized delta +38.3
+
+  target_league / T2_w100: 291/320 picks changed (90.9%)
+    improved 149/291 (51.2%)   worsened 142/291 (48.8%)   tied 0
+    realized delta on changed picks: mean +9.4   median +11.7   total +2734
+    distribution: p0=-355  p10=-114  p25=-69  p50=+12  p75=+94  p90=+141  p100=+277
+    within-position changes 72/291 (24.7%)   cross-position 219
+      within-position realized delta: mean +18.2
+      cross-position  realized delta: mean +6.5
+    phase             picks  changed       %  mean delta  improved %
+    EARLY (1-5)         100       88  88.0%         4.5      51.1%
+    MIDDLE (6-10)       100       92  92.0%        35.7      64.1%
+    LATE (11-16)        120      111  92.5%        -8.6      40.5%
+    round    changed %  mean delta
+    1             85%         8.7
+    2             95%        -9.7
+    3             90%        21.0
+    4             85%        -4.8
+    5             85%         8.0
+    6             85%         3.7
+    7             85%        22.1
+    8             95%        43.9
+    9             95%        41.0
+    10           100%        61.9
+    11            95%        -5.8
+    12            75%        19.9
+    13            95%       -14.8
+    14           100%       -32.9
+    15           100%       -16.2
+    16            90%         6.9
+    by CONTROL position (where Y1 would have picked):
+      QB    n=36    mean delta    -53.0  improved 36.1%
+      RB    n=49    mean delta    +49.0  improved 67.3%
+      WR    n=90    mean delta     +6.2  improved 47.8%
+      TE    n=48    mean delta    +27.3  improved 56.2%
+      K     n=40    mean delta    -14.0  improved 37.5%
+      DST   n=28    mean delta    +33.1  improved 64.3%
+    position swaps (Y1 -> arm), top 8: [(('WR', 'WR'), 42), (('WR', 'RB'), 33), (('RB', 'RB'), 22), (('TE', 'WR'), 20), (('RB', 'WR'), 19), (('K', 'RB'), 17), (('TE', 'RB'), 15), (('K', 'WR'), 15)]
+    first divergence round histogram: {1: 17, 2: 3}   drafts with no divergence 0/20
+    picks 1-1: 5/5 changed, mean realized delta -21.3
+    picks 20-21: 8/10 changed, mean realized delta +8.0
+    picks 40-41: 8/10 changed, mean realized delta +14.3
+    picks 60-61: 8/10 changed, mean realized delta +65.5
+
+  target_league / ECR_ALONE: 291/320 picks changed (90.9%)
+    improved 149/291 (51.2%)   worsened 142/291 (48.8%)   tied 0
+    realized delta on changed picks: mean +9.4   median +11.7   total +2734
+    distribution: p0=-355  p10=-114  p25=-69  p50=+12  p75=+94  p90=+141  p100=+277
+    within-position changes 72/291 (24.7%)   cross-position 219
+      within-position realized delta: mean +18.2
+      cross-position  realized delta: mean +6.5
+    phase             picks  changed       %  mean delta  improved %
+    EARLY (1-5)         100       88  88.0%         4.5      51.1%
+    MIDDLE (6-10)       100       92  92.0%        35.7      64.1%
+    LATE (11-16)        120      111  92.5%        -8.6      40.5%
+    round    changed %  mean delta
+    1             85%         8.7
+    2             95%        -9.7
+    3             90%        21.0
+    4             85%        -4.8
+    5             85%         8.0
+    6             85%         3.7
+    7             85%        22.1
+    8             95%        43.9
+    9             95%        41.0
+    10           100%        61.9
+    11            95%        -5.8
+    12            75%        19.9
+    13            95%       -14.8
+    14           100%       -32.9
+    15           100%       -16.2
+    16            90%         6.9
+    by CONTROL position (where Y1 would have picked):
+      QB    n=36    mean delta    -53.0  improved 36.1%
+      RB    n=49    mean delta    +49.0  improved 67.3%
+      WR    n=90    mean delta     +6.2  improved 47.8%
+      TE    n=48    mean delta    +27.3  improved 56.2%
+      K     n=40    mean delta    -14.0  improved 37.5%
+      DST   n=28    mean delta    +33.1  improved 64.3%
+    position swaps (Y1 -> arm), top 8: [(('WR', 'WR'), 42), (('WR', 'RB'), 33), (('RB', 'RB'), 22), (('TE', 'WR'), 20), (('RB', 'WR'), 19), (('K', 'RB'), 17), (('TE', 'RB'), 15), (('K', 'WR'), 15)]
+    first divergence round histogram: {1: 17, 2: 3}   drafts with no divergence 0/20
+    picks 1-1: 5/5 changed, mean realized delta -21.3
+    picks 20-21: 8/10 changed, mean realized delta +8.0
+    picks 40-41: 8/10 changed, mean realized delta +14.3
+    picks 60-61: 8/10 changed, mean realized delta +65.5
+
+  target_league / ECR_ALONE_NAIVE: 291/320 picks changed (90.9%)
+    improved 149/291 (51.2%)   worsened 142/291 (48.8%)   tied 0
+    realized delta on changed picks: mean +9.4   median +11.7   total +2734
+    distribution: p0=-355  p10=-114  p25=-69  p50=+12  p75=+94  p90=+141  p100=+277
+    within-position changes 72/291 (24.7%)   cross-position 219
+      within-position realized delta: mean +18.2
+      cross-position  realized delta: mean +6.5
+    phase             picks  changed       %  mean delta  improved %
+    EARLY (1-5)         100       88  88.0%         4.5      51.1%
+    MIDDLE (6-10)       100       92  92.0%        35.7      64.1%
+    LATE (11-16)        120      111  92.5%        -8.6      40.5%
+    round    changed %  mean delta
+    1             85%         8.7
+    2             95%        -9.7
+    3             90%        21.0
+    4             85%        -4.8
+    5             85%         8.0
+    6             85%         3.7
+    7             85%        22.1
+    8             95%        43.9
+    9             95%        41.0
+    10           100%        61.9
+    11            95%        -5.8
+    12            75%        19.9
+    13            95%       -14.8
+    14           100%       -32.9
+    15           100%       -16.2
+    16            90%         6.9
+    by CONTROL position (where Y1 would have picked):
+      QB    n=36    mean delta    -53.0  improved 36.1%
+      RB    n=49    mean delta    +49.0  improved 67.3%
+      WR    n=90    mean delta     +6.2  improved 47.8%
+      TE    n=48    mean delta    +27.3  improved 56.2%
+      K     n=40    mean delta    -14.0  improved 37.5%
+      DST   n=28    mean delta    +33.1  improved 64.3%
+    position swaps (Y1 -> arm), top 8: [(('WR', 'WR'), 42), (('WR', 'RB'), 33), (('RB', 'RB'), 22), (('TE', 'WR'), 20), (('RB', 'WR'), 19), (('K', 'RB'), 17), (('TE', 'RB'), 15), (('K', 'WR'), 15)]
+    first divergence round histogram: {1: 17, 2: 3}   drafts with no divergence 0/20
+    picks 1-1: 5/5 changed, mean realized delta -21.3
+    picks 20-21: 8/10 changed, mean realized delta +8.0
+    picks 40-41: 8/10 changed, mean realized delta +14.3
+    picks 60-61: 8/10 changed, mean realized delta +65.5
+
+  dynasty_1qb / T1_ALL_w25: 89/320 picks changed (27.8%)
+    improved 52/89 (58.4%)   worsened 35/89 (39.3%)   tied 2
+    realized delta on changed picks: mean +3.5   median +5.5   total +314
+    distribution: p0=-138  p10=-87  p25=-43  p50=+5  p75=+37  p90=+96  p100=+194
+    within-position changes 43/89 (48.3%)   cross-position 46
+      within-position realized delta: mean -1.6
+      cross-position  realized delta: mean +8.3
+    phase             picks  changed       %  mean delta  improved %
+    EARLY (1-5)         100       13  13.0%        39.5      69.2%
+    MIDDLE (6-10)       100       25  25.0%       -16.0      44.0%
+    LATE (11-16)        120       51  42.5%         3.9      62.7%
+    round    changed %  mean delta
+    1             10%       124.7
+    2             15%        96.2
+    3             20%       -57.4
+    4             15%        62.1
+    5              5%        18.4
+    6             15%       -29.4
+    7             25%        17.1
+    8             20%       -49.1
+    9             60%        -5.2
+    10             5%      -137.6
+    11            25%        32.9
+    12            20%        46.3
+    13            55%        15.4
+    14            60%         8.9
+    15            50%       -33.0
+    16            45%       -10.7
+    by CONTROL position (where Y1 would have picked):
+      QB    n=7     mean delta    +28.7  improved 57.1%
+      RB    n=13    mean delta    -21.2  improved 46.2%
+      WR    n=28    mean delta    +11.4  improved 50.0%
+      TE    n=14    mean delta     +9.7  improved 85.7%
+      K     n=23    mean delta     -8.4  improved 52.2%
+      DST   n=4     mean delta    +32.0  improved 100.0%
+    position swaps (Y1 -> arm), top 8: [(('K', 'K'), 21), (('WR', 'WR'), 14), (('TE', 'K'), 10), (('WR', 'K'), 7), (('RB', 'K'), 6), (('TE', 'WR'), 4), (('DST', 'DST'), 4), (('RB', 'TE'), 3)]
+    first divergence round histogram: {1: 2, 2: 2, 3: 4, 4: 2, 5: 1, 6: 2, 7: 2, 9: 5}   drafts with no divergence 0/20
+    picks 1-1: 0/5 changed, mean realized delta +0.0
+    picks 20-21: 2/10 changed, mean realized delta +20.9
+    picks 40-41: 2/10 changed, mean realized delta +136.9
+    picks 60-61: 3/10 changed, mean realized delta +19.9
+
+  dynasty_1qb / T1_ALL_w50: 166/320 picks changed (51.9%)
+    improved 90/166 (54.2%)   worsened 74/166 (44.6%)   tied 2
+    realized delta on changed picks: mean -0.7   median +5.3   total -124
+    distribution: p0=-161  p10=-104  p25=-54  p50=+5  p75=+38  p90=+96  p100=+269
+    within-position changes 75/166 (45.2%)   cross-position 91
+      within-position realized delta: mean +11.3
+      cross-position  realized delta: mean -10.7
+    phase             picks  changed       %  mean delta  improved %
+    EARLY (1-5)         100       32  32.0%        20.4      50.0%
+    MIDDLE (6-10)       100       49  49.0%         3.7      59.2%
+    LATE (11-16)        120       85  70.8%       -11.3      52.9%
+    round    changed %  mean delta
+    1             15%        28.0
+    2             30%         2.1
+    3             30%        43.1
+    4             45%        31.2
+    5             40%         2.0
+    6             30%       -18.5
+    7             30%        -7.7
+    8             70%        23.8
+    9             80%         5.6
+    10            35%       -11.9
+    11            55%        37.0
+    12            65%        16.1
+    13            85%       -20.9
+    14            85%       -30.5
+    15            75%       -27.2
+    16            60%       -24.5
+    by CONTROL position (where Y1 would have picked):
+      QB    n=15    mean delta    +13.8  improved 46.7%
+      RB    n=36    mean delta    -26.3  improved 33.3%
+      WR    n=50    mean delta    +12.5  improved 52.0%
+      TE    n=21    mean delta    +16.7  improved 81.0%
+      K     n=32    mean delta    -22.2  improved 50.0%
+      DST   n=12    mean delta    +29.0  improved 100.0%
+    position swaps (Y1 -> arm), top 8: [(('K', 'K'), 30), (('WR', 'WR'), 20), (('TE', 'K'), 19), (('DST', 'DST'), 12), (('WR', 'K'), 11), (('RB', 'K'), 11), (('RB', 'WR'), 11), (('WR', 'TE'), 8)]
+    first divergence round histogram: {1: 3, 2: 5, 3: 4, 4: 3, 5: 4, 7: 1}   drafts with no divergence 0/20
+    picks 1-1: 1/5 changed, mean realized delta -9.4
+    picks 20-21: 3/10 changed, mean realized delta +7.6
+    picks 40-41: 4/10 changed, mean realized delta +28.7
+    picks 60-61: 4/10 changed, mean realized delta -61.4
+
+  dynasty_1qb / T1_ALL_w75: 229/320 picks changed (71.6%)
+    improved 107/229 (46.7%)   worsened 121/229 (52.8%)   tied 1
+    realized delta on changed picks: mean -8.0   median -8.9   total -1833
+    distribution: p0=-234  p10=-138  p25=-59  p50=-9  p75=+37  p90=+96  p100=+359
+    within-position changes 85/229 (37.1%)   cross-position 144
+      within-position realized delta: mean +6.8
+      cross-position  realized delta: mean -16.7
+    phase             picks  changed       %  mean delta  improved %
+    EARLY (1-5)         100       61  61.0%         8.6      42.6%
+    MIDDLE (6-10)       100       66  66.0%       -11.7      51.5%
+    LATE (11-16)        120      102  85.0%       -15.5      46.1%
+    round    changed %  mean delta
+    1             45%        73.5
+    2             55%        -0.7
+    3             55%       -50.1
+    4             65%        10.0
+    5             85%        17.1
+    6             35%        56.6
+    7             55%       -27.4
+    8             90%       -13.9
+    9             95%       -11.8
+    10            55%       -35.8
+    11            80%         0.4
+    12            80%       -49.1
+    13           100%        -0.3
+    14            90%       -21.4
+    15            70%        -8.1
+    16            90%       -16.8
+    by CONTROL position (where Y1 would have picked):
+      QB    n=21    mean delta    -61.7  improved 19.0%
+      RB    n=50    mean delta     -9.9  improved 40.0%
+      WR    n=73    mean delta     -3.9  improved 42.5%
+      TE    n=37    mean delta    +18.0  improved 59.5%
+      K     n=36    mean delta    -22.3  improved 50.0%
+      DST   n=12    mean delta    +31.3  improved 100.0%
+    position swaps (Y1 -> arm), top 8: [(('K', 'K'), 31), (('WR', 'WR'), 27), (('RB', 'K'), 22), (('TE', 'K'), 20), (('WR', 'K'), 16), (('RB', 'WR'), 15), (('WR', 'TE'), 13), (('DST', 'DST'), 12)]
+    first divergence round histogram: {1: 9, 2: 6, 3: 1, 4: 2, 5: 2}   drafts with no divergence 0/20
+    picks 1-1: 3/5 changed, mean realized delta +16.5
+    picks 20-21: 6/10 changed, mean realized delta -30.5
+    picks 40-41: 7/10 changed, mean realized delta +31.4
+    picks 60-61: 4/10 changed, mean realized delta -61.4
+
+  dynasty_1qb / T1_ALL_w100: 269/320 picks changed (84.1%)
+    improved 113/269 (42.0%)   worsened 156/269 (58.0%)   tied 0
+    realized delta on changed picks: mean -28.3   median -20.6   total -7615
+    distribution: p0=-268  p10=-147  p25=-86  p50=-21  p75=+25  p90=+89  p100=+256
+    within-position changes 120/269 (44.6%)   cross-position 149
+      within-position realized delta: mean -29.4
+      cross-position  realized delta: mean -27.5
+    phase             picks  changed       %  mean delta  improved %
+    EARLY (1-5)         100       64  64.0%        -8.4      53.1%
+    MIDDLE (6-10)       100       94  94.0%       -47.1      35.1%
+    LATE (11-16)        120      111  92.5%       -23.9      41.4%
+    round    changed %  mean delta
+    1             55%        60.4
+    2             60%        -3.3
+    3             50%       -39.2
+    4             80%         2.0
+    5             75%       -53.4
+    6             80%       -77.3
+    7             95%       -57.3
+    8             95%       -32.3
+    9            100%       -19.0
+    10           100%       -55.4
+    11           100%       -44.3
+    12           100%       -18.1
+    13           100%        -6.3
+    14            85%       -30.5
+    15            70%       -30.2
+    16           100%       -16.8
+    by CONTROL position (where Y1 would have picked):
+      QB    n=26    mean delta    -43.1  improved 30.8%
+      RB    n=60    mean delta    -29.8  improved 40.0%
+      WR    n=82    mean delta    -36.9  improved 36.6%
+      TE    n=46    mean delta     -4.7  improved 54.3%
+      K     n=35    mean delta    -36.1  improved 51.4%
+      DST   n=20    mean delta     -9.6  improved 40.0%
+    position swaps (Y1 -> arm), top 8: [(('WR', 'WR'), 36), (('K', 'K'), 34), (('RB', 'K'), 25), (('TE', 'K'), 22), (('DST', 'DST'), 20), (('WR', 'K'), 20), (('RB', 'RB'), 14), (('RB', 'WR'), 14)]
+    first divergence round histogram: {1: 11, 2: 4, 3: 2, 4: 2, 5: 1}   drafts with no divergence 0/20
+    picks 1-1: 3/5 changed, mean realized delta +65.3
+    picks 20-21: 6/10 changed, mean realized delta -3.5
+    picks 40-41: 8/10 changed, mean realized delta -31.9
+    picks 60-61: 9/10 changed, mean realized delta -83.9
+
+  dynasty_1qb / T1_SKILL_w100: 212/320 picks changed (66.2%)
+    improved 85/212 (40.1%)   worsened 127/212 (59.9%)   tied 0
+    realized delta on changed picks: mean -24.4   median -33.9   total -5183
+    distribution: p0=-268  p10=-143  p25=-86  p50=-35  p75=+42  p90=+98  p100=+256
+    within-position changes 76/212 (35.8%)   cross-position 136
+      within-position realized delta: mean -31.5
+      cross-position  realized delta: mean -20.5
+    phase             picks  changed       %  mean delta  improved %
+    EARLY (1-5)         100       64  64.0%        -8.4      53.1%
+    MIDDLE (6-10)       100       66  66.0%       -51.9      31.8%
+    LATE (11-16)        120       82  68.3%       -14.9      36.6%
+    round    changed %  mean delta
+    1             55%        60.4
+    2             60%        -3.3
+    3             50%       -39.2
+    4             80%         2.0
+    5             75%       -53.4
+    6             80%       -77.3
+    7             95%       -55.6
+    8             80%         5.4
+    9             15%       -74.9
+    10            60%       -82.7
+    11            40%       -66.8
+    12            95%         2.6
+    13            95%        -3.8
+    14            65%         2.2
+    15            35%       -42.4
+    16            80%       -24.7
+    by CONTROL position (where Y1 would have picked):
+      QB    n=25    mean delta    -10.9  improved 44.0%
+      RB    n=60    mean delta    -35.5  improved 31.7%
+      WR    n=82    mean delta    -34.9  improved 40.2%
+      TE    n=42    mean delta     -4.5  improved 45.2%
+      K     n=3     mean delta    +91.9  improved 100.0%
+    position swaps (Y1 -> arm), top 8: [(('WR', 'WR'), 37), (('RB', 'K'), 18), (('RB', 'RB'), 15), (('TE', 'TE'), 14), (('RB', 'WR'), 12), (('WR', 'QB'), 11), (('QB', 'QB'), 10), (('WR', 'K'), 10)]
+    first divergence round histogram: {1: 11, 2: 4, 3: 2, 4: 2, 5: 1}   drafts with no divergence 0/20
+    picks 1-1: 3/5 changed, mean realized delta +65.3
+    picks 20-21: 6/10 changed, mean realized delta -3.5
+    picks 40-41: 8/10 changed, mean realized delta -31.9
+    picks 60-61: 9/10 changed, mean realized delta -83.9
+
+  dynasty_1qb / T2_w25: 163/320 picks changed (50.9%)
+    improved 91/163 (55.8%)   worsened 72/163 (44.2%)   tied 0
+    realized delta on changed picks: mean +19.8   median +16.0   total +3233
+    distribution: p0=-206  p10=-95  p25=-49  p50=+16  p75=+89  p90=+151  p100=+359
+    within-position changes 62/163 (38.0%)   cross-position 101
+      within-position realized delta: mean +8.7
+      cross-position  realized delta: mean +26.7
+    phase             picks  changed       %  mean delta  improved %
+    EARLY (1-5)         100       31  31.0%        -5.7      51.6%
+    MIDDLE (6-10)       100       61  61.0%        41.8      62.3%
+    LATE (11-16)        120       71  59.2%        12.1      52.1%
+    round    changed %  mean delta
+    1             30%         9.2
+    2             35%       -15.8
+    3             10%      -139.5
+    4             40%        42.5
+    5             40%       -22.7
+    6             30%       -65.2
+    7             65%        24.9
+    8             70%        62.9
+    9            100%        68.7
+    10            40%        45.4
+    11            50%        56.6
+    12            65%        27.9
+    13            55%         6.4
+    14            60%        10.3
+    15            70%        -2.3
+    16            55%       -21.0
+    by CONTROL position (where Y1 would have picked):
+      QB    n=17    mean delta     +9.4  improved 58.8%
+      RB    n=29    mean delta    +18.9  improved 44.8%
+      WR    n=39    mean delta     -6.3  improved 51.3%
+      TE    n=20    mean delta     +5.0  improved 50.0%
+      K     n=41    mean delta    +40.3  improved 56.1%
+      DST   n=17    mean delta    +60.0  improved 88.2%
+    position swaps (Y1 -> arm), top 8: [(('WR', 'WR'), 22), (('RB', 'RB'), 18), (('K', 'WR'), 14), (('TE', 'TE'), 13), (('K', 'QB'), 13), (('WR', 'RB'), 13), (('DST', 'WR'), 9), (('QB', 'WR'), 9)]
+    first divergence round histogram: {1: 6, 2: 6, 3: 1, 4: 1, 5: 3, 7: 3}   drafts with no divergence 0/20
+    picks 1-1: 1/5 changed, mean realized delta +41.9
+    picks 20-21: 2/10 changed, mean realized delta -65.6
+    picks 40-41: 3/10 changed, mean realized delta +32.8
+    picks 60-61: 5/10 changed, mean realized delta +11.3
+
+  dynasty_1qb / T2_w50: 216/320 picks changed (67.5%)
+    improved 116/216 (53.7%)   worsened 100/216 (46.3%)   tied 0
+    realized delta on changed picks: mean +17.0   median +13.8   total +3680
+    distribution: p0=-206  p10=-97  p25=-49  p50=+14  p75=+88  p90=+154  p100=+359
+    within-position changes 81/216 (37.5%)   cross-position 135
+      within-position realized delta: mean +2.6
+      cross-position  realized delta: mean +25.7
+    phase             picks  changed       %  mean delta  improved %
+    EARLY (1-5)         100       59  59.0%        -5.2      50.8%
+    MIDDLE (6-10)       100       75  75.0%        45.8      61.3%
+    LATE (11-16)        120       82  68.3%         6.8      48.8%
+    round    changed %  mean delta
+    1             45%        44.1
+    2             60%       -10.7
+    3             70%       -46.7
+    4             65%         5.2
+    5             55%         0.8
+    6             70%        52.4
+    7             75%        25.4
+    8             80%        23.4
+    9            100%        66.2
+    10            50%        61.8
+    11            75%        51.8
+    12            70%        18.2
+    13            65%        -4.9
+    14            70%         0.5
+    15            75%        -2.1
+    16            55%       -35.2
+    by CONTROL position (where Y1 would have picked):
+      QB    n=21    mean delta    -11.1  improved 42.9%
+      RB    n=38    mean delta     +9.5  improved 47.4%
+      WR    n=62    mean delta     +3.2  improved 53.2%
+      TE    n=34    mean delta    +12.9  improved 50.0%
+      K     n=41    mean delta    +37.5  improved 53.7%
+      DST   n=20    mean delta    +68.9  improved 85.0%
+    position swaps (Y1 -> arm), top 8: [(('WR', 'WR'), 36), (('RB', 'RB'), 28), (('WR', 'RB'), 22), (('K', 'WR'), 16), (('K', 'QB'), 14), (('TE', 'TE'), 13), (('DST', 'WR'), 12), (('QB', 'WR'), 12)]
+    first divergence round histogram: {1: 9, 2: 6, 3: 4, 7: 1}   drafts with no divergence 0/20
+    picks 1-1: 2/5 changed, mean realized delta +47.8
+    picks 20-21: 6/10 changed, mean realized delta -48.0
+    picks 40-41: 6/10 changed, mean realized delta +12.4
+    picks 60-61: 7/10 changed, mean realized delta +35.8
+
+  dynasty_1qb / T2_w75: 243/320 picks changed (75.9%)
+    improved 126/243 (51.9%)   worsened 117/243 (48.1%)   tied 0
+    realized delta on changed picks: mean +9.7   median +6.0   total +2346
+    distribution: p0=-265  p10=-102  p25=-52  p50=+6  p75=+71  p90=+136  p100=+359
+    within-position changes 86/243 (35.4%)   cross-position 157
+      within-position realized delta: mean -7.7
+      cross-position  realized delta: mean +19.2
+    phase             picks  changed       %  mean delta  improved %
+    EARLY (1-5)         100       71  71.0%       -17.5      47.9%
+    MIDDLE (6-10)       100       81  81.0%        31.8      56.8%
+    LATE (11-16)        120       91  75.8%        11.1      50.5%
+    round    changed %  mean delta
+    1             65%        22.1
+    2             85%       -64.0
+    3             75%       -61.4
+    4             70%        14.7
+    5             60%        23.0
+    6             80%        41.8
+    7             80%         0.9
+    8             85%        15.8
+    9            100%        63.6
+    10            60%        29.4
+    11            80%        38.8
+    12            75%        26.6
+    13            75%        -8.4
+    14            75%         3.5
+    15            85%        13.4
+    16            65%       -12.9
+    by CONTROL position (where Y1 would have picked):
+      QB    n=26    mean delta    -46.2  improved 34.6%
+      RB    n=45    mean delta     +3.1  improved 51.1%
+      WR    n=73    mean delta     -0.7  improved 47.9%
+      TE    n=38    mean delta     +9.5  improved 52.6%
+      K     n=41    mean delta    +41.8  improved 56.1%
+      DST   n=20    mean delta    +69.0  improved 80.0%
+    position swaps (Y1 -> arm), top 8: [(('WR', 'WR'), 44), (('RB', 'RB'), 27), (('WR', 'RB'), 21), (('K', 'WR'), 17), (('QB', 'WR'), 16), (('K', 'QB'), 14), (('RB', 'WR'), 13), (('TE', 'RB'), 13)]
+    first divergence round histogram: {1: 13, 2: 5, 3: 1, 4: 1}   drafts with no divergence 0/20
+    picks 1-1: 4/5 changed, mean realized delta +38.6
+    picks 20-21: 9/10 changed, mean realized delta -114.8
+    picks 40-41: 6/10 changed, mean realized delta +37.5
+    picks 60-61: 8/10 changed, mean realized delta -20.9
+
+  dynasty_1qb / T2_w100: 303/320 picks changed (94.7%)
+    improved 139/303 (45.9%)   worsened 164/303 (54.1%)   tied 0
+    realized delta on changed picks: mean -8.3   median -14.0   total -2507
+    distribution: p0=-268  p10=-135  p25=-78  p50=-14  p75=+52  p90=+118  p100=+359
+    within-position changes 84/303 (27.7%)   cross-position 219
+      within-position realized delta: mean -22.3
+      cross-position  realized delta: mean -2.9
+    phase             picks  changed       %  mean delta  improved %
+    EARLY (1-5)         100       90  90.0%       -20.8      41.1%
+    MIDDLE (6-10)       100       96  96.0%        12.3      57.3%
+    LATE (11-16)        120      117  97.5%       -15.6      40.2%
+    round    changed %  mean delta
+    1             80%        36.0
+    2             95%       -75.5
+    3             95%       -48.0
+    4             90%        -9.5
+    5             90%         4.0
+    6             90%         5.3
+    7             90%        18.7
+    8            100%        59.6
+    9            100%        14.6
+    10           100%       -36.6
+    11            95%        -6.3
+    12           100%        28.0
+    13            95%        18.2
+    14           100%       -20.2
+    15           100%       -55.0
+    16            95%       -58.0
+    by CONTROL position (where Y1 would have picked):
+      QB    n=38    mean delta    -60.1  improved 34.2%
+      RB    n=58    mean delta     -0.6  improved 48.3%
+      WR    n=100   mean delta    -12.9  improved 45.0%
+      TE    n=46    mean delta    +11.5  improved 50.0%
+      K     n=41    mean delta     +0.9  improved 41.5%
+      DST   n=20    mean delta    +26.4  improved 65.0%
+    position swaps (Y1 -> arm), top 8: [(('WR', 'WR'), 53), (('RB', 'WR'), 27), (('WR', 'RB'), 25), (('RB', 'RB'), 20), (('TE', 'WR'), 20), (('QB', 'WR'), 19), (('K', 'WR'), 18), (('TE', 'RB'), 15)]
+    first divergence round histogram: {1: 16, 2: 3, 3: 1}   drafts with no divergence 0/20
+    picks 1-1: 5/5 changed, mean realized delta +0.6
+    picks 20-21: 10/10 changed, mean realized delta -118.3
+    picks 40-41: 10/10 changed, mean realized delta -57.1
+    picks 60-61: 8/10 changed, mean realized delta -41.7
+
+  dynasty_1qb / ECR_ALONE: 303/320 picks changed (94.7%)
+    improved 139/303 (45.9%)   worsened 164/303 (54.1%)   tied 0
+    realized delta on changed picks: mean -8.3   median -14.0   total -2507
+    distribution: p0=-268  p10=-135  p25=-78  p50=-14  p75=+52  p90=+118  p100=+359
+    within-position changes 84/303 (27.7%)   cross-position 219
+      within-position realized delta: mean -22.3
+      cross-position  realized delta: mean -2.9
+    phase             picks  changed       %  mean delta  improved %
+    EARLY (1-5)         100       90  90.0%       -20.8      41.1%
+    MIDDLE (6-10)       100       96  96.0%        12.3      57.3%
+    LATE (11-16)        120      117  97.5%       -15.6      40.2%
+    round    changed %  mean delta
+    1             80%        36.0
+    2             95%       -75.5
+    3             95%       -48.0
+    4             90%        -9.5
+    5             90%         4.0
+    6             90%         5.3
+    7             90%        18.7
+    8            100%        59.6
+    9            100%        14.6
+    10           100%       -36.6
+    11            95%        -6.3
+    12           100%        28.0
+    13            95%        18.2
+    14           100%       -20.2
+    15           100%       -55.0
+    16            95%       -58.0
+    by CONTROL position (where Y1 would have picked):
+      QB    n=38    mean delta    -60.1  improved 34.2%
+      RB    n=58    mean delta     -0.6  improved 48.3%
+      WR    n=100   mean delta    -12.9  improved 45.0%
+      TE    n=46    mean delta    +11.5  improved 50.0%
+      K     n=41    mean delta     +0.9  improved 41.5%
+      DST   n=20    mean delta    +26.4  improved 65.0%
+    position swaps (Y1 -> arm), top 8: [(('WR', 'WR'), 53), (('RB', 'WR'), 27), (('WR', 'RB'), 25), (('RB', 'RB'), 20), (('TE', 'WR'), 20), (('QB', 'WR'), 19), (('K', 'WR'), 18), (('TE', 'RB'), 15)]
+    first divergence round histogram: {1: 16, 2: 3, 3: 1}   drafts with no divergence 0/20
+    picks 1-1: 5/5 changed, mean realized delta +0.6
+    picks 20-21: 10/10 changed, mean realized delta -118.3
+    picks 40-41: 10/10 changed, mean realized delta -57.1
+    picks 60-61: 8/10 changed, mean realized delta -41.7
+
+  dynasty_1qb / ECR_ALONE_NAIVE: 303/320 picks changed (94.7%)
+    improved 139/303 (45.9%)   worsened 164/303 (54.1%)   tied 0
+    realized delta on changed picks: mean -8.3   median -14.0   total -2507
+    distribution: p0=-268  p10=-135  p25=-78  p50=-14  p75=+52  p90=+118  p100=+359
+    within-position changes 84/303 (27.7%)   cross-position 219
+      within-position realized delta: mean -22.3
+      cross-position  realized delta: mean -2.9
+    phase             picks  changed       %  mean delta  improved %
+    EARLY (1-5)         100       90  90.0%       -20.8      41.1%
+    MIDDLE (6-10)       100       96  96.0%        12.3      57.3%
+    LATE (11-16)        120      117  97.5%       -15.6      40.2%
+    round    changed %  mean delta
+    1             80%        36.0
+    2             95%       -75.5
+    3             95%       -48.0
+    4             90%        -9.5
+    5             90%         4.0
+    6             90%         5.3
+    7             90%        18.7
+    8            100%        59.6
+    9            100%        14.6
+    10           100%       -36.6
+    11            95%        -6.3
+    12           100%        28.0
+    13            95%        18.2
+    14           100%       -20.2
+    15           100%       -55.0
+    16            95%       -58.0
+    by CONTROL position (where Y1 would have picked):
+      QB    n=38    mean delta    -60.1  improved 34.2%
+      RB    n=58    mean delta     -0.6  improved 48.3%
+      WR    n=100   mean delta    -12.9  improved 45.0%
+      TE    n=46    mean delta    +11.5  improved 50.0%
+      K     n=41    mean delta     +0.9  improved 41.5%
+      DST   n=20    mean delta    +26.4  improved 65.0%
+    position swaps (Y1 -> arm), top 8: [(('WR', 'WR'), 53), (('RB', 'WR'), 27), (('WR', 'RB'), 25), (('RB', 'RB'), 20), (('TE', 'WR'), 20), (('QB', 'WR'), 19), (('K', 'WR'), 18), (('TE', 'RB'), 15)]
+    first divergence round histogram: {1: 16, 2: 3, 3: 1}   drafts with no divergence 0/20
+    picks 1-1: 5/5 changed, mean realized delta +0.6
+    picks 20-21: 10/10 changed, mean realized delta -118.3
+    picks 40-41: 10/10 changed, mean realized delta -57.1
+    picks 60-61: 8/10 changed, mean realized delta -41.7
