@@ -79,8 +79,9 @@ def apply_risk_off(con: duckdb.DuckDBPyConnection, seasons: tuple[int, ...]) -> 
                 continue
             con.execute(
                 "INSERT INTO uncertainty_predictions (prediction_id, player_id, season, position, "
-                "model_version, feature_version, point_prediction, confidence) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, 1.0)",
+                "model_version, feature_version, point_prediction, confidence, "
+                "calibration_season, predicted_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, 1.0, ?, now())",
                 [
                     f"d111-{pid}-{season}",
                     pid,
@@ -89,6 +90,7 @@ def apply_risk_off(con: duckdb.DuckDBPyConnection, seasons: tuple[int, ...]) -> 
                     MODEL_VERSION,
                     FEATURE_VERSION_FALLBACK,
                     value,
+                    season - 1,
                 ],
             )
             inserted += 1
@@ -102,8 +104,13 @@ def main() -> None:
     ap.add_argument("--out", required=True)
     ap.add_argument("--league", default="target_league")
     ap.add_argument("--slots", default="")
+    ap.add_argument("--seasons", default="", help="shard the run; results are merged by season")
     args = ap.parse_args()
     os.makedirs(args.out, exist_ok=True)
+    run_seasons = (
+        tuple(int(s) for s in args.seasons.split(",")) if args.seasons else SEASONS
+    )
+    tag = f"_{args.seasons.replace(',', '-')}" if args.seasons else ""
 
     league = load_league_context(
         f"src/alpha_squad/config/league_configs/{args.league}.yaml"
@@ -114,7 +121,7 @@ def main() -> None:
         else tuple(range(1, league.teams + 1))
     )
 
-    work = os.path.join(args.out, f"d111_{args.league}_{args.arm}.duckdb")
+    work = os.path.join(args.out, f"d111_{args.league}_{args.arm}{tag}.duckdb")
     shutil.copy(args.db, work)
     con = duckdb.connect(work)
 
@@ -146,7 +153,7 @@ def main() -> None:
     print(f"league={args.league} arm={args.arm} slots={slots} vintage={vintage[:16]}", flush=True)
 
     rows = []
-    for season in SEASONS:
+    for season in run_seasons:
         projections, positions = load_season_projections(con, season)
         realized = _actual_points_for(con, season, sorted(projections))
         for slot in slots:
@@ -169,11 +176,11 @@ def main() -> None:
             print(f"  {season} slot {slot}: {[positions.get(p, '?') for p in picks[:3]]} "
                   f"starters {res.starter_points:.0f} ({time.time() - t0:.0f}s)", flush=True)
 
-    with open(os.path.join(args.out, f"d111_{args.league}_{args.arm}.json"), "w") as f:
+    with open(os.path.join(args.out, f"d111_{args.league}_{args.arm}{tag}.json"), "w") as f:
         json.dump(rows, f)
     con.close()
     os.remove(work)
-    print(f"wrote d111_{args.league}_{args.arm}.json ({len(rows)} drafts)", flush=True)
+    print(f"wrote d111_{args.league}_{args.arm}{tag}.json ({len(rows)} drafts)", flush=True)
 
 
 if __name__ == "__main__":

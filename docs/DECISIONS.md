@@ -8670,3 +8670,99 @@ change of any kind.** Nothing merged, no PR.
 
 **NEXT PHASE (not started):** does ablating the `risk` multiplier to a constant — changing no
 projection at all — move realized draft value more than any cross-position magnitude arm did?
+
+## D111 — Risk multiplier audit and ablation (C + F: not a risk measure; the uncertainty model is)
+
+**Question.** Is the `risk` multiplier useful and calibrated (A), redundant (B), reinforcing
+projection bias (C), actively hurting draft value (D), or some combination? Diagnostic phase. No
+production change, no retraining, no scoring-formula change, no PR, nothing merged. `models/`
+`73b408e9`, `league/` `d4cfd00e`, unchanged. Vintage `d2955868…`. Full report:
+`docs/D111_RISK_MULTIPLIER_AUDIT.md`. Ablation pre-registered at `b96b88a` before it ran.
+
+### 1. What risk provably is — this is algebra, not statistics
+
+`conformal.py::apply_quantiles` returns `point_prediction + residual_quantile`, and the residual
+quantiles are fit once per (calibration season, position). So `p90 − p10` is a per-(season,
+position) **CONSTANT** — measured: **20 of 20 cells have exactly one distinct width** — and
+
+    confidence = clip(1 - W(season, position) / (2 * |projection|), 0, 1)
+
+is a deterministic, strictly increasing function of the player's own projection. It carries **no
+player-specific uncertainty whatsoever**; within a position-season it is the projection,
+re-expressed. It is bounded above by 1.0, so it can only ever REDUCE a score. Contention-set values:
+RB 0.604, WR 0.719, QB 0.722, TE 0.753 — i.e. it removes 21–35% of the winning score, unevenly by
+position. It collapses to exactly 0 past ~ECR 160 (27% of 161–250, 78% beyond, 100% unranked),
+while ~a quarter of the pool (every DST, most K, ~100 rookies/season) has no uncertainty row at all
+and silently takes a hardcoded **0.7** fallback — a plausible mechanism for the long-documented
+round-9 kicker.
+
+### 2. It is not measuring risk, and the sign is inverted
+
+Spearman(confidence, |error|) is **POSITIVE** at every position (QB +0.18, RB +0.31, WR +0.25,
+TE +0.29); a working risk measure needs it clearly negative. Signed-error correlation is positive at
+QB/WR/TE, and projection-quintile bias runs −33.2 to +20.6 — the multiplier discounts exactly the
+players the model under-projects, compounding the D109 bias. Interval coverage is 74% against a
+nominal 80%. **This supersedes a D110 reading**: D110 saw relative error fall as confidence rises
+and called it real signal, but both quantities divide by the projection, so that was mechanical.
+
+### 3. The RB-vs-WR gap (D109's concern): outcome D, a combination — but neither channel is risk
+
+Inside ECR ≤ 36 the WR−RB confidence gap is **+0.115**. Giving RB WR's width closes 58%; giving RB
+WR's projection closes 70% (the terms interact). Both channels are POSITION-level, and the
+projection channel is the one D109 showed biased low at RB.
+
+### 4. Leverage is real
+
+At 350 real production pick states, **21% select a different player** when risk is removed, 61% of
+those a position change (round 6 44%, round 5 28%, rounds 1–2 22%). Example: 2023 pick #10
+Amon-Ra St. Brown (WR, 259 × 0.76) beats Mahomes (QB, 371 × 0.71) only because of risk. The term
+acts as an unintended positional re-weighting set by each position's residual spread relative to
+its projection scale.
+
+### 5. Ablating it (`risk_mult = 1.0`) changes a third of the draft and nothing else
+
+Applied by setting `confidence = 1.0` and **inserting 857 rows** for the fallback population at
+their exact projections — otherwise the "ablation" would have re-weighted skill players against
+K/DST. Both guards passed on every shard: every season's `board_hash` unchanged, every candidate
+at 1.0.
+
+| | Δ vs control | 95% CI (season) | seasons | MDE | verdict |
+|---|---|---|---|---|---|
+| target (1-QB PPR), 50 drafts | **+26.7** | [−112.9, +166.4] | 2W/3L | 139.6 | **powered null** |
+| 2-QB dynasty, 20 drafts | +52.7 | [−70.3, +175.7] | 3W/2L | 123.0 | powered null |
+| target, weekly | +49.0 | [−80.7, +178.7] | 3W/2L | — | null |
+| 2-QB dynasty, weekly | +28.5 | [−104.0, +161.0] | 2W/3L | — | null |
+
+Both point estimates are single-season artifacts, and **not the same season**: target +26.7 →
+**−22.9** excluding 2024; dynasty +52.7 → **+11.1** excluding 2021. Zero unfilled mandatory slots in
+either arm. 33% of picks change (27% in rounds 1–3); first RB 4.38 → 3.54; roster RB 3.16 → 3.68,
+DST 1.50 → 1.28. The value movement is LATE — R1–3 **−5.9**, R4–6 −7.8, **R7–10 +53.1** — and
+concentrated: the 5 largest drafts contribute +2055 against a net +1336, and the three biggest
+(2024 slots 1–3) have **identical first three picks** in both arms.
+
+### 6. No principled replacement exists downstream — the deeper problem is upstream
+
+Spearman against the point prediction within (season, position): `p10`/`p25`/`median`/`p75`/`p90`
+all **exactly 1.0000**; `top12_prob` 0.91–0.99; `top24_prob` 0.97–0.99. The uncertainty model is
+**homoscedastic** — one interval shape per position-season, slid up and down with the projection.
+Every alternative in the brief (position-relative, magnitude-independent, absolute, calibrated
+empirical) would be built from these outputs and would still be a function of the projection.
+
+**Verdict: C + F.** Risk reinforces projection bias and changes many decisions, but removing it is
+value-neutral under a powered test in two formats; the uncertainty estimates themselves are the
+real defect. **E is rejected** — risk is not responsible for the early WR/QB lean (first RB moves
+less than a round, and rounds 1–3 value falls slightly). **D is not excluded** for one narrow
+purpose: the 0.7 fallback keeps K/DST competitive against zeroed skill players late, and that role
+is untested.
+
+### 7. Validity and repository
+
+D111's control reproduces D110's control on **20 of 20** overlapping (season, slot) cells exactly.
+1427 tests pass, 44 deselected; both ruff gates clean on `src tests`. Added the report and five
+`scripts/research/d111_*.py` runners. **No `src/` change of any kind.** Nothing merged, no PR.
+
+**NEXT PHASE (not started):** is player-level (heteroscedastic) uncertainty estimable at all from
+the existing feature panel — i.e. can the model produce interval widths that vary by player and
+actually predict absolute error out of sample? If not, `risk` should be retired rather than
+reformulated, bundled with the roster-legality constraint, since the 0.7 fallback and the legality
+guarantee are currently the same mechanism.
