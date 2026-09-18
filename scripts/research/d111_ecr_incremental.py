@@ -248,6 +248,32 @@ varied with anything here, and no new uncertainty estimate is built.  The open q
 
 No production change.  No model fitted.  No ECR weight tuned against outcomes.  No 2026.  Nothing
 merged.  No PR.
+
+==========================================================================================
+PRE-REGISTRATION AMENDMENT 1 -- the tie-break in the blended key
+==========================================================================================
+Made at commit-after-`bf1cbe5`, **before any treatment arm had been run** and before any value,
+divergence or counterfactual number existed.  It is recorded here rather than folded in silently.
+
+WHAT CHANGED.  Ties in the blended key `(1-w)*r_Y1 + w*r_ECR` broke on `player_id`; they now break
+on `r_Y1`, the control's own order.
+
+WHY.  A unit test exposed that with two rankings in strong disagreement the blended key ties often,
+and an alphabetical fallback then decides -- which is precisely the degeneracy this phase REJECTED
+`ecr_implied_baseline` for in Phase 0 (M6, ground (a)).  Measured on the real board at w = 0.5, the
+key ties on **19-42 rows per position per season, in groups of up to 4** (RB and WR, both formats,
+2021/2023/2025).  Leaving it would have meant the treatment differed from the control partly by an
+alphabetical accident rather than by ECR, breaking the phase's own P2 requirement in spirit.
+
+WHY THIS TIE-BREAK.  `r_Y1` is already a strict total order (it carries a `player_id` tie-break of
+its own), so determinism in the D54 sense is unchanged, and it is the CONSERVATIVE choice: where
+the two sources are exactly indifferent, the arm keeps the control's ordering rather than inventing
+one.  It also makes the treatment move a player only when the consensus has a STRICT preference,
+which is what "ECR as additional information" should mean.
+
+WHAT IT CANNOT BE.  It is not an outcome-driven change: no realized-value number for any treatment
+arm existed when it was made, and the amendment direction (fall back to the control) is the one
+that makes the treatment LOOK MORE LIKE the control, i.e. the one biased against finding an effect.
 """
 
 from __future__ import annotations
@@ -383,7 +409,7 @@ def blended_static(league, static, w: float, positions: tuple[str, ...] = ALL_PO
 
         r_Y1(x)  = index of x in sorted(C, key=(-projection, player_id))
         r_ECR(x) = index of x in sorted(C, key=(ecr_rank,    player_id))
-        order    = sorted(C, key=((1-w)*r_Y1 + w*r_ECR, player_id))
+        order    = sorted(C, key=((1-w)*r_Y1 + w*r_ECR, r_Y1))
         assign     sorted(values, descending)[i] -> order[i]
 
     Players with no ECR rank keep their Y1 projection untouched, so the candidate universe and the
@@ -396,8 +422,13 @@ def blended_static(league, static, w: float, positions: tuple[str, ...] = ALL_PO
         value);
       * w = 1 with `positions=SKILL` is D104's `ecr_ordered_static`.
 
-    `player_id` is the outer tie-break throughout, the D54 discipline: real ECR ranks tie often and
-    `PYTHONHASHSEED` is unset, so without it a re-run could order ties differently.
+    THE TIE-BREAK IS THE CONTROL'S OWN ORDER, NOT `player_id` -- amended before any treatment
+    result existed; see PRE-REGISTRATION AMENDMENT 1 in the module docstring. `r_Y1` is already a
+    strict total order (it carries a `player_id` tie-break of its own), so this is fully
+    deterministic in the D54 sense, and it is the conservative choice: where the two sources are
+    exactly indifferent, the arm keeps the control's ordering instead of manufacturing an
+    alphabetical one. Measured, the equal-weight key ties on 19-42 rows per position per season in
+    groups of up to 4 -- the same degeneracy class this phase rejected `ecr_implied_baseline` for.
     """
     if not 0.0 <= w <= 1.0:
         raise ValueError(f"weight must be in [0, 1], got {w}")
@@ -419,7 +450,7 @@ def blended_static(league, static, w: float, positions: tuple[str, ...] = ALL_PO
         ecr_order = sorted(covered, key=lambda p: (static.market_rank[p][1], p))
         r_y1 = {p: i for i, p in enumerate(y1_order)}
         r_ecr = {p: i for i, p in enumerate(ecr_order)}
-        order = sorted(covered, key=lambda p: ((1.0 - w) * r_y1[p] + w * r_ecr[p], p))
+        order = sorted(covered, key=lambda p: ((1.0 - w) * r_y1[p] + w * r_ecr[p], r_y1[p]))
         for player_id, value in zip(order, values, strict=True):
             if projections[player_id] != value:
                 moved += 1
@@ -449,6 +480,9 @@ def consensus_pick(static, scored, w: float) -> str:
 
     w = 0 returns Y1's own pick exactly, because `_pick_by_tier` selects by the same
     `(-score, player_id)` order this builds `r_y1` from.
+
+    Ties in the blended key fall back to `r_y1` -- the control's own order -- for the reason given
+    in `blended_static` and in PRE-REGISTRATION AMENDMENT 1.
     """
     ranked = sorted(scored, key=lambda c: (-c.score, c.player_id))
     r_y1 = {c.player_id: i for i, c in enumerate(ranked)}
@@ -457,7 +491,7 @@ def consensus_pick(static, scored, w: float) -> str:
         key=lambda p: (static.market_rank[p][1] if p in static.market_rank else math.inf, p),
     )
     r_ecr = {p: i for i, p in enumerate(ecr_order)}
-    return min(r_y1, key=lambda p: ((1.0 - w) * r_y1[p] + w * r_ecr[p], p))
+    return min(r_y1, key=lambda p: ((1.0 - w) * r_y1[p] + w * r_ecr[p], r_y1[p]))
 
 
 # --------------------------------------------------------------------------------------------
