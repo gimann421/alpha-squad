@@ -1,0 +1,144 @@
+board vintage 63076e2e2bbfbbe5c29fb41265966ac1b8aaa180b3e89ee7742388fcc19d98ad
+seasons (2021, 2022, 2023, 2024, 2025)  slots (1, 2, 3, 4, 5, 6, 7, 8, 9, 10)  mode audit
+
+  audit target_league 2021 done
+  audit target_league 2022 done
+  audit target_league 2023 done
+  audit target_league 2024 done
+  audit target_league 2025 done
+  audit dynasty_1qb 2021 done
+  audit dynasty_1qb 2022 done
+  audit dynasty_1qb 2023 done
+  audit dynasty_1qb 2024 done
+  audit dynasty_1qb 2025 done
+
+================================================================================================
+PART 1 -- IS ALPHA EVER AT RISK OF AN ILLEGAL ROSTER?
+================================================================================================
+
+  target_league   (50 drafts, 800 Alpha picks)
+    final rosters ILLEGAL (a mandatory slot unfilled): 0/50
+    feasibility slack (picks_remaining - unfilled mandatory slots), starts at 8.
+    Quoted while a mandatory slot is still OUTSTANDING -- after the deficit hits
+    zero, slack is just picks_remaining decaying to 1, which is arithmetic, not a
+    feasibility fact. The rule activates at slack == 0.
+      minimum while live: min 5  median 6  max 6  mean 5.82
+      distribution of per-draft minimum live slack: {5: 9, 6: 41}
+      round the LAST mandatory slot is filled: mean 10.18  worst 11
+      drafts where slack ever reached 0 (the rule would activate): 0/50
+      drafts where slack ever went NEGATIVE (already infeasible): 0/50
+    picks at which the legality rule is BINDING: 0/800
+    picks where it CHANGES Alpha's choice (category C): 0/800
+    pool supply at the scarcest outstanding mandatory position: min 32  p10 32  median 32
+    first round each mandatory position is filled (mean / worst):
+      QB   mean  2.36  worst   4  never drafted in 0/50 drafts
+      RB   mean  4.44  worst   7  never drafted in 0/50 drafts
+      WR   mean  1.62  worst   4  never drafted in 0/50 drafts
+      TE   mean  6.30  worst   9  never drafted in 0/50 drafts
+      K    mean  8.74  worst   9  never drafted in 0/50 drafts
+      DST  mean 10.18  worst  11  never drafted in 0/50 drafts
+    mean roster composition: QB 1.84  RB 3.04  WR 5.18  TE 2.60  K 2.00  DST 1.34
+
+  dynasty_1qb   (50 drafts, 800 Alpha picks)
+    final rosters ILLEGAL (a mandatory slot unfilled): 0/50
+    feasibility slack (picks_remaining - unfilled mandatory slots), starts at 8.
+    Quoted while a mandatory slot is still OUTSTANDING -- after the deficit hits
+    zero, slack is just picks_remaining decaying to 1, which is arithmetic, not a
+    feasibility fact. The rule activates at slack == 0.
+      minimum while live: min 5  median 5  max 6  mean 5.38
+      distribution of per-draft minimum live slack: {5: 31, 6: 19}
+      round the LAST mandatory slot is filled: mean 10.62  worst 11
+      drafts where slack ever reached 0 (the rule would activate): 0/50
+      drafts where slack ever went NEGATIVE (already infeasible): 0/50
+    picks at which the legality rule is BINDING: 0/800
+    picks where it CHANGES Alpha's choice (category C): 0/800
+    pool supply at the scarcest outstanding mandatory position: min 32  p10 32  median 32
+    first round each mandatory position is filled (mean / worst):
+      QB   mean  2.10  worst   5  never drafted in 0/50 drafts
+      RB   mean  4.48  worst   7  never drafted in 0/50 drafts
+      WR   mean  1.48  worst   4  never drafted in 0/50 drafts
+      TE   mean  5.74  worst  10  never drafted in 0/50 drafts
+      K    mean  8.86  worst   9  never drafted in 0/50 drafts
+      DST  mean 10.62  worst  11  never drafted in 0/50 drafts
+    mean roster composition: QB 1.94  RB 3.10  WR 5.56  TE 2.34  K 2.06  DST 1.00
+
+================================================================================================
+PART 2 -- DOES FEASIBILITY CONSTRAIN THE EARLY PICKS?
+================================================================================================
+
+  A = no mandatory slot outstanding   B = constraint exists but is not binding
+  C = binding AND changes the pick     D = binding but does not change the pick
+
+  target_league
+    rounds          picks       A       B       C       D     C %  min slack
+    1-6 (EARLY)       300       0     300       0       0   0.0%          6
+    7-11              250      41     209       0       0   0.0%          5
+    12-16             250     250       0       0       0   0.0%          1
+    ALL               800     291     509       0       0   0.0%          1
+    round      n     A     B     C     D  min slack  fills a deficit slot
+    1         50     0    50     0     0          8                 100%
+    2         50     0    50     0     0          8                 100%
+    3         50     0    50     0     0          8                  98%
+    4         50     0    50     0     0          7                  54%
+    5         50     0    50     0     0          7                  32%
+    6         50     0    50     0     0          6                  58%
+    7         50     0    50     0     0          6                  72%
+    8         50     0    50     0     0          6                  86%
+    9         50     0    50     0     0          6                 100%
+    10        50     0    50     0     0          6                  82%
+    11        50    41     9     0     0          5                  18%
+    12        50    50     0     0     0          5                   0%
+    13        50    50     0     0     0          4                   0%
+    14        50    50     0     0     0          3                   0%
+    15        50    50     0     0     0          2                   0%
+    16        50    50     0     0     0          1                   0%
+
+  dynasty_1qb
+    rounds          picks       A       B       C       D     C %  min slack
+    1-6 (EARLY)       300       0     300       0       0   0.0%          6
+    7-11              250      19     231       0       0   0.0%          5
+    12-16             250     250       0       0       0   0.0%          1
+    ALL               800     269     531       0       0   0.0%          1
+    round      n     A     B     C     D  min slack  fills a deficit slot
+    1         50     0    50     0     0          8                 100%
+    2         50     0    50     0     0          8                 100%
+    3         50     0    50     0     0          8                 100%
+    4         50     0    50     0     0          8                  74%
+    5         50     0    50     0     0          7                  38%
+    6         50     0    50     0     0          6                  38%
+    7         50     0    50     0     0          6                  62%
+    8         50     0    50     0     0          6                  82%
+    9         50     0    50     0     0          5                 100%
+    10        50     0    50     0     0          5                  44%
+    11        50    19    31     0     0          5                  62%
+    12        50    50     0     0     0          5                   0%
+    13        50    50     0     0     0          4                   0%
+    14        50    50     0     0     0          3                   0%
+    15        50    50     0     0     0          2                   0%
+    16        50    50     0     0     0          1                   0%
+
+================================================================================================
+THE CAPACITY CEILING -- does the mechanism already in production bind?
+================================================================================================
+
+  `positional_feasibility_cap` x 0.1 is in tier L0, i.e. in
+  production. Caps: QB 2, RB 6, WR 6, TE 4, K 2, DST 2. The un-penalised score is
+  recovered exactly, so 'changes the pick' below is an exact counterfactual.
+
+  target_league
+    rounds          picks  cap fires  changes pick
+    1-6 (EARLY)       300      0.0%         0.0%
+    7-11              250      3.6%         3.2%
+    12-16             250     90.0%        38.4%
+    ALL               800     29.2%        13.0%
+    where it changes the pick (uncapped choice -> actual), top 6: [(('QB', 'TE'), 23), (('K', 'WR'), 19), (('QB', 'WR'), 17), (('QB', 'DST'), 12), (('K', 'DST'), 10), (('QB', 'RB'), 10)]
+    by round: {11: 8, 12: 6, 13: 26, 14: 8, 15: 20, 16: 36}
+
+  dynasty_1qb
+    rounds          picks  cap fires  changes pick
+    1-6 (EARLY)       300      0.0%         0.0%
+    7-11              250      6.4%         0.0%
+    12-16             250     78.4%        16.8%
+    ALL               800     26.5%         5.2%
+    where it changes the pick (uncapped choice -> actual), top 6: [(('QB', 'TE'), 12), (('QB', 'RB'), 6), (('WR', 'K'), 6), (('WR', 'RB'), 5), (('K', 'RB'), 5), (('K', 'TE'), 2)]
+    by round: {12: 7, 13: 12, 14: 5, 15: 5, 16: 13}

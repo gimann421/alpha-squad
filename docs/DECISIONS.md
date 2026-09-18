@@ -8647,3 +8647,121 @@ for k = 5 to see, it is not an information question, and the rule already exists
 1475 tests pass (1427 + 48 new in `tests/unit/test_d111_ecr_incremental.py`), 44 deselected.
 `ruff check` and `ruff format --check` clean on `src`, `tests` and the new runner. **Zero `src/`
 changes.** Y1 remains production, unchanged by every phase from D85 to D111.
+
+## D112 — Does Alpha have an EARLY roster-feasibility problem? No: the legality rule binds in 0 of 1,600 picks, and D111's +241/+215 is the benchmark forfeiting two starters.
+
+Targeted diagnostic. **No production change, no `src/` change at all, no `models/`, no `league/`,
+no counterfactual run, nothing merged, no PR.** `models/` `73b408e9` and `league/` `d4cfd00e`
+byte-identical. Full report: `docs/D112_EARLY_FEASIBILITY_AUDIT.md`. Artifacts:
+`docs/d112_artifacts/`.
+
+### 1. The premise this phase exists to challenge
+
+D111 closed by recommending a test of whether enforcing roster feasibility *earlier* carries the
++241.1 / +215.3 effect it measured on the ECR-alone benchmark. **That recommendation assumed Alpha
+has the problem the benchmark had. It does not, and D112 retracts the recommendation.**
+
+Alpha's roster machinery has two separable parts, and conflating them is the trap:
+a **MINIMUM** (legality — `unfilled_dedicated_slots`, restrict once `picks_remaining <= deficit`;
+present in `roster_aware_market_pick` and tiers `W2`/`W3`, `L1`/`L3`, **absent from production
+`L0`**) and a **MAXIMUM** (capacity — `positional_feasibility_cap` x `OVER_CAP_VALUE_MULTIPLIER`
+= 0.1; **present in `L0`**).
+
+The audit turns on **feasibility slack** = `picks_remaining - sum(unfilled_dedicated_slots)`,
+counting the current pick. It starts at 8 (both formats have 8 mandatory dedicated slots and 16
+rounds), falls by exactly 1 for a pick that does not fill one and is unchanged by one that does.
+`slack == 0` is exactly when the legality rule activates, so **`min(slack) > 0` over a draft is a
+deterministic proof that no earlier enforcement could have changed any pick** — which is what lets
+a finite audit be conclusive.
+
+### 2. Result — Alpha is never at risk
+
+2021-2025 x **all 10 slots** x both shipped formats = 100 drafts, 1,600 Alpha picks.
+
+| | target | dynasty |
+|---|---|---|
+| final rosters illegal | **0/50** | **0/50** |
+| picks where the legality rule is **binding** | **0/800** | **0/800** |
+| picks where it **changes the pick** (category C) | **0/800** | **0/800** |
+| minimum live slack (the rule needs 0) | **5** (median 6) | **5** (median 5) |
+| drafts where slack ever reached 0 | **0/50** | **0/50** |
+| scarcest outstanding mandatory position, pool supply | min **32** | min **32** |
+
+**Alpha finishes its eight mandatory slots with five to six picks to spare, in 100 of 100 drafts.**
+Rounds 1-6: **600 of 600 picks are category B** — a constraint exists but is not binding, six picks
+clear of the frontier. **Categories C and D are empty across all 1,600 picks**, so the rule never
+even insures against anything. Every position is filled in every draft (last is DST, mean round
+10.18/10.62, worst 11).
+
+**Alpha fills those slots early for VALUATION reasons, not feasibility ones** — `L0` carries no
+legality rule at all. That is precisely why feasibility never becomes binding.
+
+**The capacity ceiling does not touch an early pick either: it fires in 0.0% of rounds 1-6** in
+both formats. It is a late-round mechanism (fires 90%/78% in rounds 12-16, changes the pick
+38.4%/16.8%), and where it acts it is working — the swaps it prevents are QB->TE, K->WR, QB->WR,
+QB->DST, i.e. a third QB or third kicker. The un-penalised score is recovered exactly (the penalty
+is a pure x0.1), so that is an exact counterfactual, not an estimate.
+
+Direction worth recording: Alpha drafts **2.00 / 2.06 kickers against a cap of 2**. It *over*-fills
+K rather than under-filling it — the D85/D94 pathology, and the opposite of a feasibility risk.
+
+### 3. No counterfactual — and the proposed one is not definable
+
+The pre-registered stopping rule fired: category C is not "about zero", it is **exactly 0 of
+1,600**. There is also a structural reason that matters more. The existing rule activates at
+`slack <= 0`, which is **by construction the last moment feasibility is still guaranteed** — it is
+already as early as a *legality* constraint can be without restricting picks that are not at risk.
+Making it bind in rounds 1-6 needs a threshold `slack <= k` with **k >= 6**; binding at round 1
+needs **k >= 8**, at which the restriction is unconditional: "fill all eight mandatory slots
+first." **That is a positional-balance strategy with an invented coefficient, not a legality rule**,
+and the brief rules it out. So the finding is not "a counterfactual was not warranted" but **"the
+counterfactual D111 proposed is not definable within the existing roster-legality definitions."**
+
+### 4. D111's effect, decomposed exactly — answer D (artifact), with B (Alpha is fine)
+
+`ECR_ALONE_NAIVE` drafts **0 kickers and 0 defenses in 40 of 40 drafts** (an overall ECR board
+never ranks one best-available), forfeiting both slots and scoring 0.0 in each. Measured on the
+roster-aware arm, those two slots are worth **226.0 (target) / 226.1 (dynasty)** realized starter
+points — which **brackets D111's measured +241.1 / +215.3**, the residual being the ~zero
+season-long value of the two bench picks the naive drafter made instead. D67's ~-130 per forfeited
+starter predicted this within rounding.
+
+By contrast `Y1` drafts 2.00/1.40 and 2.05/1.00 K/DST and has **no draft with zero of either**.
+
+**The D111 effect is real and correctly measured; it is a property of the benchmark opponent's
+documented lack of roster awareness (`docs/BENCHMARK_SPEC.md` §3), not a transferable lesson about
+Alpha.** Not answer A. Not C.
+
+### 5. A statistic corrected mid-phase
+
+The first cut quoted the *whole-draft* minimum slack, which is exactly 1 in 100/100 drafts — and
+that is arithmetic, not a feasibility fact: once the deficit reaches zero, slack is just
+`picks_remaining` decaying to 1 at the final pick. The meaningful margin is the minimum **while a
+mandatory slot is still outstanding** (5-6). The runner records both, the report quotes the live
+one, and a test pins the distinction so it cannot be re-quoted wrongly.
+
+### 6. Validation
+
+Y1 control parity is **exact**: target **2002.9** and dynasty **2061.5**, reproducing D111's
+recorded control means on the same {1,4,7,10} grid, same vintage `63076e2e`, same pool, board,
+roster rules, continuation and scoring. Because the conclusion is negative, the tests are built to
+prove the detector *can* fire: they construct rosters at the feasibility frontier and assert the
+classifier returns **C** when the constraint changes the pick and **D** when it agrees, that it
+activates at exactly `slack == 0` and not a pick earlier, and that the `DEF` slot <-> `DST`
+position alias resolves — a missing alias would make every roster look illegal and manufacture the
+very problem under test.
+
+### 7. What this does NOT establish
+
+It does not say Alpha's roster construction is optimal — **legality is not quality**, and the
+K = 2.00/2.06-against-a-cap-of-2 behaviour remains the open *capacity* pathology D85/D94 recorded.
+It does not generalise beyond these two 1-QB formats, these seasons and this board; a format whose
+mandatory lineup left less slack could bind where this one does not, and the audit is cheap to
+re-run. It does not touch ECR, risk or projections; **the frozen risk/uncertainty question from
+D111 §7 remains open and untouched.**
+
+### 8. Repository
+
+1491 tests pass (1475 + 16 new in `tests/unit/test_d112_feasibility_audit.py`), 44 deselected.
+`ruff check` and `ruff format --check` clean. **Zero `src/` changes.** Y1 remains production,
+unchanged by every phase from D85 to D112.

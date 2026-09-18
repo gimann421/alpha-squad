@@ -3,6 +3,42 @@
 Living summary of what is implemented, validated, and outstanding. Updated at the end of every
 milestone. See `docs/TRACEABILITY.md` for the acceptance-criteria-level mapping.
 
+## Status: M60 complete (D112) — **Alpha has NO early roster-feasibility problem: the legality rule binds in 0 of 1,600 picks. D111's +241/+215 was the benchmark forfeiting two starters, and that recommendation is retracted. Y1 remains production, unchanged from D85 to D112.**
+
+Targeted diagnostic. **No production change, no `src/` change at all, no counterfactual run,
+nothing merged, no PR.** Full report: `docs/D112_EARLY_FEASIBILITY_AUDIT.md`; artifacts:
+`docs/d112_artifacts/`.
+
+- **The legality constraint never binds on Alpha.** 100 drafts (2021–2025 × all 10 slots × both
+  formats), 1,600 picks: **0 binding, 0 category C, 0 illegal final rosters.** Alpha finishes its
+  eight mandatory slots with **5–6 picks to spare** in every draft. Rounds 1–6 are **600/600
+  category B** — a constraint exists but is six picks clear of binding.
+- **Positional capacity does not touch an early pick either** — it fires in **0.0%** of rounds 1–6
+  and is a late-round mechanism (rounds 12–16: fires 90%/78%, changes the pick 38.4%/16.8%),
+  stopping a third QB or third kicker. Measured as an exact counterfactual, since the penalty is a
+  pure ×0.1.
+- **Alpha fills mandatory slots early for *valuation* reasons, not feasibility ones** — `L0`
+  carries no legality rule. That is *why* feasibility never binds.
+- **D111's effect is decomposed exactly.** `ECR_ALONE_NAIVE` drafts **0 kickers and 0 defenses in
+  40/40 drafts**; those two slots are worth **226.0 / 226.1** realized starter points, bracketing
+  the measured **+241.1 / +215.3**. It is a property of the benchmark opponent's documented lack of
+  roster awareness, **not** a transferable lesson about Alpha. **D111's closing recommendation is
+  retracted.**
+- **The proposed counterfactual is not definable.** The existing rule already activates at the last
+  moment feasibility is guaranteed; making it bind in rounds 1–6 needs an invented threshold
+  (k ≥ 6; k ≥ 8 to bind at round 1, where it becomes "fill all eight mandatory slots first"). That
+  is a balance heuristic, not a legality rule.
+- **Travelling caveat:** legality is **not** quality. Alpha drafts **2.00/2.06 kickers against a cap
+  of 2** — it *over*-fills K. That remains the open D85/D94 *capacity* pathology, a different
+  question from feasibility.
+- Control parity exact (target 2002.9, dynasty 2061.5, vintage `63076e2e`). Tests are built to
+  prove the detector *can* fire, since the result is negative.
+
+**Still open, untouched:** *can a properly constructed player-level / heteroscedastic uncertainty
+measure improve realized draft value?* (frozen since D111).
+
+---
+
 ## Status: M59 complete (D111) — **ECR as INCREMENTAL information: positive in all four pre-registered primary cells, every one below the detection floor. The only effect that clears the floor is roster legality, not information. Y1 remains production, unchanged by every phase from D85 to D111.**
 
 Research only. **No production change, no `src/` change at all, no model fitted, no ECR weight
