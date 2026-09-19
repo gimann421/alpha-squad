@@ -296,4 +296,60 @@ efficiency; multiplying by P(play) double-counts it.
 
 ## 14. Amendments
 
-*(None. Any change after execution begins is recorded here with its date and reason.)*
+### A1 — 2026-09-19, before execution: the FLEX and Half-PPR findings are corrected at source
+
+**Trigger.** W1.1 re-investigated W1's claim that "no 1-QB weekly overall/FLEX board exists"
+and found it was a statement about the **DynastyProcess mirror**, not about FantasyPros.
+FantasyPros publishes a regular weekly FLEX board and serves it historically through its
+official API, which this repository has a configured key for and had never queried for weekly
+rankings. Full audit: `docs/weekly/W11_FANTASYPROS_FLEX_AUDIT.md`.
+
+**This amendment is written before any W2 metric has been computed.** No result influenced it.
+
+**What changes:**
+
+1. **§7.1 gains a second, independent ECR artifact.** The FLEX benchmark is now measured two
+   ways, and they are never pooled because their vintages differ:
+
+   | | primary (depth) | validation (truth) |
+   |---|---|---|
+   | source | DynastyProcess `db_fpecr` mirror | FantasyPros API `position=FLX` |
+   | board | **reconstructed** — superflex minus QBs | the **real** published FLEX board |
+   | vintage | **Friday** (pre-Sunday, post-TNF) | **Sunday ~12:59 ET**, frozen at kickoff |
+   | depth | full board (300–450 players) | **top 10 only** (`public_api_limited`, `limit=10`) |
+   | coverage | 79 weeks, 2021–2025 | 18 weeks (2021) + spot weeks; quota-limited |
+
+2. **A new pre-registered analysis: reconstruction validation.** Before the headline benchmark
+   is interpreted, measure how closely the mirror reconstruction's top 10 matches the real
+   FLEX top 10, on the weeks where both exist. Decision rule, fixed now:
+
+   | outcome | criterion | consequence |
+   |---|---|---|
+   | **reconstruction sound** | median top-10 overlap **≥ 0.70** | full-depth results stand as FLEX results |
+   | **reconstruction weak** | median overlap **< 0.70** | full-depth results are reported as a **superflex-derived proxy**, not as FLEX, and the FLEX claim is restricted to top-10 |
+
+   0.70 is fixed here, before measurement. It is chosen as the point at which 7 of 10 names
+   agree — below that the two boards are describing meaningfully different player sets.
+   **The comparison confounds two things** (reconstruction error and a two-day vintage gap) and
+   cannot separate them at scale; the single week where the API served both `FLX` and `OP`
+   (2023 wk8, both scorings) isolates the reconstruction component alone and is reported
+   separately as a one-week sanity bound, never as an estimate.
+
+3. **§6's Half-PPR status changes from "does not exist" to "exists, not accessible at depth".**
+   FantasyPros serves `scoring=HALF` historically for every position and for FLEX. The
+   configured key returns only the top 10, so a full-depth Half-PPR benchmark remains
+   unavailable — a **licensing/tier** limit, not a data-availability one. Half-PPR stays
+   secondary for W2, and no Half-PPR ECR is approximated from Full-PPR.
+
+4. **§7.2's reference baselines are unchanged** (B0 season-to-date PPG, B1 prior-season PPG),
+   and remain the scale against which ECR's strength and the noise floor are read.
+
+**What does NOT change:** the population (§3, 79 weeks, 2021–2025), the Friday cutoff for the
+primary benchmark (§4), the universe rules (§5), the ground truth (§6), the metric suite (§8,
+already frozen in `evaluation/weekly/metrics.py` with hand-computed tests), the aggregation and
+noise-floor method (§9), and every prohibition in §13.
+
+**Access-control note.** The 10-row cap and the request quota are access controls on a paid
+third-party API. They are reported as limits, not worked around; no scraping of FantasyPros web
+pages was performed or will be (CLAUDE.md: "Never bypass access controls").
+

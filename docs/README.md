@@ -3,7 +3,7 @@
 **What this file is.** An index of where each kind of information authoritatively lives, and
 whether a given document is **shared**, **draft-specific** or **weekly-specific**.
 
-**Why it exists (W1/D109).** Alpha Squad now runs two research programs — the draft-choice
+**Why it exists (W1/D109; extended W1.1-W2/D110).** Alpha Squad now runs two research programs — the draft-choice
 program (D86–D108, closed) and the weekly-ranking program (W1→). `docs/` is a flat directory of
 40+ files that mixes product authority, shared methodology, draft findings, living state and the
 decision log. With one program that was navigable by memory; with two it is not, and the
@@ -21,7 +21,7 @@ Most authoritative first. When two documents disagree, the higher tier wins.
 |---|---|---|---|
 | **1** | Product & architecture authority | `/PRODUCT_SPEC.md`, `/ARCHITECTURE.md`, `/ACCEPTANCE_CRITERIA.md`, `/AGENT_CONTRACTS.md`, `/IMPLEMENTATION_PLAN.md`, `/CLAUDE.md` | shared |
 | **2** | **Decisions** | **`DECISIONS.md`** — one append-only, D-numbered log for the whole project | shared |
-| **3** | Program entry points | `D108_PROGRAM_CLOSEOUT.md` · `weekly/W1_FOUNDATION_AUDIT.md` | per-program |
+| **3** | Program entry points | `D108_PROGRAM_CLOSEOUT.md` (draft) · **`weekly/W2_ECR_BENCHMARK_RESULTS.md`** (weekly — start there; then `weekly/W11_FANTASYPROS_FLEX_AUDIT.md` for the data story) | per-program |
 | **4** | Methodology / benchmark definition | `BENCHMARK_SPEC.md` (draft) · `weekly/W2_PREREGISTRATION.md` (weekly) | per-program |
 | **5** | Data & format contracts | `DATA_SOURCES.md`, `TARGET_FORMAT_1QB.md` | shared |
 | **6** | Living state | `PROJECT_STATE.md`, `TRACEABILITY.md` | shared |
@@ -41,6 +41,8 @@ decided it.**
 |---|---|
 | What is Alpha? What is the product? | `/PRODUCT_SPEC.md`, `/README.md` |
 | What is the current product goal for weekly rankings? | `weekly/W1_FOUNDATION_AUDIT.md` §0 |
+| How good is the ECR benchmark, and what counts as a real improvement? | `weekly/W2_ECR_BENCHMARK_RESULTS.md` §2-§3 |
+| Which weekly ECR data exists, in which source, at what depth? | `weekly/W11_FANTASYPROS_FLEX_AUDIT.md` |
 | What has already been tested, and what was concluded? | `DECISIONS.md` (all) → the phase doc it names |
 | What was rejected, and why? | `DECISIONS.md`; `D108_PROGRAM_CLOSEOUT.md` §2 for the draft program |
 | Is this finding draft-specific or weekly-specific? | this file's scope column; `weekly/W1_FOUNDATION_AUDIT.md` §10.3 for the methodology split |
@@ -71,8 +73,10 @@ decided it.**
 
 | file | kind |
 |---|---|
-| `weekly/W1_FOUNDATION_AUDIT.md` | **program entry point** — data/infrastructure audit, architecture, limits |
-| `weekly/W2_PREREGISTRATION.md` | pre-registered W2 experiment (not yet executed) |
+| `weekly/W1_FOUNDATION_AUDIT.md` | foundation audit — **carries a correction banner; two of its findings were retracted/downgraded by W1.1** |
+| `weekly/W11_FANTASYPROS_FLEX_AUDIT.md` | **the FLEX/Half-PPR data correction** — which sources have what, and the acquisition limits |
+| `weekly/W2_PREREGISTRATION.md` | pre-registered W2 experiment + amendment A1 (both written before results) |
+| `weekly/W2_ECR_BENCHMARK_RESULTS.md` | **current program entry point** — the ECR benchmark, the noise floor, scope/exclusions, W3 |
 
 ### Draft-choice program (D86–D108, CLOSED)
 

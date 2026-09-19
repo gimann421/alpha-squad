@@ -8629,3 +8629,163 @@ on; it cannot be tuned toward a result because no Alpha system is touched; and i
 the product opportunity is at the top of the board or deep in it, which W1 cannot tell and which
 would otherwise be guessed. Pre-registered in full at `docs/weekly/W2_PREREGISTRATION.md`,
 committed before execution.
+
+## D110 — W1.1/W2. W1's FLEX and Half-PPR findings were WRONG (mirror-only audit); the real FantasyPros FLEX board exists. ECR benchmark established; noise floor measured. Nothing shipped.
+
+**Phase docs: `docs/weekly/W11_FANTASYPROS_FLEX_AUDIT.md` (the correction),
+`docs/weekly/W2_ECR_BENCHMARK_RESULTS.md` (the benchmark). Pre-registration + amendment A1:
+`docs/weekly/W2_PREREGISTRATION.md`.**
+
+*Audit, benchmark and pre-registration only. No Alpha model built, fitted or compared.
+`models/`, `league/`, `api/`, `cli.py`, `market/consensus.py` and configs untouched.*
+
+### 1. The correction, stated plainly
+
+**D109/W1 claimed "no 1-QB weekly overall/FLEX board exists" and "no Half-PPR ECR benchmark
+exists". Both are wrong, and wrong the same way: W1 audited only the DynastyProcess mirror and
+reported that source's limits as limits of the historical record.** FantasyPros' own API — the
+adapter already in `sources/fantasypros.py`, the key already configured, the API already
+recorded live in D36/D37 — had never been queried for weekly rankings.
+
+| W1 claim | verdict |
+|---|---|
+| no 1-QB weekly FLEX board exists | **RETRACTED.** `position=FLX` is a real RB/WR/TE board (zero QB rows), populated for every week of 2021–2025, 310–458 players, 43–183 experts |
+| no Half-PPR ECR exists | **DOWNGRADED.** `scoring` is `STD`/`PPR`/`HALF`; HALF is served historically for every board |
+| `ppr-flex.php` is absent from the mirror after 2020-10-12 | **CORRECT** — re-verified exhaustively: 54 distinct modern `fp_page` values, none an RB/WR/TE weekly board |
+| the Tue–Sun daily cadence is not reconstructable | **STANDS**, now doubly supported: the API's own vintage is a single Sunday-at-kickoff freeze |
+
+**The transferable lesson: an audit that finds an absence must name which SOURCE the absence is
+in.** W1's §4 was headed "what exists, exactly" and described one mirror.
+
+### 2. Two acquisition limits, reported rather than circumvented
+
+The configured FantasyPros key is a **public tier**: `public_api_limited: true`, `limit: 10` —
+the **top 10 rows of any board, on every endpoint** (`consensus-rankings`, `rankings`,
+`projections`, `players`, `injuries` all capped). `limit`/`offset`/`experts` do not defeat it;
+`/v2/` and `/v1/` return 403. After ~120 calls the key returned `429 Limit Exceeded` and stayed
+there. **Both are access controls on a paid third-party API and were not worked around — no
+FantasyPros page was scraped (CLAUDE.md).** Obtaining the full-depth real FLEX board and a
+genuine full-depth Half-PPR benchmark is therefore a **licensing decision, not a research
+problem**; the harvester already exists.
+
+### 3. A trap that would have corrupted the study
+
+**Per-player context in the API payload is not historical.** On the 2021 wk5 board the API
+reports Davante Adams on LAR, Stefon Diggs on WAS, Cooper Kupp on SEA — their *current* teams;
+`player_opponent`, `player_game_kickoff_ts`, `player_game_status` and `player_bye_week` are the
+historical week's schedule joined to the **current** team. Using `player_game_kickoff_ts` for
+the already-played exclusion — the obvious move — would have dropped the wrong players in
+nearly every week. Rule now in code and pinned by test: **take only the ranking and the player
+identity from a ranking source; take every schedule and roster fact from nflverse.**
+
+### 4. The reconstruction is validated, not assumed
+
+Pre-registered A1 check, threshold **0.70 fixed before measuring**: mirror-reconstructed FLEX
+top-10 vs the **real** FantasyPros FLEX top-10, 19 weeks — **median overlap 0.80**, mean 0.85,
+min 0.70, max 1.00. Verdict **`reconstruction_sound`**; every week met the threshold. It is a
+**lower bound**, because the comparison also spans a two-day vintage gap (mirror Friday vs API
+Sunday 12:59 ET). The one week where the API served `FLX` and `OP` at the *identical* vintage
+(2023 wk8) had **all five** non-QB players from the superflex top-10 present in the real FLEX
+top-10. W1's U3 is therefore resolved in the affirmative, with its limits stated.
+
+### 5. The ECR benchmark (79 weeks, 2021–2025, Full PPR, Friday cutoff)
+
+| board | ρ | SD(ρ) | pairwise | prec@10 | cap@10 | prec@50 | cap@50 |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| **FLEX** | **0.682** | 0.041 | 0.753 | **0.260** | **0.637** | 0.544 | 0.760 |
+| RB | 0.717 | 0.064 | 0.766 | 0.433 | 0.713 | 0.844 | 0.926 |
+| WR | 0.666 | 0.061 | 0.748 | 0.349 | 0.672 | 0.709 | 0.842 |
+| TE | 0.614 | 0.098 | 0.730 | 0.484 | 0.722 | 0.897 | 0.949 |
+| QB | 0.493 | 0.155 | 0.678 | 0.551 | 0.809 | — | — |
+| DST | 0.275 | 0.208 | 0.603 | 0.509 | 0.665 | — | — |
+| **K** | **0.127** | 0.235 | 0.548 | 0.452 | 0.689 | — | — |
+
+**The single most important result is the FLEX top-10 pair: precision 0.260 but points captured
+0.637.** ECR names ~2.6 of the true top 10 and those names collect 64% of the achievable
+points. Both describe the same ranking. Refusing to collapse them into one score (W1's design
+choice, the brief's instruction) is what made it visible.
+
+**K is close to noise**: ρ = 0.127, 10th-percentile week **−0.173** — in one week in ten the
+consensus kicker ranking is worse than random; pairwise 54.8%. DST is weak too (ρ 0.275, p10
+−0.044). Consistent with D57's decision to make K/DST baselines rather than models.
+
+### 6. The noise floor — the number every later phase needs
+
+Unit of replication is the **week (n = 79)**, never the player-week: player-weeks inside a week
+share the slate, the news and the vintage. Comparisons are **paired within week**; MDE is the
+half-width of the 95% bootstrap CI over weeks (10,000 resamples, seeds 0–9 pre-registered).
+
+**FLEX minimum detectable improvement over ECR: ρ ±0.018 · pairwise ±0.007 · capture@10 ±0.020
+· capture@25 ±0.015 · capture@50 ±0.013 · precision@10 ±0.020.** Per-position ρ MDEs: RB ±0.020,
+WR ±0.018, TE ±0.024, QB ±0.029, K ±0.046, DST ±0.050.
+
+Pairing matters enormously: ECR's own weekly ρ SD is 0.041, and the paired MDE is 0.018 —
+**2.3× tighter**. An unpaired design would have inflated the floor by more than 2×.
+
+**The draft program's 172–250 point floor is NOT quoted and does not transfer** (different
+instrument, unit, and 5 season-clusters vs 79 weeks).
+
+### 7. How strong is ECR really? — the sobering number
+
+Against two pre-registered trivial references over the identical universe: **B0** season-to-date
+PPG, **B1** prior-season PPG. Every comparison excludes zero for FLEX/RB/WR/TE/QB/DST.
+
+**But ECR beats B0 — a plain average of points scored so far this season — by only +0.066
+Spearman (3.6 MDE units) and +0.042 capture@10 (2.1 units)**, against +0.338 / +0.141 over B1.
+That +0.066 is the entire measured value of a 50-expert consensus over arithmetic, and it sizes
+the prize for everything that follows. **For K, ECR fails to beat B0 at all** at capture@25
+(+0.002, CI crosses zero) and precision@10 (+0.030, CI crosses zero).
+
+### 8. Pre-registered decision rules, both resolved
+
+**R1 (instrument usable?) → USABLE** for every board: gap/MDE 2.13–4.00 on FLEX, ≥1.58
+elsewhere; K marginal (0.28–1.73). W3 may proceed as designed.
+**R2 (depth-uniform?) → UNIFORM** for FLEX (spread 1.55×) and every position except **K
+(6.10×, DEPTH-DEPENDENT** — consensus adds value at the top and essentially none at depth).
+W3 targets overall ranking quality rather than one depth.
+
+### 9. Scope, exclusions, limitations
+
+**79 of 90 REG weeks included. All 11 exclusions are missing ECR boards** — none caused by
+player data, cutoff, scoring or data-quality problems: five week-18s (no board in any season),
+four week-1s, 2024 wk2–3 (mirror capture gaps). Excluded weeks are not outcome outliers
+(mean 6.72 vs 7.07 pts, SD 7.09 vs 7.54), **but the exclusions are systematic: week 1 is absent
+in four of five seasons**, so every number here describes ECR **conditional on in-season data
+existing**. **Zero invalid cells** — the pre-registered ≥10-evaluable rule never fired.
+
+Other limits: the full-depth benchmark is the **Friday** vintage while FantasyPros freezes
+**Sunday 12:59 ET**, so the real product bar is *higher* than these numbers; FLEX is a validated
+reconstruction, not the published board; no full-depth Half-PPR benchmark; five seasons cannot
+separate the +0.04 ρ drift from 2021→2025 from real improvement; ECR publishes no point
+projection so no point-accuracy metric is computed for it (correct, not a gap).
+
+**Half-PPR secondary:** scoring the same full-PPR-ranked FLEX board against half-PPR outcomes
+costs only −0.009 ρ / −0.022 capture@10. **That does not make the formats interchangeable** —
+at the same week and vintage the real FLX PPR and FLX HALF top-10s **share only 7 of 10 names**.
+
+### 10. Availability
+
+Share of ranked players who actually played: DST 0.998, K 0.929, WR 0.759, RB 0.730, QB 0.718,
+FLEX 0.688, **TE 0.650**. Reported separately and never multiplied into the projection.
+
+### 11. Repository
+
+1462 → **1502 tests pass**, 44 deselected (W1.1/W2 adds **40**: 21 metric tests, 19
+benchmark/noise/decision-rule tests; W1's 35 unchanged). `make lint` clean, both halves. New research-only
+modules under `evaluation/weekly/` (`metrics.py`, `benchmark.py`, `noise.py`,
+`decision_rules.py`); runners `w11_fantasypros_flex_harvest.py`, `w2_ecr_benchmark.py`.
+ECR vintage `e270d790…5db9a5` — **identical to W1's**, a first weekly-board immutability check
+(one observation, not a guarantee).
+
+### 12. W3
+
+**"Can Alpha, using only Friday-cutoff information and no ECR, beat the season-to-date baseline
+by more than ECR's +0.066 Spearman / +0.042 capture@10?"** Framed against a common reference
+rather than as "beat ECR" because it has more power, keeps the absolute goal primary, and makes
+a partial result informative about whether ECR-as-a-feature (System C) is likely to help.
+Point it at the **top of the board** — FLEX precision@10 is 0.260 against 0.544 at 50, so the
+absolute headroom is largest exactly where the FLEX decision happens — while noting that
+capture@10 is also the noisiest depth and that R2 found no *relative* top-of-board weakness.
+**Do not chase K/DST** (weakest ECR but widest MDEs, thin known signal, 2 of 10 slots) and **do
+not chase projection MAE** (D101: projection metrics are not monotone in each other, let alone
+in decision quality).

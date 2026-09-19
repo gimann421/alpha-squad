@@ -3,7 +3,51 @@
 Living summary of what is implemented, validated, and outstanding. Updated at the end of every
 milestone. See `docs/TRACEABILITY.md` for the acceptance-criteria-level mapping.
 
-## Status: W1 complete (D109) — **WEEKLY-RANKING PROGRAM OPENED. A valid, leakage-free, reproducible foundation EXISTS for a Friday-cutoff, Full-PPR weekly study over 79 weeks (2021-2025), all six positions plus a reconstructed FLEX. Three things the brief asked for do not exist historically. Nothing shipped.**
+## Status: W1.1 + W2 complete (D110) — **W1's FLEX and Half-PPR findings were WRONG and are corrected at source: FantasyPros DOES publish a historical weekly RB/WR/TE FLEX board. The ECR benchmark is established and the weekly noise floor is measured. Nothing shipped.**
+
+Audit, benchmark and pre-registration only. **No Alpha model built, fitted or compared;
+`models/`, `league/`, `api/`, `cli.py`, `market/consensus.py` and configs untouched.**
+**Entry points: `docs/weekly/W11_FANTASYPROS_FLEX_AUDIT.md` (the correction) and
+`docs/weekly/W2_ECR_BENCHMARK_RESULTS.md` (the benchmark).**
+
+### CURRENT WEEKLY RESEARCH STATUS
+
+- **W1's two data findings are corrected.** A real weekly FLEX board (`position=FLX`, RB/WR/TE,
+  zero QBs) and Half-PPR (`scoring=HALF`) both exist historically at FantasyPros for 2021-2025.
+  W1 had audited only the DynastyProcess mirror and reported that source's limits as limits of
+  the record. **The lesson: an audit that finds an absence must name which SOURCE it is in.**
+- **Our FantasyPros key is a public tier**: `limit: 10` rows per board on every endpoint, plus a
+  request quota that exhausted after ~120 calls. Access controls — **not circumvented, nothing
+  scraped**. Full-depth FLEX and a real Half-PPR benchmark are a **licensing** decision now.
+- **The FLEX reconstruction is VALIDATED, not assumed**: median top-10 overlap **0.80** vs the
+  real board over 19 weeks (threshold 0.70 fixed before measuring). W1's U3 is resolved.
+- **A payload trap was caught**: the API returns players' **current** teams for historical
+  weeks, so `player_game_kickoff_ts` would have excluded the wrong players in nearly every week.
+  Rule now in code: take only ranking + identity from a ranking source; schedule/roster facts
+  come from nflverse.
+- **ECR benchmark (79 weeks, 2021-2025, Full PPR)**: FLEX ρ **0.682** (SD 0.041), pairwise
+  0.753 — but **precision@10 only 0.260 against capture@10 0.637**. ECR names ~2.6 of the true
+  top 10, and those names collect 64% of the achievable points. **K is close to noise**
+  (ρ 0.127; the 10th-percentile week is −0.173, worse than random); DST weak (ρ 0.275).
+- **Noise floor (FLEX, the number every later phase needs)**: ρ **±0.018**, pairwise ±0.007,
+  capture@10 **±0.020**, capture@50 ±0.013. Unit of replication is the **week (n=79)**, paired
+  within week. **The draft program's 172-250 floor does NOT transfer.**
+- **How strong is ECR really**: it beats a plain season-to-date PPG average by only **+0.066
+  Spearman** (3.6 MDE units) and +0.042 capture@10, versus +0.338 over a prior-season baseline.
+  That +0.066 is the whole measured value of a 50-expert consensus over arithmetic — and it
+  sizes the prize for Alpha. For **K, ECR fails to beat that baseline at all** at depth.
+- **Decision rules resolved**: **R1 USABLE** (gap/MDE 2.13-4.00 on FLEX) → W3 may proceed.
+  **R2 UNIFORM** everywhere except **K (6.10x, depth-dependent)**.
+- **All 11 excluded weeks are missing-ECR weeks**; none is a data-quality exclusion. But they
+  are **systematic — week 1 is absent in four of five seasons** — so every number describes ECR
+  *conditional on in-season data existing*. Zero invalid cells.
+- **Still no Alpha comparison has been run.** The existing weekly model remains W3's starting
+  point, not a baseline.
+- **Next: W3** — *can Alpha, on Friday-cutoff information and no ECR, beat the season-to-date
+  baseline by more than ECR's +0.066 ρ?* Aimed at the top of the board; **not** at K/DST, and
+  **not** at projection MAE.
+
+### Earlier status: W1 complete (D109) — **WEEKLY-RANKING PROGRAM OPENED. A valid, leakage-free, reproducible foundation EXISTS for a Friday-cutoff, Full-PPR weekly study over 79 weeks (2021-2025), all six positions plus a reconstructed FLEX. Three things the brief asked for do not exist historically. Nothing shipped.**
 
 Audit and pre-registration only. **No production change: `models/`, `league/`, `api/`, `cli.py`,
 configs and `market/consensus.py` untouched; nothing fitted; nothing merged.** This opens a

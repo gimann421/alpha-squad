@@ -42,6 +42,25 @@ reports/**
 # ingest/train/market pipeline, so kept alongside the documents that cite them.
 !reports/draft_forensics_mtier_results.json
 !reports/pick_attribution.json
+# W1.1/D110 (weekly program): the FantasyPros API boards are NOT reproducible from
+# `alpha-squad ingest` and, unlike everything else here, cannot be re-fetched at will -- the
+# configured key is a public tier (`limit: 10` rows per board) with a request quota that
+# exhausted during the harvest. Two tracked documents
+# (docs/weekly/W11_FANTASYPROS_FLEX_AUDIT.md, docs/weekly/W2_ECR_BENCHMARK_RESULTS.md) cite
+# them as the evidence that a real weekly FLEX board exists and that the mirror reconstruction
+# reproduces it. Same reasoning as the M17/D55/D58 exceptions above. Each board carries a
+# `content_sha256` so a later re-harvest can be diffed rather than silently replacing this
+# vintage. Contains only ranking + player identity: no schedule or roster field is retained,
+# because those are not historical in this payload (D110 §3).
+# Git cannot re-include a file inside an excluded DIRECTORY, so the directories are
+# un-ignored first, then the files inside them.
+!reports/weekly/
+!reports/weekly/fp_api_cache/
+!reports/weekly/fp_api_cache/**
+# The W2 benchmark output the results document quotes throughout. Reproducible in principle,
+# but only after a full ingest + feature build, and it is the artifact a future phase diffs
+# against to check the benchmark has not drifted.
+!reports/weekly/w2_results.json
 state/**
 !state/.gitkeep
 *.duckdb

@@ -1,5 +1,30 @@
 # W1 — Weekly Rankings: Foundation & Baseline Audit
 
+> ## ⚠ CORRECTED BY W1.1 — read this first
+>
+> **Two of this document's three headline "the historical record cannot give us this" findings
+> were wrong**, and they were wrong in the same way: W1 audited only the **DynastyProcess
+> mirror** and reported that source's limits as limits of the historical record. FantasyPros'
+> own API — already adapted in `sources/fantasypros.py`, with a configured key, recorded live
+> in D36/D37 — was never queried for weekly rankings.
+>
+> | W1 said | actually |
+> |---|---|
+> | §3.3 "No 1-QB weekly overall/FLEX board exists" | **RETRACTED.** FantasyPros publishes a real weekly RB/WR/TE FLEX board (`position=FLX`) for every week of 2021–2025. The *mirror* lacks it. |
+> | §3.2 "No Half-PPR ECR benchmark exists" | **DOWNGRADED.** FantasyPros serves `scoring=HALF` historically for every board. Our API tier returns only the top 10 rows, so a *full-depth* half-PPR benchmark is a **licensing** limit, not a data-availability one. |
+> | §3.1 "The Tue–Sun daily cadence is not historically reconstructable" | **STANDS**, and is now doubly supported: the API's own vintage is a single Sunday-at-kickoff freeze, so it supplies no intermediate vintages either. |
+>
+> The FLEX reconstruction W1 built as a workaround (§4.5) has since been **validated against the
+> real board**: median top-10 overlap **0.80** over 19 weeks, against a 0.70 threshold fixed
+> before measuring. It is sound, and W2 ran on it.
+>
+> **Full correction and the corrected data audit: `docs/weekly/W11_FANTASYPROS_FLEX_AUDIT.md`.
+> Benchmark results: `docs/weekly/W2_ECR_BENCHMARK_RESULTS.md`.**
+>
+> Everything else in this document — the Friday cutoff, the already-played exclusion, the
+> ground-truth verification, the identity and coverage measurements, the repository and context
+> hierarchy — was re-checked in W1.1/W2 and **stands unchanged**.
+
 **Start here for the weekly-ranking program.** This is phase W1 of a research program that is
 separate from the draft program (D86–D108, closed out in `docs/D108_PROGRAM_CLOSEOUT.md`). It
 reuses that program's data, identity and provenance machinery, and reuses its *methodology* only
@@ -40,8 +65,8 @@ This section is the summary. Everything in it is sourced below. Nothing here is 
 | K1 | Weekly ECR exists in the mirror this project already downloads: **7 series, 96 scrape dates, 2020-10-16 → 2026-09-18** | §4.1 |
 | K2 | There is **one ECR vintage per week and it is a Friday** (82 Friday / 10 Thursday / 2 Saturday / 1 Tue / 1 Wed) | §4.2 |
 | K3 | **90 REG weeks** have a canonical weekly board across 2020–2025; **79** of them in 2021–2025 | §4.3 |
-| K4 | **No half-PPR page and no standard-scoring page exists in the mirror at any date** | §4.4 |
-| K5 | **No 1-QB weekly overall/FLEX board exists** after 2020-10-12; the only cross-position weekly board is the **superflex** one | §4.5 |
+| K4 | No half-PPR or standard-scoring page exists **in the mirror** — but FantasyPros serves both (**W1.1 §8**) | §4.4, W1.1 |
+| K5 | ~~No 1-QB weekly overall/FLEX board exists~~ **RETRACTED by W1.1** — true of the mirror only; FantasyPros publishes one | §4.5, W1.1 |
 | K6 | The superflex board's within-position order matches the dedicated positional boards almost exactly (**RB ρ̃=0.9965, WR 0.9997, TE 0.9992**, 96 weeks) | §4.5 |
 | K7 | **78 of 90 canonical boards carry already-played (Thursday-night) players — 2,522 / 42,260 rows (6.0%)** | §4.6 |
 | K8 | Board → `gsis_id` identity resolves at **99.3–99.8% overall and 99.9–100% in the top 24** | §4.7 |
@@ -137,7 +162,7 @@ from the moment the product starts capturing its own daily snapshots, it accumul
 history does not contain. It is not a *historically testable* one, and the W2 pre-registration
 says so rather than approximating it.
 
-### 3.2 A Half-PPR ECR benchmark does not exist historically
+### 3.2 A Half-PPR ECR benchmark does not exist historically — **CORRECTED: it exists; our tier cannot fetch it at depth (W1.1 §8)**
 
 Pattern search over every distinct `fp_page` value in the mirror returns **zero** pages matching
 `half`, `standard` or `non-ppr`. The weekly RB/WR/TE boards are `ppr-rb.php`, `ppr-wr.php`,
@@ -155,7 +180,7 @@ Most of the practical difference is small — reception value is the only rule t
 "small" is a hypothesis, and mislabelling a full-PPR board as a half-PPR one is exactly the D56
 error. The two must not be blurred.
 
-### 3.3 There is no 1-QB weekly overall/FLEX board — the only cross-position weekly board is superflex
+### 3.3 There is no 1-QB weekly overall/FLEX board — **RETRACTED (W1.1 §2): FantasyPros has one; the mirror does not**
 
 This is D56 repeating itself in the weekly program, and it is the finding most likely to be
 forgotten later. `ppr-flex.php` appears in the mirror only between 2019-12-27 and 2020-10-12
@@ -247,7 +272,7 @@ those weeks and mix a Tuesday information set into a Friday series.
 Distinct `fp_page` values matching `half` = **0**, `standard` = **0**, `non-ppr` = **0**.
 See §3.2.
 
-### 4.5 Constructing the FLEX benchmark
+### 4.5 Constructing the FLEX benchmark — **validated in W2: median top-10 overlap 0.80 vs the real board**
 
 There is no 1-QB weekly cross-position board (§3.3). The **only** available route is:
 
