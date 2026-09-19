@@ -3,7 +3,47 @@
 Living summary of what is implemented, validated, and outstanding. Updated at the end of every
 milestone. See `docs/TRACEABILITY.md` for the acceptance-criteria-level mapping.
 
-## Status: M58 complete (D108) — **PROGRAM CLOSEOUT. The draft-choice investigation D86–D107 is CLOSED and consolidated. Two repository defects D107 missed are fixed. Y1 remains production, unchanged by every phase from D85 to D108.**
+## Status: W1 complete (D109) — **WEEKLY-RANKING PROGRAM OPENED. A valid, leakage-free, reproducible foundation EXISTS for a Friday-cutoff, Full-PPR weekly study over 79 weeks (2021-2025), all six positions plus a reconstructed FLEX. Three things the brief asked for do not exist historically. Nothing shipped.**
+
+Audit and pre-registration only. **No production change: `models/`, `league/`, `api/`, `cli.py`,
+configs and `market/consensus.py` untouched; nothing fitted; nothing merged.** This opens a
+**second** research program, separate from the draft-choice program D108 closed — it does not
+reopen the draft question. **Entry point: `docs/weekly/W1_FOUNDATION_AUDIT.md`. Authority map for
+both programs: `docs/README.md`.**
+
+### CURRENT WEEKLY RESEARCH STATUS
+
+- **The foundation is VALID**, scoped to: **one Friday snapshot per week**, **Full PPR**, the
+  **79 covered REG weeks of 2021-2025**, QB/RB/WR/TE/K/DST, and a FLEX reconstructed from the
+  superflex board.
+- **Three brief requirements are absent from the historical record**, not fixable by harness care:
+  1. the **Tuesday-Sunday daily cadence** — weekly ECR has **one vintage per week and it is a
+     Friday** (82/96 Friday), and the injury file is one *final* row per player-week whose
+     `date_modified` is the last edit (4,818 of 2024's on a Friday), so an earlier cutoff deletes
+     most of the report rather than rewinding it;
+  2. a **Half-PPR ECR benchmark** — no `half`/`standard`/`non-ppr` page exists at any date;
+  3. a **1-QB weekly overall/FLEX board** — **D56 repeating itself**; the only weekly
+     cross-position board after 2020-10-12 is the **superflex** one.
+- **Weekly ECR is NOT ingested.** `DEFAULT_ECR_TYPES` covers only the four draft series; the
+  weekly series sit unused in the snapshot this project already downloads.
+- **Already-played (Thursday-night) rows must be excluded**: 78 of 90 canonical boards carry them,
+  6.0% of rows.
+- **Ground truth is verified**: nflverse `fantasy_points_ppr` reproduces an explicit PPR formula
+  to **0.0 max abs difference, zero mismatches over 5,864 player-weeks**; half-PPR is an exact
+  identity over stored columns.
+- **A weekly model already exists and has NEVER been evaluated as a ranking** —
+  `models/established/`, 11 features, QB/RB/WR/TE only, no opponent/Vegas/weather/injury/ECR, and
+  its evaluation sums weekly predictions into a *season total*. It is W3's starting point, not a
+  baseline.
+- **Vegas and weather are unusable historically** (untimestamped closing lines; realized game
+  conditions). This caps Alpha-without-ECR and is stated before any result.
+- **No ranking quality has been measured for any system.** Every comparative claim is still ahead.
+- **The draft program's 172-250 detection floor does NOT transfer** — a different instrument.
+- **Next: W2**, pre-registered and committed before execution
+  (`docs/weekly/W2_PREREGISTRATION.md`): *how strong is the ECR-alone weekly benchmark, and what
+  is the noise floor?* One system, no Alpha, no comparison.
+
+### Earlier status: M58 complete (D108) — **PROGRAM CLOSEOUT. The draft-choice investigation D86–D107 is CLOSED and consolidated. Two repository defects D107 missed are fixed. Y1 remains production, unchanged by every phase from D85 to D108.**
 
 Consolidation/audit only. **No production draft logic, no `models/`, no `league/`, nothing fitted,
 no new experiment, no new ranking source, no Y1 tuning, no PR, nothing merged, no D109.** `models/`

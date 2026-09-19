@@ -8480,3 +8480,152 @@ clean** (was 4 files failing). Only source change in the whole D98-D108 stack:
 `evaluation/draft_oracle.py` (D103's instrument, imported by no production path) plus D108's
 formatting-only test-file pass. **Y1 remains production, unchanged by every phase from D85 to
 D108.** D109 not started.
+
+## D109 — Weekly-ranking program opens (W1). The foundation is VALID at a Friday cutoff in Full PPR; three things the brief asked for do not exist historically. Nothing shipped.
+
+**Phase doc: `docs/weekly/W1_FOUNDATION_AUDIT.md`. Pre-registration: `docs/weekly/W2_PREREGISTRATION.md`.**
+
+Opens a second research program, separate from the draft-choice program D108 closed. D108 §4
+criterion 7 anticipated exactly this kind of split ("a **new** question, not a continuation of
+this draft-only one"); nothing in D109 reopens the draft question and no draft conclusion is
+restated here.
+
+*Audit and pre-registration only. No production change: `models/`, `league/`, `api/`, `cli.py`,
+configs and `market/consensus.py` are untouched; nothing fitted; nothing merged.*
+
+### 1. The verdict
+
+**YES — there is a valid, leakage-free, reproducible foundation** for asking whether Alpha can
+produce weekly rankings that meaningfully outperform ECR, **scoped to a Friday cutoff, Full PPR,
+and the 79 covered REG weeks of 2021–2025**, covering all six positions plus a reconstructed
+FLEX.
+
+### 2. Three things the brief asked for that the historical record cannot give
+
+Each is absent from the data, not fixable by care in the harness, and carried into the W2
+pre-registration as a scope limit rather than approximated.
+
+1. **The Tuesday–Sunday daily snapshot cadence is not historically reconstructable.** Two
+   independent reasons agree. (a) The weekly ECR mirror holds **one vintage per week and it is a
+   Friday** — across 96 boards: 82 Friday, 10 Thursday (all 2020), 2 Saturday, 1 Tuesday, 1
+   Wednesday. (b) nflverse's injury file is **one final row per player-week** (6,213 keys in
+   6,215 rows, 2024) whose `date_modified` is the *last* edit, **4,818 of them on a Friday** — so
+   filtering to a Wednesday cutoff does not reconstruct the Wednesday report, it deletes most of
+   it and yields a systematically *healthier* week. That is a missingness bias, and it is more
+   dangerous than a leak because it flatters any injury-using system while looking clean. The
+   daily cadence stays a **forward-only** product capability.
+2. **No Half-PPR ECR benchmark exists.** Zero `fp_page` values in the mirror match `half`,
+   `standard` or `non-ppr` at any date. Half-PPR *ground truth* is exact; the *benchmark* is
+   absent. Full PPR carries the ECR comparison; Half PPR is reported as an Alpha-internal,
+   explicitly format-mismatched secondary.
+3. **No 1-QB weekly overall/FLEX board exists** — **D56 repeating itself in the weekly program.**
+   `ppr-flex.php` appears only 2019-12-27→2020-10-12 and never again; from 2020-10-16 the sole
+   weekly cross-position board is `ppr-superflex.php`.
+
+### 3. What was measured (all reproducible via `scripts/research/w1_weekly_foundation_audit.py`)
+
+- **Weekly ECR exists and covers every product position**: 7 series (QB/RB/WR/TE/K/DST +
+  superflex overall), **96 scrape dates, 2020-10-16 → 2026-09-18**. Better positional coverage
+  than the draft program had, where K/DST needed a constructed board (D57).
+- **It is not ingested.** `market/consensus.py::DEFAULT_ECR_TYPES` is `("ro","do","rsf","dsf")` —
+  the four *draft* series. Weekly ECR sits in the snapshot this project already downloads and is
+  absent from `market_snapshot`. Wiring it in is a one-line filter widening and is a production
+  change, so W1 did not make it; the audit reads the recorded snapshot through `require_snapshot`,
+  introducing no second data path.
+- **90 canonical REG weeks 2020–2025 (79 in 2021–2025).** Week 18 is never covered; week 1 only
+  in 2021; 2024 starts at week 4.
+- **FLEX reconstruction is defensible and its limit is stated.** Dropping QBs from the superflex
+  board yields a within-position order matching the dedicated positional boards at median
+  Spearman **RB 0.9965 / WR 0.9997 / TE 0.9992** over 96 boards. This establishes *within*-position
+  consistency; it does **not** establish that the superflex board's *cross-position* calibration
+  equals a 1-QB board's, because no such board exists to check. Recorded as an assumption.
+- **Already-played contamination is real and must be excluded**: **78 of 90 canonical boards**
+  carry at least one player whose game had already kicked off — **2,522 of 42,260 rows (6.0%)**. A
+  Friday board sits after Thursday night. Removed from the *universe* before ranking, by a rule
+  owned by the cutoff rather than by any system.
+- **Identity is not a blocker**: board → `gsis_id` resolves at **99.3–99.8% overall, 99.9–100% in
+  the top 24**. DST joins by team code; only `JAC`/`LAR` differ from nflverse and
+  `FANTASYPROS_TEAM_ALIASES` already covers them.
+- **Ground truth is verified, not assumed.** `points(r) = fantasy_points_ppr − (1−r)·receptions`.
+  An explicit PPR formula reproduces the stored column with **max abs difference 0.0 and zero
+  mismatches over 5,864 REG QB/RB/WR/TE player-weeks (2024)**; the two independent half-PPR routes
+  agree to 0.0. So it is an identity over stored columns, not a second scoring implementation
+  that could drift from the one every draft number was measured under. Spot-checked against real
+  2024 player-weeks (Chase wk5 41.3/36.3; Bowers wk5 23.7/19.7; Barkley wk1 33.2/32.2).
+- **All six positions have weekly ground truth in one table**, two of them computed: nflverse
+  prices only pass/rush/rec, so every kicker's `fantasy_points_ppr` is **0.0** (569 K rows in 2024
+  summing to exactly 0.0) and team defenses do not exist as an entity. D57/D78 already build both
+  into `player_week_stats`.
+- **Vegas and weather are class D, not class C.** `nfldata/games.csv` carries spread/total/
+  moneylines with **no timestamp** (effectively closing values) and `temp`/`wind` that are
+  **realized game conditions**, not a Friday forecast. Both are look-ahead at any historical
+  cutoff. This caps how strong an Alpha-without-ECR system can be, and is stated before any
+  result rather than after a disappointing one.
+- **Injuries/depth charts/snaps run 2009→2026.** **ECR is the binding constraint on the study
+  period, not the NFL data.**
+
+### 4. A weekly model already exists — and has never been evaluated as a ranking
+
+`models/established/` (M5) trains walk-forward on seasons < S and persists `ml_catboost` weekly
+predictions to `weekly_projection_snapshot`, served at `GET /rankings/weekly` with M9's bounded
+evidence adjustment. But: **11 features; QB/RB/WR/TE only; full-PPR target; no opponent, no
+Vegas, no weather, no injury, no depth chart, no ECR** — and its evaluation **sums weekly
+predictions into a season total** and scores that against `player_season_stats`. No weekly
+ranking metric has ever been computed on it. So it exists, and nothing is known about whether it
+is good at the job this program cares about. It is W3's starting point, not a baseline.
+
+### 5. Sample size
+
+79 covered weeks (2021–2025); **~30,200 ranked FLEX player-weeks, ~21,900 of them active**
+(72.6% measured on 2024). **The unit of replication is the week, not the player-week** —
+player-weeks within a week share the slate, the injury news and the ECR vintage, so pooling them
+would overstate precision by about an order of magnitude. **n ≈ 79** is far more replication than
+the draft program's 5 season clusters, and is this program's main structural advantage over it.
+
+**No minimum detectable effect is stated.** It requires the per-week variance, which requires
+running the ECR-alone baseline — and doing that before pre-registering the metric suite is the
+ordering the brief forbids. W2 computes the floor from ECR alone, before any Alpha comparison.
+
+### 6. Methodology: what transfers and what does not
+
+**Transfers:** pre-registration before measurement with fixed decision rules (D70, D106);
+leakage-safety by construction with adversarial tests; committed instruments (**D92** — a finding
+was retracted because its runner was never committed); series = `(ecr_type, page_type)` (**D56**);
+no names as join keys, DST ids from team codes (**D57**); "nothing shipped" as a legitimate
+outcome.
+
+**Does NOT transfer:** the **172–250 point detection floor** (a *draft* instrument's resolution
+over 5 season clusters — quoting it here is a category error); D108's canonical conclusion
+(explicitly scoped to the draft); replacement level / VORP / positional scarcity / roster
+construction; and — the sharpest trap — the draft program's **weekly lineup objective**
+(D86/D103/D106), which scores a season of a fixed roster week by week and is a different quantity
+from a week's ordering of all players despite sharing the word.
+
+### 7. Structure
+
+Smallest additive change that makes two programs navigable, **with no file moved** so no
+citation breaks: `src/alpha_squad/evaluation/weekly/` (research-only subpackage, contract stated
+in its `__init__`), `scripts/research/w1_weekly_foundation_audit.py`, `docs/weekly/`, and
+`docs/README.md` — an authority map classifying every existing document by kind and by scope
+(shared / draft-specific / weekly-specific). **One decision log is kept deliberately:** a separate
+weekly log would be the parallel source of truth CLAUDE.md warns against. D-numbers say what was
+decided; W-numbers say which phase decided it.
+
+### 8. Repository
+
+1427 tests pass, 44 deselected **before** W1 — matching D108's record exactly. W1 adds 35 tests
+(11 scoring, 9 series, 15 leakage). `make lint` clean, both halves (D108 §3). `models/`,
+`league/`, `api/`, `cli.py` untouched. Vintages hashed: `db_fpecr.parquet`
+`e270d790…5db9a5`, `db_playerids.csv` `36016b92…b19ca4`, `nfldata/games.csv` `b65b2a30…87ffcf`.
+
+**Weekly-board immutability is UNVERIFIED.** D92 established immutability for the *draft* series
+only. W2 must re-hash and check whether historical weekly rows change between vintages.
+
+### 9. W2
+
+**"How strong is the ECR-alone weekly benchmark, and what is the noise floor of the primary
+comparison?"** — one system, no Alpha, no comparison. It is the gate every later claim depends
+on; it cannot be tuned toward a result because no Alpha system is touched; and it reveals whether
+the product opportunity is at the top of the board or deep in it, which W1 cannot tell and which
+would otherwise be guessed. Pre-registered in full at `docs/weekly/W2_PREREGISTRATION.md`,
+committed before execution.
