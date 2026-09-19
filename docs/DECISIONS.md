@@ -8480,3 +8480,82 @@ clean** (was 4 files failing). Only source change in the whole D98-D108 stack:
 `evaluation/draft_oracle.py` (D103's instrument, imported by no production path) plus D108's
 formatting-only test-file pass. **Y1 remains production, unchanged by every phase from D85 to
 D108.** D109 not started.
+
+## D113 — Positional capacity has D112's leverage and almost none of its value. Removing it is neutral in 1-QB formats and RESOLVED-WORSE in 2-QB. C; close the hypothesis. Nothing ships.
+
+**Question.** Does Alpha's positional-capacity logic cost realized draft value, especially late?
+
+**Record gap, first.** This repository contains **no D109, D110, D111 or D112** — the tip before
+D113 is `b82d2cf` (D108) and `PROJECT_STATE.md` still reads "D109 not started". D112's findings
+were taken from the brief as a hypothesis and, where cheaply checkable, re-measured. They
+reproduce: K = **2.00** (`target_league`) / **2.06** (`dynasty_1qb`) against a capacity of 2, and
+the penalty fires in **94.8%** of rounds 12-16 states. "The D111 ECR effect" has no record either,
+so the ECR comparison below is against **D104**'s measured ECR effect.
+
+**The mechanism, exactly.** One line in `league/draft.py`: `score *= OVER_CAP_VALUE_MULTIPLIER
+(0.1)` once `have_at_position[pos] >= positional_feasibility_cap(pos)`. Count-based, hard (no
+taper), applied last, and **not a prohibition** — a 0.1x score can still win, and in production it
+does (10/800 target states). Caps derive from config alone: target `QB 2, RB 6, WR 6, TE 4, K 2,
+DST 2`.
+
+**Counterfactual.** Control = `ScoringVariant.control()`, **verified identical to
+`recommend_draft_pick` over 30 complete drafts / 490 pick states, player for player**. T1 =
+`use_cap_multiplier=False`, one boolean, already in the committed harness; no new rule, no weight.
+T2 additionally drops the soft `roster_fit` sibling. 3 formats x 5 seasons (2021-2025) x 10 slots
+x 3 arms = 450 free-running drafts, plus 2,450 matched pick states where the draft never forks.
+
+**Leverage (reproduces D112).** `target_league`: penalty fires at **248/800 (31.0%)** states,
+changes **105/800 (13.1%)** picks; **every changed pick is at a firing state** (105/105), and
+**57.7% of firings change nothing**. Earliest firing round **11**; earliest changed pick **11**;
+**R1-6 effect is identically zero in all three formats**. The binding cap is overwhelmingly **QB**
+(229 firings) then K (95) — it is a QB brake, not a kicker rule.
+
+**Value — the answer.** Realized season-long starter points, T1 - C, per draft:
+
+| format | effect | 95% CI | seasons | own MDE |
+|---|---|---|---|---|
+| `target_league` | **+0.8** | [-46.1, +47.7] | 1W/3L | 46.9 |
+| `dynasty_1qb` | **+0.9** | [-14.6, +16.4] | 2W/3L | 15.5 |
+| `legacy_2qb_dynasty` | **-25.1** | **[-43.1, -7.2]** t=-3.89 | **0W/5L** | 17.9 |
+
+Weekly objective is negative in every format (hindsight -60.4 / +0.4 / -60.1; `legacy` CI
+[-92.1, -28.1], 0W/5L). Rosters stay legal: **0.000 unfilled mandatory slots in every arm**, so
+the counterfactual is valid and no legality rule was invented.
+
+**The methodological result, which matters more than the headline.** The pick-level metric points
+the OPPOSITE way: T1's changed picks are worth **+66.1 realized points each, +133.9 per draft**,
+because removing the cap buys **70 third quarterbacks** (+16,198.7 realized points) in a 1-QB
+league. Those points never enter a lineup. **+133.9 points of realized player value converts to
++0.8 points of realized starter value — 0.6%.** `total_roster_points` rises (+93.8) while
+`season_long` does not. "Many picks changed" and "the changed picks scored more" are both true and
+neither is evidence of improvement.
+
+**Power.** Applied mechanically, D97's 172-250 floor classifies every contrast UNRESOLVED and the
+pre-registered rule closes capacity. **The honest reading is stronger: this contrast BOUNDS the
+effect.** T1 and the control share 14.4 of 16 picks, so the between-season SD of the paired
+difference is 12.5-37.8, and this contrast's own MDE is **15.5-46.9**, four to sixteen times finer
+than the quoted floor. An effect the size of the floor is **excluded**, not undetected. D107 §G's
+"the floor cannot be lowered" is true for the contrasts it was derived from and **false for
+tightly-paired ones** — which is D113's recommended next question.
+
+**Versus ECR (D104).** ECR ordering: +77.3 (target) / -132.1 (`dynasty_1qb`). Capacity removal:
++0.8 / +0.9 / -25.1. **Two orders of magnitude smaller on the target format**, with no positive
+effect to compound, and one resolved effect saying capacity HELPS. Not a portfolio candidate.
+
+**Decision.** **C — capacity is NOT costing realized draft value; it is mildly protective.**
+Hypothesis closed. **No production change, no follow-up capacity experiment, no PR, nothing
+merged.** Board vintage for this run is `0d52543044fe99d6...`, which does **NOT** match the
+`ca3e2d8a...` D97-D108 recorded (the projection layer moved on a from-source rebuild); within-run
+pairing is unaffected, cross-phase magnitude comparisons are approximate. Full report:
+`docs/D113_CAPACITY_AUDIT.md`.
+
+**Next question (recommended).** Not another mechanism ablation. **Which decision-layer contrasts
+are tightly-paired enough to be resolvable, and what is this benchmark's real power frontier?**
+Concretely: re-express D104's ECR arm and D97's `PROD - NAIVE` as matched-state contrasts and see
+whether their own-MDEs collapse the way capacity's did. If they do, several closed "unresolved"
+findings become resolvable without new seasons — the one lever D97 said was unavailable.
+
+**Repository.** 1453 tests pass, 44 deselected. `ruff check src tests` and `ruff format --check
+src tests` clean; `check-secrets` clean. **`src/alpha_squad/` is byte-identical to D108.** New:
+`scripts/research/d113_capacity_audit.py`, `tests/unit/test_d113_capacity_audit.py`,
+`docs/D113_CAPACITY_AUDIT.md`. D114 not started.

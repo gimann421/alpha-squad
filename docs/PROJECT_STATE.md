@@ -3,7 +3,42 @@
 Living summary of what is implemented, validated, and outstanding. Updated at the end of every
 milestone. See `docs/TRACEABILITY.md` for the acceptance-criteria-level mapping.
 
-## Status: M58 complete (D108) — **PROGRAM CLOSEOUT. The draft-choice investigation D86–D107 is CLOSED and consolidated. Two repository defects D107 missed are fixed. Y1 remains production, unchanged by every phase from D85 to D108.**
+## Status: D113 complete — **POSITIONAL CAPACITY IS NOT COSTING REALIZED DRAFT VALUE. It has D112's leverage (fires at 31% of target-format pick states, changes 13% of picks) and almost none of its value (+0.8 points per draft, 95% CI [−46.1, +47.7]). In the 2-QB format removing it is RESOLVED-WORSE (−25.1, CI [−43.1, −7.2], 0W/5L). Hypothesis closed. Y1 remains production, unchanged by every phase from D85 to D113.**
+
+Research only. **No production draft logic, no `models/`, no `league/`, nothing fitted, no new
+capacity rule, no weight tuned, no PR, nothing merged.** `src/alpha_squad/` is byte-identical to
+D108. New this phase: `scripts/research/d113_capacity_audit.py`,
+`tests/unit/test_d113_capacity_audit.py`, `docs/D113_CAPACITY_AUDIT.md`.
+
+**Two things a future researcher needs from D113 beyond its verdict:**
+
+1. **The pick-level metric points the wrong way, and by a factor of 160.** Removing capacity buys
+   changed picks worth **+133.9 realized points per draft** — because it buys third quarterbacks
+   in a one-QB league — which converts to **+0.8 points of realized starter value**. Counting
+   changed picks, or their raw realized points, is not evidence of improvement.
+2. **The 172–250 detection floor is a property of the CONTRAST, not of the data.** D113's arms
+   share 14.4 of 16 picks, so its own MDE is **15.5–46.9 points**, four to sixteen times finer
+   than the floor the program has treated as hard since D97. D107 §G's "the floor cannot be
+   lowered" holds for the contrasts it was derived from and **not** for tightly-paired ones.
+
+**Record gap:** this repository contains no D109–D112. D112's checkable findings were re-measured
+and reproduce (K = 2.00/2.06 against a capacity of 2; penalty fires in 94.8% of R12–16 states).
+**Entry points: `docs/D113_CAPACITY_AUDIT.md`, then `docs/D108_PROGRAM_CLOSEOUT.md`.**
+
+### D113 headline table — realized season-long starter points, `T1_no_cap − control`, per draft
+
+| format | effect | 95% CI | seasons | own MDE | verdict |
+|---|---|---|---|---|---|
+| `target_league` | **+0.8** | [−46.1, +47.7] | 1W/3L | 46.9 | bounded near zero |
+| `dynasty_1qb` | **+0.9** | [−14.6, +16.4] | 2W/3L | 15.5 | bounded near zero |
+| `legacy_2qb_dynasty` | **−25.1** | [−43.1, −7.2] | **0W/5L** | 17.9 | resolved — capacity **helps** |
+
+Roster legality is unaffected (0.000 unfilled mandatory slots in every arm), so the counterfactual
+is valid. Board vintage for the D113 run is `0d52543044fe99d6…`, which does **not** match the
+`ca3e2d8a…` D97–D108 recorded — the projection layer moved on a from-source rebuild. Within-run
+pairing is unaffected; cross-phase magnitude comparisons are approximate.
+
+### Previously: M58 complete (D108) — **PROGRAM CLOSEOUT. The draft-choice investigation D86–D107 is CLOSED and consolidated. Two repository defects D107 missed are fixed.**
 
 Consolidation/audit only. **No production draft logic, no `models/`, no `league/`, nothing fitted,
 no new experiment, no new ranking source, no Y1 tuning, no PR, nothing merged, no D109.** `models/`
