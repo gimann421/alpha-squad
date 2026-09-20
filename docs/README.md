@@ -21,7 +21,7 @@ Most authoritative first. When two documents disagree, the higher tier wins.
 |---|---|---|---|
 | **1** | Product & architecture authority | `/PRODUCT_SPEC.md`, `/ARCHITECTURE.md`, `/ACCEPTANCE_CRITERIA.md`, `/AGENT_CONTRACTS.md`, `/IMPLEMENTATION_PLAN.md`, `/CLAUDE.md` | shared |
 | **2** | **Decisions** | **`DECISIONS.md`** — one append-only, D-numbered log for the whole project | shared |
-| **3** | Program entry points | `D108_PROGRAM_CLOSEOUT.md` (draft) · **`weekly/W2_ECR_BENCHMARK_RESULTS.md`** (weekly — start there; then `weekly/W11_FANTASYPROS_FLEX_AUDIT.md` for the data story) | per-program |
+| **3** | Program entry points | `D108_PROGRAM_CLOSEOUT.md` (draft) · **`weekly/W3_ALPHA_BENCHMARK_RESULTS.md`** (weekly — start there; then W2 for the benchmark and W1.1 for the data story) | per-program |
 | **4** | Methodology / benchmark definition | `BENCHMARK_SPEC.md` (draft) · `weekly/W2_PREREGISTRATION.md` (weekly) | per-program |
 | **5** | Data & format contracts | `DATA_SOURCES.md`, `TARGET_FORMAT_1QB.md` | shared |
 | **6** | Living state | `PROJECT_STATE.md`, `TRACEABILITY.md` | shared |
@@ -42,6 +42,7 @@ decided it.**
 | What is Alpha? What is the product? | `/PRODUCT_SPEC.md`, `/README.md` |
 | What is the current product goal for weekly rankings? | `weekly/W1_FOUNDATION_AUDIT.md` §0 |
 | How good is the ECR benchmark, and what counts as a real improvement? | `weekly/W2_ECR_BENCHMARK_RESULTS.md` §2-§3 |
+| What can the existing Alpha weekly model actually do? | `weekly/W3_ALPHA_BENCHMARK_RESULTS.md` |
 | Which weekly ECR data exists, in which source, at what depth? | `weekly/W11_FANTASYPROS_FLEX_AUDIT.md` |
 | What has already been tested, and what was concluded? | `DECISIONS.md` (all) → the phase doc it names |
 | What was rejected, and why? | `DECISIONS.md`; `D108_PROGRAM_CLOSEOUT.md` §2 for the draft program |
@@ -76,7 +77,9 @@ decided it.**
 | `weekly/W1_FOUNDATION_AUDIT.md` | foundation audit — **carries a correction banner; two of its findings were retracted/downgraded by W1.1** |
 | `weekly/W11_FANTASYPROS_FLEX_AUDIT.md` | **the FLEX/Half-PPR data correction** — which sources have what, and the acquisition limits |
 | `weekly/W2_PREREGISTRATION.md` | pre-registered W2 experiment + amendment A1 (both written before results) |
-| `weekly/W2_ECR_BENCHMARK_RESULTS.md` | **current program entry point** — the ECR benchmark, the noise floor, scope/exclusions, W3 |
+| `weekly/W2_ECR_BENCHMARK_RESULTS.md` | the ECR benchmark, the noise floor, scope/exclusions |
+| `weekly/W3_PREREGISTRATION.md` | pre-registered W3 evaluation + the Alpha model audit (written before results) |
+| `weekly/W3_ALPHA_BENCHMARK_RESULTS.md` | **current program entry point** — what the existing Alpha weekly model can do, three-way comparison, W4 |
 
 ### Draft-choice program (D86–D108, CLOSED)
 

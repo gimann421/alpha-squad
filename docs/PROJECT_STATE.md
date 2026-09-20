@@ -3,7 +3,43 @@
 Living summary of what is implemented, validated, and outstanding. Updated at the end of every
 milestone. See `docs/TRACEABILITY.md` for the acceptance-criteria-level mapping.
 
-## Status: W1.1 + W2 complete (D110) — **W1's FLEX and Half-PPR findings were WRONG and are corrected at source: FantasyPros DOES publish a historical weekly RB/WR/TE FLEX board. The ECR benchmark is established and the weekly noise floor is measured. Nothing shipped.**
+## Status: W3 complete (D111) — **Alpha has REAL weekly ranking signal (~53% of ECR's edge over a trivial baseline) but ZERO edge at the FLEX top 10, loses to ECR on every board, and cannot produce a Friday board at all. Nothing shipped.**
+
+Evaluation only. **No model built, tuned or modified; no ECR added; no feature added;
+production diff EMPTY.** **Entry point: `docs/weekly/W3_ALPHA_BENCHMARK_RESULTS.md`.**
+
+### CURRENT WEEKLY RESEARCH STATUS
+
+- **Alpha's signal is a DEEP-BOARD signal.** FLEX vs season-to-date baseline: Spearman
+  **+0.0347** (2.4x MDE, **68-11 weeks**, p=3e-12) but **capture@10 +0.0027** (0.16x MDE,
+  **39-40 weeks**, p=0.78). Monotone gradient: @50 1.69x -> @25 0.82x -> @10 0.16x.
+- **Alpha loses to ECR everywhere** (FLEX Spearman −0.0313, **5.15x MDE**, 8-71 weeks). Order is
+  identical on every board: **ECR > Alpha > B0 > B1**. The product gate is not met.
+- **W2 reproduced exactly**: ECR−B0 on FLEX = **+0.0660** vs W2's +0.066. Instrument is stable.
+- **Pooling destroys ~84% of Alpha's positional top-10 signal.** Positional capture@10 edges
+  (RB +0.020, WR +0.007, TE +0.035) imply ~+0.017 pooled; observed **+0.0027**. Alpha's FLEX
+  top-10 is **1.4% TE** against a realized 10.8%, and over-represents RB by +15.3pp.
+- **But cross-position calibration does NOT explain the overall deficit**: Alpha's within-position
+  deficit to ECR (−0.0348) equals its pooled deficit (−0.0313). It is a **top-of-FLEX** problem
+  only. The wrong version of this finding was one step away.
+- **The model cannot produce a real Friday board** — `player_week_features` exists only for
+  players who PLAYED, so Alpha can only score retrospectively. Blocking product limitation.
+- **A live leakage defect in the SERVED path**: the evidence layer reads the final injury report
+  with no `date_modified` filter; 7.2-9.8% of the Out/Doubtful rows it consumes were finalised
+  after Friday, and the 2025 file has no such column at all. Excluded from W3; must be fixed.
+- **Secondary, and a trap**: Alpha under-predicts by a near-constant −1.0 to −1.4 across all ten
+  deciles — a pure additive shift that **cannot change any ranking**. The most obvious-looking
+  defect is the least worth fixing.
+- **Positional shares of ECR's Spearman edge**: TE 60%, WR 54%, FLEX 53%, RB 42%, **QB 25%**
+  (barely above the noise floor). Alpha is materially **more stable** than the baseline
+  (FLEX SD 0.050 vs 0.096, close to ECR's 0.042).
+- **Next: W4** — *why does the per-position top-10 signal vanish when pooled into FLEX, and can
+  cross-position calibration alone recover it?* Targets measured signal already being discarded,
+  at the depth with the most headroom, at zero data cost. **Not** feature engineering, **not**
+  adding ECR, **not** MAE reduction, **not** K/DST. Two non-research prerequisites alongside:
+  fix the evidence-layer injury cutoff, and make Alpha able to produce a Friday board.
+
+### Earlier status: W1.1 + W2 complete (D110) — **W1's FLEX and Half-PPR findings were WRONG and are corrected at source: FantasyPros DOES publish a historical weekly RB/WR/TE FLEX board. The ECR benchmark is established and the weekly noise floor is measured. Nothing shipped.**
 
 Audit, benchmark and pre-registration only. **No Alpha model built, fitted or compared;
 `models/`, `league/`, `api/`, `cli.py`, `market/consensus.py` and configs untouched.**

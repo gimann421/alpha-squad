@@ -8789,3 +8789,129 @@ capture@10 is also the noisiest depth and that R2 found no *relative* top-of-boa
 **Do not chase K/DST** (weakest ECR but widest MDEs, thin known signal, 2 of 10 slots) and **do
 not chase projection MAE** (D101: projection metrics are not monotone in each other, let alone
 in decision quality).
+
+## D111 — W3. Alpha has real weekly ranking signal (~53% of ECR's edge over a trivial baseline) but ZERO edge at the FLEX top 10, loses to ECR on every board, and cannot produce a Friday board at all. Nothing shipped.
+
+**Phase docs: `docs/weekly/W3_ALPHA_BENCHMARK_RESULTS.md`, pre-registration
+`docs/weekly/W3_PREREGISTRATION.md` (committed before any Alpha metric existed).**
+
+*Evaluation only. No model built, tuned, retrained selectively or modified; no ECR added; no
+feature added; production diff EMPTY against `models/`, `league/`, `api/`, `cli.py`,
+`features/`, `sources/`, `evidence/`, `market/`, `uv.lock`, Makefile.*
+
+### 1. The headline
+
+FLEX, 79 weeks, 2021–2025, Full PPR, Friday cutoff, paired within week:
+
+| | Alpha − baseline | ECR − baseline | Alpha's share |
+|---|---:|---:|---:|
+| **Spearman** | **+0.0347** (2.4× MDE, 68–11 weeks, p=3e-12) | +0.0660 | **53%** |
+| **capture@10** | **+0.0027** (0.16× MDE, 39–40 weeks, p=0.78) | +0.0415 | **7%** |
+
+**Alpha's signal is a deep-board signal.** Its edge over season-to-date averaging is large,
+consistent and overwhelming on overall ordering, and **exactly zero at the top 10** — an effect
+six times smaller than 79 weeks can resolve, with a 39–40 week split. The gradient is monotone:
+capture@50 1.69× MDE → @25 0.82× → @10 0.16×.
+
+**Alpha loses to ECR on every board, metric and depth** (FLEX Spearman −0.0313, **5.15× MDE**,
+8–71 weeks). Ordering is identical everywhere: **ECR > Alpha > B0 > B1**. The product gate is
+not met.
+
+**W2 reproduced exactly**: ECR − B0 on FLEX = **+0.0660** here vs **+0.066** in W2, on a
+slightly different (Alpha-restricted) universe. The instrument is stable.
+
+### 2. What Alpha is (audited before results)
+
+`ml_catboost` (CatBoost, 200 iters, depth 4, lr 0.05, MAE loss, seed 42) — the only model
+persisted to `weekly_projection_snapshot` and therefore the only one `/rankings/weekly` can
+serve. **11 features**, all lags: player form, opportunity, team environment. **No opponent, no
+matchup, no injury, no depth chart, no Vegas, no weather, no ECR.** QB/RB/WR/TE only. Full-PPR
+target. Walk-forward, seasons `[2015, S−1]`. No ranking logic and no FLEX existed; W3 ranks by
+predicted points and pools RB+WR+TE unadjusted, as the product architecture intends.
+
+### 3. Two limitations that are findings
+
+**(a) The model cannot produce a real Friday board.** `player_week_features` is built from
+`player_week_stats`, which has a row only if the player **appeared**. Alpha can only predict
+someone who played — which on Friday is unknowable. It scores retrospectively. This does not
+contaminate W3 (all systems share the evaluable set, and neither is asked to predict
+availability), but **the weekly model is not deployable as it stands.**
+
+**(b) The served product's evidence layer carries a live leakage defect.**
+`detect_injury_events` reads the nflverse injury file with `WHERE i.week = ?` and **no
+`date_modified` filter**. Measured 2021–2024, **7.2%–9.8% of the `Out`/`Doubtful` rows it
+consumes were finalised after Friday**; the **2025 file has no `date_modified` column at all**.
+The W3 brief forbids post-cutoff injury information, so the layer was excluded from Alpha —
+and the defect is recorded as a production bug to fix, independent of any experiment.
+
+### 4. The cross-position finding — and the half of it that is NOT true
+
+**Pooling destroys most of Alpha's top-10 signal.** Alpha's capture@10 edge over the baseline on
+the *positional* boards is RB +0.0198, WR +0.0070, TE +0.0346; pool-weighted that predicts
+**≈ +0.017** for FLEX. Observed pooled: **+0.0027** — **~84% of the positional top-10 signal is
+lost in the pooling step.**
+
+**The mechanism is visible in composition.** Alpha's FLEX top-10 is **1.4% tight end** against a
+realized 10.8% and a pool share of 23.6% — effectively a TE-free board — and over-represents RB
+by **+15.3 points** vs realized, against ECR's +7.7 and the baseline's +6.0. Consistent with
+relative point bias: RB −15.1%, WR −15.4%, **TE −19.7%**.
+
+**But cross-position miscalibration does NOT explain Alpha's overall deficit.** Decomposing FLEX
+Spearman: Alpha's deficit to ECR **within** positions is **−0.0348** and **pooled** is
+**−0.0313** — the same size; pooling slightly *helps* both systems. So it is a **top-of-FLEX**
+problem specifically, and Alpha is simply worse than ECR inside every position. A composition
+table alone would have suggested calibration explained everything; the decomposition shows it
+does not. **Recorded because the wrong version of this finding was one step away.**
+
+### 5. Secondary diagnostics, and a trap they contain
+
+Alpha under-predicts nearly uniformly: FLEX MAE 4.18, RMSE 6.10, mean signed bias **−1.20**.
+Decile calibration gaps run **−0.96 to −1.43 across all ten deciles** — an almost constant
+additive shift, which **cannot change a ranking at all**. The most obvious-looking defect in the
+diagnostics is the one least worth fixing. What matters is the *relative* bias differing by
+position (§4), because on a pooled board that reorders.
+
+`corr(weekly MAE, weekly Spearman) = −0.685` — accurate weeks are well-ordered weeks. That is a
+within-system correlation, **not** evidence that reducing MAE would improve ranking; the flat
+calibration curve is the counterexample.
+
+### 6. Positional detail
+
+Alpha's share of ECR's Spearman edge over the baseline: **TE 60%, WR 54%, FLEX 53%, RB 42%,
+QB 25%**. QB is the weakest (+0.0248, **1.24× MDE**, 47–32 weeks, p=0.04) — barely above the
+noise floor. At capture@10 the shares are TE 57%, RB 46%, WR 18%, **FLEX 7%**, QB −3%.
+
+**One property in Alpha's favour:** its week-to-week SD is far below the baseline's (FLEX 0.050
+vs 0.096), close to ECR's 0.042. Alpha is a materially **more stable** ranker than season-to-date
+averaging.
+
+### 7. Audit and coverage
+
+No ECR is reachable — verified both by feature name and by the physical column list of
+`player_week_features`. Leakage gate: **0** rows claim prior games with no strictly-earlier
+game on record; **0** already-played players evaluated; **0** invalid cells. Alpha covers
+**98.2%** of the shared universe (min 88.0%); the gap is **fullbacks** — FantasyPros lists FB
+under RB, nflverse types them `FB`, which is not in the model's positions. Reported, never
+imputed. 2021 predictions required ingesting 2015–2020, since the model trains on `season < S`.
+
+### 8. Repository
+
+1502 → **1521 tests pass**, 44 deselected (W3 adds 19). `make lint` clean, both halves. Two
+independent benchmark runs **byte-identical**. New research-only modules
+`evaluation/weekly/alpha.py` and `evaluation/weekly/diagnostics.py`; runner
+`scripts/research/w3_alpha_benchmark.py`.
+
+### 9. W4
+
+**"Why does Alpha's per-position top-10 signal disappear when the three models are pooled into a
+FLEX board, and can it be recovered by cross-position calibration alone — no new features, no
+new data?"** Chosen because it targets measured signal *already being discarded* (84% of it), at
+the depth W2 identified as having the largest absolute headroom, at zero data cost.
+**Explicitly not** feature engineering (premature — fix the leak before pouring more in, and
+Vegas/weather remain historically unusable), **not** adding ECR (would confound "Alpha improved"
+with "Alpha imported the benchmark"), **not** MAE reduction (§5's flat calibration curve is the
+counterexample), **not** K/DST (absent from the model, near-noise in ECR, 2 of 10 slots).
+
+Two non-research prerequisites scheduled alongside: **fix the evidence layer's injury cutoff**
+(§3b, a live production leakage defect) and **make Alpha able to produce a Friday board** (§3a,
+the blocking product limitation).

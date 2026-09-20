@@ -61,6 +61,10 @@ reports/**
 # but only after a full ingest + feature build, and it is the artifact a future phase diffs
 # against to check the benchmark has not drifted.
 !reports/weekly/w2_results.json
+# W3/D111: the Alpha-vs-ECR-vs-baseline benchmark output. Reproducible only after a full
+# 2015-2025 ingest, feature build and model training run (~hours); the results document quotes
+# it throughout and a later phase diffs against it to check the baseline has not drifted.
+!reports/weekly/w3_results.json
 state/**
 !state/.gitkeep
 *.duckdb
