@@ -1,5 +1,13 @@
 # W3 — What the existing Alpha weekly model can already do
 
+> ⚠ **ONE FINDING SUPERSEDED BY W4 (D112).** W3's *"pooling destroys ~84% of Alpha's positional
+> top-10 signal"* does not survive as a causal claim: it was arithmetic on point estimates whose
+> individual CIs all contained zero, and W4's oracle — which removes **every** cross-position
+> effect — recovers **2.1%** of the available headroom, not 84%. The *descriptive* composition
+> figures below are correct and reproduce exactly; the inference drawn from them does not. See
+> `docs/weekly/W4_FLEX_FORENSICS_RESULTS.md` §9 and §12. Everything else in this document stands
+> and was re-verified value-for-value by W4 (2,607 metric values, max abs diff `0`).
+
 **Status: COMPLETE.** Run exactly as pre-registered in `docs/weekly/W3_PREREGISTRATION.md`,
 which was committed before any Alpha ranking metric existed. **No model was built, tuned,
 retrained selectively or modified. No ECR entered Alpha. No production file changed.**

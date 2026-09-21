@@ -8915,3 +8915,111 @@ counterexample), **not** K/DST (absent from the model, near-noise in ECR, 2 of 1
 Two non-research prerequisites scheduled alongside: **fix the evidence layer's injury cutoff**
 (§3b, a live production leakage defect) and **make Alpha able to produce a Friday board** (§3a,
 the blocking product limitation).
+
+---
+
+## D112 — W4: cross-position calibration is NOT the FLEX bottleneck (verdict D); stop the line of work
+
+**Date:** W4. **Status:** accepted. **Supersedes:** D111 §9's framing and W3's "pooling destroys
+84% of Alpha's positional top-10 signal".
+**Authority:** `docs/weekly/W4_PREREGISTRATION.md` (committed before any result existed),
+`docs/weekly/W4_FLEX_FORENSICS_RESULTS.md` (the full report),
+`reports/weekly/w4_results.json`.
+
+### Decision
+
+**Do not build cross-position calibration for the weekly FLEX board.** The question W4 was sent
+to answer — *how much of Alpha's top-of-FLEX deficit is caused by the RB/WR/TE combination step,
+versus deficiencies already inside the positional rankings?* — resolves to the pre-registered
+**verdict D, essentially irrelevant**.
+
+### Evidence
+
+On FLEX capture@10 over 79 weeks (2021–2025, Full PPR, Friday cutoff), with the week as the unit
+of replication:
+
+- `X = ORACLE_XPOS − CF_A` (**perfect** cross-position scale, Alpha's within-position order) =
+  **+0.0075, 95% CI [−0.0055, +0.0205]**, 37–38 weeks. **0.58× MDE.**
+- `W = ORACLE_WITHIN − CF_A` (**perfect** within-position order, Alpha's scale) = **+0.3613, CI
+  [+0.3426, +0.3796]**, **79–0 weeks**.
+- `X / W` = **2.1%**.
+- A perfect cross-position scale still leaves Alpha significantly behind ECR (**−0.0313, CI
+  [−0.0495, −0.0136]**); a perfect within-position order beats ECR by **+0.3225**.
+- Four pre-registered causal calibrations (`CAL_MEANVAR`, `CAL_AFFINE`, `CAL_QUANTILE`,
+  `CAL_RANKPCT`) — **none met either success bar**; all four significantly degrade Spearman;
+  `CAL_QUANTILE`/`CAL_RANKPCT` additionally degrade capture@50 and precision@50. Harm rises
+  monotonically with how aggressively a method rescales.
+- The **exact additive** pairwise decomposition: Alpha already orders cross-position pairs
+  *better* (0.7385) than within-position pairs (0.7365). **The premise has the wrong sign.**
+
+### Three findings that change how the program reasons
+
+1. **Composition matching is not ranking quality.** `CAL_QUANTILE`/`CAL_RANKPCT` match the
+   realized FLEX top-10 composition almost exactly (RB over-representation +0.153 → +0.018 /
+   +0.006; TE −0.094 → −0.005 / −0.010) and gain nothing. `ORACLE_WITHIN` keeps Alpha's
+   composition **unchanged** (+0.153 / −0.094) and gains +0.3613. W3's composition table was a
+   correct description and an incorrect diagnosis.
+2. **Alpha's anti-TE cross-position bias is real, removable, and not an error.** ECR — which
+   beats Alpha at every depth in every position — has a *stronger* anti-TE bias (RB-TE +0.0621
+   vs Alpha's +0.0454; WR-TE +0.0674 vs +0.0532). At equal predicted value, top TEs realize
+   fewer points (+0.83 against RB's +1.47), so demoting them is correct behaviour. Do not
+   "fix" it — the same trap CLAUDE.md already records for the draft program's top-of-board
+   compression.
+3. **The FLEX problem is the positional problem.** Alpha's deficit to ECR is the same size
+   inside each position (RB −0.0375, WR −0.0305, TE −0.0343 Spearman) as on FLEX (−0.0313), and
+   at the top of the board the FLEX deficit is statistically indistinguishable from the mean
+   positional deficit. **W3's "pooling destroys 84% of Alpha's positional top-10 signal" does
+   not survive as a causal claim** and is superseded: it was arithmetic on point estimates whose
+   individual CIs all contained zero, and the oracle that removes every pooling effect recovers
+   2.1%, not 84%.
+
+### One honest complication
+
+On **name overlap** rather than points, the cross-position ceiling is real: `ORACLE_XPOS`
+improves precision@5 by **+0.0456** and precision@10 by **+0.0241**, both CIs excluding zero. A
+perfect scale puts more of the right names in the top 10; those names are worth almost nothing in
+points. The pre-registered primary metric is capture@10 *because* it prices a miss by its cost, so
+the verdict follows it — but the gloss attached to verdict D ("changes nothing measurable") is too
+strong as written and is corrected in the report rather than restated.
+
+### Methodology, including two defects W4 found in its own instruments
+
+Six validity gates, enforced by the committed `scripts/research/w4_validity_gates.py`, all pass:
+causality (0 fit rows at or after the ranked week), already-played (0), identical universes (0
+mismatches), **within-position monotonicity (0 of 948 cells)**, no-ECR (0), determinism (two runs
+byte-identical). W3 reproduced **exactly** — 2,607 values, max abs diff `0`.
+
+**Gate G4 failed first, at 458 of 948**, and per the pre-registration's own rule no result was
+read until it was diagnosed. Root cause: `CAL_QUANTILE`/`CAL_RANKPCT` are step functions that
+manufacture within-position ties (362 and 355 per week; the strictly-increasing methods
+manufacture 0), after which the dense re-rank fell back to `player_id`. **Separately**, an
+invariant caught a defect in the oracle itself: 42.5% of realized values tie inside a
+position-week, so `ORACLE_XPOS` was scrambling the very ordering it exists to preserve. Before
+the fix it scored Spearman −0.0047 CI [−0.0069, −0.0025] — *"perfect calibration makes the
+ordering significantly worse"* — and after it, +0.0004 CI [−0.0013, +0.0023]. Fixing both
+**helped** the calibration methods (`CAL_QUANTILE` Spearman −0.0052 → −0.0011, `CAL_RANKPCT`
+−0.0085 → −0.0033) and they still fail. Both constructions remain runnable via
+`w4_flex_forensics.py --legacy-ties` so the comparison is reproducible, and both invariants are
+now asserted by test.
+
+**One a priori prediction was wrong** and is reported as such: §3's prediction 2 said calibration
+would push RB *up*; it pushed RB **down** (top-10 share 0.534 → 0.399) and TE up. Five of the six
+held, including the expected verdict.
+
+### Scope
+
+Research-only. **Production diff EMPTY.** New modules are all under
+`src/alpha_squad/evaluation/weekly/` (`calibration.py`, `counterfactual.py`, `crosspos.py`); the
+only edit to a file W3 shipped is `alpha_board`'s optional `tiebreak` argument, which defaults to
+`None` and reproduces W3 byte-for-byte (verified numerically, not asserted). 1521 → **1567 tests
+pass**, 44 deselected. `make lint` clean, both halves.
+
+### W5
+
+**Target within-position ordering at the top of each positional board**, where `corr(pred, real)`
+collapses to RB 0.251 / WR 0.222 / TE 0.141 and where Alpha's WR top-5 loses to the *trivial*
+season-to-date baseline (−0.0304, CI [−0.0603, −0.0003], 9–20 weeks). That is where 97.9% of the
+measured headroom is. W4 measured that the collapse happens; it did **not** diagnose why, because
+diagnosing it means changing the model, which W4 may not do. The two engineering prerequisites
+carried from W3 — the served evidence layer's injury cutoff leak and the Friday-board eligibility
+architecture — remain open and remain outside research scope.

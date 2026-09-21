@@ -65,6 +65,13 @@ reports/**
 # 2015-2025 ingest, feature build and model training run (~hours); the results document quotes
 # it throughout and a later phase diffs against it to check the baseline has not drifted.
 !reports/weekly/w3_results.json
+# W4/D112: the FLEX forensic audit -- 14 systems x 79 weeks of cells, the oracle/counterfactual
+# boards, the exact pairwise decomposition, composition and per-season robustness. Same
+# reasoning as w3_results.json: it needs the same multi-hour ingest/train run to regenerate,
+# docs/weekly/W4_FLEX_FORENSICS_RESULTS.md quotes it throughout, and W4 itself demonstrates why
+# the artifact matters -- it reproduces w3_results.json value-for-value (max abs diff 0), which
+# is only checkable because the earlier file is tracked.
+!reports/weekly/w4_results.json
 state/**
 !state/.gitkeep
 *.duckdb

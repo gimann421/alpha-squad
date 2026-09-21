@@ -213,7 +213,10 @@ class CellMetrics:
             "decisive_pairs": self.decisive_pairs,
             "mean_rank_error": self.mean_rank_error,
         }
-        for k in DEPTHS:
+        # Emit whatever depths this cell was actually computed at, not the module default:
+        # W4 evaluates depth 5 as well, and keying the output off `DEPTHS` silently dropped it
+        # (the value was computed and then thrown away).
+        for k in sorted(set(self.precision) | set(self.capture)):
             row[f"precision@{k}"] = self.precision.get(k)
             row[f"capture@{k}"] = self.capture.get(k)
         return row

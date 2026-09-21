@@ -79,6 +79,7 @@ def load_alpha_predictions(
 def alpha_board(
     reference: Board,
     predictions: dict[str, float],
+    tiebreak: dict[str, float] | None = None,
 ) -> tuple[Board, CoverageReport]:
     """Alpha's ranking of **exactly the players on `reference`**, ordered by predicted points.
 
@@ -88,10 +89,25 @@ def alpha_board(
 
     A reference player Alpha did not predict is **dropped and counted**, never imputed —
     inventing a prediction would be fabricating the very quantity under test. The caller
-    applies the same drop to the other systems so the universes stay identical."""
+    applies the same drop to the other systems so the universes stay identical.
+
+    `tiebreak` (default `None`, which reproduces W3 exactly) resolves equal predicted values in
+    favour of a caller-supplied ordering before falling back to `player_id`. It exists for W4's
+    calibration boards: `CAL_QUANTILE` and `CAL_RANKPCT` are step functions on an empirical
+    distribution, so they map distinct predictions onto **equal** calibrated values -- 362 and
+    355 manufactured same-position ties per week respectively over the 79 evaluated weeks, while
+    the strictly-increasing `CAL_MEANVAR` and `CAL_AFFINE` manufacture exactly 0
+    (`scripts/research/w4_validity_gates.py` prints these counts on every run). Without a
+    tiebreak the sort would reorder those players by `player_id`, a within-position change --
+    and W4's whole claim is that these transforms are monotone within a position and therefore
+    purely cross-position. Passing Alpha's own order here keeps that true."""
     ranked = [r for r in reference.rows if r.player_id in predictions]
     missing = tuple(r.player_id for r in reference.rows if r.player_id not in predictions)
-    ordered = sorted(ranked, key=lambda r: (-predictions[r.player_id], r.player_id))
+    tb = tiebreak or {}
+    ordered = sorted(
+        ranked,
+        key=lambda r: (-predictions[r.player_id], tb.get(r.player_id, 0.0), r.player_id),
+    )
     board = Board(
         reference.season,
         reference.week,

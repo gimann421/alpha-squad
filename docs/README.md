@@ -21,7 +21,7 @@ Most authoritative first. When two documents disagree, the higher tier wins.
 |---|---|---|---|
 | **1** | Product & architecture authority | `/PRODUCT_SPEC.md`, `/ARCHITECTURE.md`, `/ACCEPTANCE_CRITERIA.md`, `/AGENT_CONTRACTS.md`, `/IMPLEMENTATION_PLAN.md`, `/CLAUDE.md` | shared |
 | **2** | **Decisions** | **`DECISIONS.md`** — one append-only, D-numbered log for the whole project | shared |
-| **3** | Program entry points | `D108_PROGRAM_CLOSEOUT.md` (draft) · **`weekly/W3_ALPHA_BENCHMARK_RESULTS.md`** (weekly — start there; then W2 for the benchmark and W1.1 for the data story) | per-program |
+| **3** | Program entry points | `D108_PROGRAM_CLOSEOUT.md` (draft) · **`weekly/W4_FLEX_FORENSICS_RESULTS.md`** (weekly — start there; then W3 for what Alpha can do, W2 for the benchmark, W1.1 for the data story) | per-program |
 | **4** | Methodology / benchmark definition | `BENCHMARK_SPEC.md` (draft) · `weekly/W2_PREREGISTRATION.md` (weekly) | per-program |
 | **5** | Data & format contracts | `DATA_SOURCES.md`, `TARGET_FORMAT_1QB.md` | shared |
 | **6** | Living state | `PROJECT_STATE.md`, `TRACEABILITY.md` | shared |
@@ -29,7 +29,7 @@ Most authoritative first. When two documents disagree, the higher tier wins.
 
 **One decision log, deliberately.** A separate `WEEKLY_DECISIONS.md` would create the parallel
 source of truth CLAUDE.md and the W1 brief both warn against, and would make "has this been
-decided?" a two-file question. The weekly program continues the D-sequence (it opens at **D109**)
+decided?" a two-file question. The weekly program continues the D-sequence (it opens at **D109**; W4 is **D112**)
 and uses W-numbers only for *phases*: **D-numbers say what was decided, W-numbers say which phase
 decided it.**
 
@@ -43,6 +43,8 @@ decided it.**
 | What is the current product goal for weekly rankings? | `weekly/W1_FOUNDATION_AUDIT.md` §0 |
 | How good is the ECR benchmark, and what counts as a real improvement? | `weekly/W2_ECR_BENCHMARK_RESULTS.md` §2-§3 |
 | What can the existing Alpha weekly model actually do? | `weekly/W3_ALPHA_BENCHMARK_RESULTS.md` |
+| Is cross-position calibration worth building for the FLEX board? | `weekly/W4_FLEX_FORENSICS_RESULTS.md` §1 (no — verdict D) |
+| Why is Alpha's FLEX top-10 short of TEs, and should that be fixed? | `weekly/W4_FLEX_FORENSICS_RESULTS.md` §8-§9 (it is not an error) |
 | Which weekly ECR data exists, in which source, at what depth? | `weekly/W11_FANTASYPROS_FLEX_AUDIT.md` |
 | What has already been tested, and what was concluded? | `DECISIONS.md` (all) → the phase doc it names |
 | What was rejected, and why? | `DECISIONS.md`; `D108_PROGRAM_CLOSEOUT.md` §2 for the draft program |
@@ -79,7 +81,9 @@ decided it.**
 | `weekly/W2_PREREGISTRATION.md` | pre-registered W2 experiment + amendment A1 (both written before results) |
 | `weekly/W2_ECR_BENCHMARK_RESULTS.md` | the ECR benchmark, the noise floor, scope/exclusions |
 | `weekly/W3_PREREGISTRATION.md` | pre-registered W3 evaluation + the Alpha model audit (written before results) |
-| `weekly/W3_ALPHA_BENCHMARK_RESULTS.md` | **current program entry point** — what the existing Alpha weekly model can do, three-way comparison, W4 |
+| `weekly/W3_ALPHA_BENCHMARK_RESULTS.md` | what the existing Alpha weekly model can do, three-way comparison — **one finding superseded by W4** (the "pooling destroys 84%" claim) |
+| `weekly/W4_PREREGISTRATION.md` | pre-registered W4 forensic audit + a priori predictions (written before any counterfactual ran) |
+| `weekly/W4_FLEX_FORENSICS_RESULTS.md` | **current program entry point** — the FLEX forensic audit: verdict D, and why calibration must not be built |
 
 ### Draft-choice program (D86–D108, CLOSED)
 
