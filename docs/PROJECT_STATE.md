@@ -3,7 +3,71 @@
 Living summary of what is implemented, validated, and outstanding. Updated at the end of every
 milestone. See `docs/TRACEABILITY.md` for the acceptance-criteria-level mapping.
 
-## Status: D113 complete — **POSITIONAL CAPACITY IS NOT COSTING REALIZED DRAFT VALUE. It has D112's leverage (fires at 31% of target-format pick states, changes 13% of picks) and almost none of its value (+0.8 points per draft, 95% CI [−46.1, +47.7]). In the 2-QB format removing it is RESOLVED-WORSE (−25.1, CI [−43.1, −7.2], 0W/5L). Hypothesis closed. Y1 remains production, unchanged by every phase from D85 to D113.**
+## Status: D114 complete — **MATCHED-STATE PAIRING IS REAL BUT IS NOT A GENERAL POWER MULTIPLIER. D113's tight intervals came from an INERT TREATMENT, not from the pairing. ECR is CLOSED as a per-pick decision signal (+1.32 per pick state, 95% CI [−12.1, +14.7]). D97's PROD-vs-NAIVE is UNRECONSTRUCTIBLE and was STOPPED, not substituted. Y1 remains production, unchanged by every phase from D85 to D114.**
+
+Research only. **No production draft logic, no `models/`, no `league/`, nothing fitted, no ECR
+weight introduced or tuned, no PR, nothing merged.** `src/alpha_squad/` is byte-identical to D108;
+`scripts/research/d104_ecr_floor.py` was re-run, not edited. New this phase:
+`scripts/research/d114_matched_state.py`, `tests/unit/test_d114_matched_state.py`,
+`docs/D114_MATCHED_STATE_REANALYSIS.md`.
+
+### The single most important correction D114 makes to the program's record
+
+**The 172–250 "detection floor" is not a floor. It is a function of how much the treatment moves
+the roster** — measured on identical machinery, seasons, slots, formats, opponents and vintage:
+
+| contrast | roster slots moved (of 16) | first divergence round | own MDE | vs the 172–250 band |
+|---|---|---|---|---|
+| D113 capacity, `dynasty_1qb` | 0.70 | 13.6 | **15.5** | 11–16× tighter |
+| D113 capacity, `legacy_2qb_dynasty` | 2.60 | 12.7 | 17.9 | 10–14× tighter |
+| D113 capacity, `target_league` | 1.64 | 13.5 | 46.9 | 4–5× tighter |
+| **D114 ECR, `target_league`** | **8.44** | **1.9** | **94.6** | inside the band |
+| **D114 ECR, `dynasty_1qb`** | **10.46** | **1.7** | **259.2** | **above the band** |
+
+A **17× range in MDE**. **D107 §G's "the detection floor is 172–250 and cannot be lowered" is
+wrong as a universal statement** — too conservative for a late, narrow treatment and slightly too
+generous for a broad one. Widening from 4 seats to 10 made it *worse* (83.4→94.6; 238.3→259.2):
+seasons bind, not slots (D88, re-confirmed on a new treatment).
+
+**The replacement standard is a procedure, not a number.** Report every contrast's own MDE; report
+roster slots moved and first divergence round beside it; state whether the ONE-STEP estimand is
+the question actually being asked (for Alpha's stated objective it usually is); never buy power
+with slots; never quote a program-wide floor.
+
+### D114 headline results
+
+| estimator | format | effect (season-long) | 95% CI | MDE | verdict |
+|---|---|---|---|---|---|
+| ONE-STEP, per pick state | `target_league` | **+1.32** | [−12.1, +14.7] | **13.37** | **B — tight around zero** |
+| ONE-STEP, per pick state | `dynasty_1qb` | **−4.69** | [−17.4, +8.1] | **12.75** | **B — tight around zero** |
+| FREE-RUN, per draft | `target_league` | +64.5 | [−18.9, +147.9] | 83.4 | C — unresolved |
+| FREE-RUN, per draft | `dynasty_1qb` | −153.9 | [−392.2, +84.4] | 238.3 | C — unresolved |
+
+**ECR is zero/closed as a per-pick signal and is NOT a credible small improvement to preserve for
+combined-system testing** — both intervals lie wholly inside ±25 points, changed picks are 176
+better/149 worse (target) and 195 better/212 worse (dynasty), and the sign flips by format under
+both estimators. The whole-draft adoption question stays formally unresolved; closing ECR rests on
+the per-pick evidence plus the cross-format sign flip and is a judgement, not a proof.
+
+**D97 PROD-vs-NAIVE: unreconstructible.** `git log --all -S NAIVE -- '*.py'` is empty, no `d97*`
+file was ever added, and no script was ever deleted. NAIVE exists only as prose. Rebuilding it
+would be inventing a naive system, so D114 stopped and ran no substitute. A test
+(`test_no_naive_arm_exists_in_the_checkout`) fails the day one is added.
+
+**Pick-level vs roster-level, measured:** raw realized points at ECR's changed picks **+9,742**
+converts to **+1,057** of roster value — **10.9%**. At 60 picks ECR's player outscored Y1's *and
+the roster got worse*. The mechanism: ECR takes **135 extra kickers** worth **+1,282 raw** and
+**−3,678 roster value**.
+
+**Board vintage for D113/D114 is `0d52543044fe99d6…`, which does not match the `ca3e2d8a…` that
+D97–D108 recorded.** D114 quantified the cost by re-running D104's own unmodified runner: every
+sign, verdict and season pattern survives; point estimates move 13–22 points against intervals
+170–480 wide. The procedure reconstructs exactly; the numbers are not bit-identical.
+
+**Entry points: `docs/D114_MATCHED_STATE_REANALYSIS.md`, then `docs/D113_CAPACITY_AUDIT.md`, then
+`docs/D108_PROGRAM_CLOSEOUT.md`.** D115 not started.
+
+### Previously: D113 complete — **POSITIONAL CAPACITY IS NOT COSTING REALIZED DRAFT VALUE. It has D112's leverage (fires at 31% of target-format pick states, changes 13% of picks) and almost none of its value (+0.8 points per draft, 95% CI [−46.1, +47.7]). In the 2-QB format removing it is RESOLVED-WORSE (−25.1, CI [−43.1, −7.2], 0W/5L). Hypothesis closed. Y1 remains production, unchanged by every phase from D85 to D113.**
 
 Research only. **No production draft logic, no `models/`, no `league/`, nothing fitted, no new
 capacity rule, no weight tuned, no PR, nothing merged.** `src/alpha_squad/` is byte-identical to

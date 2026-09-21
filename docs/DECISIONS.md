@@ -8559,3 +8559,114 @@ findings become resolvable without new seasons — the one lever D97 said was un
 src tests` clean; `check-secrets` clean. **`src/alpha_squad/` is byte-identical to D108.** New:
 `scripts/research/d113_capacity_audit.py`, `tests/unit/test_d113_capacity_audit.py`,
 `docs/D113_CAPACITY_AUDIT.md`. D114 not started.
+
+## D114 — Matched-state pairing is real but is NOT a general power multiplier. D113's tight intervals came from an inert treatment. ECR is CLOSED as a per-pick signal. D97 PROD-vs-NAIVE is UNRECONSTRUCTIBLE — stopped, not substituted. Nothing ships.
+
+**Question.** D113 produced a decision-layer contrast with an MDE of 15.5-46.9 against D97's
+172-250 "unlowerable" floor. Was that the PAIRING, or an inert treatment? If the pairing, other
+unresolved effects become measurable.
+
+**Answer: the treatment.** D113's capacity arm moved 0.7-2.6 of 16 roster slots and never
+diverged before round 10. D104's ECR arm moves **8.4-10.5 of 16** and diverges at round **1.7**,
+and its whole-draft MDE is **94.6** (target) / **259.2** (`dynasty_1qb`) — inside and ABOVE D97's
+band, on identical machinery, seasons, slots, formats, opponents and vintage.
+
+### Reconstructability audit, run FIRST (the brief's steps 1-6)
+
+| experiment | verdict | evidence |
+|---|---|---|
+| D104 ECR arm | **reconstructible** | `d104_ecr_floor.py::ecr_ordered_static` committed + tested; D114 IMPORTS it; no weight exists to retune (it is a within-position rank permutation of Y1's own value multiset) |
+| **D97 PROD vs NAIVE** | **NOT reconstructible — STOPPED** | `git log --all -S NAIVE -- '*.py'` **empty**; no `d97*` file ever added; no script ever deleted. NAIVE exists only as prose. Rebuilding it = inventing a naive system, which the brief forbids. **No substitute run.** |
+| data vintage | **differs** | this checkout `0d525430...` vs D103/D104/D105's `ca3e2d8a...` |
+
+**The vintage cost is measured, not assumed.** D104's own unmodified runner, re-run here:
+target **+64.5** CI [−18.9, +147.9] (published +77.3 [−44.1, +198.6]); dynasty **−153.9**
+CI [−392.2, +84.4] (published −132.1 [−371.1, +107.0]); Y1→ORACLE_Y1 **+783.6 / +726.9**
+(published +795.3 / +717.0). Every sign, verdict and season pattern survives; point estimates move
+13 and 22 points against intervals 170-480 wide. The *procedure* reconstructs exactly; the
+*numbers* are not bit-identical. Only target-format season consistency changes (5W/0L → 4W/1L).
+
+### The two estimators (same grid, vintage, opponents; only the projections the rule reads differ)
+
+**FREE-RUN** = D104's design (each arm plays its own draft) — "adopt ECR".
+**ONE-STEP (matched state)** = D103's committed `draft_oracle.rollout`: at each production pick
+state, swap in ECR's choice, then play the remainder with the **same shipped policy on Y1's
+board**. Everything but one pick is shared. Estimand: "take ECR's advice at ONE pick". The
+runner recomputes the control branch through the identical `rollout` call and RAISES if it
+disagrees with the control draft — across ~2,000 rollout pairs it never fired.
+
+**The two are never summed into each other.** One-step deviations are not additive.
+
+### ECR result
+
+| estimator | format | objective | effect | 95% CI | MDE | classification |
+|---|---|---|---|---|---|---|
+| ONE-STEP (per pick state) | target | season-long | **+1.32** | [−12.1, +14.7] | **13.37** | **B — tight around zero** |
+| ONE-STEP | dynasty_1qb | season-long | **−4.69** | [−17.4, +8.1] | **12.75** | **B — tight around zero** |
+| FREE-RUN (per draft) | target | season-long | +64.5 | [−18.9, +147.9] | 83.4 | C — unresolved |
+| FREE-RUN | dynasty_1qb | season-long | −153.9 | [−392.2, +84.4] | 238.3 | C — unresolved |
+
+Weekly objective is likewise tight around zero under one-step (−3.51 / −0.61). Conditional on a
+changed pick: **176 better / 149 worse** (target), **195 better / 212 worse** (dynasty) — a coin
+flip, in opposite directions by format. 56.0% / 68.0% of picks change (D104 published 57-64%).
+
+**ECR: ZERO / CLOSED as a per-pick decision signal** — the unit Alpha's objective is stated in.
+Both intervals lie wholly inside ±25. **Not a credible small improvement; do not preserve it for
+combined-system testing**: a component bounded within ±13 points per pick whose sign depends on
+the format imports format-dependence without importing value. **Honest qualification:** the
+whole-draft adoption question stays formally C — unresolved (target CI admits +148). Closing ECR
+rests on the per-pick evidence plus the cross-format sign flip, and is a judgement, not a proof.
+
+### Pick-level vs roster-level, measured
+
+Raw realized points at changed picks **+9,742.4** (target) → one-step roster value **+1,056.7**:
+**10.9% conversion**. At **60** picks ECR's player outscored Y1's *and the roster got worse*
+(reverse: 26). Mechanism: ECR took **135 kickers** Y1 would not have, worth **+1,282 raw** and
+**−3,678 roster value** — D104 §11's own flagged confound, now measured instead of inferred.
+
+### The floor is not a floor — it is a function of how much the treatment moves the roster
+
+| contrast | slots moved /16 | first divergence rd | own MDE | vs 172-250 |
+|---|---|---|---|---|
+| D113 capacity, dynasty_1qb | 0.70 | 13.6 | **15.5** | 11-16x tighter |
+| D113 capacity, legacy_2qb | 2.60 | 12.7 | 17.9 | 10-14x tighter |
+| D113 capacity, target | 1.64 | 13.5 | 46.9 | 4-5x tighter |
+| **D114 ECR, target** | **8.44** | **1.9** | **94.6** | inside the band |
+| **D114 ECR, dynasty_1qb** | **10.46** | **1.7** | **259.2** | **ABOVE the band** |
+
+A **17x** range in MDE on identical statistical machinery. **D107 §G's "the detection floor is
+172-250 and cannot be lowered" is wrong as a universal** — too conservative for a late, narrow
+treatment and slightly too generous for a broad one. Widening 4 seats → 10 made it WORSE
+(83.4→94.6, 238.3→259.2): seasons bind, not slots (D88, re-confirmed on a new treatment).
+
+**The replacement standard, a procedure not a number:** report every contrast's own MDE; report
+roster slots moved and first divergence round beside it; say whether the ONE-STEP estimand is the
+question actually being asked (for Alpha's objective it usually is); do not buy power with slots.
+
+### What this methodology can resolve
+
+ONE-STEP resolves **~13 points per pick** against the oracle's **134.8**-point mean per-pick
+regret (D103, HISTORICAL) and a per-pick action space with SD **69.5/80.3**, mean |Δ| **46.6/51.6**
+— **~10% of the oracle**; ECR captures **1.8%**. FREE-RUN resolves **94.6** against a **783.6**
+oracle gap — **~12%**. **In relative terms the two designs resolve about the same fraction**;
+one-step is finer in absolute points because the quantity is smaller, not because pairing is
+magic. The 25-point economic threshold is INSIDE one-step's resolution and OUTSIDE free-run's.
+
+### Decision
+
+**No production change, no ECR weight introduced or tuned, no PR, nothing merged.**
+`src/alpha_squad/` byte-identical to D108; `d104_ecr_floor.py` re-run, not edited. Board vintage
+`0d52543044fe99d6...`. Full report: `docs/D114_MATCHED_STATE_REANALYSIS.md`.
+
+**Next question (recommended).** Not another component ablation, and not PROD-vs-NAIVE. **Where
+does the ~135-point per-pick regret actually live, now that it can be measured to ±13?** Run the
+one-step estimator over the arms that already exist (`FP_ECR_Y1`, D99's X2/X3 calibration arms,
+D105's perturbation ladder) against `ORACLE_Y1`'s one-step choice and report each arm's share of
+per-pick regret with its own MDE — a decomposition, not another ablation, needing no new seasons.
+Explicitly lower priority: if D97's decomposition is wanted back, **commit a NAIVE arm as a
+reviewed instrument with a test** and measure it fresh under both estimators; the resulting number
+must not be compared to +213.8.
+
+**Repository.** 1481 tests pass, 44 deselected. `ruff check src tests` and `ruff format --check
+src tests` clean; `check-secrets` clean. New: `scripts/research/d114_matched_state.py`,
+`tests/unit/test_d114_matched_state.py`, `docs/D114_MATCHED_STATE_REANALYSIS.md`. D115 not started.
