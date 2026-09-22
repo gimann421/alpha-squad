@@ -8778,3 +8778,73 @@ table, QB +65.2 / WR +35.3 / TE +35.2).
 tests` clean; `check-secrets` clean. New: `scripts/research/d115_regret_attribution.py`,
 `tests/unit/test_d115_regret_attribution.py`, `docs/D115_REGRET_ATTRIBUTION.md`; fixed
 `tests/unit/test_d114_matched_state.py`. D116 not started.
+
+## D116 — The survival model KNEW who would disappear first, and it mostly said Alpha's own player. D115's "sequencing" regret is not an ordering loss; it is valuation lost in the value base, upstream of survival and opportunity cost. Attribution only; nothing ships.
+
+**Question.** On D115's C1 ∧ C2 "pure sequencing" picks, did Alpha's existing survival /
+opportunity-cost system know, ex ante, which of the two players (A = Alpha's, O = oracle's) would
+disappear first?
+
+**Population and truth.** D115's C1 ∧ C2, read from D115's committed artifacts, which were
+re-produced on this vintage by D115's unmodified runner: **151** target picks (**48.1%** of
+regret; D115 47.3%) and **155** dynasty picks (46.5%; D115 52.2%). On this population both players
+reach the next pick by construction, so the next-pick truth (H1) is a tie on every pick. The
+ranking truth (H2) is therefore removal order under the real opponent field, with Alpha passing,
+which is symmetric in A and O. Ex-ante signals are read from the shipped `CandidateScore` at the
+pre-pick state; the re-scored pick and the counterfactual step are checked against D115 and raise
+on disagreement.
+
+| metric | target | dynasty |
+|---|---|---|
+| survival ranking accuracy (H2) | **87.5%** (84/96), CI [74, 98]% | **93.0%** (66/71), CI [85, 101]% |
+| survival multiplier | identical (no None survival values in this population) | identical |
+| opportunity cost | 14.3% (2/14), **unresolved**; 89% ties | 37.5% (3/8); 92% ties |
+| combined score (always "A first") | 75.8% = A-first base rate | 59.3% |
+| market rank (reference: the field's own order) | 93.5% | 92.0% |
+| H1 calibration on population (truth = 1) | ECE 0.133; mean S 0.867, **too pessimistic** | ECE 0.111 |
+| C1 XOR C2 contrast, H1 survival accuracy | 86.2%; production's replay **100%** | 96.1%; replay 100% |
+| **Alpha took O at its next pick** | **0 / 151** | **1 / 155** |
+| engine would take A next had it taken O | 113 / 151 | 110 / 155 |
+| Alpha's rank of O at the pick (median) | **125** | 129 |
+| projection O vs A | **108.6 vs 188.2** | 136.4 vs 202.0 |
+| realized − projection, O vs A (HINDSIGHT) | **+163.5 vs −25.6** | +153.8 vs −26.5 |
+
+**Where information is lost: the value base, not survival or opportunity cost.** The additive
+term favours A on 100% of decomposable pairs (mean log +0.79, value-base gap +129 points). The
+risk multiplier is second (+0.35 log, pointing at A on 62 of 69 pairs). Survival contributes
++0.01, with a maximum possible swing of log 1.3. Setting survival to neutral flips **0** picks
+(dynasty 1), and setting opportunity cost to neutral flips **0**.
+
+**Addressable share (of total regret, target / dynasty).** Potentially addressable 48.1% / 46.5%.
+Survival pointed at O on 10.9% / 9.9%, and on 7.7% / 6.9% it was also right (O went first). But on
+every one of those picks O was still available at the next pick, and Alpha passed on him again.
+Any availability signal pointed at O on 15.4% / 11.8%. **Unexplained by any availability signal:
+32.7% / 34.8%.** The part addressable by the existing survival system is effectively zero.
+
+**Verdict.** None of the brief's A–D fits these picks. The nearest is **A**: directionally right
+(87–93%), with an S-shaped magnitude miscalibration (0.15–0.45 forecasts too optimistic, 0.7–0.9
+too pessimistic). It is **not D**: the engine discards no survival signal that pointed at O. The
+answer to "did it know which player would disappear first" is **YES**. What it knew was that
+Alpha's own player was at greater risk, and it was right. The regret on these picks is
+**valuation information**: Alpha, and the market (O's rank lag 57 picks vs A's 26), did not rate
+O, and O broke out.
+
+**Vintage.** A from-source rebuild lands on **`f00226015095534f…`**, not D113–D115's
+`0d525430…`. The upstream board and id map sha256s are identical to D115's, and retraining in this
+container is bit-deterministic, so the projection layer moved between sessions. D116 re-ran D115's
+own instrument on this vintage rather than mixing the two, and it quotes D115's figures labelled
+by vintage.
+
+**Decision.** Attribution only. **No production change, no weight tuned, no survival model, no
+realized outcome as a feature, no PR, nothing merged.** `src/alpha_squad/` is byte-identical to
+HEAD `e02fcf7`. Full report: `docs/D116_SURVIVAL_ATTRIBUTION.md`.
+
+**Next question (exactly one).** Does Alpha's existing uncertainty output (M6's p90 / top-24
+probability, already produced ex ante) rank the C1 ∧ C2 oracle players above Alpha's own picks at
+those states? That is, is the upside information present but discounted by the point projection
+and the confidence multiplier? Attribution, not optimisation.
+
+**Repository.** New: `scripts/research/d116_survival_attribution.py`,
+`tests/unit/test_d116_survival_attribution.py` (43 tests), `docs/D116_SURVIVAL_ATTRIBUTION.md`.
+1576 tests pass, 44 deselected; `make lint` clean (ruff check, ruff format --check,
+check-secrets).

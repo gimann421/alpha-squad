@@ -3,7 +3,31 @@
 Living summary of what is implemented, validated, and outstanding. Updated at the end of every
 milestone. See `docs/TRACEABILITY.md` for the acceptance-criteria-level mapping.
 
-## Status: D115 complete — **HALF THE PER-PICK ORACLE REGRET IS SEQUENCING, AND WHAT REMAINS IS INFORMATION, NOT THE DECISION RULE. On picks carrying 47.3% of all measured regret Alpha could have had BOTH its own player and the oracle's, in either order. Perfect information recovers 73.5%; every preseason-available arm recovers −3.2% to +2.7% with every interval spanning zero. Y1 remains production, unchanged by every phase from D85 to D115.**
+## Status: D116 complete — **THE SURVIVAL MODEL KNEW WHO WOULD DISAPPEAR FIRST (87.5% target / 93.0% dynasty), AND IT MOSTLY SAID ALPHA'S OWN PLAYER. D115's "sequencing" regret is not an ordering loss. Alpha took the oracle's player at its next pick 0 times in 151, ranks him about #125, and projects him at 58% of its own pick. The loss is in the value base, upstream of survival and opportunity cost; neutralising either flips 0 picks. Y1 remains production, unchanged.**
+
+Attribution only. **No production change, no tuning, no survival model, no PR, nothing merged.**
+`src/alpha_squad/` is byte-identical to HEAD `e02fcf7`. The board vintage for this run is
+**`f0022601…`** (not D113–D115's `0d525430…`; the upstream board and id map are identical, and the
+projection layer moved). D115's instrument was re-run on it: C1 ∧ C2 = 48.1% of regret (D115
+47.3%). New: `scripts/research/d116_survival_attribution.py`,
+`tests/unit/test_d116_survival_attribution.py`, `docs/D116_SURVIVAL_ATTRIBUTION.md`.
+
+| | target | dynasty |
+|---|---|---|
+| C1 ∧ C2 picks / share of regret | 151 / 48.1% | 155 / 46.5% |
+| survival ranking accuracy (which goes first) | **87.5%** [74, 98] | **93.0%** [85, 101] |
+| opportunity cost / combined score | 14.3% (unresolved, 89% ties) / 75.8% | 37.5% / 59.3% |
+| Alpha took O at next pick | **0/151** | 1/155 |
+| addressable by any existing availability signal | 15.4% | 11.8% |
+| unexplained by any availability signal | 32.7% | 34.8% |
+
+**Next:** does M6's existing p90 / top-24 probability rank the C1 ∧ C2 oracle players above
+Alpha's picks? In other words, is the upside information present but discounted by the point
+projection and the confidence multiplier?
+
+**Repository.** 1576 tests pass, 44 deselected; `make lint` clean.
+
+### Previously: D115 complete — **HALF THE PER-PICK ORACLE REGRET IS SEQUENCING, AND WHAT REMAINS IS INFORMATION, NOT THE DECISION RULE. On picks carrying 47.3% of all measured regret Alpha could have had BOTH its own player and the oracle's, in either order. Perfect information recovers 73.5%; every preseason-available arm recovers −3.2% to +2.7% with every interval spanning zero. Y1 remains production, unchanged by every phase from D85 to D115.**
 
 Attribution only. **No production change, no new model/feature/weight/arm, no tuning, no PR,
 nothing merged.** `src/alpha_squad/` is byte-identical to D108. New this phase:
