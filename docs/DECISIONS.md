@@ -9023,3 +9023,137 @@ measured headroom is. W4 measured that the collapse happens; it did **not** diag
 diagnosing it means changing the model, which W4 may not do. The two engineering prerequisites
 carried from W3 — the served evidence layer's injury cutoff leak and the Friday-board eligibility
 architecture — remain open and remain outside research scope.
+
+---
+
+## D113 — W5: the top-of-board "collapse" is range restriction, but a real RB/WR cliff sits underneath it; no information class is material
+
+**Date:** W5. **Status:** accepted. **Refines:** D112's reported conditional-correlation figures.
+**Authority:** `docs/weekly/W5_PREREGISTRATION.md` (committed at `37a7428`, before the
+instruments), `docs/weekly/W5_TOPBOARD_FORENSICS.md`, `reports/weekly/w5_results.json`,
+`reports/weekly/w5_e1.json`.
+
+### Decision
+
+**Do not open an information-acquisition phase.** No Class B candidate — opponent, injury, depth
+chart, prior-season rank, teammate absence, team-environment change — clears the pre-registered
+materiality bar. The next experiment targets **how the objective is represented**, is scoped to
+**RB and WR only**, and is designed in full in the results document §25.
+
+### The statistic that motivated the phase was an artefact
+
+D112 reported `corr(pred, real)` among top-of-board players collapsing to RB **0.251** / WR
+**0.222** / TE **0.141**. W5 built the missing comparison — a **calibrated copula null**, a ranker
+with the board's own Spearman and no top-specific structure — and it scores **0.151 / 0.110 /
+0.142** on the same statistic. **Range restriction accounts for the entire drop**, and Alpha
+retains **1.7x–2.3x** a uniform ranker's top-of-board signal. Conditioning on a high predicted
+value truncates the predictor's variance; any ranker shows it. D112's numbers are correct as
+measurements and were over-read as a diagnosis; they are not retracted, they are re-interpreted.
+
+### But there is a real cliff, on the metric the product is graded on
+
+Positional capture@10, actual minus the same-Spearman null, paired over 79 weeks:
+
+  RB  -0.0710  CI [-0.0916, -0.0505]  21-58 weeks   CLIFF
+  WR  -0.0800  CI [-0.0999, -0.0607]  15-64 weeks   CLIFF
+  TE  -0.0096  CI [-0.0289, +0.0096]  38-41 weeks   NO CLIFF
+
+Negative and significant in all five leave-one-season-out folds at RB and WR, replicated in
+Half-PPR (-0.0794, -0.0873), and sharply depth-localised: at RB, -0.099 at depth 5, -0.071 at 10,
+-0.022 at 20, and **+0.006 at depth 50**. Alpha is significantly *better* than a ranker of its own
+overall quality deep in the board and worse at the top. **TE is excluded from any RB/WR
+intervention** — it has no cliff and is better than its own null at depths 20-25.
+
+### The mechanism
+
+**Alpha ranks by expected floor; the top of the board is won by ceiling.**
+
+1. **It finds the right group and cannot order inside it.** The top-10 finishers it misses sit at
+   median predicted rank 22 (RB) / 29 (WR) / 20 (TE); 90% of RB's misses are inside its own top
+   40; 62-83% of missed regret comes from players who were the listed starter the previous week.
+2. **The failure is systematic with respect to its own dominant features.** `HIGH_SNAP` (WR +80%
+   relative lift) and `HOT_L3` (WR +86%) carry the excess missed regret, and
+   `fp_ppr_avg_season_to_date` plus `snap_pct_avg_last3` carry 38-57% of model gain at every
+   position. Every cohort representing a player Alpha *cannot* see well — new, returning, rookie,
+   moved — carries **less** regret than its population share.
+3. **Ceiling lives in the middle of the board.** `P(realized >= 2 x predicted)` falls from 41.5%
+   in RB's lowest predicted decile to 5.6% in its highest.
+
+### What is NOT explaining it
+
+Injury designation (STRICT-variant coverage **0.2%**; FRIDAY share equal to population share);
+depth chart (the missed points are starters Alpha already ranks); role change (every continuous
+measure null, `TEAM_CHANGE` 43-87% *below* its share); team-environment change (null everywhere);
+matchup (significant at RB/WR/QB but worth 5-10% of missed regret); the MAE/median-versus-mean
+loss (the mean-median gap is +1.0 to +1.9 and **flat** across all ten deciles, so it cannot
+reorder anything — tested under a dated pre-registration amendment and dropped).
+
+**And the misses are not predictable**: a walk-forward classifier on pre-cutoff features reaches
+AUC **0.4875** (RB) and **0.4957** (WR), both below their own permutation 95th percentile. TE
+alone is slightly above chance at 0.5872.
+
+### The one large reachable prize is opportunity
+
+`ORACLE_USAGE` — rank by the week's realized usage-expected points, perfect opportunity foresight
+and **zero** conversion foresight — recovers **58.6% / 56.2% / 63.0%** of the perfect-foresight
+ceiling on capture@10 and beats ECR by **+0.159 to +0.206**, four to eight times the entire
+Alpha-vs-ECR gap. The remaining 37-47% is touchdown and efficiency variance and is unreachable
+from any pre-game information. This replaces D112's `ORACLE_WITHIN` (+0.3613) as the meaningful
+ceiling: that one assumed perfect *outcome* knowledge, and W5's audit measured that even perfect
+*usage* knowledge explains only r=0.80-0.84 of weekly points overall and r=0.38-0.61 among the
+week's actual top 12.
+
+### Methodology, and five defects the instruments caught
+
+Ten validity gates, enforced by the committed `scripts/research/w5_validity_gates.py`, all
+passing. **G10 (determinism) failed on the first complete run** and, per the pre-registration's
+own rule, no result was interpreted until it was diagnosed: `aggregate_cohorts` intersected two
+dicts' keys with a bare `keys() & keys()`, whose iteration order for string keys varies with
+`PYTHONHASHSEED`, and the bootstrap indexes its input by position -- so the cohort lift intervals
+differed on every run. Fixed structurally (every per-week list is now put into canonical week
+order before it reaches the bootstrap) and pinned by a millisecond test rather than by two
+twelve-minute runs. Post-fix every headline number and every significance mark is unchanged: the
+defect moved intervals, not conclusions, which is exactly why a gate rather than a reader had to
+find it. **G2 is the one that matters most**: it rebuilds every pre-cutoff context value against a database with the
+ranked week's outcome rows physically removed and requires an identical answer. It caught two
+reproducibility defects in W5's own code (a `row_number()` leaving 13 TEs tied on exactly 0.0
+points; a `stddev_samp` whose input order the planner could vary) — neither leakage, both fatal to
+reproducibility. Three more were caught during construction: the copula null landing ~0.017 below
+its target Spearman (which would have flattered this phase's own pre-registered answer), a
+conditional correlation compared across incompatible scales, and an `over_promotion` statistic
+that was conceptually backwards. A sixth was caught by reading a result that could not be true —
+the Half-PPR usage oracle reporting `U = +0.0000` exactly. W3 and W4 reproduce **exactly**
+(46,756 and 126,844 numeric leaves, max absolute difference 0).
+
+**Three of the eight a priori predictions were wrong** and are reported as such: the phase
+predicted NO CLIFF (wrong at RB/WR), predicted the usage oracle would recover less than half the
+ceiling (it recovers 53-63%), and predicted TE was not a distinct failure mode (it is the only
+position without a cliff). Those errors changed the recommendation.
+
+### Scope
+
+Research-only. **Production diff EMPTY.** Four new modules under
+`src/alpha_squad/evaluation/weekly/` (`nulls.py`, `topboard.py`, `context.py`, `regret.py`), three
+runners under `scripts/research/`, two new test files. No production path touched; no model
+trained, tuned or retrained; no feature added; no ECR used anywhere. **1,567 -> 1,611 tests pass**,
+44 deselected; `make lint` clean, both halves; W3 and W4 reproduce exactly (46,756 and 126,844
+numeric leaves, max absolute difference 0).
+
+### W6
+
+**"Alpha ranks by expected floor; the top of the board is won by ceiling. Does training the same
+model on an upper quantile of the outcome instead of its median recover the top-of-board capture,
+at RB and WR, without damaging TE or the deep board?"** Three pre-registered arms
+(`Quantile:alpha` in {0.6, 0.7, 0.8}), one argument changed, everything else frozen; primary
+metric positional capture@10 against the frozen W5 control; success requires >= +0.02 at RB or WR
+with a CI excluding zero **and** no significant degradation at TE or depth 50; the copula-null
+cliff test is re-run on the treated board so the *mechanism* is checked, not just the metric. Full
+design in `docs/weekly/W5_TOPBOARD_FORENSICS.md` §25.
+
+**Runner-up, named rather than buried**: a two-stage opportunity model, whose decisive unknown is
+how much of weekly usage is forecastable on Friday — a cheap study that should precede the model.
+
+**Engineering prerequisites.** The served evidence layer's injury leak **does not gate W6** (the
+signal is worth nothing at the top of the board) but cannot be fixed by filtering either: under a
+genuine pre-Friday cutoff the nflverse file retains 0.2% of its rows, so the layer needs a
+different source. The Friday-board eligibility defect **gates production, not W6**.

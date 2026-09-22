@@ -1,0 +1,132 @@
+{
+ "model": {
+  "iterations": 200,
+  "depth": 4,
+  "learning_rate": 0.05,
+  "loss_function": "Logloss",
+  "verbose": false,
+  "random_seed": 42
+ },
+ "features": [
+  "predicted_points",
+  "predicted_rank",
+  "games_played_prior",
+  "snap_pct_avg_last3",
+  "fp_ppr_avg_last3",
+  "fp_ppr_avg_season_to_date",
+  "opportunity_last1",
+  "opportunity_avg_prior3",
+  "opportunity_delta",
+  "snap_delta",
+  "snap_sd_prior3",
+  "weeks_since_last_game",
+  "prior_season_rank",
+  "opponent_pa_prior",
+  "team_epa_avg_last3",
+  "team_epa_delta",
+  "depth_team_prior"
+ ],
+ "alpha_model": "ml_catboost",
+ "target": "predicted top-10, finished outside realized top-24",
+ "positions": {
+  "RB": {
+   "by_season": {
+    "2023": {
+     "n_train": 330,
+     "n_test": 160,
+     "base_rate": 0.3,
+     "auc": 0.49962797619047616
+    },
+    "2024": {
+     "n_train": 490,
+     "n_test": 140,
+     "base_rate": 0.24285714285714285,
+     "auc": 0.4264705882352941
+    },
+    "2025": {
+     "n_train": 630,
+     "n_test": 160,
+     "base_rate": 0.2125,
+     "auc": 0.5126050420168067
+    }
+   },
+   "n": 790,
+   "base_rate": 0.2645569620253165,
+   "pooled_auc": 0.48752004811547717,
+   "pooled_n": 460,
+   "permutation_baseline": {
+    "mean": 0.49896451483560544,
+    "p95": 0.5452836808340016,
+    "p05": 0.4577485966319166,
+    "n": 200
+   },
+   "exceeds_permutation_p95": false
+  },
+  "WR": {
+   "by_season": {
+    "2023": {
+     "n_train": 330,
+     "n_test": 160,
+     "base_rate": 0.4,
+     "auc": 0.5266927083333334
+    },
+    "2024": {
+     "n_train": 490,
+     "n_test": 140,
+     "base_rate": 0.4357142857142857,
+     "auc": 0.49533098153143806
+    },
+    "2025": {
+     "n_train": 630,
+     "n_test": 160,
+     "base_rate": 0.41875,
+     "auc": 0.45642753972075106
+    }
+   },
+   "n": 790,
+   "base_rate": 0.4291139240506329,
+   "pooled_auc": 0.49566620024875624,
+   "pooled_n": 460,
+   "permutation_baseline": {
+    "mean": 0.5016457750310945,
+    "p95": 0.546700093283582,
+    "p05": 0.4560012437810945,
+    "n": 200
+   },
+   "exceeds_permutation_p95": false
+  },
+  "TE": {
+   "by_season": {
+    "2023": {
+     "n_train": 330,
+     "n_test": 160,
+     "base_rate": 0.18125,
+     "auc": 0.551460910765991
+    },
+    "2024": {
+     "n_train": 490,
+     "n_test": 140,
+     "base_rate": 0.22857142857142856,
+     "auc": 0.6698495370370371
+    },
+    "2025": {
+     "n_train": 630,
+     "n_test": 160,
+     "base_rate": 0.225,
+     "auc": 0.5701164874551972
+    }
+   },
+   "n": 790,
+   "base_rate": 0.22531645569620254,
+   "pooled_auc": 0.5872312629575985,
+   "pooled_n": 460,
+   "permutation_baseline": {
+    "mean": 0.4992348981852262,
+    "p95": 0.5551106188407032,
+    "p05": 0.445031382238505,
+    "n": 200
+   },
+   "exceeds_permutation_p95": true
+  }
+ }
+}

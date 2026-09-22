@@ -71,6 +71,18 @@ def _null_metrics(pred_rank: list[float], real: list[float]) -> dict:
     return row
 
 
+def _by_week(values: dict[str, float]) -> list[float]:
+    """A per-week dict as a list in **canonical week order**.
+
+    `noise._bootstrap_mean_ci` indexes its input BY POSITION, so a list whose order depends on
+    anything incidental -- dict insertion order, a set intersection, the order rows happened to
+    arrive in -- produces a different confidence interval on every run. Gate G10 caught exactly
+    that: `aggregate_cohorts` was intersecting two dicts' keys with a bare `keys() & keys()`,
+    whose iteration order for string keys varies with `PYTHONHASHSEED`. Sorting here makes the
+    property structural rather than incidental, at no cost."""
+    return [v for _, v in sorted(values.items())]
+
+
 def _mean_of(rows: list[dict], key: str) -> float | None:
     vals = [r[key] for r in rows if r.get(key) is not None]
     return statistics.fmean(vals) if vals else None
@@ -303,11 +315,13 @@ def summarise(cells: dict, comparisons: list[tuple[str, str]]) -> dict:
     out: dict = {"distributions": {}, "paired": {}, "outcomes": {}}
     for sysname, weeks in cells.items():
         for metric in HEADLINE:
-            vals = [
-                r.get(metric)
-                for r in weeks.values()
-                if not r.get("invalid") and r.get(metric) is not None
-            ]
+            vals = _by_week(
+                {
+                    k: r[metric]
+                    for k, r in weeks.items()
+                    if not r.get("invalid") and r.get(metric) is not None
+                }
+            )
             d = noise.describe(metric, vals)
             if d:
                 out["distributions"].setdefault(sysname, {})[metric] = d.as_row()
@@ -358,10 +372,12 @@ def aggregate_cohorts(cohort_rows: list[dict]) -> dict:
             for r in sel
             if r["population_share"] is not None
         }
-        lift = {k: miss[k] - pop[k] for k in miss.keys() & pop.keys()}
-        d_miss = noise.describe("missed_share", list(miss.values()))
-        d_pop = noise.describe("population_share", list(pop.values()))
-        d_lift = noise.describe("lift", list(lift.values()))
+        # `sorted(...)`: `dict.keys() & dict.keys()` is a SET, whose iteration order for
+        # string keys varies with PYTHONHASHSEED. See `_by_week` for why that mattered.
+        lift = {k: miss[k] - pop[k] for k in sorted(miss.keys() & pop.keys())}
+        d_miss = noise.describe("missed_share", _by_week(miss))
+        d_pop = noise.describe("population_share", _by_week(pop))
+        d_lift = noise.describe("lift", _by_week(lift))
         if not (d_miss and d_pop and d_lift):
             continue
         rel = (d_miss.mean / d_pop.mean - 1.0) if d_pop.mean else None

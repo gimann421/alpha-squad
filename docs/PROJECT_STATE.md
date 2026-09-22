@@ -3,51 +3,70 @@
 Living summary of what is implemented, validated, and outstanding. Updated at the end of every
 milestone. See `docs/TRACEABILITY.md` for the acceptance-criteria-level mapping.
 
-## Status: W4 complete (D112) — **Cross-position calibration is NOT the FLEX bottleneck (verdict D). A PERFECT cross-position scale buys 2.1% of the available headroom; the positional rankings hold the other 97.9%. Do not build calibration. Nothing shipped.**
+## Status: W5 complete (D113) — **The top-of-board "collapse" is range restriction, but a REAL cliff sits underneath it at RB and WR (not TE). No pre-cutoff information class is material. Alpha ranks by floor; the top is won by ceiling. Nothing shipped.**
 
-Research only. **No model built, fitted, tuned or retrained; no calibration added to production;
-no ECR added; production diff EMPTY.** **Entry point:
-`docs/weekly/W4_FLEX_FORENSICS_RESULTS.md`.**
+Research only. **No model built, fitted, tuned or retrained; no feature added; no ECR used
+anywhere; production diff EMPTY.** **Entry point: `docs/weekly/W5_TOPBOARD_FORENSICS.md`.**
 
 ### CURRENT WEEKLY RESEARCH STATUS
 
-- **Verdict D — cross-position calibration is essentially irrelevant.** FLEX capture@10, 79
-  weeks: `X` (perfect cross-position scale) = **+0.0075, CI [−0.0055, +0.0205]**, 37-38 weeks,
-  **0.58x MDE**. `W` (perfect within-position order, Alpha's scale untouched) = **+0.3613, CI
-  [+0.3426, +0.3796]**, **79-0 weeks**. `X/W` = **2.1%**.
-- **The decisive number**: a perfect cross-position scale still loses to ECR (**−0.0313, CI
-  [−0.0495, −0.0136]**); a perfect within-position order *beats* ECR by **+0.3225**.
-- **Four pre-registered causal calibrations, none succeeded.** All NULL on capture@10, all
-  significantly NEGATIVE on Spearman; harm rises monotonically with rescaling aggressiveness
-  (AFFINE −0.0008 < MEANVAR −0.0011 ~ QUANTILE −0.0011 < RANKPCT −0.0033).
-- **The premise has the wrong sign.** The exact additive pairwise decomposition: Alpha orders
-  cross-position pairs *better* (0.7385) than within-position pairs (0.7365).
-- **Composition matching is NOT ranking quality.** The two methods that match the realized FLEX
-  top-10 composition almost exactly (RB over-rep +0.153 -> +0.018/+0.006, TE −0.094 ->
-  −0.005/−0.010) gain nothing; the oracle that leaves composition **unchanged** gains +0.3613.
-- **Alpha's anti-TE bias is real, removable, and NOT an error** — ECR, which beats Alpha
-  everywhere, has a *stronger* one (RB-TE +0.0621 vs +0.0454). Do not "fix" it.
-- **W3's "pooling destroys ~84% of Alpha's positional top-10 signal" is SUPERSEDED.** It was
-  arithmetic on point estimates whose CIs all contained zero; the oracle that removes every
-  pooling effect recovers 2.1%. At the top of the board the FLEX deficit is statistically
-  indistinguishable from the mean positional deficit.
-- **Where Alpha is actually worst: WR at the very top.** precision@5 0.2000 vs ECR's 0.2608, and
-  **−0.0304 against the trivial season-to-date baseline** (CI [−0.0603, −0.0003], 9-20 weeks) —
-  the only place Alpha loses to the trivial baseline anywhere in the program.
-- **One honest complication**: on *name overlap* the cross-position ceiling is real
-  (precision@5 **+0.0456***, precision@10 **+0.0241***). A perfect scale puts more of the right
-  names in the top 10; they are worth almost nothing in points.
-- **The model still cannot produce a real Friday board**, and **the served evidence layer's
-  injury-cutoff leak is still open** — both carried forward unchanged from W3.
-- **Methodology**: six validity gates pass (causality, already-played, identical universes,
-  within-position monotonicity **0/948**, no-ECR, determinism byte-identical); W3 reproduced
-  **exactly** (2,607 values, max abs diff `0`). Gate G4 **failed first at 458/948** and a
-  separate invariant caught a defect in W4's own oracle; both fixes **helped** the calibration
-  methods and they still fail. Both defective constructions remain runnable via `--legacy-ties`.
-- **Next: W5** — **within-position ordering at the top of each positional board**, where
-  `corr(pred, real)` collapses to RB 0.251 / WR 0.222 / TE 0.141. W4 measured that the collapse
-  happens and did **not** diagnose why, because diagnosing it means changing the model. Not
-  calibration, not composition, not the anti-TE bias.
+- **The statistic that motivated W5 was an artefact.** D112's "corr collapses to RB 0.251 / WR
+  0.222 / TE 0.141" is fully explained by range restriction: a ranker with Alpha's OWN Spearman
+  and no top-specific structure scores **0.151 / 0.110 / 0.142**. Alpha retains **1.7x-2.3x** a
+  uniform ranker's top signal. The numbers stand; the diagnosis drawn from them does not.
+- **But a real cliff exists on the product metric.** Positional capture@10 vs the same-Spearman
+  null: **RB −0.0710** CI[−0.0916,−0.0505] (21-58 wk), **WR −0.0800** CI[−0.0999,−0.0607]
+  (15-64 wk), **TE −0.0096** CI[−0.0289,+0.0096] → **NO CLIFF at TE**.
+- **Sharply depth-localised and it REVERSES.** RB: −0.099 @5, −0.071 @10, −0.022 @20,
+  **+0.006 @50**. Alpha is significantly *better* than its own null deep in the board.
+- **Mechanism: Alpha ranks by expected FLOOR; the top-10 is won by CEILING.** The misses sit at
+  median predicted rank 22/29/20 — not deep. 62-83% of missed regret is prior-week STARTERS Alpha
+  already ranks. `HIGH_SNAP` (WR +80%) and `HOT_L3` (WR +86%) carry the excess — both defined by
+  features already carrying 38-57% of model gain. `P(realized ≥ 2× predicted)` falls 41.5% → 5.6%
+  across RB's predicted deciles.
+- **NO information class is material.** Injury (STRICT coverage **0.2%** — the nflverse file is a
+  Friday-final artefact and cannot support a pre-Friday feature at all), depth chart (the misses
+  are starters Alpha already ranks), role change (every continuous measure null; TEAM_CHANGE
+  carries 43-87% LESS regret), team environment (null), matchup (significant at RB/WR/QB but worth
+  only 5-10% of missed regret).
+- **Misses are NOT predictable** from pre-cutoff information where the cliff is: AUC **0.4875**
+  (RB), **0.4957** (WR), both below their own permutation p95. TE alone 0.5872.
+- **The one large reachable prize is OPPORTUNITY.** `ORACLE_USAGE` (perfect opportunity, ZERO
+  conversion foresight) recovers **58.6% / 56.2% / 63.0%** of the perfect-foresight ceiling and
+  beats ECR by **+0.159 to +0.206** — 4-8× the entire Alpha-vs-ECR gap. It replaces D112's
+  ORACLE_WITHIN (+0.3613), which assumed unreachable perfect outcome knowledge.
+- **43% of Alpha's WR top-10 slots are busts** (finish outside the realized top-24); RB 26.5%,
+  TE 22.5%.
+- **Three of eight a priori predictions were WRONG** and are reported as such (NO CLIFF; usage
+  oracle < half the ceiling; TE not distinct). The errors changed the recommendation.
+- **Methodology**: ten validity gates pass. **G2** — rebuilding every context value against a
+  database with the ranked week's outcomes deleted — caught two reproducibility defects in W5's
+  own code. Four more defects were caught before any result was read. W3 and W4 reproduce
+  **exactly** (max abs diff 0 over 46,756 and 126,844 numeric leaves).
+- **Next: W6** — *does training the same model on an upper quantile of the outcome instead of its
+  median recover the top-of-board capture, at RB and WR, without damaging TE or the deep board?*
+  Three arms, one argument changed, everything else frozen; the copula-null cliff test re-run on
+  the treated board so the MECHANISM is checked, not just the metric. Runner-up: a two-stage
+  opportunity model, preceded by a cheap study of how much weekly usage is forecastable on Friday.
+
+### Earlier status: W4 complete (D112) — **Cross-position calibration is NOT the FLEX bottleneck (verdict D). A PERFECT cross-position scale buys 2.1% of the available headroom. Do not build calibration. Nothing shipped.**
+
+Research only. Entry point: `docs/weekly/W4_FLEX_FORENSICS_RESULTS.md`.
+
+- **Verdict D.** FLEX capture@10: `X` (perfect cross-position scale) = **+0.0075, CI
+  [−0.0055,+0.0205]**, 0.58x MDE. `W` (perfect within-position order) = **+0.3613**, 79-0 weeks.
+  `X/W` = **2.1%**.
+- A perfect cross-position scale still loses to ECR (**−0.0313**); a perfect within-position order
+  beats ECR by **+0.3225**.
+- **Four pre-registered causal calibrations, none succeeded**; harm rises with aggressiveness.
+- The exact additive decomposition: Alpha orders cross-position pairs *better* (0.7385) than
+  within-position pairs (0.7365) — **the premise had the wrong sign**.
+- **Composition matching is NOT ranking quality**; **Alpha's anti-TE bias is real, removable and
+  NOT an error** (ECR, which beats Alpha everywhere, has a stronger one).
+- ~~W3's "pooling destroys ~84%"~~ **superseded**; the oracle that removes every pooling effect
+  recovers 2.1%.
+- **W5 note:** D112's conditional-correlation figures are correct as measurements but were
+  over-read as a diagnosis — see D113.
 
 ### Earlier status: W3 complete (D111) — **Alpha has REAL weekly ranking signal (~53% of ECR's edge over a trivial baseline) but ZERO edge at the FLEX top 10, loses to ECR on every board, and cannot produce a Friday board at all. Nothing shipped.**
 

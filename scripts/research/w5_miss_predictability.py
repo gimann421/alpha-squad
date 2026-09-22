@@ -31,17 +31,20 @@ from __future__ import annotations
 import argparse
 import json
 import statistics
+import sys
 from pathlib import Path
 
 import duckdb
 import numpy as np
 from catboost import CatBoostClassifier
 
-from alpha_squad.evaluation.weekly import alpha as alpha_mod
-from alpha_squad.evaluation.weekly import audit, benchmark, context
-from alpha_squad.evaluation.weekly.regret import FP_PRED_DEPTH, FP_REAL_DEPTH
-from alpha_squad.evaluation.weekly.scoring import FULL_PPR
-from scripts.research.w5_topboard_forensics import (
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
+from alpha_squad.evaluation.weekly import alpha as alpha_mod  # noqa: E402
+from alpha_squad.evaluation.weekly import audit, benchmark, context  # noqa: E402
+from alpha_squad.evaluation.weekly.regret import FP_PRED_DEPTH, FP_REAL_DEPTH  # noqa: E402
+from alpha_squad.evaluation.weekly.scoring import FULL_PPR  # noqa: E402
+from scripts.research.w5_topboard_forensics import (  # noqa: E402
     CONFIRMATORY_POSITIONS,
     SEASONS,
     build_context,

@@ -1,5 +1,15 @@
 # W4 — Is cross-position calibration the FLEX bottleneck?
 
+> ⚠ **ONE READING REFINED BY W5 (D113).** §3's `corr(pred, real)` figures for the top of each
+> positional board (RB 0.251 / WR 0.222 / TE 0.141) are correct as measurements and are reproduced
+> exactly by W5. They were over-read as evidence that ranking quality *collapses* at the top: a
+> ranker with Alpha's own overall Spearman and **no top-specific structure at all** scores
+> 0.151 / 0.110 / 0.142 on the same statistic, so the drop is range restriction and Alpha retains
+> 1.7x–2.3x a uniform ranker's top signal. A real top-of-board defect does exist at RB and WR, but
+> it is visible on points-captured@10, not on that correlation. See
+> `docs/weekly/W5_TOPBOARD_FORENSICS.md` §3 and §19. **Verdict D itself is unaffected** — W5
+> re-ran W4's instrument and reproduced every number to a maximum absolute difference of 0.
+
 **Status: COMPLETE. Verdict D — essentially irrelevant.**
 
 Run exactly as pre-registered in `docs/weekly/W4_PREREGISTRATION.md`, committed before any

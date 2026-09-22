@@ -430,4 +430,23 @@ named uncertainty that must be resolved before any experiment is worth running.
 
 ## 15. Amendments
 
-*(None yet.)*
+### A1 — one supporting diagnostic added after results (dated: W5 results run)
+
+**What.** A descriptive table of `mean(realized) - median(realized)` by predicted decile, per
+position, reported in the results document as an **exploratory** diagnostic alongside E1-E4.
+
+**Why it was added.** The confirmatory results established a real top-of-board cliff at RB and WR
+(§5's rule) and left its *mechanism* open. One candidate mechanism suggested itself from the
+audit: the production model minimises **MAE**, which fits the conditional *median*, while the
+top-of-board metric rewards the conditional *mean* of a right-skewed outcome. That hypothesis is
+worth a sentence in the report only if the mean-median gap actually **varies** across the
+predicted range -- W3 already established that a *constant* additive offset cannot change any
+ranking.
+
+**What it may not do.** It is exploratory, it does not feed §14's decision rules, and it is not
+counted toward §9's materiality bar. It is recorded here rather than presented as if it had been
+planned.
+
+**Outcome, stated for the record:** the gap is **+1.0 to +1.9 points and essentially flat across
+all ten deciles at every position**, so the median-versus-mean hypothesis is **not supported** and
+was dropped rather than written into the W6 recommendation.

@@ -79,6 +79,10 @@ reports/**
 # quotes it throughout, and W5's own reproduction gate diffs it against w3_results.json and
 # w4_results.json -- which is only checkable because those files are tracked.
 !reports/weekly/w5_results.json
+# W5/D113 (E1): the exploratory miss-predictability diagnostic. Small, but the results document
+# quotes its AUCs and permutation baselines, and a later phase re-reads them to check whether the
+# "misses are unpredictable" finding still holds against a changed model.
+!reports/weekly/w5_e1.json
 state/**
 !state/.gitkeep
 *.duckdb
