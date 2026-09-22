@@ -8670,3 +8670,111 @@ must not be compared to +213.8.
 **Repository.** 1481 tests pass, 44 deselected. `ruff check src tests` and `ruff format --check
 src tests` clean; `check-secrets` clean. New: `scripts/research/d114_matched_state.py`,
 `tests/unit/test_d114_matched_state.py`, `docs/D114_MATCHED_STATE_REANALYSIS.md`. D115 not started.
+
+## D115 — Half the per-pick oracle regret is SEQUENCING, and what remains is INFORMATION, not the decision rule. Attribution only; nothing ships.
+
+**Question.** D103 measured ~135 realized starter points of regret at the average Alpha pick and
+D114 showed the one-step estimator resolves ~13. D115 spends that resolution on attribution.
+
+**Definitional correction, stated first.** The brief defined regret as `oracle player realized
+value - Alpha player realized value`. That is not the quantity the ~135 measures. D103's regret is
+a ROSTER-VALUE quantity under a common continuation (`OraclePick.regret`), and every D115 table is
+built on it; the raw form is reported beside it. Measured: target roster **142.4**/pick vs raw
+117.1 (ratio 1.22); dynasty **127.0** vs 129.7 (0.98). Against D114's 0.109 conversion, this shows
+the raw metric is not reliably biased one way — **which way it errs depends on whether the
+substituted player starts.** D103's published 134.8 reproduces at 142.4 on the current vintage.
+
+**Grid.** D103's own, unchanged: 2021-2025 x slots (1,4,7,10) x 16 rounds x both 1-QB formats =
+**640 audited picks, ~13,900 rollouts**, via the committed `audit_draft`. Formats reported
+separately, never pooled. k=5 seasons, t_crit 2.776.
+
+### The ranked attribution (A/B disjoint and exhaustive; C an OVERLAY, never a bucket)
+
+| rank | source | % picks | % of regret | 95% CI on the share |
+|---|---|---|---|---|
+| 1 | **B — WRONG POSITION** | 71.2% | **74.1%** | [63.0, 85.5]% |
+| 2 | **A — WRONG PLAYER, RIGHT POSITION** | 28.8% | **25.9%** | [14.5, 37.0]% |
+| — | D — unclassified | 0.0% | 0.0% | — |
+
+| overlay | % picks | % of regret |
+|---|---|---|
+| C1 oracle's player survives to my next pick | 71.3% | 68.2% |
+| C2 my player survives IF I take the oracle's | 60.0% | 56.3% |
+| **C1 AND C2 -- pure sequencing, nothing contested** | **52.0%** | **47.3%** |
+
+`dynasty_1qb` replicates: B 74.6%, A 25.4%, **C1 AND C2 = 52.2% of regret**.
+
+**The headline: ~47% of the regret is ORDERING, not valuation.** On those picks Alpha could have
+had BOTH its own player and the oracle's, in either order, and took them in the wrong one.
+
+### Where it sits
+
+**Position (target):** WR **33.2%** (152.7/pick), RB 17.9%, QB 15.3% (166.2/pick), TE 14.8%,
+K 11.1%, DST 7.7%. **K and DST regret is 100% category B in both formats** -- the oracle never
+wants a different kicker, it wants a different position (18.8% of all regret in target).
+**Phase:** R1-6 **170.4**/pick and 44.9% of regret; R7-11 129.9 (28.5%); R12-16 121.2 (26.6%).
+D103's "regret is concentrated EARLY" reproduces (EARLY 1-5 173.8, MIDDLE 135.4, LATE 122.0). The
+A-share falls monotonically 35% -> 22% -> 14%: early mistakes are more often right-position/wrong-
+player, late ones are almost purely positional. **Rounds 1-3:** 176.5/pick, 23.2% of regret.
+**RB/WR/TE cross-position: 38.3% of all regret**, and asymmetric -- **WR->RB is 45 picks / 7,699
+points against RB->WR's 18 / 2,761** (dynasty 47/8,002 vs 15/2,275), ~2.5:1 in both formats.
+**Concentration: BROAD, not a few disasters** -- gini 0.31, median 131 vs mean 142, top 1% of picks
+hold 2.6% of regret, top 10% hold 21.3%, and only 13 of 320 picks fall below D114's 13.4-point
+resolution.
+
+### Existing-arm recovery (one-step, common continuation on Y1's board)
+
+| arm | target delta/pick | recovery | dynasty delta/pick | recovery |
+|---|---|---|---|---|
+| Y1 (null check) | **0.00** | 0.0% | **0.00** | 0.0% |
+| FP_ECR_Y1 | +1.88 [-8.8, +12.6] | 1.3% | -4.03 [-14.8, +6.7] | -3.2% |
+| X2 / X3 (D99 calibration) | +1.44 / -0.47 | 1.0% / -0.3% | +3.40 / +1.92 | 2.7% / 1.5% |
+| L4 (uniform permutation) | **-23.40** [-42.1, -4.7] | -16.4% | -27.58 [-47.2, -7.9] | -21.7% |
+| **ORACLE_Y1** | **+104.65** [+52.6, +156.7] | **73.5%** 5+/0- | **+88.35** [+50.1, +126.6] | **69.6%** 5+/0- |
+
+**No preseason-available arm recovers anything** (-3.2% to +2.7%, every interval spanning zero,
+signs disagreeing across formats). D114's ECR result reproduces on a different grid (+1.88 vs
++1.32). **Y1 sits ~23 points above randomly-scrambled ordering and ~105 below perfect ordering, so
+it has captured roughly 18% of the within-position information available** (21% dynasty).
+`ORACLE_Y1` recovers only 73.5% because it is the Y1 RULE under perfect information while the
+per-pick oracle is an unconstrained slate maximiser; the ~27% gap is what the rule discards.
+
+**Component associations are CORRELATION ONLY and implicate nothing.** Every raw correlation
+collapses or reverses once round is held fixed, and the two formats disagree in sign on five of
+eight components. The only mildly consistent residual is `projection` (+0.11 / +0.04).
+
+### What is NOT established
+
+That the sequencing regret is REACHABLE. C1 AND C2 says both players were obtainable; it does not
+say a policy could pick the order without seeing outcomes. D115 measures the size of the prize,
+not its reachability. Also unattributed: category A's 26%, and ORACLE_Y1's 27% rule residual.
+
+### Two defects found and fixed
+
+1. **D114's NAIVE guard broke itself on commit** -- it searched every `*.py` in history for the
+   string, and D114's own runner and test discuss NAIVE's absence in prose, so committing D114
+   made the guard match itself. It passed in D114 only because those files were still uncommitted
+   when the suite ran. The guard now excludes the files that document the absence and asserts each
+   exclusion still earns its place.
+2. **D115's first C2 was vacuous** -- "is Alpha's own player in the pool at the next pick" is
+   necessarily False because Alpha drafted him; it measured 0 of 300. Replaced with the
+   counterfactual ("had Alpha taken the ORACLE's player, would its own have survived?") and pinned
+   by a regression test.
+
+**Decision.** Attribution only. **No production change, no new model/feature/weight/arm, no
+tuning, no PR, nothing merged.** `src/alpha_squad/` byte-identical to D108. Board vintage
+`0d52543044fe99d6...` (NOT D103's `ca3e2d8a...`). Full report: `docs/D115_REGRET_ATTRIBUTION.md`.
+
+**Next question (recommended).** **Is any part of the C1 AND C2 sequencing regret reachable by a
+policy that cannot see outcomes?** The repository already holds the instrument -- D97 measured the
+survival/opportunity-cost term as calibrated but understated (corr 0.73-0.88, magnitude understated
+20-65%, moves 9% of picks). Measure, at each C1 AND C2 pick, whether Alpha's own survival estimate
+already ranks the two players' availability correctly, and how much of the 47% a policy acting on
+it would have captured. Attribution, not optimisation. Lower priority: decompose ORACLE_Y1's 27%
+rule residual, and the WR->RB asymmetry (whose likely origin is D97's per-position projection bias
+table, QB +65.2 / WR +35.3 / TE +35.2).
+
+**Repository.** 1533 tests pass, 44 deselected. `ruff check src tests` and `ruff format --check src
+tests` clean; `check-secrets` clean. New: `scripts/research/d115_regret_attribution.py`,
+`tests/unit/test_d115_regret_attribution.py`, `docs/D115_REGRET_ATTRIBUTION.md`; fixed
+`tests/unit/test_d114_matched_state.py`. D116 not started.

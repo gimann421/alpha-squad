@@ -3,7 +3,52 @@
 Living summary of what is implemented, validated, and outstanding. Updated at the end of every
 milestone. See `docs/TRACEABILITY.md` for the acceptance-criteria-level mapping.
 
-## Status: D114 complete — **MATCHED-STATE PAIRING IS REAL BUT IS NOT A GENERAL POWER MULTIPLIER. D113's tight intervals came from an INERT TREATMENT, not from the pairing. ECR is CLOSED as a per-pick decision signal (+1.32 per pick state, 95% CI [−12.1, +14.7]). D97's PROD-vs-NAIVE is UNRECONSTRUCTIBLE and was STOPPED, not substituted. Y1 remains production, unchanged by every phase from D85 to D114.**
+## Status: D115 complete — **HALF THE PER-PICK ORACLE REGRET IS SEQUENCING, AND WHAT REMAINS IS INFORMATION, NOT THE DECISION RULE. On picks carrying 47.3% of all measured regret Alpha could have had BOTH its own player and the oracle's, in either order. Perfect information recovers 73.5%; every preseason-available arm recovers −3.2% to +2.7% with every interval spanning zero. Y1 remains production, unchanged by every phase from D85 to D115.**
+
+Attribution only. **No production change, no new model/feature/weight/arm, no tuning, no PR,
+nothing merged.** `src/alpha_squad/` is byte-identical to D108. New this phase:
+`scripts/research/d115_regret_attribution.py`, `tests/unit/test_d115_regret_attribution.py`,
+`docs/D115_REGRET_ATTRIBUTION.md`; fixed `tests/unit/test_d114_matched_state.py`.
+
+### Where the ~135 points/pick goes (`target_league`; `dynasty_1qb` replicates)
+
+| source | % picks | % of regret | 95% CI on the share |
+|---|---|---|---|
+| **B — wrong position** | 71.2% | **74.1%** | [63.0, 85.5]% |
+| **A — wrong player, right position** | 28.8% | **25.9%** | [14.5, 37.0]% |
+| **C1 ∧ C2 overlay — pure sequencing** | 52.0% | **47.3%** | — |
+
+Mean regret **142.4**/pick (target) and **127.0** (dynasty); D103's published 134.8 reproduces.
+WR is the largest positional source (33.2%); **WR→RB is the largest cross-position flow, ~2.5:1
+against RB→WR in both formats**; K/DST regret is **100% category B** — the oracle never wants a
+different kicker, it wants a different position. R1–6 carries 44.9% at 170.4/pick, and regret is
+**broadly distributed** (gini 0.31, top 1% of picks hold 2.6%).
+
+### Arm recovery of that regret — one-step, common continuation
+
+| arm | target | dynasty |
+|---|---|---|
+| Y1 (null check) | **0.00** | **0.00** |
+| FP_ECR_Y1 | +1.88 → 1.3% | −4.03 → −3.2% |
+| X2 / X3 (D99 calibration) | +1.44 / −0.47 | +3.40 / +1.92 |
+| L4 (uniform permutation) | −23.40 | −27.58 |
+| **ORACLE_Y1** | **+104.65 → 73.5%** | **+88.35 → 69.6%** |
+
+**Y1 sits ~23 points above randomly-scrambled ordering and ~105 below perfect ordering — it has
+captured roughly 18% of the within-position information available, and no existing arm moves it.**
+
+**Not established:** that the sequencing regret is *reachable*. C1 ∧ C2 says both players were
+obtainable; it does not say a policy could pick the order without seeing outcomes.
+
+**Two defects found and fixed in D115:** D114's NAIVE guard matched its own text once committed
+(it passed in D114 only because the files were still uncommitted when the suite ran), and D115's
+first C2 overlay was vacuous (Alpha's own pick can never be in the next pool). Both now carry
+regression tests.
+
+**Entry points: `docs/D115_REGRET_ATTRIBUTION.md`, then `docs/D114_MATCHED_STATE_REANALYSIS.md`,
+`docs/D113_CAPACITY_AUDIT.md`, `docs/D108_PROGRAM_CLOSEOUT.md`.** D116 not started.
+
+### Previously: D114 complete — **MATCHED-STATE PAIRING IS REAL BUT IS NOT A GENERAL POWER MULTIPLIER. D113's tight intervals came from an INERT TREATMENT, not from the pairing. ECR is CLOSED as a per-pick decision signal (+1.32 per pick state, 95% CI [−12.1, +14.7]). D97's PROD-vs-NAIVE is UNRECONSTRUCTIBLE and was STOPPED, not substituted. Y1 remains production, unchanged by every phase from D85 to D114.**
 
 Research only. **No production draft logic, no `models/`, no `league/`, nothing fitted, no ECR
 weight introduced or tuned, no PR, nothing merged.** `src/alpha_squad/` is byte-identical to D108;

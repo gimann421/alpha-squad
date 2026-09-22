@@ -43,6 +43,16 @@ RUNNER_SOURCE = (
     Path(__file__).resolve().parents[2] / "scripts" / "research" / "d114_matched_state.py"
 ).read_text()
 
+#: Files whose PURPOSE is to record that D97's NAIVE arm does not exist. They necessarily
+#: mention the string, so a history search over every `*.py` would match them and the guard
+#: would flag itself. Excluded here, and each exclusion is re-verified by the guard.
+GUARD_FILES = (
+    "scripts/research/d114_matched_state.py",
+    "tests/unit/test_d114_matched_state.py",
+    "scripts/research/d115_regret_attribution.py",
+    "tests/unit/test_d115_regret_attribution.py",
+)
+
 
 class TestTheArmIsD104sArm:
     def test_the_ecr_arm_is_imported_not_reimplemented(self):
@@ -163,12 +173,36 @@ class TestReconstructabilityAuditIsDerivedNotAsserted:
 
     def test_no_naive_arm_exists_in_the_checkout(self):
         """The fact D114 stops on. If a NAIVE arm is ever added, this test fails and Experiment 2
-        becomes runnable -- which is the correct trigger to revisit it."""
+        becomes runnable -- which is the correct trigger to revisit it.
+
+        REGRESSION (found in D115): the first version of this test searched every `*.py` in
+        history for the string, which meant that committing D114 -- whose runner and this very
+        file both discuss NAIVE's absence in prose -- made the guard match itself. It passed in
+        D114 only because the files were still uncommitted when the suite ran. The guard now
+        excludes the files whose JOB is to document the absence, and asserts that each exclusion
+        is still earning its place, so a stale exclusion is itself a failure."""
         import subprocess
 
         root = Path(__file__).resolve().parents[2]
+        for rel in GUARD_FILES:
+            path = root / rel
+            if path.exists():
+                assert "NAIVE" in path.read_text(), (
+                    f"{rel} no longer mentions NAIVE, so excluding it from the guard hides "
+                    "real history -- drop it from GUARD_FILES"
+                )
         found = subprocess.run(
-            ["git", "log", "--all", "--oneline", "-S", "NAIVE", "--", "*.py"],
+            [
+                "git",
+                "log",
+                "--all",
+                "--oneline",
+                "-S",
+                "NAIVE",
+                "--",
+                "*.py",
+                *(f":(exclude){rel}" for rel in GUARD_FILES),
+            ],
             cwd=root,
             capture_output=True,
             text=True,
