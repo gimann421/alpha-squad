@@ -78,17 +78,28 @@ MIN_TRAIN_SEASON = 2015
 
 @dataclass
 class ArmPredictions:
-    """One arm's weekly predictions, keyed exactly as `weekly_projection_snapshot` is."""
+    """One arm's weekly predictions, keyed exactly as `weekly_projection_snapshot` is.
+
+    `position_by_key` is carried alongside rather than derived from a player id, because the panel
+    is built per position and a player id is not guaranteed to map to one position across seasons.
+    Every board W6 scores is positional, so the filter has to be exact."""
 
     arm: str
     loss: str
     by_key: dict[tuple[str, int, int], float]
+    position_by_key: dict[tuple[str, int, int], str]
     by_position: dict[str, int]
     skipped: list[str]
 
-    def for_week(self, season: int, week: int, position_of: dict[str, str] | None = None):
-        del position_of
-        return {pid: v for (pid, s, w), v in self.by_key.items() if s == season and w == week}
+    def for_week(self, season: int, week: int, position: str | None = None) -> dict[str, float]:
+        """One week's predictions as `player_id -> value`, optionally one position only."""
+        return {
+            pid: value
+            for (pid, s, w), value in self.by_key.items()
+            if s == season
+            and w == week
+            and (position is None or self.position_by_key[(pid, s, w)] == position)
+        }
 
 
 def train_arm(
@@ -110,6 +121,7 @@ def train_arm(
         raise ValueError(f"unknown arm {arm!r}; known: {known}")
     loss = ARM_LOSS[arm]
     out: dict[tuple[str, int, int], float] = {}
+    pos_of: dict[tuple[str, int, int], str] = {}
     counts: dict[str, int] = {}
     skipped: list[str] = []
 
@@ -132,9 +144,18 @@ def train_arm(
                 preds,
                 strict=True,
             ):
-                out[(pid, int(season), int(week))] = float(pred)
+                key = (pid, int(season), int(week))
+                out[key] = float(pred)
+                pos_of[key] = position
                 counts[position] = counts.get(position, 0) + 1
-    return ArmPredictions(arm=arm, loss=loss, by_key=out, by_position=counts, skipped=skipped)
+    return ArmPredictions(
+        arm=arm,
+        loss=loss,
+        by_key=out,
+        position_by_key=pos_of,
+        by_position=counts,
+        skipped=skipped,
+    )
 
 
 def load_production_predictions(

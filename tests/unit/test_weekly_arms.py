@@ -72,9 +72,14 @@ class TestOnlyTheLossChanges:
 
 
 class TestComparisonToProduction:
-    def _pred(self, by_key):
+    def _pred(self, by_key, position_by_key=None):
         return arms.ArmPredictions(
-            arm="A_MAE", loss="MAE", by_key=by_key, by_position={}, skipped=[]
+            arm="A_MAE",
+            loss="MAE",
+            by_key=by_key,
+            position_by_key=position_by_key or dict.fromkeys(by_key, "RB"),
+            by_position={},
+            skipped=[],
         )
 
     def test_an_exact_match_reports_exactly_that(self):
@@ -112,3 +117,13 @@ class TestComparisonToProduction:
         assert p.for_week(2024, 1) == {"p1": 1.0}
         assert p.for_week(2024, 2) == {"p2": 2.0}
         assert p.for_week(2022, 1) == {}
+
+    def test_for_week_filters_by_position_exactly(self):
+        """Every board W6 scores is positional, so a loose filter would quietly mix boards."""
+        by_key = {("rb", 2024, 1): 1.0, ("wr", 2024, 1): 2.0, ("te", 2024, 1): 3.0}
+        p = self._pred(
+            by_key, {("rb", 2024, 1): "RB", ("wr", 2024, 1): "WR", ("te", 2024, 1): "TE"}
+        )
+        assert p.for_week(2024, 1, "RB") == {"rb": 1.0}
+        assert p.for_week(2024, 1, "WR") == {"wr": 2.0}
+        assert p.for_week(2024, 1) == {"rb": 1.0, "wr": 2.0, "te": 3.0}
