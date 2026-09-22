@@ -72,6 +72,13 @@ reports/**
 # the artifact matters -- it reproduces w3_results.json value-for-value (max abs diff 0), which
 # is only checkable because the earlier file is tracked.
 !reports/weekly/w4_results.json
+# W5/D113: the top-of-board forensic audit -- per-cell metrics for four systems x four
+# positions, the calibrated copula-null distribution, the exact player-level regret
+# decomposition (~16k player-weeks) and the cohort attribution. Same reasoning as w3/w4: it
+# needs the same multi-hour ingest/train run to regenerate, docs/weekly/W5_TOPBOARD_FORENSICS.md
+# quotes it throughout, and W5's own reproduction gate diffs it against w3_results.json and
+# w4_results.json -- which is only checkable because those files are tracked.
+!reports/weekly/w5_results.json
 state/**
 !state/.gitkeep
 *.duckdb
