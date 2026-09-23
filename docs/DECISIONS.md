@@ -8916,3 +8916,60 @@ arm. It is now scoped to HEAD, as its name states.
 **Repository.** New: `scripts/research/d117_upside_audit.py`,
 `tests/unit/test_d117_upside_audit.py` (34 tests), `docs/D117_UPSIDE_AUDIT.md`; fixed
 `tests/unit/test_d114_matched_state.py`. 1610 tests pass, 44 deselected; `make lint` clean.
+
+## D118 — Player-specific upside is partly PREDICTABLE but not demonstrated as a DRAFT signal. The one real signal is the market's within-position disagreement with the projection. It is stable in every season, but it moves pairwise ordering by ~1pp and flips 3 of 28 sequencing pairs. Diagnostic only; nothing ships.
+
+**Question.** Does preseason information Alpha already stores predict which players beat their own
+board projection, out of sample, well enough to change a same-position draft decision?
+
+**Inventory.** Used: board projection, ECR rank and ECR range (`ro`/`redraft-overall`, Jul/Aug),
+age, experience, draft pick, S−1 games/PPG/opportunity per game, S−1 REG mean snap share and target
+share, and the rookie `breakout_probability`. **Excluded:** `dynasty_values` (only snapshot
+2026-09-18, which would be future leakage) and `edge_snapshot` (empty). 12 established and 7 rookie
+features, all pre-registered. Strict walk-forward inside 2021–2025: out-of-sample seasons are
+2022–2025 (k = 4). One fixed-penalty ridge (α = 1) per signal; nothing searched.
+
+**Results, established players (1,799 player-seasons; e SD 62.3):**
+
+| signal | OOS ρ(e) | all 4 seasons | AUC +100 | ECR≤200 order acc proj → adj | net correct flips CI |
+|---|---|---|---|---|---|
+| COMBINED | **+0.265** [+0.20, +0.33] | Y | 0.708 | 69.1% → **70.4%** | [−44, +138] |
+| mkt_vs_model | **+0.271** [+0.20, +0.34] | Y | 0.738 | 69.1% → 70.0% | [−33, +98] |
+| age / experience | +0.110 / +0.093 | Y / Y | 0.60 / 0.56 | +0.6 / +0.5pp | span 0 |
+| draft pick, ECR range, snap/target share, ECR rank | CI spans 0 | n | | ≈ 0 | |
+
+OOS R² is at most +0.051: **≥ 95% of projection-error variance is not predictable** from this
+information. COMBINED net-correct flips by season: +77, −38, +63, +85. By position, ρ is weakest
+at RB (+0.11). In-season, `mkt_vs_model` holds +0.23 to +0.33 in all five seasons, declining.
+**Rookies:** the market clearly out-knows M7 (COMBINED ρ +0.39; order accuracy 70.7% → 74.3%;
+net-correct CI [+11, +39] on the whole rookie board), but the draftable slice (n = 83) is
+unresolved. `breakout_probability` predicts nothing.
+
+**Sequencing pairs (D116/D117, same vintage).** Same-position target pairs: COMBINED favours O on
+23 of 28, but the projection's own regression-to-mean fit favours O on 25 of 28 (O is always
+lower-projected), so "favours O" is not the test. The predicted-error gap is +26 points against a
+67-point projection gap. **Flips: 3 of 28** target and 8 of 25 dynasty. Regret flipped, same- plus
+cross-position: **1.5%** of total (target) and 5.9% (dynasty). That is an upper bound, because
+flips on the general population are right only 53–56% of the time.
+
+**Perfect-signal bound on this vintage (D115 `ORACLE_Y1`, re-run):** it recovers **72.7%** (target)
+and 74.4% (dynasty) of total regret. **~27% is a rule residual no information fixes.**
+
+**Verdict (pre-registered rule).** (1) OOS predictability: **met**. (2) Decision-level improvement
+with CI excluding 0: **not met**. (3) Flips ≥ 5% of close pairs: met. **Player-specific upside is
+not demonstrated as a usable draft signal from Alpha's current information set.** This is a claim
+about this information set only: depth charts, injuries, coaching and camp news are not stored and
+were not tested. D111 (unmerged branch) found the consistent result for a Y1+ECR rank consensus.
+
+**Decision.** Diagnostic only. **No production change, no engine term, no external data, no
+hyperparameter search, no PR.** `src/alpha_squad/` byte-identical. Full report:
+`docs/D118_UPSIDE_PREDICTABILITY.md`.
+
+**Next question (exactly one).** Would a pre-registered walk-forward market-disagreement correction
+(proj + ê from `mkt_vs_model`, specification frozen from D118) be detectable above D114's one-step
+MDE (~13 pts/pick)? Answer it first by a power calculation from D118's measured flip rate, accuracy
+and gain per flip, and run the controlled one-step test only if that clears the MDE. Otherwise,
+close the line.
+
+**Repository.** New: `scripts/research/d118_upside_predictability.py`,
+`tests/unit/test_d118_upside_predictability.py` (23 tests), `docs/D118_UPSIDE_PREDICTABILITY.md`.

@@ -3,7 +3,26 @@
 Living summary of what is implemented, validated, and outstanding. Updated at the end of every
 milestone. See `docs/TRACEABILITY.md` for the acceptance-criteria-level mapping.
 
-## Status: D117 complete — **ALPHA HOLDS NO PLAYER-SPECIFIC UPSIDE INFORMATION. M6's p10/p90 are the projection plus one constant per (season, position); `confidence` is an exact function of the projection; top-24 follows the projection up to Monte Carlo noise. On the D115/D116 sequencing pairs no uncertainty output separates the oracle's player from Alpha's as an individual (0 of 69 same-position pairs, beyond one MC-noise case). The value term carries ~80% of the score gap, risk ~20%, and neutralising risk flips 1–2 of 306 decisions. Y1 remains production, unchanged.**
+## Status: D118 complete — **PLAYER-SPECIFIC UPSIDE IS PARTLY PREDICTABLE BUT NOT DEMONSTRATED AS A DRAFT SIGNAL. The one real out-of-sample signal is the market's within-position disagreement with the projection (ρ +0.27, all four held-out seasons). It moves same-position ordering accuracy from 69.1% to 70.4% (net-correct CI spans 0) and flips 3 of 28 sequencing pairs (~1.5% of regret). ≥ 95% of projection-error variance is unpredictable from stored information; even perfect projections leave ~27% of regret. Y1 remains production, unchanged.**
+
+Diagnostic only. **No production change, no engine term, no external data, no PR.**
+`src/alpha_squad/` byte-identical. Vintage `f0022601…` (= D116/D117). New:
+`scripts/research/d118_upside_predictability.py`, `tests/unit/test_d118_upside_predictability.py`,
+`docs/D118_UPSIDE_PREDICTABILITY.md`.
+
+| | target / established | dynasty |
+|---|---|---|
+| COMBINED OOS ρ(e) / AUC +100 | +0.265 / 0.708 | (player-level; format-independent) |
+| ECR≤200 order acc proj → adj; net-correct CI | 69.1% → 70.4%; [−44, +138] | |
+| sequencing same-position flips to O | 3/28 | 8/25 |
+| regret flipped (upper bound) | 1.5% | 5.9% |
+| perfect-signal bound (ORACLE_Y1) | 72.7% | 74.4% |
+
+**Next:** a power calculation to decide whether a frozen walk-forward market-disagreement
+correction could even be detected above D114's ~13-point one-step MDE. Run the controlled test
+only if it can.
+
+### Previously: D117 complete — **ALPHA HOLDS NO PLAYER-SPECIFIC UPSIDE INFORMATION. M6's p10/p90 are the projection plus one constant per (season, position); `confidence` is an exact function of the projection; top-24 follows the projection up to Monte Carlo noise. On the D115/D116 sequencing pairs no uncertainty output separates the oracle's player from Alpha's as an individual (0 of 69 same-position pairs, beyond one MC-noise case). The value term carries ~80% of the score gap, risk ~20%, and neutralising risk flips 1–2 of 306 decisions. Y1 remains production, unchanged.**
 
 Diagnostic only. **No production change, no tuning, no feature/model, no PR.** `src/alpha_squad/`
 byte-identical. Board vintage `f0022601…` (the same as D116). New:
