@@ -22,7 +22,7 @@ week-*w* opportunity has these per-week rank correlations with the real thing:
 - WR: about **0.67**
 - TE: about **0.63**
 
-Across all player-weeks it explains about **40–48%** of the variation. That is better than
+Across all player-weeks it explains about **39–48%** of the variation. That is better than
 Alpha's ranking of *fantasy points* (0.67 / 0.64 / 0.58). So opportunity is somewhat easier to
 predict than points. It is still far from knowable.
 
