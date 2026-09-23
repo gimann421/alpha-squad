@@ -9353,7 +9353,8 @@ raising whole-board Spearman.
 - **G2:** physically deleting every outcome at or after the ranked week moves 0 predictor values
   across 2,861 audited player-weeks, and the check is proven non-vacuous.
 - **G3–G9:** pass.
-- **G10 and G11:** results are in the results document §0.
+- **G10:** a fresh run is byte-identical to the committed results.
+- **G11:** W3, W4, W5 and W6 re-run and reproduce exactly (max abs diff 0).
 
 **Four of ten a priori predictions were right, three partly right and three wrong.** The most
 consequential error was predicting WR capture@10 would be null; it was harmed.

@@ -76,8 +76,8 @@ Friday can see.
 | G7 | walk-forward | **PASS** — 0 training frames contain the season they predict |
 | G8 | Friday cutoff | **PASS** — 0 evaluated players whose team had already kicked off |
 | G9 | identical universe | **PASS** — enforced inside the runner, which aborts on any mismatch |
-| G10 | determinism | **PENDING** — running |
-| G11 | upstream W3–W6 reproduce | **PENDING** — running |
+| G10 | determinism | **PASS** — a fresh run of the runner is byte-identical to the committed `w7_results.json` (sha256 prefix `6f5815c6618cf4b2` both) |
+| G11 | upstream W3–W6 reproduce | **PASS** — W3, W4, W5 and W6 re-run and match their committed results with max abs diff 0 |
 
 ---
 
