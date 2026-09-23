@@ -8848,3 +8848,71 @@ and the confidence multiplier? Attribution, not optimisation.
 `tests/unit/test_d116_survival_attribution.py` (43 tests), `docs/D116_SURVIVAL_ATTRIBUTION.md`.
 1576 tests pass, 44 deselected; `make lint` clean (ruff check, ruff format --check,
 check-secrets).
+
+## D117 — Alpha holds NO player-specific upside information: M6's intervals are the projection plus a per-position constant, so nothing can be "suppressed". The oracle's player loses because all of Alpha's information says he is worse. Rule 1 applies; no fix proposed. Nothing ships.
+
+**Question.** On D116's C1 ∧ C2 pairs (151 target / 155 dynasty, read from D116's artifact on the
+same vintage `f0022601…`), does Alpha already hold upside/uncertainty information that identifies
+the oracle's player O, which the projection/risk logic then fails to use?
+
+**Structural finding (measured on the full 2021–2025 M6 table, 2,271 player-seasons).**
+`p90 − point` and `p10 − point` are constant within every (season, position): sd ≤ 1.8e-14.
+`confidence` equals `clip(1 − width/(2·point))` exactly, so it is a function of the projection.
+`top24` follows the projection's order except for Monte Carlo noise (2.5% of pairs). **Within a
+position, no M6 output can rank two players differently from the projection.** M6 contains no
+player-level uncertainty.
+
+| signal (target; favours O among decisive) | all pairs | same-position | dynasty all |
+|---|---|---|---|
+| point projection | 3.3% (5/151) | 0/39 | 11.0% |
+| p90 / p90 − replacement | 7.0% / 5.6% (of 71) | 0/25 | 8.9% / 8.9% |
+| top-24 probability | 15.5% (11/71) | 1/25 (MC noise) | 15.8% |
+| confidence / risk as applied | 8.5% / 10.4% | 0/25 | 8.9% / 8.7% |
+| rookie breakout probability | 1/4 defined | — | 0 defined |
+| p90−repl vs proj−repl discordance | 2 vs 2, p = 1.0 | 0 vs 0 | 5 vs 4 |
+| any output favours O beyond proj, player-level | 12 (11 cross-position artifacts + 1 MC) | 1 | 15 (0 same-position) |
+
+The oracle's player beat his **own p90** in 105/117 target (135/146 dynasty) cases. These were
+tail outcomes the model assigned < 10% probability, with no player-specific way to see them.
+**Selection control:** across the board, p90's correlation with the signed residual is identical
+to the projection's, because it *is* the projection plus a constant. The market's ECR range, the
+one player-specific dispersion signal Alpha stores, predicts a *worse* outcome than projected,
+holding the projection fixed (partial r −0.24, CI [−0.39, −0.08], ECR ≤ 200).
+
+**Score decomposition (exact Shapley, shipped L0 formula; A − O = +98.1 target / +106.3
+dynasty).** Value 81.3% / 79.1% (favours A on every pair); risk 19.1% / 21.2%; survival, opportunity
+cost, fit and capacity each within ±2%. Setting risk to neutral lets O win on **1 / 2** pairs.
+
+**Risk: wrong information, not suppressed upside.** Confidence counts the projection a second
+time. It zeroes 53% of M6 player-seasons, including 26 target O's. Among draftable players
+(ECR ≤ 200) the most-penalised buckets beat their projection: conf = 0 gives +43.2 [+35.6, +51.7];
+[.25, .5) gives +19.6 [+3.5, +35.8]; ≥ .75 gives −31.3. Absolute error does not rise as
+confidence falls. The bias is real, but on this population the term moves ≤ 2 decisions, which
+does not meet the bar for a production change or a controlled experiment from this evidence.
+
+**Addressable by information already inside Alpha:** population 48.1% / 46.5% of regret; any M6
+output favouring O beyond projection 11.4% / 15.3%, and 4.5% / 4.9% after excluding the
+position-constant width/upside. All of that is cross-position artifact and balanced by the reverse
+cases. **Player-level: ~0%.**
+
+**Defect fixed before any result was read.** Pairwise calls scored ~1e-14 float noise in M6's
+per-position offsets as preferences ("width favours O 80%" on same-position pairs, where the width
+is identical). A 1e-9 relative tie tolerance now applies, pinned by a regression test.
+
+**Decision.** Rule 1 of the brief applies: the current information set lacks the needed signal.
+**No production change, no weight tuned, no feature/model, no draft strategy, no PR.**
+`src/alpha_squad/` byte-identical. Full report: `docs/D117_UPSIDE_AUDIT.md`.
+
+**Next question (exactly one).** Is player-specific upside knowable preseason at all? Walk-forward,
+from information Alpha already stores, is the size or upper tail of M6's out-of-sample residual
+predictable beyond the (season, position) constant, and would that prediction beat chance on the
+same-position C1 ∧ C2 pairs? If not, the sequencing regret is irreducible tail luck for this
+information set.
+
+**Guard fixed.** `test_no_naive_arm_exists_in_the_checkout` (D114) searched `git log --all`. After
+a fetch it matched `ab18fc2`, an unmerged D111 branch's `ECR_ALONE_NAIVE` label, which is not D97's
+arm. It is now scoped to HEAD, as its name states.
+
+**Repository.** New: `scripts/research/d117_upside_audit.py`,
+`tests/unit/test_d117_upside_audit.py` (34 tests), `docs/D117_UPSIDE_AUDIT.md`; fixed
+`tests/unit/test_d114_matched_state.py`. 1610 tests pass, 44 deselected; `make lint` clean.

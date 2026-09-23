@@ -180,7 +180,13 @@ class TestReconstructabilityAuditIsDerivedNotAsserted:
         file both discuss NAIVE's absence in prose -- made the guard match itself. It passed in
         D114 only because the files were still uncommitted when the suite ran. The guard now
         excludes the files whose JOB is to document the absence, and asserts that each exclusion
-        is still earning its place, so a stale exclusion is itself a failure."""
+        is still earning its place, so a stale exclusion is itself a failure.
+
+        REGRESSION (found in D117): the search used `git log --all`, so its verdict depended on
+        which remote branches a clone happened to have fetched. After a routine `git fetch` it
+        matched `ab18fc2` -- an unmerged D111 branch whose arm label `ECR_ALONE_NAIVE` contains
+        the substring and has nothing to do with D97's arm. The guard is about THE CHECKOUT, as
+        its name says, so it now searches HEAD's history only."""
         import subprocess
 
         root = Path(__file__).resolve().parents[2]
@@ -195,7 +201,7 @@ class TestReconstructabilityAuditIsDerivedNotAsserted:
             [
                 "git",
                 "log",
-                "--all",
+                "HEAD",
                 "--oneline",
                 "-S",
                 "NAIVE",

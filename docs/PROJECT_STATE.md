@@ -3,7 +3,31 @@
 Living summary of what is implemented, validated, and outstanding. Updated at the end of every
 milestone. See `docs/TRACEABILITY.md` for the acceptance-criteria-level mapping.
 
-## Status: D116 complete — **THE SURVIVAL MODEL KNEW WHO WOULD DISAPPEAR FIRST (87.5% target / 93.0% dynasty), AND IT MOSTLY SAID ALPHA'S OWN PLAYER. D115's "sequencing" regret is not an ordering loss. Alpha took the oracle's player at its next pick 0 times in 151, ranks him about #125, and projects him at 58% of its own pick. The loss is in the value base, upstream of survival and opportunity cost; neutralising either flips 0 picks. Y1 remains production, unchanged.**
+## Status: D117 complete — **ALPHA HOLDS NO PLAYER-SPECIFIC UPSIDE INFORMATION. M6's p10/p90 are the projection plus one constant per (season, position); `confidence` is an exact function of the projection; top-24 follows the projection up to Monte Carlo noise. On the D115/D116 sequencing pairs no uncertainty output separates the oracle's player from Alpha's as an individual (0 of 69 same-position pairs, beyond one MC-noise case). The value term carries ~80% of the score gap, risk ~20%, and neutralising risk flips 1–2 of 306 decisions. Y1 remains production, unchanged.**
+
+Diagnostic only. **No production change, no tuning, no feature/model, no PR.** `src/alpha_squad/`
+byte-identical. Board vintage `f0022601…` (the same as D116). New:
+`scripts/research/d117_upside_audit.py`, `tests/unit/test_d117_upside_audit.py`,
+`docs/D117_UPSIDE_AUDIT.md`.
+
+| | target | dynasty |
+|---|---|---|
+| favours O: projection / p90 / top-24 / confidence | 3.3% / 7.0% / 15.5% / 8.5% | 11.0% / 8.9% / 15.8% / 8.9% |
+| p90−repl vs proj−repl discordance | 2 vs 2 (p = 1.0) | 5 vs 4 |
+| O beat his own p90 | 105/117 | 135/146 |
+| Shapley share: value / risk | 81% / 19% | 79% / 21% |
+| risk neutralised → O wins | 1/151 | 2/155 |
+| regret addressable by player-level info inside Alpha | ~0% | 0% |
+
+**Risk multiplier:** it uses the wrong information (it counts the projection twice and zeroes 53%
+of M6 player-seasons), but it suppresses no upside. **Next:** is player-specific upside knowable
+preseason at all, i.e. is M6's residual size predictable walk-forward beyond the position
+constant?
+
+**Repository.** 1610 tests pass, 44 deselected; `make lint` clean. D114's history guard is now
+scoped to HEAD (it matched an unmerged branch after a fetch).
+
+### Previously: D116 complete — **THE SURVIVAL MODEL KNEW WHO WOULD DISAPPEAR FIRST (87.5% target / 93.0% dynasty), AND IT MOSTLY SAID ALPHA'S OWN PLAYER. D115's "sequencing" regret is not an ordering loss. Alpha took the oracle's player at its next pick 0 times in 151, ranks him about #125, and projects him at 58% of its own pick. The loss is in the value base, upstream of survival and opportunity cost; neutralising either flips 0 picks. Y1 remains production, unchanged.**
 
 Attribution only. **No production change, no tuning, no survival model, no PR, nothing merged.**
 `src/alpha_squad/` is byte-identical to HEAD `e02fcf7`. The board vintage for this run is
