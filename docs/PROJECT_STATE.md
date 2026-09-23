@@ -3,7 +3,25 @@
 Living summary of what is implemented, validated, and outstanding. Updated at the end of every
 milestone. See `docs/TRACEABILITY.md` for the acceptance-criteria-level mapping.
 
-## Status: D118 complete — **PLAYER-SPECIFIC UPSIDE IS PARTLY PREDICTABLE BUT NOT DEMONSTRATED AS A DRAFT SIGNAL. The one real out-of-sample signal is the market's within-position disagreement with the projection (ρ +0.27, all four held-out seasons). It moves same-position ordering accuracy from 69.1% to 70.4% (net-correct CI spans 0) and flips 3 of 28 sequencing pairs (~1.5% of regret). ≥ 95% of projection-error variance is unpredictable from stored information; even perfect projections leave ~27% of regret. Y1 remains production, unchanged.**
+## Status: D119 complete — **NO-GO. The market-vs-model correction cannot be detected by a one-step experiment: 8% power at the smallest interesting effect (3.6 pts/pick), 80%-power MDE 21 pts/pick, against a realistic effect of ~1–3 pts/pick. The experiment was not run; the line is closed. Y1 remains production, unchanged.**
+
+Power analysis only. **No production change, no treatment run, nothing tuned, no PR.**
+`src/alpha_squad/` byte-identical. Vintage `f0022601…`. New:
+`scripts/research/d119_market_correction_power.py`, `tests/unit/test_d119_market_correction_power.py`,
+`docs/D119_MARKET_CORRECTION_POWER.md`.
+
+| target case | E/pick | MDE 80% | power at SPIE 3.58 |
+|---|---|---|---|
+| conservative (decision) | +3.28 | 21.2 | **0.082** |
+| low leverage | +1.11 | 10.6 | 0.175 |
+| GO-favourable stress test | +26.6 | 11.4 | 0.160 |
+| anti-conservative clustering | +3.28 | 6.8 | 0.319 |
+
+**Next:** decompose `ORACLE_Y1`'s ~27% rule residual (~37 pts/pick, measurable). First check that
+`oracle_static` does not recompute `replacement_levels` despite its docstring, and that it keeps
+M6's projection-derived `confidence`.
+
+### Previously: D118 complete — **PLAYER-SPECIFIC UPSIDE IS PARTLY PREDICTABLE BUT NOT DEMONSTRATED AS A DRAFT SIGNAL. The one real out-of-sample signal is the market's within-position disagreement with the projection (ρ +0.27, all four held-out seasons). It moves same-position ordering accuracy from 69.1% to 70.4% (net-correct CI spans 0) and flips 3 of 28 sequencing pairs (~1.5% of regret). ≥ 95% of projection-error variance is unpredictable from stored information; even perfect projections leave ~27% of regret. Y1 remains production, unchanged.**
 
 Diagnostic only. **No production change, no engine term, no external data, no PR.**
 `src/alpha_squad/` byte-identical. Vintage `f0022601…` (= D116/D117). New:

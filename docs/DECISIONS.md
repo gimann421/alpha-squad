@@ -8973,3 +8973,47 @@ close the line.
 
 **Repository.** New: `scripts/research/d118_upside_predictability.py`,
 `tests/unit/test_d118_upside_predictability.py` (23 tests), `docs/D118_UPSIDE_PREDICTABILITY.md`.
+
+## D119 — Power analysis for the market-vs-model correction: NO-GO. The frozen experiment has 8% power at the smallest interesting effect; it was not run. Line closed for now. Nothing ships.
+
+**Question.** Is D118's market-vs-model signal strong enough to justify one controlled one-step
+draft-decision experiment?
+
+**Frozen treatment (no tuning needed, so no STOP).** `proj + beta_S * z_mkt_vs_model`, where
+beta_S is D118's walk-forward univariate slope, refitted with D118's own `fit_ridge` and checked
+against every stored D118 prediction to 1e-9. The slopes are +17.3 to +19.9 pts/SD (established)
+and +26.1 to +33.2 (rookie). The intercept is dropped (it is D68's closed positional-calibration
+question), so the correction is within-position only. There is no threshold. 2021 has zero
+correction, so k = 4 seasons. The insertion point is `projections_override`, as in D68's X-arms.
+
+**Power model.** E = p_c × g; season SD = infl × σ_c × √(64 p_c)/64. σ_c (55.7–82.6) and infl
+(0.97–2.20) come from D115's EXISTING arms on this vintage. The model is checked leave-one-arm-out
+(predictions 0.71–1.43× observed), and power is checked against Monte Carlo (±0.001). D118 inputs:
+flip rate 8.8% of all pairs and 26.0% of close pairs; flip accuracy 55.0%; gain per flip +12.6 raw
+points, CI [−17, +45], with a 1.0 raw→roster conversion assumed (optimistic; D114 measured 0.109).
+**SPIE** = D118's upper-bound regret share × mean regret per pick = **3.58 pts/pick** (target) and
+4.63 (dynasty).
+
+| target case | E/pick | CI ± | MDE 80% | power at SPIE | power at E |
+|---|---|---|---|---|---|
+| **conservative (decision basis)** | +3.28 | 15.8 | **21.2** | **0.082** | 0.077 |
+| low leverage | +1.11 | 8.0 | 10.6 | 0.175 | 0.062 |
+| GO-favourable (infl 1, p_c 0.59, g = top of CI) | +26.6 | 8.5 | 11.4 | 0.160 | 1.000 |
+| anti-conservative (16 drafts, no inflation) | +3.28 | — | 6.8 | 0.319 | 0.276 |
+
+The GO-favourable E would mean recovering ~20% of all regret, against D118's own upper bound of
+2.6%. It is a stress test, not a plausible effect. Across every case, power at the scenario's own
+plausible effect is ≤ 0.33.
+
+**Decision: NO-GO.** Pre-registered rule: target, conservative case, power at SPIE ≥ 0.80. Actual:
+0.082. The experiment mode raises `NoGoError`, and nothing else was tried. The line is closed.
+
+**Next question.** Decompose the ~27% rule residual that `ORACLE_Y1` (perfect projections, 72.7%
+recovery) leaves, about 37 pts/pick, which is ~3× the one-step resolution. First resolve a
+discrepancy: `oracle_static`'s docstring says it recomputes `replacement_levels`, but its code does
+not. It also keeps M6's `confidence`, which D117 showed is a function of the OLD projection.
+
+**Repository.** New: `scripts/research/d119_market_correction_power.py`,
+`tests/unit/test_d119_market_correction_power.py` (24 tests), `docs/D119_MARKET_CORRECTION_POWER.md`.
+Two runner defects were fixed before the decision was read: a scipy NaN tail, and a circular
+"validation". `src/alpha_squad/` byte-identical.
