@@ -407,4 +407,13 @@ If the results contradict these, the results win and the contradiction is report
 
 ## 13. Amendments
 
-*(None yet.)*
+### A1 — pre-results clarification (2026-09-23, before any W8 result was read)
+
+**The FLEX MATCHED threshold.** §6 says each FLEX player carries "their own position's surprise
+and pair thresholds". A **pair** threshold is ambiguous for a cross-position pair, because the pair
+has no single position. W8 therefore takes the FLEX MATCHED cut as the bottom tercile of
+`|x_i − x_j|` pooled over **FLEX top-region pairs**. Per-player quantities (the CLOSE and SURPRISE
+cut points) still use each player's own position, as written.
+
+This was decided while writing the instrument, before the runner had produced any output. No
+positional quantity and no verdict rule changes.
