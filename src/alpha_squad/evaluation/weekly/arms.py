@@ -41,6 +41,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import duckdb
+import pandas as pd
 from catboost import CatBoostRegressor
 
 from alpha_squad.models.established.data import load_position_week_data
@@ -196,3 +197,72 @@ def compare_to_production(
         "max_abs_diff": max(diffs) if diffs else None,
         "mean_abs_diff": (sum(diffs) / len(diffs)) if diffs else None,
     }
+
+
+# ---------------------------------------------------------------------------------------
+# W7: Alpha with added features. Same model, same loss, same hyperparameters, same walk-forward.
+# ---------------------------------------------------------------------------------------
+
+
+def train_with_extra_features(
+    con: duckdb.DuckDBPyConnection,
+    extra: pd.DataFrame,
+    extra_cols: list[str],
+    *,
+    arm: str = "ALPHA_PLUS_OPP",
+    seasons: tuple[int, ...] = TRAIN_SEASONS,
+    min_train_season: int = MIN_TRAIN_SEASON,
+    positions: tuple[str, ...] = ("RB", "WR", "TE"),
+) -> ArmPredictions:
+    """Production's weekly model with `extra_cols` appended to its 11 features. **One change.**
+
+    The training frame is read with production's own loader, so its rows arrive in production's
+    order with production's `fillna(0.0)` on the 11 original features; the extra columns are
+    left-joined onto it, preserving that order, and passed to CatBoost with missing values intact
+    (CatBoost treats them natively -- zero-filling would invent a prior-week depth of 0).
+
+    **With `extra_cols` empty this is production exactly**, which is W7's fidelity gate: it must
+    reproduce `weekly_projection_snapshot` bit for bit, or the arm is measuring something else."""
+    keys = ["player_id", "season", "week"]
+    lookup = extra[keys + list(extra_cols)] if extra_cols else None
+    out: dict[tuple[str, int, int], float] = {}
+    pos_of: dict[tuple[str, int, int], str] = {}
+    counts: dict[str, int] = {}
+    skipped: list[str] = []
+
+    for target_season in seasons:
+        for position in positions:
+            train_df = load_position_week_data(con, position, min_train_season, target_season - 1)
+            if len(train_df) < MIN_TRAINING_ROWS:
+                skipped.append(f"{position}/{target_season}: only {len(train_df)} training rows")
+                continue
+            predict_df = load_position_week_data(con, position, target_season, target_season)
+            if predict_df.empty:
+                continue
+            cols = list(FULL_FEATURES)
+            if lookup is not None:
+                train_df = train_df.merge(lookup, on=keys, how="left", validate="one_to_one")
+                predict_df = predict_df.merge(lookup, on=keys, how="left", validate="one_to_one")
+                cols += list(extra_cols)
+            model = CatBoostRegressor(loss_function=ARM_LOSS[CONTROL_ARM], **BASE_KWARGS)
+            model.fit(train_df[cols].astype(float).to_numpy(), train_df[TARGET_COLUMN].to_numpy())
+            preds = model.predict(predict_df[cols].astype(float).to_numpy())
+            for pid, season, week, pred in zip(
+                predict_df["player_id"].tolist(),
+                predict_df["season"].tolist(),
+                predict_df["week"].tolist(),
+                preds,
+                strict=True,
+            ):
+                key = (pid, int(season), int(week))
+                out[key] = float(pred)
+                pos_of[key] = position
+                counts[position] = counts.get(position, 0) + 1
+    return ArmPredictions(
+        arm=arm,
+        loss=ARM_LOSS[CONTROL_ARM],
+        by_key=out,
+        position_by_key=pos_of,
+        by_position=counts,
+        skipped=skipped,
+    )
