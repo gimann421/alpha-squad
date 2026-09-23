@@ -3,51 +3,62 @@
 Living summary of what is implemented, validated, and outstanding. Updated at the end of every
 milestone. See `docs/TRACEABILITY.md` for the acceptance-criteria-level mapping.
 
-## Status: W5 complete (D113) — **The top-of-board "collapse" is range restriction, but a REAL cliff sits underneath it at RB and WR (not TE). No pre-cutoff information class is material. Alpha ranks by floor; the top is won by ceiling. Nothing shipped.**
+## Status: W6 complete (D114) — **Training for higher-end outcomes does NOT fix the top of the board. Verdict NO EFFECT. The objective barely controls the ordering — the features do. Nothing shipped.**
 
-Research only. **No model built, fitted, tuned or retrained; no feature added; no ECR used
-anywhere; production diff EMPTY.** **Entry point: `docs/weekly/W5_TOPBOARD_FORENSICS.md`.**
+Research only. **One argument changed (the CatBoost loss); no feature added, no hyperparameter
+tuned, no ECR anywhere; production diff EMPTY.** **Entry point:
+`docs/weekly/W6_UPPER_OUTCOME_RESULTS.md`.**
 
 ### CURRENT WEEKLY RESEARCH STATUS
 
-- **The statistic that motivated W5 was an artefact.** D112's "corr collapses to RB 0.251 / WR
-  0.222 / TE 0.141" is fully explained by range restriction: a ranker with Alpha's OWN Spearman
-  and no top-specific structure scores **0.151 / 0.110 / 0.142**. Alpha retains **1.7x-2.3x** a
-  uniform ranker's top signal. The numbers stand; the diagnosis drawn from them does not.
-- **But a real cliff exists on the product metric.** Positional capture@10 vs the same-Spearman
-  null: **RB −0.0710** CI[−0.0916,−0.0505] (21-58 wk), **WR −0.0800** CI[−0.0999,−0.0607]
-  (15-64 wk), **TE −0.0096** CI[−0.0289,+0.0096] → **NO CLIFF at TE**.
-- **Sharply depth-localised and it REVERSES.** RB: −0.099 @5, −0.071 @10, −0.022 @20,
-  **+0.006 @50**. Alpha is significantly *better* than its own null deep in the board.
-- **Mechanism: Alpha ranks by expected FLOOR; the top-10 is won by CEILING.** The misses sit at
-  median predicted rank 22/29/20 — not deep. 62-83% of missed regret is prior-week STARTERS Alpha
-  already ranks. `HIGH_SNAP` (WR +80%) and `HOT_L3` (WR +86%) carry the excess — both defined by
-  features already carrying 38-57% of model gain. `P(realized ≥ 2× predicted)` falls 41.5% → 5.6%
-  across RB's predicted deciles.
-- **NO information class is material.** Injury (STRICT coverage **0.2%** — the nflverse file is a
-  Friday-final artefact and cannot support a pre-Friday feature at all), depth chart (the misses
-  are starters Alpha already ranks), role change (every continuous measure null; TEAM_CHANGE
-  carries 43-87% LESS regret), team environment (null), matchup (significant at RB/WR/QB but worth
-  only 5-10% of missed regret).
-- **Misses are NOT predictable** from pre-cutoff information where the cliff is: AUC **0.4875**
-  (RB), **0.4957** (WR), both below their own permutation p95. TE alone 0.5872.
-- **The one large reachable prize is OPPORTUNITY.** `ORACLE_USAGE` (perfect opportunity, ZERO
-  conversion foresight) recovers **58.6% / 56.2% / 63.0%** of the perfect-foresight ceiling and
-  beats ECR by **+0.159 to +0.206** — 4-8× the entire Alpha-vs-ECR gap. It replaces D112's
-  ORACLE_WITHIN (+0.3613), which assumed unreachable perfect outcome knowledge.
-- **43% of Alpha's WR top-10 slots are busts** (finish outside the realized top-24); RB 26.5%,
-  TE 22.5%.
-- **Three of eight a priori predictions were WRONG** and are reported as such (NO CLIFF; usage
-  oracle < half the ceiling; TE not distinct). The errors changed the recommendation.
-- **Methodology**: ten validity gates pass. **G2** — rebuilding every context value against a
-  database with the ranked week's outcomes deleted — caught two reproducibility defects in W5's
-  own code. Four more defects were caught before any result was read. W3 and W4 reproduce
-  **exactly** (max abs diff 0 over 46,756 and 126,844 numeric leaves).
-- **Next: W6** — *does training the same model on an upper quantile of the outcome instead of its
-  median recover the top-of-board capture, at RB and WR, without damaging TE or the deep board?*
-  Three arms, one argument changed, everything else frozen; the copula-null cliff test re-run on
-  the treated board so the MECHANISM is checked, not just the metric. Runner-up: a two-stage
-  opportunity model, preceded by a cheap study of how much weekly usage is forecastable on Friday.
+- **Verdict NO EFFECT.** `B2_Q70` (70th-percentile target) vs the production control, 79 weeks:
+  RB capture@5 **+0.0023** CI[−0.0124,+0.0173], RB capture@10 **+0.0052** CI[−0.0022,+0.0135],
+  WR capture@5 **−0.0008**, WR capture@10 **−0.0051**. **Every primary CI contains zero** against
+  a +0.02 threshold and a measured MDE of ~0.02.
+- **The median weekly difference is exactly 0.0000** at both positions; the two boards produce an
+  identical capture@10 in **32 of 79 RB weeks**.
+- **The W5 cliff did NOT shrink** (the mechanism check): RB −0.0710 → **−0.0650** (8%, inside
+  noise; Q60 *widens* it); WR −0.0800 → **−0.0836**, worse, and monotonically worse with quantile.
+- **THE EXPLANATION, and the constraint it adds:** the target change moves the predicted numbers
+  enormously (RB mean prediction +48%, 6.86 → 10.18) and the **ordering almost not at all** —
+  board rank correlation with the control is **0.9958 / 0.9963 / 0.9912** (RB/WR/TE), top-10
+  overlap 89–93%, and the top 10 is **literally identical in 24–41% of weeks**. On these 11 lagged
+  features the quantile is very nearly a **monotone rescaling**, which cannot change any ranking.
+  **The ordering is determined by the features, not by the objective.**
+- **No dose-response**, and `B0_RMSE` (the discriminating control) is indistinguishable from
+  `B2_Q70` — moving off MAE in *any* direction does the same amount of nothing.
+- **One genuine positive, off-target:** TE capture@5 **+0.0208** CI[+0.0068,+0.0367], p=0.015,
+  replicated at every quantile and in Half-PPR, passing all three genuineness checks. Not a primary
+  cell, does not propagate to TE capture@10, and lands on the one position W5 found had no cliff.
+- **Not more bust-prone either**: top-10 false-positive rate RB 26.5%→26.1%, WR 42.9%→43.2%. The
+  change is neither better nor recklessly extreme. It is inert.
+- **A defect in W6's own pre-registration, disclosed** (amendment A1): the HARM clause had no
+  practical floor, so two negligible guardrail breaches (RB capture@50 −0.0029, FLEX Spearman
+  −0.0014) trigger it literally. NO EFFECT is reported; both readings recommend the same action.
+- **Second consecutive phase to rule out reshaping the existing signal** — D112 ruled out
+  cross-position calibration, D114 rules out target reshaping.
+- **Methodology**: nine gates pass. **G1 load-bearing** — retraining with production's own loss
+  reproduces production's own stored predictions **exactly** (29,376/29,376, max abs diff 0.0), so
+  every arm differs from production in one argument. W3/W4/W5 reproduce exactly; output
+  byte-identical on a repeat run. **Four of eight a priori predictions were wrong.**
+- **Next: W7** — *how much of a player's week-w opportunity (targets and carries) is actually
+  forecastable from Friday information?* W5 showed perfect opportunity foresight is worth 53–63%
+  of the whole ceiling and would beat ECR by +0.16 to +0.21. **It is a measurement, not a model**,
+  and it should be asked before anything else is built.
+
+### Earlier status: W5 complete (D113) — **The top-of-board "collapse" is range restriction, but a REAL cliff sits underneath it at RB and WR (not TE). No pre-cutoff information class is material.**
+
+Research only. Entry point: `docs/weekly/W5_TOPBOARD_FORENSICS.md`.
+
+- D112's "corr collapses to RB 0.251 / WR 0.222 / TE 0.141" is fully explained by range
+  restriction: a same-Spearman ranker with no top defect scores **0.151 / 0.110 / 0.142**.
+- **Real cliff on capture@10**: RB −0.0710, WR −0.0800, TE −0.0096 (**no cliff at TE**).
+- **Alpha ranks by FLOOR; the top-10 is won by CEILING.** Misses sit at median predicted rank
+  22/29/20; 62–83% of missed regret is prior-week starters it already ranks.
+- **No information class is material** — injury (STRICT coverage 0.2%), depth chart, role change,
+  team environment, matchup (5–10% of missed regret).
+- **Misses are NOT predictable** where the cliff is: AUC 0.4875 (RB), 0.4957 (WR).
+- **`ORACLE_USAGE` recovers 53–63% of the ceiling** and beats ECR by +0.159 to +0.206.
 
 ### Earlier status: W4 complete (D112) — **Cross-position calibration is NOT the FLEX bottleneck (verdict D). A PERFECT cross-position scale buys 2.1% of the available headroom. Do not build calibration. Nothing shipped.**
 

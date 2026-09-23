@@ -296,4 +296,31 @@ results; or present a sub-threshold or inconsistent effect as success.
 
 ## 13. Amendments
 
-*(None yet.)*
+### A1 — the HARM rule had no practical floor, and fires on a negligible effect (dated: W6 results run)
+
+**What happened.** §8's four verdicts are not mutually exclusive, and on the actual result two of
+them fire at once. Every primary CI contains zero, which is **NO EFFECT** exactly as written. But
+HARM's second clause — *"a guardrail breach with no qualifying primary gain"* — also fires,
+because §6 defines a **breach** as any degradation whose 95% CI excludes zero, with no lower bound
+on its size. The two breaches are **RB capture@50 = −0.0029** (on a metric averaging 0.92) and
+**FLEX Spearman = −0.0014** (on a metric averaging 0.65).
+
+**Why the literal reading is rejected.** Calling a 0.3% change in a deep-board metric "damage"
+would misdescribe the experiment to the product decision this report exists to serve. W4's §7.2
+identified precisely this hazard and guarded against it — *"a self-calibrated MDE shrinks as two
+systems become similar and would otherwise make trivial effects significant"* — and added a
+**practical** bar alongside the statistical one. **I applied that guard to the success side and
+not to the breach side.** That asymmetry is an error in this pre-registration, not a finding about
+the model.
+
+**What is reported.** The verdict is **NO EFFECT**, and §5 of the results document states the
+literal HARM trigger, its two component effects and their sizes, so a reader can apply either
+reading. **Nothing material hinges on the choice**: both readings recommend discontinuing the
+direction, for the same reason.
+
+**The rule that should have been written**, recorded so a later phase inherits it rather than the
+defect: *a guardrail breach requires a CI excluding zero **and** a magnitude of at least 25% of the
+primary success threshold* — here 0.005 — which neither of these two clears.
+
+No other rule, threshold, metric or arm was changed, and the primary verdict was not affected by
+this amendment.

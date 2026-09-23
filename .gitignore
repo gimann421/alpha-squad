@@ -83,6 +83,14 @@ reports/**
 # quotes its AUCs and permutation baselines, and a later phase re-reads them to check whether the
 # "misses are unpredictable" finding still holds against a changed model.
 !reports/weekly/w5_e1.json
+# W6/D114: the upper-outcome experiment. Five trained arms x four positions x 79 weeks of
+# per-cell metrics, the per-arm copula-null cliff re-test, the movement diagnostics, and the
+# board-agreement measurements that explain the null (rank correlation 0.99+ between the treated
+# and control boards). Reproducible only after the same multi-hour ingest and feature build;
+# docs/weekly/W6_UPPER_OUTCOME_RESULTS.md quotes both files throughout, and the W6 gates diff
+# them against fresh runs -- which is only checkable because they are tracked.
+!reports/weekly/w6_results.json
+!reports/weekly/w6_agreement.json
 state/**
 !state/.gitkeep
 *.duckdb

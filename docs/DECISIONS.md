@@ -9157,3 +9157,110 @@ how much of weekly usage is forecastable on Friday — a cheap study that should
 signal is worth nothing at the top of the board) but cannot be fixed by filtering either: under a
 genuine pre-Friday cutoff the nflverse file retains 0.2% of its rows, so the layer needs a
 different source. The Friday-board eligibility defect **gates production, not W6**.
+
+---
+
+## D114 — W6: training for higher-end outcomes does not fix the top of the board; the objective barely controls the ordering
+
+**Date:** W6. **Status:** accepted. **Closes:** the target-reshaping line opened by D113 §W6.
+**Authority:** `docs/weekly/W6_PREREGISTRATION.md` (committed at `87ad0a1`, before any comparative
+result) and its amendment A1, `docs/weekly/W6_UPPER_OUTCOME_RESULTS.md`,
+`reports/weekly/w6_results.json`, `reports/weekly/w6_agreement.json`.
+
+### Decision
+
+**Verdict: NO EFFECT. Do not continue the target-reshaping direction.** Changing what the weekly
+model is trained to predict -- median (production), mean, or the 60th/70th/80th percentile --
+leaves the top of the RB and WR boards statistically unchanged. Per the pre-registered rule, W6
+does not try a fourth quantile, a blended target, a per-position quantile, or the same idea with
+different hyperparameters.
+
+### Evidence
+
+`B2_Q70` (the pre-registered primary arm) against the production control, paired over 79 weeks:
+
+  RB capture@5   +0.0023  CI [-0.0124, +0.0173]   28-19-32   59.6% of decided weeks
+  RB capture@10  +0.0052  CI [-0.0022, +0.0135]   28-19-32   59.6%
+  WR capture@5   -0.0008  CI [-0.0149, +0.0139]   24-29-26   45.3%
+  WR capture@10  -0.0051  CI [-0.0157, +0.0053]   28-32-19   46.7%
+
+**Every primary CI contains zero**, against a pre-registered success threshold of +0.02 and a
+measured MDE of 0.0196-0.0206. The **median weekly difference is exactly 0.0000** at both
+positions, and the two boards produce an identical capture@10 in **32 of 79 RB weeks**.
+
+**The W5 cliff did not shrink** -- the mechanism check, and the most decisive result. RB's
+capture@10 cliff goes -0.0710 -> -0.0650 (8%, inside noise, and Q60 *widens* it); WR's goes
+-0.0800 -> **-0.0836**, worse, and monotonically worse with the quantile level. Half-PPR agrees.
+
+**There is no dose-response**, and `B0_RMSE` -- included as a discriminating control precisely to
+separate "the upper tail helps" from "anything but MAE helps" -- is indistinguishable from
+`B2_Q70` (RB +0.0052, identical). Moving off MAE in any direction does the same amount of nothing.
+
+### The mechanical explanation, and the constraint it adds
+
+**The target change moves the predicted numbers enormously and the ordering almost not at all.**
+RB's mean prediction rises 48% (6.86 -> 10.18), while the rank correlation between the treated
+board and the control board is **0.9958 (RB) / 0.9963 (WR) / 0.9912 (TE)**, top-10 overlap is
+89-93%, and the top 10 is **literally identical in 24-41% of weeks**. Players move a mean of 1.4
+(RB) / 2.1 (WR) places.
+
+Changing the quantile is, on these eleven lagged volume-and-form features, **very nearly a monotone
+rescaling** -- and a monotone rescaling cannot change any ranking at all (W3's finding, and the
+reason W4's four calibrations failed).
+
+**The constraint for the roadmap: the ordering is determined by the features, not by the
+objective.** Any future intervention that changes only what the model predicts -- a different loss,
+a different link, a classification reformulation of the same inputs -- should be expected to fail
+the same way. This is the second consecutive phase to rule out a reshaping of the existing signal
+(D112 ruled out cross-position calibration; D114 rules out target reshaping).
+
+### One genuine positive, off-target
+
+**TE capture@5 improves by +0.0208, CI [+0.0068, +0.0367]**, 25-14 weeks, p = 0.015, replicated at
+every quantile and in Half-PPR, and it passes all three pre-registered genuineness checks including
+a shrinking cliff (-0.0292 significant -> -0.0083 not significant). It is **not a primary cell**,
+does not propagate to TE capture@10 (-0.0083, null), and lands on the one position W5 found had no
+top-of-board cliff. It cannot produce SUCCESS and is recorded rather than promoted.
+
+### A defect in this pre-registration, disclosed
+
+§8's verdicts were not written mutually exclusive, and both NO EFFECT and HARM fire on the actual
+result: HARM's second clause needs only "a guardrail breach", and §6 defined a breach as any
+degradation whose CI excludes zero **with no lower bound on its size**. The two breaches are RB
+capture@50 = **-0.0029** (metric mean 0.92) and FLEX Spearman = **-0.0014** (metric mean 0.65).
+W4's §7.2 had already identified this hazard and added a *practical* bar next to the statistical
+one; I applied that guard to the success side and not to the breach side. Amendment A1 records the
+rule that should have been written (a breach requires >= 25% of the primary threshold). **NO EFFECT
+is reported; both readings recommend the same action.**
+
+### Methodology
+
+Nine validity gates, all passing. **G1 is load-bearing**: retraining with production's own loss
+reproduces production's own stored predictions **exactly** -- 29,376/29,376, max absolute
+difference 0.0 -- so every arm differs from production in one argument and nothing else. W3, W4
+and W5 re-run and reproduce exactly (46,756 / 126,844 / 568,947 numeric leaves, max abs diff 0);
+the runner is byte-identical on a repeat run. **Four of eight a priori predictions were wrong**,
+most importantly the prediction that the quantile arms would move rankings substantially -- being
+wrong about that is what turns a null result into the constraint above.
+
+### Scope
+
+Research-only. **Production diff EMPTY.** One new module (`evaluation/weekly/arms.py`), three
+runners, one test file. No production path touched; no feature added; no hyperparameter tuned; no
+ECR anywhere. **1,611 -> 1,625 tests pass**, 44 deselected; `make lint` clean, both halves.
+
+### W7
+
+**"How much of a player's week-w opportunity -- his targets and carries -- is actually forecastable
+from information available on the Friday before the game?"**
+
+W5 measured that perfect opportunity foresight is worth 53-63% of the entire perfect-foresight
+ceiling and would beat ECR by +0.16 to +0.21 on positional capture@10 -- four to eight times the
+current gap to the benchmark. It is the largest identified prize in the program and its decisive
+unknown has never been measured. **It is a measurement, not a model**: regress realized week-w
+opportunity on strictly-prior opportunity features and report the achievable R², the way W5 §2.6
+measured the persistence of points. Cheap, no production model, no leakage risk.
+
+**Ask it before building anything.** W6 is the evidence for that ordering: a full cycle spent
+discovering that an intervention could not move the board, when a one-day measurement of where the
+movable signal lives would have said so in advance.
