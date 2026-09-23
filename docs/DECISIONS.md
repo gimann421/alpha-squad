@@ -9264,3 +9264,119 @@ measured the persistence of points. Cheap, no production model, no leakage risk.
 **Ask it before building anything.** W6 is the evidence for that ordering: a full cycle spent
 discovering that an intervention could not move the board, when a one-day measurement of where the
 movable signal lives would have said so in advance.
+
+## D115 — W7: pre-Friday opportunity is only partly predictable, mostly already in Alpha, and does not improve the top of the board
+
+**Date:** W7. **Status:** accepted. **Closes:** the opportunity-forecasting line opened by D113
+§17 and D114 §W7.
+**Authority:** `docs/weekly/W7_PREREGISTRATION.md` (committed at `0c46c30`, before any forecast
+was fitted; no amendments), `docs/weekly/W7_OPPORTUNITY_RESULTS.md`,
+`reports/weekly/w7_results.json`.
+
+### Decision
+
+**Pre-registered verdict: HARM** (§9, first clause, at WR). In the brief's three-way scheme this is
+**NO EFFECT**: opportunity is somewhat predictable, and using the prediction brings no ranking gain.
+
+**Stop the opportunity-forecasting direction on Class A data.** Do not add opportunity features to
+Alpha. Do not build an opportunity-forecast model for ranking. Do not retry with more lags, other
+windows or another learner; W7 shows those choices do not matter.
+
+### Evidence
+
+**Forecastability.** The best Class A forecast (ridge on Alpha's 11 features plus 9 new Class A
+features, walk-forward) of week-*w* usage-expected points (`T_XFP`, the quantity W5's
+`ORACLE_USAGE` ranked by):
+
+  per-week Spearman  RB 0.709 / WR 0.672 / TE 0.625   (Alpha's points board: 0.668 / 0.636 / 0.576)
+  pooled R^2         RB 0.479 / WR 0.418 / TE 0.393
+
+**What Alpha already has.** Alpha's own features alone reach 0.699 / 0.660 / 0.612. That is 84–86%
+of the fitted forecasts' improvement over a naive 3-game mean.
+
+  Delta_NEW                        +0.0105* / +0.0118* / +0.0127*   (bar +0.02 -> C1 fails everywhere)
+  Delta_NEW - Delta_RED (net of
+  5-game re-expressions)           +0.0096* / +0.0052* / +0.0044 (n.s.)
+  CatBoost - ridge                 -0.0005 / -0.0024 / -0.0080*
+  Class B lagged xFP               -0.0004 / +0.0001 / -0.0004
+
+**Not at the top.** Within Alpha's top 5, the forecast's rank correlation with realized opportunity
+is 0.12–0.30. The new information leaves it unchanged at RB (0.124 -> 0.124) and lowers it at WR
+(0.195 -> 0.165). It helps predicted-rank bands 6–50.
+
+**The ranking ladder.** `ALPHA_PLUS_OPP` is production's CatBoost, hyperparameters, MAE loss and
+walk-forward, plus the 9 NEW features, compared with production over 79 weeks:
+
+  RB capture@10  +0.0047  CI [-0.0058, +0.0152]   35-30-14
+  WR capture@10  -0.0127  CI [-0.0250, -0.0006]   28-40-11   Wilcoxon p = 0.055
+  TE capture@10  -0.0033  CI [-0.0175, +0.0108]
+  Spearman       RB +0.0107* / WR +0.0055* / TE +0.0041 / FLEX +0.0071*
+
+The WR harm is 2.5x the 0.005 practical floor. It is negative in all five leave-one-season-out
+folds (significant in three) and in every season, and it replicates in Half-PPR (-0.0139*). The W5
+cliff does not shrink (WR -0.0800 -> -0.0963). No guardrail breach.
+
+**The W5 prize is not reachable on Friday.** Of `ORACLE_USAGE`'s capture@10 advantage (+0.18 to
++0.20), realistic forecasting recovers:
+
+  R_L1 (Alpha + forecastable opportunity)   +2.6% / -6.3% / -1.7%
+  R_F  (rank by the forecast alone)         +1.6% / -0.9% / -0.9%
+
+The usage oracle's value is this week's usage *surprise*, which is by construction invisible to a
+pre-Friday forecast.
+
+### The constraint it adds
+
+**Opportunity forecasting is information-limited, not model-limited.** Alpha's 3-game volume
+averages already hold most of the provably pre-Friday signal, and the rest does not reach the
+players at the top of the board.
+
+This is the third consecutive null for an intervention on Alpha's existing information:
+
+- D112: cross-position calibration
+- D114: target reshaping
+- D115: more Class A opportunity signal
+
+Any further top-of-board gain requires information this repository does not hold with a provable
+timestamp: injury and practice reports, news, Vegas lines, routes. That is a data-acquisition
+decision, not a modelling one.
+
+A pattern, not a finding: W6's quantile arm and W7's feature arm both lowered WR capture@10 while
+raising whole-board Spearman.
+
+### Methodology
+
+**Eleven gates:**
+
+- **G1:** the extended trainer with no added features reproduces production's stored RB/WR/TE
+  predictions 26,097/26,097 exactly.
+- **G2:** physically deleting every outcome at or after the ranked week moves 0 predictor values
+  across 2,861 audited player-weeks, and the check is proven non-vacuous.
+- **G3–G9:** pass.
+- **G10 and G11:** results are in the results document §0.
+
+**Four of ten a priori predictions were right, three partly right and three wrong.** The most
+consequential error was predicting WR capture@10 would be null; it was harmed.
+
+### Scope
+
+Research-only. **Production diff EMPTY.** No ECR feature, and Alpha's ranking model is unchanged.
+
+- New: one module (`evaluation/weekly/opportunity.py`), one trainer extension
+  (`arms.train_with_extra_features`), two runners, and one test file with 29 tests.
+- Test count goes from 1,625 to 1,654.
+
+### W8
+
+**"Is ECR's top-of-board edge over Alpha concentrated in the player-weeks whose opportunity departs
+from its pre-Friday forecast?"** This asks whether the expert edge is news about this week's usage
+or judgement about efficiency.
+
+It uses W7's M_NEW residual as the instrument. ECR is a diagnostic only, never a feature. The
+answer decides between the two remaining directions:
+
+- **Yes:** acquire timestamped news, injury and Vegas data. That is an explicit decision for the
+  user.
+- **No:** opportunity work is finished; study efficiency.
+
+It is a measurement, not a model.

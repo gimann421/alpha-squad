@@ -3,13 +3,52 @@
 Living summary of what is implemented, validated, and outstanding. Updated at the end of every
 milestone. See `docs/TRACEABILITY.md` for the acceptance-criteria-level mapping.
 
-## Status: W6 complete (D114) — **Training for higher-end outcomes does NOT fix the top of the board. Verdict NO EFFECT. The objective barely controls the ordering — the features do. Nothing shipped.**
+## Status: W7 complete (D115) — **Pre-Friday opportunity is only partly predictable, mostly already in Alpha, and does not improve the top of the board. Verdict HARM by the pre-registered order (= NO EFFECT in the brief's scheme). Nothing shipped.**
 
-Research only. **One argument changed (the CatBoost loss); no feature added, no hyperparameter
-tuned, no ECR anywhere; production diff EMPTY.** **Entry point:
-`docs/weekly/W6_UPPER_OUTCOME_RESULTS.md`.**
+Research only. **No ECR, no change to Alpha's ranking model, no production model; production diff
+EMPTY.** **Entry point: `docs/weekly/W7_OPPORTUNITY_RESULTS.md`.**
 
 ### CURRENT WEEKLY RESEARCH STATUS
+
+- **Opportunity is partly predictable.** The best Class A (provably pre-Friday) forecast of
+  week-*w* usage-expected points ranks it at per-week Spearman **0.709 (RB) / 0.672 (WR) / 0.625
+  (TE)**, with pooled R² 0.48 / 0.42 / 0.39. That is above Alpha's points board (0.668 / 0.636 /
+  0.576), but far from known.
+- **Alpha already holds ~84–86% of it.** Alpha's 11 features alone reach 0.699 / 0.660 / 0.612.
+  All genuinely new Class A information adds **+0.0105 / +0.0118 / +0.0127**. Each is
+  significant, and all are below the +0.02 bar (**C1 fails everywhere**).
+- **The double-counting control:** net of 5-game re-expressions, the gain is +0.0096 at RB (new),
+  +0.0052 at WR (about half re-expression) and +0.0044 at TE (not distinguishable from
+  re-expression).
+- **The information is the limit, not the model.** Ridge ≈ CatBoost (CatBoost is worse at TE).
+  Class B lagged xFP adds **0.0000**.
+- **Not at the top.** Within Alpha's top 5, the forecast's rank correlation with realized
+  opportunity is **0.12–0.30**. New information leaves it unchanged at RB (0.124 → 0.124) and
+  lowers it at WR (0.195 → 0.165). It helps bands 6–50.
+- **Alpha + pre-Friday opportunity (one change) vs production:**
+  - RB capture@10 +0.0047 (null).
+  - **WR capture@10 −0.0127 CI[−0.0250, −0.0006]**, negative in every LOSO fold and season, and
+    replicated in Half-PPR.
+  - TE −0.0033 (null).
+  - Whole-board Spearman +0.004–0.011.
+  - The W5 cliff does not shrink (WR −0.0800 → −0.0963).
+- **The perfect-opportunity prize is not reachable on Friday.** Realistic forecasting recovers
+  +2.6% (RB), −6.3% (WR) and −1.7% (TE) of `ORACLE_USAGE`'s capture@10 advantage.
+- **Predictions:** 4 right, 3 partly right, 3 wrong. Most consequential: WR was predicted null
+  and was harmed.
+- **Methodology:** eleven gates.
+  - G1: 26,097/26,097 exact parity.
+  - G2: a physical-redaction leakage test that moves 0 predictor values.
+  - W5/W6 re-run first.
+- **Next:** *Is ECR's top-of-board edge over Alpha concentrated in the player-weeks whose
+  opportunity departs from its pre-Friday forecast?* This asks whether the expert edge is news
+  about usage or judgement about efficiency. It is a measurement using W7's residual; ECR is a
+  diagnostic only.
+
+### Earlier status: W6 complete (D114) — **Training for higher-end outcomes does NOT fix the top of the board. Verdict NO EFFECT. The objective barely controls the ordering — the features do. Nothing shipped.**
+
+Research only. One argument changed (the CatBoost loss). Entry point:
+`docs/weekly/W6_UPPER_OUTCOME_RESULTS.md`.
 
 - **Verdict NO EFFECT.** `B2_Q70` (70th-percentile target) vs the production control, 79 weeks:
   RB capture@5 **+0.0023** CI[−0.0124,+0.0173], RB capture@10 **+0.0052** CI[−0.0022,+0.0135],

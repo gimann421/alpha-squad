@@ -21,7 +21,7 @@ Most authoritative first. When two documents disagree, the higher tier wins.
 |---|---|---|---|
 | **1** | Product & architecture authority | `/PRODUCT_SPEC.md`, `/ARCHITECTURE.md`, `/ACCEPTANCE_CRITERIA.md`, `/AGENT_CONTRACTS.md`, `/IMPLEMENTATION_PLAN.md`, `/CLAUDE.md` | shared |
 | **2** | **Decisions** | **`DECISIONS.md`** — one append-only, D-numbered log for the whole project | shared |
-| **3** | Program entry points | `D108_PROGRAM_CLOSEOUT.md` (draft) · **`weekly/W6_UPPER_OUTCOME_RESULTS.md`** (weekly — start there; then W5 for the diagnosis, W4 for the FLEX question, W3 for what Alpha can do, W2 for the benchmark, W1.1 for the data story) | per-program |
+| **3** | Program entry points | `D108_PROGRAM_CLOSEOUT.md` (draft) · **`weekly/W7_OPPORTUNITY_RESULTS.md`** (weekly — start there; then W6 for the objective, W5 for the diagnosis, W4 for the FLEX question, W3 for what Alpha can do, W2 for the benchmark, W1.1 for the data story) | per-program |
 | **4** | Methodology / benchmark definition | `BENCHMARK_SPEC.md` (draft) · `weekly/W2_PREREGISTRATION.md` (weekly) | per-program |
 | **5** | Data & format contracts | `DATA_SOURCES.md`, `TARGET_FORMAT_1QB.md` | shared |
 | **6** | Living state | `PROJECT_STATE.md`, `TRACEABILITY.md` | shared |
@@ -29,7 +29,7 @@ Most authoritative first. When two documents disagree, the higher tier wins.
 
 **One decision log, deliberately.** A separate `WEEKLY_DECISIONS.md` would create the parallel
 source of truth CLAUDE.md and the W1 brief both warn against, and would make "has this been
-decided?" a two-file question. The weekly program continues the D-sequence (it opens at **D109**; W4 is **D112**, W5 is **D113**, W6 is **D114**)
+decided?" a two-file question. The weekly program continues the D-sequence (it opens at **D109**; W4 is **D112**, W5 is **D113**, W6 is **D114**, W7 is **D115**)
 and uses W-numbers only for *phases*: **D-numbers say what was decided, W-numbers say which phase
 decided it.**
 
@@ -49,6 +49,8 @@ decided it.**
 | Can the injury report be used at a Friday cutoff? | `weekly/W5_TOPBOARD_FORENSICS.md` §9 (no — 0.2% of rows survive a strict cutoff) |
 | Would training on a higher part of the outcome fix the top of the board? | `weekly/W6_UPPER_OUTCOME_RESULTS.md` §1 (no — verdict NO EFFECT) |
 | Why did changing the training target not move the rankings? | `weekly/W6_UPPER_OUTCOME_RESULTS.md` §5 (it is nearly a monotone rescaling — board rank correlation 0.99+) |
+| Can a player's opportunity be predicted before Friday? | `weekly/W7_OPPORTUNITY_RESULTS.md` (partly — rank correlation 0.71 / 0.67 / 0.63; ~84–86% of it is already in Alpha) |
+| Would adding pre-Friday opportunity features to Alpha fix the top of the board? | `weekly/W7_OPPORTUNITY_RESULTS.md` §8 (no — RB null, WR top-10 slightly worse; verdict HARM) |
 | Why is Alpha's FLEX top-10 short of TEs, and should that be fixed? | `weekly/W4_FLEX_FORENSICS_RESULTS.md` §8-§9 (it is not an error) |
 | Which weekly ECR data exists, in which source, at what depth? | `weekly/W11_FANTASYPROS_FLEX_AUDIT.md` |
 | What has already been tested, and what was concluded? | `DECISIONS.md` (all) → the phase doc it names |
@@ -92,7 +94,9 @@ decided it.**
 | `weekly/W5_PREREGISTRATION.md` | pre-registered W5 forensic audit + a priori predictions + amendment A1 (written before the instruments) |
 | `weekly/W5_TOPBOARD_FORENSICS.md` | the top-of-board audit: what the cliff is, what does not explain it, and the W6 design |
 | `weekly/W6_PREREGISTRATION.md` | pre-registered W6 experiment + a priori predictions + amendment A1 (written before any comparative result) |
-| `weekly/W6_UPPER_OUTCOME_RESULTS.md` | **current program entry point** — the upper-outcome experiment: verdict NO EFFECT, and why the objective does not control the ordering |
+| `weekly/W6_UPPER_OUTCOME_RESULTS.md` | the upper-outcome experiment: verdict NO EFFECT, and why the objective does not control the ordering |
+| `weekly/W7_PREREGISTRATION.md` | pre-registered W7 audit: timing classes, fixed feature sets, verdict order, a priori predictions (written before any forecast) |
+| `weekly/W7_OPPORTUNITY_RESULTS.md` | **current program entry point** — the opportunity-forecastability audit: what is predictable before Friday, what Alpha already has, verdict HARM (= NO EFFECT) |
 
 ### Draft-choice program (D86–D108, CLOSED)
 

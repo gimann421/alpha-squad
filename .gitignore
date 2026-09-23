@@ -91,6 +91,11 @@ reports/**
 # them against fresh runs -- which is only checkable because they are tracked.
 !reports/weekly/w6_results.json
 !reports/weekly/w6_agreement.json
+# W7/D115: the opportunity-forecastability audit. 150 forecast cells x 79 weeks, the ranking
+# ladder (Alpha + pre-Friday opportunity vs production), rank bands, LOSO / per-season and Half-PPR.
+# docs/weekly/W7_OPPORTUNITY_RESULTS.md quotes it throughout and the W7 G10 gate diffs it against a
+# fresh run -- which is only checkable because it is tracked.
+!reports/weekly/w7_results.json
 state/**
 !state/.gitkeep
 *.duckdb
