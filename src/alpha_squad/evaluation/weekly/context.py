@@ -22,6 +22,7 @@ What is deliberately NOT here
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 
 import duckdb
@@ -109,6 +110,17 @@ def _sample_sd(values: list) -> float | None:
     return (sum((x - mean) ** 2 for x in xs) / (len(xs) - 1)) ** 0.5
 
 
+def _exact_mean(values: list) -> float | None:
+    """Mean of the non-null values with a correctly-rounded sum (`math.fsum`).
+
+    Replaces SQL `avg()` over DOUBLE, whose parallel partial sums combine in a planner-chosen
+    order: W8's pre-analysis reproduction of W5 caught `avg(fantasy_points_ppr)` moving in the
+    last bit (max 3.6e-15) between runs. `fsum` is exact before its single final rounding, so
+    the result is independent of the input order, not merely of one fixed order."""
+    xs = [float(v) for v in values if v is not None]
+    return math.fsum(xs) / len(xs) if xs else None
+
+
 def load_role_context(
     con: duckdb.DuckDBPyConnection, season: int, week: int, positions: tuple[str, ...]
 ) -> dict[str, PlayerContext]:
@@ -136,7 +148,8 @@ def load_role_context(
                max(CASE WHEN recency = 1 THEN opp END)                       AS opp_last1,
                avg(CASE WHEN recency BETWEEN 2 AND 4 THEN opp END)           AS opp_prior3,
                max(CASE WHEN recency = 1 THEN snap END)                      AS snap_last1,
-               avg(CASE WHEN recency BETWEEN 2 AND 4 THEN snap END)          AS snap_prior3,
+               list(CASE WHEN recency BETWEEN 2 AND 4 THEN snap END ORDER BY recency)
+                                                                             AS snap_list_prior3,
                -- `list(... ORDER BY ...)` and a Python reduction, not `stddev_samp`: floating
                -- point addition is not associative, so an aggregate whose input order the
                -- planner may vary is not reproducible. G2 caught one such movement.
@@ -155,6 +168,7 @@ def load_role_context(
         ctx.opportunity_avg_prior3 = None if o3 is None else float(o3)
         if o1 is not None and o3 is not None:
             ctx.opportunity_delta = float(o1) - float(o3)
+        s3 = _exact_mean(s3 or [])
         if s1 is not None and s3 is not None:
             ctx.snap_delta = float(s1) - float(s3)
         ctx.snap_sd_prior3 = _sample_sd([v for v in (ssd or []) if v is not None])
@@ -245,10 +259,12 @@ def attach_opponent(
     ):
         opp_of[home], opp_of[away] = away, home
     pa: dict[tuple[str, str], tuple[float, int]] = {}
-    for opp, pos, avg_pa, n in _fetch(
+    for opp, pos, pa_list, n in _fetch(
         con,
         """
-        SELECT g.opp, s.position, avg(s.fantasy_points_ppr), count(DISTINCT s.week)
+        SELECT g.opp, s.position,
+               list(s.fantasy_points_ppr ORDER BY s.week, s.player_id),
+               count(DISTINCT s.week)
         FROM player_week_stats s
         JOIN (
             SELECT season, week, home_team AS team, away_team AS opp FROM games WHERE game_type='REG'
@@ -260,7 +276,7 @@ def attach_opponent(
         """,
         [season, week],
     ):
-        pa[(opp, pos)] = (float(avg_pa or 0.0), int(n))
+        pa[(opp, pos)] = (_exact_mean(pa_list or []) or 0.0, int(n))
     for c in ctx.values():
         if not c.team:
             continue

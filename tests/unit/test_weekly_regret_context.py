@@ -207,3 +207,40 @@ class TestUsageOracleIsScoringFormatAware:
             "p_catcher",
             "p_runner",
         }
+
+
+# ---------------------------------------------------------------------------------------
+# Regression (W8): a floating-point mean must not depend on the order its inputs arrive in
+# ---------------------------------------------------------------------------------------
+
+
+def test_exact_mean_is_independent_of_input_order():
+    """W8's reproduction of W5 caught SQL `avg()` over DOUBLE moving in the last bit between
+    runs (parallel partial sums combine in a planner-chosen order). The replacement must give a
+    bit-identical result for every permutation -- including inputs where naive left-to-right
+    summation does not."""
+    import functools
+    import itertools
+    import operator
+    import random
+
+    from alpha_squad.evaluation.weekly.context import _exact_mean
+
+    vals = [0.1, 0.2, 0.3, 12.34, 7.7, 3.05]
+    # Plain left-to-right addition, as SQL partial sums do (Python 3.12's `sum()` compensates).
+    naive = {functools.reduce(operator.add, p) / len(p) for p in itertools.permutations(vals)}
+    assert len(naive) > 1  # the hazard is real for this input
+    assert {_exact_mean(list(p)) for p in itertools.permutations(vals)} == {_exact_mean(vals)}
+    rng = random.Random(0)
+    pts = [round(rng.uniform(0, 30), 2) for _ in range(200)]
+    shuffled = pts[:]
+    rng.shuffle(shuffled)
+    assert _exact_mean(pts) == _exact_mean(shuffled)
+
+
+def test_exact_mean_ignores_nulls_like_sql_avg():
+    from alpha_squad.evaluation.weekly.context import _exact_mean
+
+    assert _exact_mean([None, 2.0, None, 4.0]) == 3.0
+    assert _exact_mean([None, None]) is None
+    assert _exact_mean([]) is None
