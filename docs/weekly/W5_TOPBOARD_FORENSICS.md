@@ -11,6 +11,25 @@ weeks (2021–2025), Full PPR **and** Half-PPR, Friday cutoff; 22,413 evaluated 
 Instruments: `scripts/research/w5_topboard_forensics.py`, `w5_validity_gates.py`,
 `w5_miss_predictability.py`. Results: `reports/weekly/w5_results.json`, `w5_e1.json`.
 
+> **Erratum (W8 / D116): a determinism defect, corrected; no conclusion changes.** W8's
+> pre-analysis reproduction found W5 not bit-exact. Two averages were computed by SQL `avg()`
+> over DOUBLE, whose parallel partial sums combine in a planner-chosen order:
+>
+> - `opponent_pa_prior` moved by up to 3.6e-15 between runs;
+> - `snap_prior3` had the same exposure.
+>
+> Both are now an exactly-rounded, order-independent mean (`context._exact_mean`). Two
+> post-fix runs are byte-identical, and the committed result files were regenerated.
+>
+> Only three reported numbers move, all marked below:
+>
+> - **E1 miss-model AUC:** RB 0.4875 → **0.4883**, WR 0.4957 → **0.4981**, TE unchanged.
+>   `opponent_pa_prior` and the snap averages are E1 features, so last-bit input changes can
+>   move CatBoost's split borders. Both AUCs stay below their permutation 95th percentiles.
+> - **The `snap_delta` tercile association:** last-bit changes re-order near-tied values across
+>   the tercile boundary. All three CIs still contain zero.
+> - **Every other number in this document is unchanged.**
+
 ---
 
 ## 1. Executive summary
@@ -50,8 +69,9 @@ misses sit at **median predicted rank 20–29**, not deep in the board. Alpha fi
 **No pre-cutoff information class clears the materiality bar.** Injury designation (§9),
 depth chart (§10), opponent (§12), role change (§8) and team environment (§11) each fail at least
 one of the three pre-registered criteria, most of them badly. And the misses are **not
-predictable** from pre-cutoff information at the two positions that have a cliff: AUC **0.4875**
-(RB) and **0.4957** (WR), both below their own permutation 95th percentile.
+predictable** from pre-cutoff information at the two positions that have a cliff: AUC **0.4883**
+(RB) and **0.4981** (WR), both below their own permutation 95th percentile (D116 erratum; were
+0.4875 / 0.4957).
 
 **The one large, reachable prize is opportunity.** Ranking by the week's realized usage —
 perfect opportunity foresight, **zero** conversion foresight — recovers **53–63%** of the
@@ -145,7 +165,8 @@ Cliff **−0.0710** on capture@10 (CI [−0.0916, −0.0505]), stable across all
   share (−46%).
 * Alpha's predicted RB1 finishes at **median rank 9** and is the true RB1 in **10.1%** of weeks;
   it scores 20.6 against the true RB1's 35.0.
-* Misses are **not predictable**: E1 AUC **0.4875**, permutation p95 0.5453.
+* Misses are **not predictable**: E1 AUC **0.4883**, permutation p95 0.5498 (D116 erratum; was
+  0.4875 / 0.5453).
 
 ---
 
@@ -163,7 +184,8 @@ Half-PPR.
   holds and weights at 16.7% and 9.5% of model gain.
 * `ELITE_PRIOR_SEASON` shows the largest relative lift in the phase: **+133%**.
 * Alpha's predicted WR1 finishes at median rank 12 and is the true WR1 in **6.3%** of weeks.
-* Misses are **not predictable**: E1 AUC **0.4957**, permutation p95 0.5467.
+* Misses are **not predictable**: E1 AUC **0.4981**, permutation p95 0.5454 (D116 erratum; was
+  0.4957 / 0.5467).
 
 WR is also where Alpha loses to the *trivial* season-to-date baseline at precision@5 (W4's −0.0304
 finding, reproduced here).
@@ -232,7 +254,7 @@ between the top and bottom tercile:
 | | RB | WR | TE |
 |---|---|---|---|
 | `opportunity_delta` (last game vs prior 3) | +0.345 [−0.130, +0.823] | −0.211 [−0.591, +0.160] | +0.040 [−0.389, +0.467] |
-| `snap_delta` | +0.374 [−0.073, +0.829] | +0.147 [−0.170, +0.473] | +0.347 [−0.027, +0.720] |
+| `snap_delta` (D116 erratum) | +0.365 [−0.082, +0.820] | +0.159 [−0.157, +0.483] | +0.331 [−0.042, +0.700] |
 | `weeks_since_last_game` | −0.371 [−0.855, +0.094] | −0.003 [−0.316, +0.311] | **−0.655\*** |
 
 **Not one is significantly positive at any position.** The only significant result is *negative*:
@@ -612,7 +634,7 @@ explicitly so they could be wrong in public. Four held, three were wrong, one sp
 | 4 | Injury/practice explains less than expected | **RIGHT**, emphatically — STRICT coverage 0.2%, FRIDAY share equal to population share |
 | 5 | Opponent explains very little and fails the bar at every position | **RIGHT on materiality** (5–10% of missed regret), **partly wrong on "very little"** — significant at RB, WR and QB |
 | 6 | TE is **not** a distinct failure mode | **WRONG.** TE is the one position with no cliff, is better than its own null at depths 20–25, and is the only one whose misses are predictable at all |
-| 7 | Miss-model AUC below 0.62 | **RIGHT** — 0.4875 / 0.4957 / 0.5872 |
+| 7 | Miss-model AUC below 0.62 | **RIGHT** — 0.4883 / 0.4981 / 0.5872 (D116 erratum) |
 | 8 | The decision will not be "add features" | **RIGHT** — no Class B candidate clears the materiality bar |
 
 Predictions 1 and 6 being wrong is what makes §25's experiment RB/WR-scoped rather than universal;

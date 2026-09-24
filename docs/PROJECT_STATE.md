@@ -96,7 +96,7 @@ Research only. Entry point: `docs/weekly/W5_TOPBOARD_FORENSICS.md`.
   22/29/20; 62–83% of missed regret is prior-week starters it already ranks.
 - **No information class is material** — injury (STRICT coverage 0.2%), depth chart, role change,
   team environment, matchup (5–10% of missed regret).
-- **Misses are NOT predictable** where the cliff is: AUC 0.4875 (RB), 0.4957 (WR).
+- **Misses are NOT predictable** where the cliff is: AUC 0.4883 (RB), 0.4981 (WR) (D116 erratum).
 - **`ORACLE_USAGE` recovers 53–63% of the ceiling** and beats ECR by +0.159 to +0.206.
 
 ### Earlier status: W4 complete (D112) — **Cross-position calibration is NOT the FLEX bottleneck (verdict D). A PERFECT cross-position scale buys 2.1% of the available headroom. Do not build calibration. Nothing shipped.**
