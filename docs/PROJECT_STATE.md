@@ -3,12 +3,50 @@
 Living summary of what is implemented, validated, and outstanding. Updated at the end of every
 milestone. See `docs/TRACEABILITY.md` for the acceptance-criteria-level mapping.
 
-## Status: W7 complete (D115) — **Pre-Friday opportunity is only partly predictable, mostly already in Alpha, and does not improve the top of the board. Verdict HARM by the pre-registered order (= NO EFFECT in the brief's scheme). Nothing shipped.**
+## Status: W8 complete (D116) — **ECR's top-of-board advantage is anticipated OPPORTUNITY, not efficiency. Pre-registered verdict MIXED (recommendation C), but only its information half is robust. Nothing shipped.**
 
-Research only. **No ECR, no change to Alpha's ranking model, no production model; production diff
-EMPTY.** **Entry point: `docs/weekly/W7_OPPORTUNITY_RESULTS.md`.**
+Research only. ECR is used as an instrument, never a feature. No data acquired, Alpha unchanged,
+production diff EMPTY. **Entry point: `docs/weekly/W8_ECR_ADVANTAGE_RESULTS.md`.**
 
 ### CURRENT WEEKLY RESEARCH STATUS
+
+- **The exact decomposition of ECR's capture@10 lead** (identity residual 2.6e-16), RB / WR / TE:
+  - lead: +0.0228\* / +0.0320\* / +0.0258\*
+  - **all opportunity: 75% / 94% / 84%**
+  - conversion: 25% / 6% / 16%, never significant
+- **ECR's top 10 carries LESS forecastable usage than Alpha's** (`G_F` −0.012 to −0.015\*) and much
+  more **unforecast** usage (`G_S` +0.029 to +0.045\*, 127–142% of the lead).
+- **ECR's disagreements with Alpha track usage surprise, not conversion:** ρ(d, s) is +0.20\* at
+  every position; ρ(d, c) ≈ 0.
+- **Large-surprise players** are ~36% of the disagreements and carry **78–107%** of the lead.
+  On close-to-forecast pairs, ECR's edge is not significant at RB, Alpha is **better** at TE, and
+  ECR keeps +0.041\* at WR.
+- **Falsification (exploratory):** Class-A-only boards that disagree with Alpha the same way get no
+  such bonus. LAST3_POINTS: `G_S` ≤ 0, ρ(d, s) −0.03 to −0.09. ECR's `G_S` is not produced by the
+  method.
+- **Verdicts:** RB INFORMATION · WR MIXED · TE INFORMATION · FLEX INFORMATION → **overall MIXED**.
+  - **Robust** (≥ 4/5 LOSO, Half-PPR, ≥ 3/4 variants): information at WR and TE; RB narrowly
+    misses on LOSO because its total gap is marginal.
+  - **Not robust:** WR efficiency (1/5 LOSO, fails Half-PPR, 2/4 variants; passes by 0.0001).
+  - Half-PPR: INFORMATION everywhere.
+- **The naive "Alpha + perfect opportunity" board** beats ECR by 6–8× ECR's lead. It is
+  uninformative, as pre-registered, and kept out of the verdict.
+- **Player level:** ECR's repeat top-10 wins are established stars Alpha demotes after quiet weeks
+  (A.J. Brown 13–0, Derrick Henry 9–0, Jake Ferguson 8–0). This is a hypothesis of durable
+  role/quality knowledge, not late news.
+- **W5 determinism defect found and fixed:** SQL `avg()` over DOUBLE, max 3.6e-15. W5 is now
+  byte-stable. E1 AUC RB 0.4883 / WR 0.4981 (were 0.4875 / 0.4957); no conclusion changes.
+- **Methodology:** 11 gates pass. G5 failed first on a false positive and was fixed and re-run
+  before any result was read. W6/W7 are byte-identical. Predictions: 2 right, 5 partly right,
+  3 wrong.
+- **Next: W9** — is ECR's usage edge **durable** (prior-season role/rank, already in the repository)
+  or **late-breaking** (Friday news)? That decides whether direction A's data acquisition is
+  warranted at all.
+
+### Earlier status: W7 complete (D115) — **Pre-Friday opportunity is only partly predictable, mostly already in Alpha, and does not improve the top of the board. Verdict HARM by the pre-registered order (= NO EFFECT in the brief's scheme). Nothing shipped.**
+
+Research only. No ECR, no change to Alpha's ranking model. Entry point:
+`docs/weekly/W7_OPPORTUNITY_RESULTS.md`.
 
 - **Opportunity is partly predictable.** The best Class A (provably pre-Friday) forecast of
   week-*w* usage-expected points ranks it at per-week Spearman **0.709 (RB) / 0.672 (WR) / 0.625

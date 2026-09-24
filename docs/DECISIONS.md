@@ -9381,3 +9381,156 @@ answer decides between the two remaining directions:
 - **No:** opportunity work is finished; study efficiency.
 
 It is a measurement, not a model.
+
+## D116 — W8: ECR's top-of-board advantage is anticipated opportunity, not efficiency; one W5 determinism defect fixed
+
+**Date:** W8. **Status:** accepted. **Answers:** the question D115 §W8 set.
+**Authority:** `docs/weekly/W8_PREREGISTRATION.md` (committed at `9fab368`, before any ECR-vs-Alpha
+comparison; amendment A1 is a pre-results clarification), `docs/weekly/W8_ECR_ADVANTAGE_RESULTS.md`,
+`reports/weekly/w8_results.json`, `reports/weekly/w8_null_check.json` (exploratory).
+
+### Decision
+
+**Pre-registered verdict: MIXED**, which maps to recommendation **C: investigate both**. The verdict
+stands as the rule produced it. **Only its INFORMATION half is robust.**
+
+**Read C as information first.** The EFFICIENCY half is a single WR route that passes by 0.0001
+(`Ω_match` 0.02390 against 0.02381) and fails the pre-registered robustness test:
+
+- it holds in 1 of 5 leave-one-season-out folds;
+- it fails in Half-PPR;
+- it holds under 2 of 4 bucket and metric variants.
+
+**Do not acquire external data yet.** One measurement must come first: whether ECR's information is
+durable or late-breaking (below).
+
+### Evidence
+
+ECR's capture@10 lead over Alpha splits exactly into forecastable usage `G_F`, unforecast usage
+`G_S` and conversion `G_C` (identity residual 2.6e-16):
+
+    RB  G +0.0228*   G_F -0.0120*   G_S +0.0290* (127%)   G_C +0.0057 (25%, n.s.)
+    WR  G +0.0320*   G_F -0.0154*   G_S +0.0453* (142%)   G_C +0.0021 ( 6%, n.s.)
+    TE  G +0.0258*   G_F -0.0133*   G_S +0.0350* (136%)   G_C +0.0041 (16%, n.s.)
+
+- **All opportunity, `G_F + G_S`, is 75% / 94% / 84% of the lead.**
+- **ECR's top 10 carries less forecastable usage than Alpha's.** Its edge is anticipating usage
+  that pre-Friday information does not forecast.
+- **ECR's disagreements with Alpha track that surprise:** `ρ(d, s)` is +0.20 at every position,
+  positive in 65 of 79 weeks. They do not track conversion: `ρ(d, c)` is about 0.
+
+**Large-surprise players** are ~36% of the swapped players and carry 78–107% of the lead.
+
+**Close-to-forecast pairs:**
+
+| | ECR − Alpha |
+|---|---|
+| RB | not significant |
+| TE | **Alpha better (−0.059\*)** |
+| WR | ECR better (+0.041\*) |
+
+Every piece is stable across seasons: `G_F` < 0 and `G_S` > 0 in all 15 position-folds, and
+`G_C` is never significant. Half-PPR gives INFORMATION at every position.
+
+**Verdicts:**
+
+| position | verdict |
+|---|---|
+| RB | INFORMATION |
+| WR | MIXED |
+| TE | INFORMATION (the cleanest case) |
+| FLEX | INFORMATION |
+
+FLEX also has a cross-position conversion piece: +0.016\* at capture@10, 0.004 (n.s.) at @25.
+
+**Falsification (exploratory, post-hoc, not in the verdict).** Class-A-only boards decomposed
+against Alpha get no unforecast-usage bonus. LAST3_POINTS disagrees with Alpha exactly the way ECR
+does (ρ(d, f) −0.30 to −0.33), yet its `G_S` is 0 to −0.015\* and its ρ(d, s) is −0.03 to −0.09\*.
+ECR's `G_S` is not produced by the method.
+
+**The naive counterfactual.** Alpha with perfect opportunity beats ECR by 6–8× ECR's lead. It is
+uninformative about ECR, as pre-registered, and kept out of the verdict.
+
+### What it adds to the roadmap
+
+**The missing ingredient is information about usage that no provably pre-Friday box-score feature
+contains.** It is not better modelling of what Alpha already has; W4, W6 and W7 already ruled that
+out three ways. Nor is it better efficiency prediction.
+
+**The player-level pattern points to durable knowledge.** ECR's repeat top-10 wins are
+overwhelmingly established stars that Alpha demotes after quiet weeks:
+
+- A.J. Brown: 13 weeks in ECR's top 10 but not Alpha's, 0 the other way;
+- Derrick Henry: 9–0;
+- Jake Ferguson: 8–0.
+
+That suggests durable knowledge of role and quality rather than late news. **It is a hypothesis,
+not a finding.**
+
+### W5 determinism defect (found by W8's reproduction gate)
+
+W8's pre-analysis reproduction found W5 not bit-exact. 45 `opponent_pa_prior` values moved in the
+last bit (max 3.6e-15).
+
+**Cause:** SQL `avg()` over DOUBLE under parallel aggregation. `snap_prior3` had the same
+exposure.
+
+**Fix** (`028a72e`): an ordered `list()` plus `math.fsum` mean, which is order-independent, with
+regression tests. Two post-fix runs of W5, and two of W5/E1, are byte-identical. The W5 artifacts
+were regenerated (`5063ccf`).
+
+**Changed W5 numbers:**
+
+- E1 AUC: RB 0.4875 → 0.4883, WR 0.4957 → 0.4981. Both are still below chance.
+- The `snap_delta` tercile association: all CIs still contain zero.
+
+**No W5 conclusion changes.** D113 is left as written (append-only). The W5 report carries an
+erratum.
+
+### Methodology
+
+**Eleven gates pass.** The first run failed G5. Its substring matcher flagged board-depth constants
+(`region_depth`), not depth-chart data. The matcher was fixed to match whole terms, given a
+self-test, and the whole suite was re-run before any result was read.
+
+The instrument is anchored to earlier phases:
+
+- W8's forecast re-scores to W7's committed cells exactly (1,422 metrics).
+- Its boards re-score to W7's committed cells exactly (12,798 metrics).
+- The runner is byte-identical on re-run.
+
+W6 and W7 reproduce byte-for-byte.
+
+**Predictions:** two right, five partly right, three wrong. Expert judgement was expected to show
+up as efficiency, especially at WR. It shows up as anticipated usage everywhere.
+
+### Scope
+
+Research-only. **Production diff EMPTY.** ECR trained, calibrated, tuned and selected nothing. No
+external data was acquired. Alpha was not changed.
+
+- New module `evaluation/weekly/advantage.py`, with 94 tests.
+- Three runners.
+- The W5 fix in `context.py`, with 2 tests.
+- Test count goes from 1,654 to 1,750.
+
+### W9
+
+**"Is ECR's usage edge durable (knowable from pre-season role/quality information) or late-breaking
+(week-specific news)?"**
+
+Measure how much of `ρ(d, s)` and `G_S` is absorbed by two sources that already exist in the
+repository:
+
+- **the player's prior-season role and rank:** Class A, published before the season, and not among
+  W7's in-season features;
+- **the Friday teammate-availability report:** Class B.
+
+**The answer decides the next investment:**
+
+- **Mostly durable:** cheap information the repository already holds. Bring it to the user as a
+  candidate for a controlled Alpha experiment.
+- **Mostly late:** direction A (timestamped news acquisition) is justified. That is an explicit
+  decision for the user.
+
+It is a measurement, not a model.

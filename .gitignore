@@ -96,6 +96,12 @@ reports/**
 # docs/weekly/W7_OPPORTUNITY_RESULTS.md quotes it throughout and the W7 G10 gate diffs it against a
 # fresh run -- which is only checkable because it is tracked.
 !reports/weekly/w7_results.json
+# W8/D116: the ECR-advantage decomposition (per-week G/G_F/G_S/G_C, pair tests, buckets,
+# counterfactual boards, player level, LOSO/per-season, Half-PPR) and the exploratory Class-A
+# falsification check. docs/weekly/W8_ECR_ADVANTAGE_RESULTS.md quotes both throughout; the W8
+# gates diff w8_results.json against a fresh run -- only checkable because it is tracked.
+!reports/weekly/w8_results.json
+!reports/weekly/w8_null_check.json
 state/**
 !state/.gitkeep
 *.duckdb
