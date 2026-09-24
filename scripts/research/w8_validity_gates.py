@@ -30,6 +30,7 @@ import hashlib
 import json
 import math
 import random
+import re
 import statistics
 import subprocess
 import sys
@@ -68,6 +69,11 @@ FORBIDDEN_IDENTIFIERS = (
     "spread",
     "news",
 )
+#: Must be flagged / must NOT be flagged -- G5 checks itself on these before it checks the code,
+#: so a matcher that is too loose (the first run's substring match flagged `region_depth`) or too
+#: tight (flags nothing) fails loudly instead of silently.
+G5_MUST_FLAG = ("_depth", "select * from _depth", "attach_injury", "vegas_total", "odds", "news")
+G5_MUST_PASS = ("region_depth", "primary_depth", "flex_depths", "top_hit_depth", "w5_depths")
 UPSTREAM = (
     ("W5", "scripts/research/w5_topboard_forensics.py", "reports/weekly/w5_results.json"),
     ("W6", "scripts/research/w6_upper_outcome.py", "reports/weekly/w6_results.json"),
@@ -113,6 +119,13 @@ def _code_identifiers(path: Path) -> set[str]:
         ):
             out.add(node.value.lower())
     return out
+
+
+def _forbidden(ident: str) -> list[str]:
+    """Forbidden terms appearing in `ident` as a term, not as the tail of a longer word: a term
+    must not be preceded by a letter or digit. `_depth` (the depth-chart view) matches;
+    `region_depth` (a board-depth constant) does not."""
+    return [t for t in FORBIDDEN_IDENTIFIERS if re.search(rf"(?<![a-z0-9]){re.escape(t)}", ident)]
 
 
 def main() -> int:
@@ -263,17 +276,22 @@ def main() -> int:
         failures.append("G4")
 
     # --- G5 no post-Friday news ------------------------------------------------------------------
+    self_ok = all(_forbidden(x) for x in G5_MUST_FLAG) and not any(
+        _forbidden(x) for x in G5_MUST_PASS
+    )
     hits = sorted(
         {
-            (str(path), tok)
+            (str(path), ident, tok)
             for path in (RUNNER, MODULE)
             for ident in _code_identifiers(path)
-            for tok in FORBIDDEN_IDENTIFIERS
-            if tok in ident
+            for tok in _forbidden(ident)
         }
     )
-    print(f"G5  no news sources   : forbidden identifiers in W8 code: {hits or 'none'}")
-    if hits:
+    print(
+        f"G5  no news sources   : matcher self-test {'passes' if self_ok else 'FAILS'}; "
+        f"forbidden identifiers in W8 code: {hits or 'none'}"
+    )
+    if hits or not self_ok:
         failures.append("G5")
     print("G6  realized context : covered by G2 (redaction) and G3 (scrambled outcomes)")
 
