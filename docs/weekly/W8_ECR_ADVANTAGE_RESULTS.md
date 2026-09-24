@@ -121,7 +121,7 @@ The first gate run **failed G5**. Its substring match on `_depth` (meant to catc
 view) flagged seven board-depth constants (`region_depth`, `primary_depth`, …). None was a
 depth-chart reference; W8 reads no depth-chart data. The matcher now requires a term not to be
 preceded by a letter or digit, and it self-tests against must-flag and must-pass lists
-(`f5f1b89`). **The full suite was re-run, and every result below was read only after it
+(`ee45f83`). **The full suite was re-run, and every result below was read only after it
 passed.**
 
 | gate | result |
