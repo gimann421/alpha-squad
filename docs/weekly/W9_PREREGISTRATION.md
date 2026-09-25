@@ -427,3 +427,39 @@ player with no prior season) is set to 0, with `has_prior` = 0 carrying the miss
 matches the counterfactual's information exactly.
 
 No threshold, class, period, tier or verdict rule changes.
+
+### A2 — pre-results correction of I-D2 / I-D3 (2026-09-25, before any W9 quantity was computed)
+
+**A unit test found that §4.2's residualized-anticipation reduction is biased upward by
+construction.** Regressing ECR's disagreement `d` on k unrelated columns within a ~25-player
+region absorbs part of `d`'s variance by chance, so ρ(d⊥, s) shrinks even when the columns are
+pure noise.
+
+The simulation that showed it: 300 draws with ρ ≈ 0.37.
+
+| noise columns | players | mean spurious reduction |
+|---:|---:|---:|
+| 7 | 25 | **0.058** |
+| 7 | 40 | 0.030 |
+| 1 | 25 | 0.008 |
+
+At W8's ρ ≈ 0.20, I-D2 as written would have reported roughly a **15% "durable share" from noise
+alone**, with a CI excluding zero. G12 would have caught it on real data; the fix is made before
+any real-data quantity exists.
+
+**The corrected statistic** (for I-D2 and I-D3 alike):
+
+    adjusted reduction = mean over P permutations of ρ(d⊥perm, s)  −  ρ(d⊥real, s)
+
+- `d⊥perm` residualizes on the same feature matrix with its rows permuted across the week's region
+  players.
+- There are P = 20 fixed permutations (seeds 0–19).
+
+This keeps each feature's within-week distribution and dimension and breaks only its link to the
+player, so the chance absorption cancels in expectation. The durable share is
+`mean(adjusted reduction) / mean(ρ(d, s))`. D-1, D-2 and D-3 read the adjusted statistic.
+
+**G12 for I-D2 and I-D3 becomes:** the adjusted reduction, computed with an independent random
+permutation standing in for the real features, has a CI including zero.
+
+No threshold, class, period, tier or verdict rule changes.
