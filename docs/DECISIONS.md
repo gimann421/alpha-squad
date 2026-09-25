@@ -9534,3 +9534,136 @@ repository:
   decision for the user.
 
 It is a measurement, not a model.
+
+## D117 — W9: ECR's usage edge is largely durable knowledge at WR and TE; weekly information is unmeasurable here; efficiency is not supported
+
+**Date:** W9. **Status:** accepted. **Answers:** the question D116 §W9 set.
+**Authority:** `docs/weekly/W9_PREREGISTRATION.md` (committed at `ea56000` before any W9 quantity;
+amendments A1 and A2 were made before any result), `docs/weekly/W9_MECHANISMS_RESULTS.md`,
+`reports/weekly/w9_results.json`.
+
+### Decision
+
+**Pre-registered verdict: DURABLE (WR only), so recommendation A.**
+
+| position | verdict |
+|---|---|
+| RB | INCONCLUSIVE |
+| WR | **DURABLE** (D_PUBLIC and D_EXPERT) |
+| TE | DURABLE (D_EXPERT) — comparison position |
+
+- **WEEKLY is NOT MEASURABLE** at every position. Class A holds 62–91 region player-weeks, below
+  the pre-registered 100.
+- **EFFICIENCY is not supported** anywhere. This is not a blind test (W8 already showed it).
+- Half-PPR replicates every verdict.
+
+**Next direction: A, through durable public information.** Test last season's role and production
+in Alpha in a pre-registered, guard-railed W10. The 2026 season is the only out-of-sample
+confirmation. **Do not build it yet.**
+
+Preseason expert rankings (D_EXPERT) are ECR. Using them as a feature is a user decision, not a
+research default.
+
+### Evidence
+
+**A frozen August expert board anticipates as much of this week's unforecast usage as the weekly
+ECR does.** Its `G_S` against Alpha is 115% / 118% / 132% of ECR's at RB / WR / TE. So does last
+season's points per game (87% / 116% / 84%). Both lack in-season volume (`G_F` −0.04 to −0.07),
+so their total gap is about 0.
+
+W8's recency board (`LAST3_POINTS`) had `G_S` ≤ 0. **Recent box scores do not anticipate the
+surprise; an established level does.**
+
+**Durable instruments** (I-D2 is A2-adjusted):
+
+  I-D1 closure of ECR's usage edge (Alpha + 7 prior-season features, no ECR):
+       RB 18% (n.s.)   WR 53% [32, 75]   TE 25% (n.s.)
+       WR capture@10 +0.0223* [+0.0068, +0.0384] = 70% of ECR's WR lead;
+       every LOSO fold significant; every season positive
+  I-D2 linear residualization on the same features:
+       5–7%, n.s. (the signal is nonlinear)
+  I-D3 residualized on the preseason expert disagreement:
+       RB 20%   WR 48%   TE 40% (all CIs exclude 0)
+       weeks 1–6:   WR 69%, TE 66%
+       weeks 13–17: 10–15%
+
+**ECR's lead shrinks through the season** (weeks 1–6 → 13–17):
+
+| | lead early | lead late |
+|---|---:|---:|
+| RB | +0.043 | +0.013 |
+| WR | +0.048 | +0.029 |
+| TE | +0.041 | **−0.002** |
+
+This is the durable signature.
+
+**ECR's lead lives on established players.** Prior-season top-12 players carry 120% / 294% / 72%
+of the lead from 30–39% of the swapped players. At WR, 65% of ECR-only top-10 hits came after a
+below-prior-season-average game (base rate 41%).
+
+**Weekly, descriptive:**
+
+| | documented class A share of `G_S` | undocumented (B) | timing uncertain (C) |
+|---|---:|---:|---:|
+| RB | 6% | 73% | 21% |
+| WR | 11% | 43% | 46% |
+| TE | 3% | 66% | 30% |
+
+At WR, anticipation is twice as strong in documented weeks (A−B +0.25 [+0.02, +0.48]). That is
+suggestive, not measurable.
+
+**Unknowable upper bound:** ECR anticipates only 10% / 15% / 12% of the top-of-board usage surprise
+that a perfect-usage oracle exploits. Alpha with perfect usage beats ECR by +0.16 to +0.18.
+
+**FLEX:** durable closure of ECR's usage edge is 50%. The same early → late fade.
+
+### Methodology
+
+**Byte-for-byte reproduction before anything else:** W5 (post-D116), E1, W6, the W6 agreement
+file, W7, W8 and W8's null check.
+
+**Twelve gates pass.** They include:
+
+- physical deletion of seasons ≥ S, which moves 0 durable values;
+- W8's decomposition re-derived exactly (6,952 values);
+- 0 class-A timestamp violations;
+- ECR in no training frame;
+- a two-run byte-identity check;
+- a shuffled-feature null that closes 0.
+
+**Two pre-results amendments.**
+
+- **A1** reconciles G5 with G12's null model.
+- **A2** corrects a pre-registered statistic a unit test showed was biased: residualizing on 7
+  noise columns cuts ρ by 0.058 by chance. It is now measured against permuted-feature
+  residualization. The real data confirm the bias: the raw D_PUBLIC reduction is significant,
+  the adjusted one is not.
+
+**Predictions:** six right, three partly right, one wrong. The wrong one is the headline: last
+season's box scores close 53% of ECR's WR usage edge.
+
+### Scope
+
+Research only. **Production diff EMPTY.** ECR is a board and control only. No external data was
+acquired. Alpha was not changed. The three trained models are declared diagnostics.
+
+- New module `evaluation/weekly/mechanisms.py`, with 78 tests.
+- Test count goes from 1,750 to 1,828.
+
+### W10
+
+**"Does giving Alpha last season's role and production (Class A, no ECR) improve its top of the
+board under pre-registered harm guardrails?"**
+
+W10 should:
+
+- use the exact `ALPHA_PLUS_DURABLE` specification;
+- report RB, WR and TE separately;
+- apply W6/W7's guardrails: Spearman, capture@50, TE, FLEX, Half-PPR.
+
+Its limits must be stated up front:
+
+- **the 2021–2025 weeks have already informed this hypothesis**, so only 2026 is independent;
+- the RB and TE null is expected.
+
+**If it fails, the next measurement is timestamped weekly data**, the only untested mechanism.

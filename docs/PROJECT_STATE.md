@@ -3,12 +3,47 @@
 Living summary of what is implemented, validated, and outstanding. Updated at the end of every
 milestone. See `docs/TRACEABILITY.md` for the acceptance-criteria-level mapping.
 
-## Status: W8 complete (D116) — **ECR's top-of-board advantage is anticipated OPPORTUNITY, not efficiency. Pre-registered verdict MIXED (recommendation C), but only its information half is robust. Nothing shipped.**
+## Status: W9 complete (D117) — **ECR's usage edge is largely DURABLE knowledge at WR (and TE); weekly information is unmeasurable with this repository; efficiency is not supported. Verdict DURABLE (WR only) → recommendation A. Nothing shipped.**
 
-Research only. ECR is used as an instrument, never a feature. No data acquired, Alpha unchanged,
-production diff EMPTY. **Entry point: `docs/weekly/W8_ECR_ADVANTAGE_RESULTS.md`.**
+Research only. ECR (weekly or preseason) is a comparison board and control only, never a feature.
+Production diff EMPTY. **Entry point: `docs/weekly/W9_MECHANISMS_RESULTS.md`.**
 
 ### CURRENT WEEKLY RESEARCH STATUS
+
+- **Durable information carries the usage anticipation.**
+  - A preseason expert board frozen in August has 115–132% of ECR's unforecast-usage edge.
+  - Last season's points per game has 84–116%.
+  - Both give up in-season volume, so their total gap is about 0.
+  - W8's recency board had none: recent box scores do not anticipate the surprise.
+- **WR (DURABLE, public and expert).** Alpha plus 7 prior-season box-score features (no ECR):
+  - closes **53%** of ECR's usage edge;
+  - closes **70%** of its capture@10 lead (+0.022\* of +0.032);
+  - is significant in every LOSO fold and positive in every season.
+  - The preseason expert view absorbs 48% of ECR's anticipation (69% in weeks 1–6).
+- **TE (DURABLE, expert):** 40% absorbed (66% early). ECR's TE edge vanishes by weeks 13–17
+  (−0.002).
+- **RB (INCONCLUSIVE):** durable shares of 18–20%; 73% of ECR's RB usage edge sits in weeks with
+  no documented event.
+- **ECR's lead shrinks through the season**, early → late: RB +0.043 → +0.013, WR +0.048 → +0.029,
+  TE +0.041 → −0.002. It is concentrated in prior-season elite players (120% / 294% / 72% of the
+  lead).
+- **WEEKLY: NOT MEASURABLE.** Documented pre-Friday events cover 62–91 region player-weeks against
+  a pre-set bar of 100. WR shows a suggestive documented-news signal (A−B +0.25).
+- **EFFICIENCY:** not supported (not blind).
+- **Unknowable (upper bound):** ECR anticipates only 10–15% of the top-of-board usage surprise.
+- **Methodology.**
+  - W5–W8 reproduced byte-for-byte first.
+  - 12 gates pass, including physical season deletion, W8 re-derived exactly, and a
+    shuffled-feature null that closes 0.
+  - Two pre-results amendments; A2 fixed a biased pre-registered statistic that a unit test
+    caught.
+  - Predictions: 6 right, 3 partly right, 1 wrong.
+- **Next: W10** — a pre-registered, guard-railed test of prior-season role and production in
+  Alpha. No ECR. 2026 is the only independent confirmation.
+
+### Earlier status: W8 complete (D116) — **ECR's top-of-board advantage is anticipated OPPORTUNITY, not efficiency. Pre-registered verdict MIXED (recommendation C), but only its information half is robust. Nothing shipped.**
+
+Research only. Entry point: `docs/weekly/W8_ECR_ADVANTAGE_RESULTS.md`.
 
 - **The exact decomposition of ECR's capture@10 lead** (identity residual 2.6e-16), RB / WR / TE:
   - lead: +0.0228\* / +0.0320\* / +0.0258\*

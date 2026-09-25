@@ -102,6 +102,10 @@ reports/**
 # gates diff w8_results.json against a fresh run -- only checkable because it is tracked.
 !reports/weekly/w8_results.json
 !reports/weekly/w8_null_check.json
+# W9/D117: durable / weekly / efficiency decomposition of ECR's usage edge (per-week boards,
+# residualized anticipation, tiers, weekly classes, periods, Half-PPR, FLEX, counterfactual, player
+# level). docs/weekly/W9_MECHANISMS_RESULTS.md quotes it and the W9 gates diff it against a re-run.
+!reports/weekly/w9_results.json
 state/**
 !state/.gitkeep
 *.duckdb
