@@ -3,7 +3,24 @@
 Living summary of what is implemented, validated, and outstanding. Updated at the end of every
 milestone. See `docs/TRACEABILITY.md` for the acceptance-criteria-level mapping.
 
-## Status: D119 complete — **NO-GO. The market-vs-model correction cannot be detected by a one-step experiment: 8% power at the smallest interesting effect (3.6 pts/pick), 80%-power MDE 21 pts/pick, against a realistic effect of ~1–3 pts/pick. The experiment was not run; the line is closed. Y1 remains production, unchanged.**
+## Status: D120 complete — **HALF OF THE "~27% PERFECT-PROJECTION RESIDUAL" WAS AN INSTRUMENT DEFECT: ORACLE_Y1 kept M6's confidence, which is a function of the OLD projection. Recomputing it takes recovery from 72.7% to 87.0% (target) and 74.4% to 87.2% (dynasty). Stale replacement levels have zero effect. The true decision-rule residual under consistent perfect projections is ~13% (~18 pts/pick): rounds 1–6, wrong position (RB over WR/QB), value base + survival urgency. Y1 remains production, unchanged.**
+
+Diagnostic only. **No production change, no tuning, no PR.** `src/alpha_squad/` byte-identical.
+D103 is not edited: its defects are pinned by regression tests, and corrected research arms sit
+beside it. Vintage `f0022601…`. New: `scripts/research/d120_perfect_projection_gap.py`,
+`tests/unit/test_d120_perfect_projection_gap.py`, `docs/D120_PERFECT_PROJECTION_GAP.md`.
+
+| | target | dynasty |
+|---|---|---|
+| ORACLE_Y1 as committed | 72.7% | 74.4% |
+| + replacement levels | 72.7% (0 picks change) | 74.4% |
+| + confidence (= + both) | **87.0%** | **87.2%** |
+| decision residual | **13.0%** (17.8/pick) | **12.8%** (16.8/pick) |
+
+**Next:** in the R1–6 wrong-position states, does the value base disagree with one-step roster
+value, and how much of that is myopic valuation versus survival urgency?
+
+### Previously: D119 complete — **NO-GO. The market-vs-model correction cannot be detected by a one-step experiment: 8% power at the smallest interesting effect (3.6 pts/pick), 80%-power MDE 21 pts/pick, against a realistic effect of ~1–3 pts/pick. The experiment was not run; the line is closed. Y1 remains production, unchanged.**
 
 Power analysis only. **No production change, no treatment run, nothing tuned, no PR.**
 `src/alpha_squad/` byte-identical. Vintage `f0022601…`. New:

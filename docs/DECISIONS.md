@@ -9017,3 +9017,57 @@ not. It also keeps M6's `confidence`, which D117 showed is a function of the OLD
 `tests/unit/test_d119_market_correction_power.py` (24 tests), `docs/D119_MARKET_CORRECTION_POWER.md`.
 Two runner defects were fixed before the decision was read: a scipy NaN tail, and a circular
 "validation". `src/alpha_squad/` byte-identical.
+
+## D120 — Half of the "~27% perfect-projection residual" was an instrument defect (stale confidence). Stale replacement levels have zero effect. The true decision-rule residual under consistent perfect projections is ~13% (~18 pts/pick): early-round, wrong-position, value base + survival urgency. Diagnostic only; nothing ships.
+
+**Question.** When projections are perfect, what stops Alpha from converting that into the best
+picks?
+
+**Reproduction (stop condition).** ORACLE_Y1, re-run through D103's unmodified `oracle_static`
+and D115's harness, reproduces D115's stored pick and one-step delta at all 640 states. The
+control rollout also reproduces.
+
+**Instrument audit (full rebuild vs ORACLE_Y1, 2021–2025).** ORACLE_Y1 updates projections and
+static VORP (VORP recomputes its own replacement level). It does NOT update
+(1) static `replacement_levels`, contrary to its docstring (all 6 positions, up to 55 pts), or
+(2) `confidence` (~55% of M6 players), which D117 showed is `clip(1 − width/(2·projection))`, so it
+keeps the old projection inside the risk multiplier. Scarcity is also stale but not read by L0.
+Market rank, ECR ranges, consumption demand and availability are identical. A full rebuild plus
+recomputed confidence (ARM 4F) picks exactly what ARM 4 picks at all 640 states: **no other stale
+input matters.**
+
+| | target | dynasty |
+|---|---|---|
+| ARM 1 ORACLE_Y1 as committed, recovery | 72.7% | 74.4% |
+| ARM 2 + replacement levels | **72.7% (0 of 640 picks change)** | 74.4% |
+| ARM 3 + confidence (M6's formula at the perfect point) | **87.0%** | **87.2%** |
+| ARM 4 + both | 87.0% (≡ ARM 3) | 87.2% |
+| stale-risk paired effect per pick | **+19.8 [+8.8, +30.7]** | **+16.9 [+9.7, +24.2]** |
+| weekly recovery ARM 1 → ARM 4 | 56.3% → 75.2% (paired +18.7 [+10.7, +26.7]) | 60.5% → 72.0% (+11.6 [−8.3, +31.5]) |
+| **decision residual 1 − R(ARM 4)** | **13.0%**, 17.8 pts/pick [4.8, 30.9] | **12.8%**, 16.8 [2.1, 31.6] |
+
+**Decomposition of the published 27.3% / 25.6% residual:** stale replacement 0 pp; stale risk
+14.4 / 12.8 pp (**53% / 50%** of it); interaction 0; decision rule 13.0 / 12.8 pp. **The D115/D118
+ORACLE_Y1 figures remain correct measurements of that arm and are not overwritten.** The corrected
+perfect-information ceiling of the Y1 rule is **~87%**, and the rule residual is **~13%, not ~27%**.
+
+**Residual under ARM 4.** 74% of it is in rounds 1–6. 87% (target) / 92% (dynasty) is
+wrong-position; the largest flows are RB→WR (34% / 25%) and RB→QB (10% / 24%). QB-wanted picks are
+unimproved (target 52.6 → 51.8 pts/pick). The C1 ∧ C2 overlay is 44%. Exact Shapley of the P − O
+score gap: value 41% / 40%, survival 26% / 22% (favouring P 124 of 169 target), fit 13% / 12%,
+opportunity cost 10% / 8%, risk 7% / 8%, capacity 4% / 11%.
+
+**Defects (research instrument only, not production).** Both are pinned by regression tests in
+`tests/unit/test_d120_perfect_projection_gap.py`. D103 is NOT edited; corrected research arms sit
+beside it.
+
+**Decision.** Diagnostic only. **No production change, no tuning, no new information, no PR.**
+`src/alpha_squad/` byte-identical. Full report: `docs/D120_PERFECT_PROJECTION_GAP.md`.
+
+**Next question (exactly one).** In the R1–6 wrong-position states where the rule with perfect
+projections takes an RB over the oracle's WR or QB, does the value base (MSV + draft-aware VORP)
+rank candidates differently from their one-step roster value, and how much is the myopic "value
+now" construction versus the survival multiplier's urgency?
+
+**Repository.** New: `scripts/research/d120_perfect_projection_gap.py`,
+`tests/unit/test_d120_perfect_projection_gap.py` (17 tests), `docs/D120_PERFECT_PROJECTION_GAP.md`.
