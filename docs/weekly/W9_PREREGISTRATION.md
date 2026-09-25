@@ -409,4 +409,21 @@ If the results contradict these, the results win and the contradiction is report
 
 ## 14. Amendments
 
-*(None yet.)*
+### A1 — pre-results clarification (2026-09-25, before any W9 quantity was computed)
+
+**G5 and G12 were inconsistent as written.** G5 says exactly two models are trained. G12's null
+construction ("permuting the durable features … makes I-D1's `G_S` closure … indistinguishable from
+zero") cannot be run without training I-D1's model on permuted features.
+
+G5 therefore counts **three declared trainings**:
+
+- `ALPHA_PLUS_DURABLE`;
+- `ALPHA_ORACLE_OPP`;
+- `ALPHA_PLUS_DURABLE_SHUFFLED` — the same 7 durable columns, permuted across players within each
+  season with a fixed seed. This is the G12 null. It never enters a verdict except as that gate.
+
+**The durable public residualization (I-D2) uses the 7 features of §4.1.** A missing value (a
+player with no prior season) is set to 0, with `has_prior` = 0 carrying the missingness. This
+matches the counterfactual's information exactly.
+
+No threshold, class, period, tier or verdict rule changes.
