@@ -315,3 +315,21 @@ text above left implicit.
    replaced by deterministic hash noise for S ∈ {2022, 2025}. Season S's durable rows must not
    move, and as a positive control season S + 1's must.
 7. **G7** also checks that 300 seeded `has_prior = 0` rows have no season S − 1 game.
+
+### A2 (2026-09-26): one post-hoc check, added AFTER the results were read
+
+**Post-hoc. Not a verdict input.** It changes nothing in §5, and the verdict stands as computed.
+
+**Why it was added.** The null arm N (B's seven columns permuted within season) passed G12, but
+its own WR capture@5 effect was +0.014 over the full season and +0.043 in the EARLY period,
+where the CI excluded 0. So "B beats A" at capture@5 could partly be "any perturbation of the
+model beats A".
+
+**What it does.** `scripts/research/w10_posthoc.py` pairs B against N directly, per week, over:
+
+- the full season and each period;
+- RB, WR, TE and FLEX;
+- capture@5, capture@10, capture@20 and Spearman.
+
+It reads only the committed per-week cells and writes `reports/weekly/w10_posthoc.json`. The
+report quotes it as a qualifier, labelled post-hoc.

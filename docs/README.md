@@ -21,7 +21,7 @@ Most authoritative first. When two documents disagree, the higher tier wins.
 |---|---|---|---|
 | **1** | Product & architecture authority | `/PRODUCT_SPEC.md`, `/ARCHITECTURE.md`, `/ACCEPTANCE_CRITERIA.md`, `/AGENT_CONTRACTS.md`, `/IMPLEMENTATION_PLAN.md`, `/CLAUDE.md` | shared |
 | **2** | **Decisions** | **`DECISIONS.md`** — one append-only, D-numbered log for the whole project | shared |
-| **3** | Program entry points | `D108_PROGRAM_CLOSEOUT.md` (draft) · **`weekly/W9_MECHANISMS_RESULTS.md`** (weekly — start there; then W8 for the decomposition, W7 for opportunity, W6 for the objective, W5 for the diagnosis, W4 for the FLEX question, W3 for what Alpha can do, W2 for the benchmark, W1.1 for the data story) | per-program |
+| **3** | Program entry points | `D108_PROGRAM_CLOSEOUT.md` (draft) · **`weekly/W10_HISTORICAL_RESULTS.md`** (weekly — start there; then W9 for the mechanisms, W8 for the decomposition, W7 for opportunity, W6 for the objective, W5 for the diagnosis, W4 for the FLEX question, W3 for what Alpha can do, W2 for the benchmark, W1.1 for the data story) | per-program |
 | **4** | Methodology / benchmark definition | `BENCHMARK_SPEC.md` (draft) · `weekly/W2_PREREGISTRATION.md` (weekly) | per-program |
 | **5** | Data & format contracts | `DATA_SOURCES.md`, `TARGET_FORMAT_1QB.md` | shared |
 | **6** | Living state | `PROJECT_STATE.md`, `TRACEABILITY.md` | shared |

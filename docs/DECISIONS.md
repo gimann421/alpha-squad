@@ -9667,3 +9667,108 @@ Its limits must be stated up front:
 - the RB and TE null is expected.
 
 **If it fails, the next measurement is timestamped weekly data**, the only untested mechanism.
+
+## D118 — W10: last season's role and production improve Alpha's WR top 10; RB and TE's top is unchanged; nothing breaks
+
+**Date:** W10. **Status:** accepted. **Answers:** the question D117 §W10 set.
+**Authority:** `docs/weekly/W10_PREREGISTRATION.md` (committed at `77a1a93` before any W10 quantity;
+A1 was made before any result, A2 is one labelled post-hoc check),
+`docs/weekly/W10_HISTORICAL_RESULTS.md`, `reports/weekly/w10_results.json`,
+`reports/weekly/w10_posthoc.json`.
+
+### Decision
+
+**Pre-registered verdict: SUCCESS, carried by WR alone.** Half-PPR gives the same verdict. There
+is no guardrail breach at any position.
+
+- **WR:** Alpha plus W9's seven prior-season box-score features (no ECR):
+  - capture@10 **+0.0223\*** (0.641 → 0.663), capture@5 +0.0275\*;
+  - positive in 5/5 seasons, significant in 5/5 LOSO folds, largest in weeks 1–6 (+0.038\*);
+  - closes **70%** of ECR's WR capture@10 lead (ECR − B +0.0097, no longer significant) and **53%**
+    of its usage-surprise edge `G_S`.
+- **Post-hoc (A2):** against the same seven columns shuffled, WR capture@10 still gains +0.029\*,
+  but **capture@5 gains only +0.014 (not significant)**. The top-10 gain is the finding; the top-5
+  gain is fragile.
+- **RB:** no top-of-board effect (capture@10 +0.000). **Two real effects cancel:**
+  - rescuing quiet prior-season stars: +0.041\*;
+  - demoting players whose role has grown: −0.055\*.
+- **TE:** no top-of-board effect (capture@10 +0.004). Quiet-star recall matches ECR (70%).
+- **FLEX:** capture@10 +0.019\*, capture@25 +0.013\*, Spearman +0.0053\*. **capture@5 −0.013
+  (not significant)**, which is flagged.
+- **Broad ordering improves everywhere:** Spearman +0.004 to +0.007\*, pairwise +0.002 to +0.003\*.
+  MAE falls at WR and TE.
+- **W5:** the WR cliff shrinks from −0.080 to −0.062; WR false negatives fall to ECR's rate
+  (−0.165\*/week). RB is unchanged.
+
+**Nothing is shipped.** Per the brief's decision tree:
+
+- the driving information is identified: the quiet-star rescue, with production, opportunity and
+  role substituting for one another;
+- the next step is a focused follow-up, not a production change.
+
+The 2026 season is the only independent confirmation. Its protocol is frozen in pre-registration §9
+(`--seasons 2026`, the same seven features, and a WR capture@10 CI excluding 0 plus positive WR
+capture@5 and @10).
+
+### Evidence
+
+- **The mechanism** comes from movement attribution, which sums exactly to G. Prior-season top-12
+  players coming off a quiet game, then finishing top 10, are in B's top 10:
+
+  | | A | B | ECR |
+  |---|---:|---:|---:|
+  | WR | 51% | 66% | 75% |
+  | RB | 52% | 65% | 64% |
+  | TE | 60% | 70% | 70% |
+
+  The cost falls on players whose recent touches exceed last season's by 3+ per game.
+- **Redundancy:** about 60% of each historical feature is linearly implied by Alpha's 11 current
+  features, in every period (R² of `prior_ppg` 0.65 early, 0.59–0.63 late). Early is not lower:
+  Alpha's 3-game lags cross the season boundary.
+- **Ablations** (attribution only): no category is necessary. Removing production, opportunity
+  or role leaves WR capture@10 at +0.016\*, +0.013 and +0.017\* respectively.
+- **The historical-only board** (last season's PPG) matches Alpha at the WR top (capture@10
+  −0.007, not significant) but is far worse overall (Spearman −0.19\*).
+- **The null arm** passes G12. Seven shuffled columns cost about 0.001 in Spearman and move some
+  EARLY cells, so early-season effects need the null comparison.
+
+### Methodology
+
+**Byte-for-byte reproduction first:** W5, E1, W6, the W6 agreement file, W7, W8, the W8 null check
+and W9. W9 was reproduced again after `durable_table` gained a `through` parameter whose default
+reproduces W9 exactly.
+
+**Twelve gates pass.** They include:
+
+- arm B equals W9's `ALPHA_PLUS_DURABLE` exactly (1,896 values);
+- arm A equals W7/W8/W9's committed cells, including W7's cliff;
+- physical season deletion and outcome scrambling move 0 features;
+- an order-reversed durable table is identical;
+- two full runs are byte-identical.
+
+**Predictions:** 7 right, 2 partly right, 3 wrong. The wrong ones:
+
+- the historical-only board is not much worse at the top;
+- no single category drives the gain;
+- history is not "new early, redundant late".
+
+### Scope
+
+Research only. **Production diff EMPTY.** ECR is a comparison board only. No external data.
+
+- New module `evaluation/weekly/historical.py`, with 18 tests. The test count goes from 1,828 to
+  1,846.
+- `scripts/research/w9_mechanisms.durable_table` gained `through` (default 2025, W9 exactly).
+
+### W11
+
+> **Can Alpha tell a quiet week from a real role change before kickoff?** Can it keep history's
+> quiet-star rescue without its breakout penalty?
+
+That penalty is the entire reason RB shows no gain, and the ceiling on WR's. W11 should be a
+pre-registered measurement using:
+
+- current-season role-trend information already in the repository;
+- timestamped weekly information, if it becomes measurable.
+
+It should not search further historical formulations: W10's specification stays frozen for 2026.

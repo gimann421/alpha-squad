@@ -3,12 +3,45 @@
 Living summary of what is implemented, validated, and outstanding. Updated at the end of every
 milestone. See `docs/TRACEABILITY.md` for the acceptance-criteria-level mapping.
 
-## Status: W9 complete (D117) — **ECR's usage edge is largely DURABLE knowledge at WR (and TE); weekly information is unmeasurable with this repository; efficiency is not supported. Verdict DURABLE (WR only) → recommendation A. Nothing shipped.**
+## Status: W10 complete (D118) — **Last season's role and production improve Alpha's WR top 10 (+0.022\*, 70% of ECR's WR gap closed); RB and TE's top is unchanged; nothing breaks. Pre-registered verdict SUCCESS (WR only). Nothing shipped.**
 
-Research only. ECR (weekly or preseason) is a comparison board and control only, never a feature.
-Production diff EMPTY. **Entry point: `docs/weekly/W9_MECHANISMS_RESULTS.md`.**
+Research only. ECR is a comparison board only, never a feature. Production diff EMPTY.
+**Entry point: `docs/weekly/W10_HISTORICAL_RESULTS.md`.**
 
 ### CURRENT WEEKLY RESEARCH STATUS
+
+- **WR works.** Alpha plus W9's seven prior-season box-score features:
+  - capture@10 **+0.0223\*** (0.641 → 0.663);
+  - positive in 5/5 seasons, significant in 5/5 LOSO folds;
+  - largest in weeks 1–6 (+0.038\*);
+  - **closes 70% of ECR's WR top-10 lead**; the remainder, +0.0097, is not significant.
+- **Qualifier.** Post-hoc, capture@10 still beats the same columns shuffled (+0.029\*), but
+  capture@5 does not (+0.014). The top-10 gain is the finding.
+- **RB: no top-of-board effect, because two real effects cancel.**
+  - Rescuing quiet prior-season stars: +0.041\*.
+  - Demoting players whose role has grown this season: −0.055\*.
+- **TE:** no top-of-board effect, but quiet-star recall now matches ECR.
+- **FLEX:** capture@10 +0.019\*, capture@25 +0.013\*; **capture@5 −0.013 (not significant),
+  flagged.**
+- **Nothing breaks.** No guardrail breach. Spearman and pairwise improve at every position; MAE
+  falls at WR and TE.
+- **W5:** the WR cliff shrinks from −0.080 to −0.062, and WR false negatives fall to ECR's rate.
+  RB is unchanged.
+- **Redundancy:** about 60% of the history is linearly implied by Alpha's current features in
+  every period. No single category (production, opportunity, role) is necessary.
+- **Methodology.**
+  - W5–W9 reproduced byte-for-byte first.
+  - 12 gates pass, including arm B equal to W9's arm exactly and two byte-identical runs.
+  - Retrospective, not confirmation: 2021–2025 shaped the hypothesis, and **2026 is unavailable**;
+    its protocol is frozen.
+  - Predictions: 7 right, 2 partly right, 3 wrong.
+- **Next: W11** — can Alpha tell a quiet week from a real role change before kickoff, keeping
+  history's rescue without its breakout penalty?
+
+### Earlier status: W9 complete (D117) — **ECR's usage edge is largely DURABLE knowledge at WR (and TE); weekly information is unmeasurable with this repository; efficiency is not supported. Verdict DURABLE (WR only) → recommendation A. Nothing shipped.**
+
+Research only. Entry point: `docs/weekly/W9_MECHANISMS_RESULTS.md`.
+
 
 - **Durable information carries the usage anticipation.**
   - A preseason expert board frozen in August has 115–132% of ECR's unforecast-usage edge.
