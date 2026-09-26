@@ -3,7 +3,23 @@
 Living summary of what is implemented, validated, and outstanding. Updated at the end of every
 milestone. See `docs/TRACEABILITY.md` for the acceptance-criteria-level mapping.
 
-## Status: D120 complete — **HALF OF THE "~27% PERFECT-PROJECTION RESIDUAL" WAS AN INSTRUMENT DEFECT: ORACLE_Y1 kept M6's confidence, which is a function of the OLD projection. Recomputing it takes recovery from 72.7% to 87.0% (target) and 74.4% to 87.2% (dynasty). Stale replacement levels have zero effect. The true decision-rule residual under consistent perfect projections is ~13% (~18 pts/pick): rounds 1–6, wrong position (RB over WR/QB), value base + survival urgency. Y1 remains production, unchanged.**
+## Status: D121 complete — **THE PERFECT-PROJECTION WRONG-POSITION GAP IS MAINLY THE VALUE TERM, NOT SURVIVAL URGENCY. In the R1–6 RB-over-WR/QB states the value term itself prefers the RB in 16/23 (target) and 9/15 (dynasty); survival alone overturns a correct value term in only 3/23 and 1/15. The one reproducible mechanism is RB→QB (6/7 in both formats): MSV values the RB's empty slot at full projection against the QB's upgrade margin. No neutralisation's CI excludes zero; no component meets the candidate bar. Y1 remains production, unchanged.**
+
+Diagnostic only. **No production change, no tuning, no PR.** `src/alpha_squad/` byte-identical.
+Vintage `f0022601…`. New: `scripts/research/d121_value_vs_survival.py`,
+`tests/unit/test_d121_value_vs_survival.py`, `docs/D121_VALUE_VS_SURVIVAL.md`.
+
+| primary population (R1–6 RB→WR/QB) | target | dynasty |
+|---|---|---|
+| states / share of ARM 4 regret | 23 / 23.1% | 15 / 25.2% |
+| value term prefers RB | 16 (66% of regret) | 9 (60%) |
+| survival alone overturns a correct value term | 3 (15%) | 1 (11%) |
+| neutralise survival: Δ/state | +10.0 [−11.5, +34.3] | +10.1 [−166, +266] |
+
+**Next:** in R1–6 RB→QB states, is the RB's true marginal roster value (RB now minus the RB the
+continuation would otherwise start) smaller than the QB's upgrade margin, as one-step value says?
+
+### Previously: D120 complete — **HALF OF THE "~27% PERFECT-PROJECTION RESIDUAL" WAS AN INSTRUMENT DEFECT: ORACLE_Y1 kept M6's confidence, which is a function of the OLD projection. Recomputing it takes recovery from 72.7% to 87.0% (target) and 74.4% to 87.2% (dynasty). Stale replacement levels have zero effect. The true decision-rule residual under consistent perfect projections is ~13% (~18 pts/pick): rounds 1–6, wrong position (RB over WR/QB), value base + survival urgency. Y1 remains production, unchanged.**
 
 Diagnostic only. **No production change, no tuning, no PR.** `src/alpha_squad/` byte-identical.
 D103 is not edited: its defects are pinned by regression tests, and corrected research arms sit

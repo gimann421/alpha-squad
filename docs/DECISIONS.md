@@ -9071,3 +9071,57 @@ now" construction versus the survival multiplier's urgency?
 
 **Repository.** New: `scripts/research/d120_perfect_projection_gap.py`,
 `tests/unit/test_d120_perfect_projection_gap.py` (17 tests), `docs/D120_PERFECT_PROJECTION_GAP.md`.
+
+## D121 — The perfect-projection wrong-position gap is mainly the VALUE TERM, not survival urgency. The one reproducible, distinguishable mechanism is RB→QB, where MSV values the RB's empty slot at full projection against the QB's upgrade margin. No component meets the candidate bar. Diagnostic only; nothing ships.
+
+**Question.** In the R1–6 states where D120's corrected perfect-projection rule (ARM 4) takes an
+RB but the per-pick oracle wanted a WR or QB, is it the value term (MSV + DA-VORP) or survival
+urgency that produces the choice?
+
+**Reproduction.** ARM 4 is recomputed at all 640 states and matches D120 640/640. ARM 4 and oracle
+one-step values match D120/D115 to 1e-6. The re-rank from factors reproduces the engine. Exact
+value bases (MSV + projection − draft-aware level) match the engine for every candidate.
+
+**Population.** Target: 23 states (RB→WR 16, RB→QB 7), regret 1,320 = 23.1% of ARM 4's regret.
+Dynasty: 15 states (8 / 7), 1,357 = 25.2%. Both are ~3% of all per-pick regret. Seasons are
+uneven (dynasty: 3 seasons only).
+
+| | target | dynasty |
+|---|---|---|
+| value prefers RB, one-step prefers oracle | **13/23, 962 regret (73%)** | **9/15, 820 (60%)** |
+| value prefers RB (all) | 16/23, 873 (66%) | 9/15, 820 (60%) |
+| RB→QB: value prefers RB | **6/7** | **6/7** |
+| RB→WR: value prefers RB | 10/16 | 3/8 |
+| correct value overturned by survival alone (class 3) | 3/23, 193 (15%) | 1/15, 151 (11%) |
+| value prefers RB, survival also favours RB | 10/16 | 6/9 |
+| combination (no single flip) | 4/23, 254 (19%) | 4/15, 300 (22%) |
+| oracle-aligned value flips (pairwise) | 6/23 | 6/15 |
+
+**Mechanism (RB→QB).** The RB's MSV equals its full projection (empty slot, 7/7). The QB's MSV is
+an upgrade margin (QB already rostered, 6/7). MSV therefore favours the RB by +75 (target) / +132
+(dynasty) although the QB scored 97 / 40 more. DA-VORP adds a push through a QB draft-aware level
++129 / +88 above the RB's. RB→WR is different: both slots are empty, the RB often scored more
+(+14), and the oracle's WR preference is a continuation/roster-construction effect. Under the
+weekly objective the value disagreement roughly halves.
+
+**Neutralisation arms** (one component, whole board, primary population). Survival: +10.0 per
+state, CI [−11.5, +34.3], MDE 22.9, weekly −5.8 (target); +10.1, CI [−166, +266] (dynasty).
+Fit: +6.5 [−3.5, +13.0]. Opportunity cost, risk and capacity are ≈ 0. **None excludes zero.**
+Shapley share of the score gap: value 43% / 45%, fit 22% / 23%, survival 21% / 24%, opportunity
+cost 11% / 10%.
+
+**Classification (pre-registered).** A value construction 66% / 60%. B survival: strict 15% / 11%;
+62% / 28% if survival-amplified value disagreements are counted as B, but in those survival alone
+flips nothing. D fit 0% / 6%. G combination 19% / 22%. **No component meets all three candidate
+criteria.** RB→QB value construction meets two (reproducible, distinguishable). Its intervention
+test is the next question.
+
+**Decision.** Diagnostic only. **No production change, no tuning, no PR.** `src/alpha_squad/`
+byte-identical. Full report: `docs/D121_VALUE_VS_SURVIVAL.md`.
+
+**Next question (exactly one).** In the R1–6 RB→QB states, does MSV's empty-slot construction
+overvalue the RB relative to the starter the shipped continuation would otherwise field in that
+slot? That is: RB now minus the continuation's RB if he is passed, against the QB's upgrade margin.
+
+**Repository.** New: `scripts/research/d121_value_vs_survival.py`,
+`tests/unit/test_d121_value_vs_survival.py` (25 tests), `docs/D121_VALUE_VS_SURVIVAL.md`.
