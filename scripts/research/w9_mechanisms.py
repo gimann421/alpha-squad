@@ -85,11 +85,12 @@ def _order_ranked(ids, rank: dict[str, float], tiebreak: dict[str, float]) -> li
 # ---------------------------------------------------------------------------------------
 
 
-def durable_table(con) -> pd.DataFrame:
-    """(player_id, season S) -> the 7 §4.1 features from season S-1, for S = 2016..2025.
+def durable_table(con, through: int = 2025) -> pd.DataFrame:
+    """(player_id, season S) -> the 7 §4.1 features from season S-1, for S = 2016..`through`.
 
     Season 2015 has no prior season in the repository: its training rows get NaN everywhere
-    (including `has_prior`), meaning "unknown", never "no prior season"."""
+    (including `has_prior`), meaning "unknown", never "no prior season". `through` (default 2025,
+    W9's range exactly) lets W10's frozen 2026 protocol build 2026's rows from 2025."""
     rows = con.execute(
         "SELECT player_id, season, week, position, fantasy_points_ppr, targets, carries, "
         "target_share, offense_snap_pct FROM player_week_stats "
@@ -112,7 +113,7 @@ def durable_table(con) -> pd.DataFrame:
         pos_last[(pid, int(season))] = pos
     # W5's positional rank by total PPR, player_id tiebreak -- totals by fsum (order-free).
     ranks: dict[tuple[str, int], int] = {}
-    for season in range(2015, 2026):
+    for season in range(2015, through + 1):
         groups: dict[str, list[tuple[float, str]]] = {}
         for (pid, s), wk in by.items():
             if s != season:
@@ -129,7 +130,7 @@ def durable_table(con) -> pd.DataFrame:
                     ranks[(pid, season)] = n
     players = sorted({pid for pid, _s in by})
     out = []
-    for season in range(2016, 2026):
+    for season in range(2016, through + 1):
         for pid in players:
             prev = by.get((pid, season - 1), [])
             if not by.get((pid, season)) and not prev:

@@ -279,4 +279,39 @@ predictions are ingested:
 
 ## 13. Amendments
 
-*(None yet.)*
+### A1 (2026-09-26): instrument clarifications, before any W10 result was computed
+
+Written while building the runner and gates, before any W10 quantity existed. None of these
+changes an arm, feature, metric, threshold or verdict rule. Each one pins down a definition the
+text above left implicit.
+
+1. **"Last game"** in §6.4–6.5 is the player's most recent appearance's realized PPR points,
+   `T_XFP__BL_LAST` in the W7 panel (its `fp_l1` lag). This is exactly the input to W9's
+   `quiet_last` flag. **"Recent 3-game opportunity"** is `targets_avg_last3 + carries_avg_last3`,
+   Alpha's own features, on the same per-game scale as `prior_opp_pg`. **"Games so far this
+   season"** is `games_played_prior`, which is season-partitioned.
+2. **G9's comparison targets:**
+   - W8's committed `CF_A` and `ECR` counterfactual cells (positional);
+   - W7's committed `ranking` cells (positional and FLEX, `CF_A` and `ECR`) and its `CF_A` cliff;
+   - W9's committed per-week ECR − A decomposition cells (`{pos}|ECR`, Full and Half-PPR).
+
+   W6's FLEX cells are **not** a target. W6 pooled every control prediction into FLEX, while
+   W7–W10 pool only the players on each positional board, so the two universes legitimately
+   differ.
+3. **§9 needs a 2026 durable table.** W9's `durable_table` hard-coded seasons up to 2025. It gains
+   a `through` parameter whose default, 2025, reproduces W9 exactly. The W10 runner passes the
+   last evaluated season and aborts if any evaluated season lacks durable rows. The W9 artifact
+   is re-reproduced after this edit (G11).
+4. **Point diagnostics are Full PPR only.** Every model predicts PPR points, so Half-PPR has no
+   matching target.
+5. **G5 is checked statically.** The runner has exactly three training call sites:
+   - B, frame `dp`;
+   - N, frame `w9.durable_panel(..., shuffle=True)`;
+   - the ablation loop, frame `dp[keys + keep]`.
+
+   `dp` is `w9.durable_panel(..., shuffle=False)`, and `durable_table` reads only
+   `player_week_stats`.
+6. **G4's scramble:** season S's points, targets, carries, target share and snap share are
+   replaced by deterministic hash noise for S ∈ {2022, 2025}. Season S's durable rows must not
+   move, and as a positive control season S + 1's must.
+7. **G7** also checks that 300 seeded `has_prior = 0` rows have no season S − 1 game.
