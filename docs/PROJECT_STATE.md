@@ -3,7 +3,24 @@
 Living summary of what is implemented, validated, and outstanding. Updated at the end of every
 milestone. See `docs/TRACEABILITY.md` for the acceptance-criteria-level mapping.
 
-## Status: D121 complete — **THE PERFECT-PROJECTION WRONG-POSITION GAP IS MAINLY THE VALUE TERM, NOT SURVIVAL URGENCY. In the R1–6 RB-over-WR/QB states the value term itself prefers the RB in 16/23 (target) and 9/15 (dynasty); survival alone overturns a correct value term in only 3/23 and 1/15. The one reproducible mechanism is RB→QB (6/7 in both formats): MSV values the RB's empty slot at full projection against the QB's upgrade margin. No neutralisation's CI excludes zero; no component meets the candidate bar. Y1 remains production, unchanged.**
+## Status: D122 complete — **NO CONTINUATION-AWARE MSV DEFECT A DECISION RULE COULD ACT ON; BRANCH CLOSED. The pre-registered leave-one-out continuation-aware MSV does not remove the RB advantage (target RB→QB: RB preferred 7/7 vs MSV's 6/7). Its whole-board re-rank moves no primary pick to the oracle, and costs dynasty −5.9 pts/state over R1–6 (CI [−11.4, −0.4]). The pairwise "otherwise" increment removes the advantage (1/7) but equals one-step value by construction. RB→QB is three 2022 decisions; in target 3/7 are sequencing, and the weekly objective prefers the RB in 5/7. Y1 remains production, unchanged.**
+
+Diagnostic only. **No production change, no tuning, no PR.** `src/alpha_squad/` byte-identical.
+Vintage `f0022601…`. New: `scripts/research/d122_continuation_aware_msv.py`,
+`tests/unit/test_d122_continuation_aware_msv.py`, `docs/D122_CONTINUATION_AWARE_MSV.md`.
+
+| | target | dynasty |
+|---|---|---|
+| RB→QB: MSV / CA / pw prefers RB | 6 / 7 / 1 of 7 | 6 / 3 / 1 of 7 |
+| primary critical cell (MSV / CA / pw) | 13 / 17 / 1 of 23 | 9 / 7 / 3 of 15 |
+| CA re-rank, all R1–6, Δ/state | +5.6 [−6.2, +17.4] | −5.9 [−11.4, −0.4] |
+
+Structural classification (both formats together): CA (pre-registered) **C**; pw (amended) **B**.
+
+**Next:** none from this branch; no D123 is proposed. The per-pick residual left by D120/D121 has
+no remaining single-component candidate.
+
+### Previously: D121 complete — **THE PERFECT-PROJECTION WRONG-POSITION GAP IS MAINLY THE VALUE TERM, NOT SURVIVAL URGENCY. In the R1–6 RB-over-WR/QB states the value term itself prefers the RB in 16/23 (target) and 9/15 (dynasty); survival alone overturns a correct value term in only 3/23 and 1/15. The one reproducible mechanism is RB→QB (6/7 in both formats): MSV values the RB's empty slot at full projection against the QB's upgrade margin. No neutralisation's CI excludes zero; no component meets the candidate bar. Y1 remains production, unchanged.**
 
 Diagnostic only. **No production change, no tuning, no PR.** `src/alpha_squad/` byte-identical.
 Vintage `f0022601…`. New: `scripts/research/d121_value_vs_survival.py`,

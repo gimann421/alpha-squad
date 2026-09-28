@@ -9125,3 +9125,74 @@ slot? That is: RB now minus the continuation's RB if he is passed, against the Q
 
 **Repository.** New: `scripts/research/d121_value_vs_survival.py`,
 `tests/unit/test_d121_value_vs_survival.py` (25 tests), `docs/D121_VALUE_VS_SURVIVAL.md`.
+
+## D122 — No continuation-aware MSV defect a decision rule could act on. Leave-one-out continuation-aware MSV does not remove the RB advantage; the pairwise "otherwise" increment does, but only by construction. RB→QB is three 2022 decisions, partly sequencing. Branch closed; no D123. Diagnostic only; nothing ships.
+
+**Question.** Does MSV over-credit filling an empty starting slot because it ignores the player the
+fixed continuation would otherwise start there? Asked on D121's R1–6 RB→QB and RB→WR states, under
+D120's ARM 4.
+
+**Reproduction.**
+- ARM 4 recomputed at all states: 640/640.
+- D121's primary population: 38/38 states, with P, O, factors, MSV, DA-VORP and one-step values to
+  1e-6.
+- ARM 4 and oracle one-step values vs D120/D115: 240/240 R1–6 states.
+- The continuation's final roster is captured from the unmodified production `rollout` by wrapping
+  its scorer.
+- BL(final) on ARM 4 projections equals the season-long scorer's value to 1e-6. ARM 4 projections
+  are realized points (asserted).
+
+**Two exact quantities.**
+- **CA (pre-registered):** leave-one-out on the continuation's own final roster, CA(c) = BL(F_c) −
+  BL(F_c − c).
+- **pw (amendment, recorded after a one-draft smoke run and before the full run):** c's
+  position-group starter points in F_c minus those in the continuation after the *other* player
+  is taken.
+- Why the amendment was needed: leave-one-out cannot see a replacement the continuation drafts
+  only when the candidate is absent. In the smoke draft the continuation holding the RB drafted no
+  third RB, but taking the QB it started a 202-point RB.
+- Both are carried everywhere. pw gap = one-step gap − spillover exactly, so pw's agreement with
+  one-step value is by construction.
+
+| | target | dynasty |
+|---|---|---|
+| RB→QB: states / distinct decisions / seasons | 7 / **3** / 2022 ×6, 2023 ×1 | 7 / **3** / 2022 ×7 |
+| RB→QB: MSV / CA / pw prefers RB | 6 / **7** / **1** | 6 / 3 / **1** |
+| RB→QB: continuation takes the **same RB later** if the QB is taken | **3/7 (187 of 231 regret)** | 0/7 |
+| RB→QB: weekly one-step prefers the RB | **5/7** | 3/7 |
+| RB→WR: MSV / CA / pw prefers RB | 10 / 13 / 1 (of 16) | 3 / 4 / 2 (of 8) |
+| primary critical cell (term → RB, one-step → oracle): MSV / CA / pw | 13 / 17 / 1 | 9 / 7 / 3 |
+| G = MSV gap − term gap, primary: CA | −56 [−103, +2] | +30 [−251, +268] |
+| G, primary: pw (near-circular) | +97 [+40, +166] | +111 [−175, +315] |
+| re-rank on CA + DA-VORP: primary picks changed / to oracle | 1 / 0 | 3 / 0 |
+| re-rank, all R1–6: Δ/state (season-long) | +5.6 [−6.2, +17.4] | **−5.9 [−11.4, −0.4]** |
+
+**Mechanism.**
+- MSV's empty-slot credit is mostly value the continuation would supply otherwise, **for both
+  players**. MSV − pw is 244 vs 108 (target RB→QB, RB vs QB) and 200 vs 120 (target RB→WR).
+- RB→WR: the WR's leave-one-out replacement enters through FLEX in 16/16 (target) and 8/8
+  (dynasty) states. Leave-one-out charges the WR a cheaper replacement than the RB, so CA and pw
+  disagree in sign.
+- RB→QB: the QB side is an upgrade over an already-rostered QB (6/7). In target 3/7 states are
+  D115-style sequencing, and the weekly objective prefers the RB in 5/7.
+- D121's "6/7 in both formats" is the same 2022 draft seen twice. It does not meet D121's own
+  majority-of-seasons bar; D121's "no candidate" conclusion stands.
+
+**Classification (pre-registered rule).** CA → **C**. pw → **B**: its only supported cell is
+target RB→WR, and that test is near-circular on a regret-selected population. Neither measure
+reaches A or D, and no format passes the decision-relevance test. The RB→QB question has an E-type
+limitation: the exact per-candidate quantity cannot see the "otherwise" RB, and the pairwise one is
+one-step value re-expressed.
+
+**Decision.** Diagnostic only. **No production change recommended; no tuning; no PR.**
+`src/alpha_squad/` byte-identical. **Branch closed; no D123 proposed.** Re-opening would need all
+of:
+- a pre-registered decision-time "otherwise" valuation for every candidate, which is a new
+  algorithm;
+- RB→QB states from more than one season;
+- a re-rank that passes the decision-relevance test in both formats.
+
+Full report: `docs/D122_CONTINUATION_AWARE_MSV.md`.
+
+**Repository.** New: `scripts/research/d122_continuation_aware_msv.py`,
+`tests/unit/test_d122_continuation_aware_msv.py` (46 tests), `docs/D122_CONTINUATION_AWARE_MSV.md`.
