@@ -9772,3 +9772,97 @@ pre-registered measurement using:
 - timestamped weekly information, if it becomes measurable.
 
 It should not search further historical formulations: W10's specification stays frozen for 2026.
+
+## D119 — W11: the role-change mechanism behind W10's RB tradeoff is real, but current-role information does not fix it; W10 stays useful for WR
+
+**Date:** W11. **Status:** accepted. **Answers:** the question D118 §W11 set.
+**Authority:** `docs/weekly/W11_PREREGISTRATION.md` (committed at `8718f07` before any W11
+comparison; amendment A1 at `e2f88f7` fixed an empty reported statistic, found after stage 1 was
+read), `docs/weekly/W11_ROLE_CHANGE_RESULTS.md`, `reports/weekly/w11_mechanism.json`,
+`reports/weekly/w11_results.json`.
+
+### Decision
+
+**Pre-registered verdict: NO EFFECT** (Full PPR and Half-PPR). The mechanism is ESTABLISHED at
+RB, WR and TE.
+
+**Stage 1: the mechanism.** A pre-Friday rule flags a sustained role change: two straight
+current-season games ≥ 3 touches, or ≥ 15 snap-share points, from last season's level.
+
+- That rule splits W10's B − A capture@10 exactly. **Demoting sustained risers costs** RB −0.053\*
+  and WR −0.033\*.
+- **Memory gains** on quiet stable players (RB +0.015\*, WR +0.050\*), on decliners (+0.025\*,
+  +0.013\*) and on one-game fluctuations (+0.018\*, +0.014\*).
+- This holds in every season, every period, under all three threshold sets and in Half-PPR.
+- Flagged changes persist into the predicted week: RB risers +5.2 touches vs +1.7 for one-game
+  spikes (R).
+- **But history's individual moves on role changers are *more* often right than on stable
+  players** (M3 has the opposite sign). The cost is concentrated in a few breakout weeks.
+
+**Stage 2: the model.** Arm C = W10's model + 3 role features, everything else frozen.
+
+- RB capture@10 C − B **+0.004** (not significant, 3/5 seasons, 0/5 LOSO folds); it does not
+  beat the role-permuted null.
+- **WR preserved:** C − B −0.002; C − A still +0.020\*.
+- No guardrail breach.
+- **The breakout penalty is untouched at RB and WR** (C − B ROLE_UP attribution +0.0001). It is
+  halved only at TE (+0.010\*).
+- FLEX capture@10 leans down (−0.008, not significant; C − A falls to +0.011, not significant).
+
+**Why.** Demoting a riser is usually right. Relative to current Alpha, the historical model:
+
+- has smaller rank errors on risers;
+- makes about a third fewer false top-10 picks among them (RB 65 → 44);
+- loses the rare real breakouts (RB top-5 finishers ranked outside 24: 10 → 18).
+
+"The role grew" does not separate the two, so a model optimizing the average does not act on it.
+
+**Next direction** (decision tree: preserves WR, does not help RB / does nothing):
+
+- W10 remains useful for WR;
+- **stop broad historical and role modelling;**
+- **move to timestamped weekly information, first for RB.** The target population is sustained
+  RB risers.
+
+The repository cannot measure this (W9: 62–91 documented region player-weeks against a bar of
+100), so it needs external timestamped data. **Nothing is shipped;** arm C is not a candidate.
+
+### Methodology
+
+- **Byte-for-byte reproduction first:** 10/10 W5–W10 artifacts. All W10 gates passed again.
+- **Twelve gates pass**, including:
+  - role features rebuilt from rows before each week, 0 values moved;
+  - outcome scrambling from week *w* onward moves nothing for *w* (positive control 10/10);
+  - B equals W10's arm (21,330 values);
+  - A equals W10's cells (24,648 values);
+  - 600 independent SQL checks;
+  - both stages byte-identical twice;
+  - the role-permuted null does nothing.
+- **A1:** pandas turned a missing transient direction into NaN, and R's lookup keyed on `None`
+  matched nothing. It was fixed with a NaN-safe helper and a regression test. A field-by-field
+  diff confirmed only R changed. Stage 1 was re-gated before R was read.
+- **Predictions:** 8 right, 1 partly right, 3 wrong. The wrong ones:
+  - M3's sign;
+  - no late-season growth;
+  - PARTIAL expected, NO EFFECT observed.
+
+### Scope
+
+Research only. **Production diff EMPTY.** ECR is a benchmark only. No news, injury or external
+data.
+
+- New module `evaluation/weekly/rolechange.py`, with 23 tests. The test count goes from 1,846 to
+  1,869.
+- W11's role definition and the 3 features are frozen for the 2026 protocol, although W11 did not
+  succeed.
+
+### W12
+
+> **Does timestamped pre-kickoff information identify which sustained risers are real breakouts,
+> first at RB?**
+
+W12 should be pre-registered against the W11 population (sustained ROLE_UP players), with:
+
+- external timestamped injury, depth-chart and news data;
+- W5–W11's Friday cutoff and gates;
+- **no ECR as a feature.**

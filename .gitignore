@@ -112,6 +112,12 @@ reports/**
 # diff w10_results.json against a re-run.
 !reports/weekly/w10_results.json
 !reports/weekly/w10_posthoc.json
+# W11/D119: quiet week vs real role change -- stage 1 (mechanism: attribution by role class,
+# movers, persistence, diagnostics) and stage 2 (arms B / C / role null, per-week cells, periods,
+# LOSO, attribution). docs/weekly/W11_ROLE_CHANGE_RESULTS.md quotes both; the W11 gates diff them
+# against re-runs.
+!reports/weekly/w11_mechanism.json
+!reports/weekly/w11_results.json
 state/**
 !state/.gitkeep
 *.duckdb

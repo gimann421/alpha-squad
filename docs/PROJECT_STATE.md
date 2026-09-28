@@ -3,12 +3,43 @@
 Living summary of what is implemented, validated, and outstanding. Updated at the end of every
 milestone. See `docs/TRACEABILITY.md` for the acceptance-criteria-level mapping.
 
-## Status: W10 complete (D118) — **Last season's role and production improve Alpha's WR top 10 (+0.022\*, 70% of ECR's WR gap closed); RB and TE's top is unchanged; nothing breaks. Pre-registered verdict SUCCESS (WR only). Nothing shipped.**
+## Status: W11 complete (D119) — **The role-change mechanism behind W10's RB tradeoff is real, but current-role information does not fix it. Pre-registered verdict NO EFFECT; W10 stays useful for WR. Nothing shipped.**
+
+Research only. ECR is a benchmark only, never a feature. No external data. Production diff EMPTY.
+**Entry point: `docs/weekly/W11_ROLE_CHANGE_RESULTS.md`.**
+
+### CURRENT WEEKLY RESEARCH STATUS
+
+- **The mechanism is established at RB, WR and TE.**
+  - A pre-Friday rule flags a sustained role change: 2 straight games ≥ 3 touches or ≥ 15
+    snap-share points from last season.
+  - It splits W10's effect exactly. Demoting sustained risers costs RB −0.053\* and WR −0.033\*.
+    Memory gains on quiet players, decliners and one-game dips.
+  - It holds in every season, period, threshold set and Half-PPR.
+  - Flagged changes persist: RB risers are +5.2 touches vs +1.7 for one-game spikes.
+- **Adding the signal to W10's model does nothing at RB or WR.**
+  - RB capture@10 +0.004 (not significant); WR preserved (−0.002; still +0.020\* vs current
+    Alpha); no breach.
+  - The breakout penalty is untouched (+0.0001). Only TE's is halved.
+  - FLEX top-10 leans down (−0.008, not significant).
+- **Why.** History's demotions of risers are usually right: smaller rank errors and a third fewer
+  false top-10 picks. It loses the rare real breakouts (RB top-5 finishers ranked outside 24:
+  10 → 18), and "the role grew" cannot tell those apart.
+- **Methodology.**
+  - W5–W10 reproduced byte-for-byte first (10/10).
+  - 12 gates pass, including pre-Friday rebuilds, scrambling with a positive control, and two
+    byte-identical runs.
+  - One post-reading bug fix (A1) restored an empty reported statistic; only that statistic
+    changed.
+  - Predictions: 8 right, 1 partly right, 3 wrong.
+- **Next: W12** — timestamped weekly information (external data), first for sustained RB risers.
+  Stop broad historical and role modelling.
+
+### Earlier status: W10 complete (D118) — **Last season's role and production improve Alpha's WR top 10 (+0.022\*, 70% of ECR's WR gap closed); RB and TE's top is unchanged; nothing breaks. Pre-registered verdict SUCCESS (WR only). Nothing shipped.**
 
 Research only. ECR is a comparison board only, never a feature. Production diff EMPTY.
 **Entry point: `docs/weekly/W10_HISTORICAL_RESULTS.md`.**
 
-### CURRENT WEEKLY RESEARCH STATUS
 
 - **WR works.** Alpha plus W9's seven prior-season box-score features:
   - capture@10 **+0.0223\*** (0.641 → 0.663);
