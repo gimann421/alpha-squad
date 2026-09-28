@@ -140,6 +140,18 @@ def group_of(cls: str) -> str | None:
     return None
 
 
+def reliability_tag(cls: str, transient_dir) -> str | None:
+    """The R test's group: sustained ROLE_UP/ROLE_DOWN, or a one-game TRANSIENT spike up/down.
+    `transient_dir` may arrive as NaN from a DataFrame round-trip; missing means none."""
+    tdir = transient_dir if isinstance(transient_dir, str) else None
+    return {
+        ("ROLE_UP", None): "up",
+        ("ROLE_DOWN", None): "down",
+        ("TRANSIENT", "UP"): "tup",
+        ("TRANSIENT", "DOWN"): "tdown",
+    }.get((cls, tdir))
+
+
 def move_outcome(rank_a: int, rank_b: int, rank_real: int) -> str | None:
     """For a substantial mover: did B's move bring the player closer to where they finished?
     "RIGHT", "WRONG", or None (equal distance)."""

@@ -232,3 +232,16 @@ def test_small_significant_loss_is_not_a_breach():
     assert rc.is_breach(_r(-0.006, -0.01, -0.001))
     assert not rc.is_breach(None)
     assert math.isclose(rc.BREACH_FLOOR, 0.005)
+
+
+def test_reliability_tag_survives_a_dataframe_round_trip():
+    # Regression (W11 A1): pandas turns a missing transient direction into NaN, and a lookup
+    # keyed on None then silently matched nothing, so the R test was empty.
+    nan = float("nan")
+    assert rc.reliability_tag("ROLE_UP", nan) == "up"
+    assert rc.reliability_tag("ROLE_UP", None) == "up"
+    assert rc.reliability_tag("ROLE_DOWN", nan) == "down"
+    assert rc.reliability_tag("TRANSIENT", "UP") == "tup"
+    assert rc.reliability_tag("TRANSIENT", "DOWN") == "tdown"
+    assert rc.reliability_tag("TRANSIENT", "MIXED") is None
+    assert rc.reliability_tag("QUIET", nan) is None

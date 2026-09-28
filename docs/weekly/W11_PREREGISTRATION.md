@@ -355,4 +355,23 @@ evidence and will be called that. **No 2026 value may inform any W11 choice.**
 
 ## 13. Amendments
 
-*(None yet.)*
+### A1 (2026-09-28): a bug in the R test, found after stage 1 was read
+
+**What happened.** Stage 1 ran and all its gates passed. When the output was read, **R (the
+persistence test) was empty at every position and threshold**. This is an instrument failure,
+not a result.
+
+**The cause.** The role table stores a TRANSIENT player's direction and leaves it missing for
+everyone else. The pandas round-trip turned "missing" into NaN, but the R lookup was keyed on
+`None`, so ROLE_UP and ROLE_DOWN never matched.
+
+**The fix.** The lookup moves into `rolechange.reliability_tag`, which treats NaN as missing,
+with a regression test. **R's definition is unchanged.**
+
+**What is unaffected.** Nothing else reads that field. M1, M2, M3, the attributions, the
+diagnostics and arm C's features are byte-for-byte what they were before the fix.
+
+**The re-run.** Stage 1 was regenerated and its gates re-run, including G10, before R was read.
+
+**Disclosure.** M1–M3 had already been read when this was found. The fix could not be steered by
+them: it restores a pre-registered quantity exactly as defined.

@@ -242,13 +242,7 @@ def analyse(con, snapshots, fmt, panel, fc, fc_opp, b_arm, dur, roles) -> dict:
             # R: does a sustained change persist into this week more than a one-game one?
             rel: dict[str, float] = {}
             for p in ids:
-                c, tdir = cls[p], state[p][f"tdir_{name}"]
-                tag = {
-                    ("ROLE_UP", None): "up",
-                    ("ROLE_DOWN", None): "down",
-                    ("TRANSIENT", "UP"): "tup",
-                    ("TRANSIENT", "DOWN"): "tdown",
-                }.get((c, tdir))
+                tag = rc.reliability_tag(cls[p], state[p][f"tdir_{name}"])
                 if tag is None:
                     continue
                 prior_opp = _num((dl.get((p, snap.season)) or {}).get("prior_opp_pg"))
