@@ -3,7 +3,37 @@
 Living summary of what is implemented, validated, and outstanding. Updated at the end of every
 milestone. See `docs/TRACEABILITY.md` for the acceptance-criteria-level mapping.
 
-## Status: W12 complete (D120) — **Verifiable pre-Friday information does not identify real RB breakouts (NO INCREMENTAL SIGNAL); that direction stops. News/beat-reporter information is untestable (no reconstructable timestamped source). Nothing shipped.**
+## Status: W13 complete (D121) — **A player's own Friday injury designation does not improve W10's FLEX top 10 (NO CONFIRMED INCREMENTAL SIGNAL); the injury-feature direction stops. W10 remains the model of record for this research line. Nothing shipped.**
+
+Research only. ECR is a benchmark only. Production diff EMPTY.
+**Entry point: `docs/weekly/W13_INJURY_FLEX_RESULTS.md`** (design: `W13_PREREGISTRATION.md`).
+
+### CURRENT WEEKLY RESEARCH STATUS
+
+- **The test.**
+  - W10's model versus W10 + the player's own Friday designation and practice status.
+  - Only reports that existed by 23:59:59 ET Friday are used (W12 A1).
+  - 2021–2024, 63 weeks; pre-registered with a +0.011 bar and six conditions.
+- **The result.**
+  - FLEX capture@10 −0.0020 [−0.0141, +0.0099]; 28–28–7 weeks; permutation p 0.76.
+  - The CI excludes the pre-registered effect size.
+  - Against the null +0.0026 (not significant); Half-PPR −0.0010; LOSO 0/4 significant.
+- **Why.**
+  - Out players never play, so they are never scored. The feature acts only on Questionable
+    players (4.6% of FLEX player-weeks).
+  - It demotes them correctly, but reshuffles healthy players at an equal loss.
+  - W12's +0.016 hint matches what refitting with shuffled columns does.
+- **Safe.** W10's WR gain is kept (+0.0220\* vs current Alpha); no guardrail breach.
+- **Methodology.**
+  - W5–W12 reproduced byte-for-byte first (13/13).
+  - 12 gates pass, including an adversarial 1-second cutoff test, 300 independent SQL checks and
+    two byte-identical runs.
+  - No amendments. Predictions: 5 right, 1 partly right, 2 wrong, 1 not assessable.
+- **Next.**
+  - Confirm W10's gain over current Alpha on untouched 2026 weeks under W10's frozen §9 protocol.
+  - Do not reopen injury features without a new pre-registration.
+
+### Earlier status: W12 complete (D120) — **Verifiable pre-Friday information does not identify real RB breakouts (NO INCREMENTAL SIGNAL); that direction stops. News/beat-reporter information is untestable (no reconstructable timestamped source). Nothing shipped.**
 
 Research only. ECR is a benchmark only. Production diff EMPTY.
 **Entry point: `docs/weekly/W12_TIMESTAMPED_RESULTS.md`** (audit: `W12_DATA_AUDIT.md`).

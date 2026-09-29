@@ -9954,3 +9954,90 @@ Research only. **Production diff EMPTY.** ECR is a benchmark only. No PR, no mer
 - **Start timestamped forward collection** of the injury report, daily depth charts and news. The
   2025 injury file has no timestamps, and every untestable category stays untestable without it.
 - **Do not reopen RB-breakout detection** without a new Class A source.
+
+## D121 — W13: a player's own Friday injury designation does not improve W10's FLEX top 10; stop the injury-feature direction
+
+**Date:** W13. **Status:** accepted. **Answers:** the question D120 §Next set.
+**Authority:**
+
+- `docs/weekly/W13_PREREGISTRATION.md` (committed at `90d93d6` before any W13 comparison existed;
+  no amendments);
+- `docs/weekly/W13_INJURY_FLEX_RESULTS.md`;
+- `reports/weekly/w13_results.json` (sha256 `217e2763…`, committed unread at `33df7cc`).
+
+### Decision
+
+**Pre-registered verdict: NO CONFIRMED INCREMENTAL SIGNAL** (Full PPR and Half-PPR). **The
+injury-feature direction stops** (§7 stopping rule).
+
+**The test.** A = W10's model exactly (gate G3: 9,072 values, 0 mismatches). B = A +
+`own_status` + `own_practice`, built by W12's timestamped pipeline with A1:
+
+- only the player's own rows last modified by 23:59:59 ET on the Friday are used;
+- post-cutoff rows do not exist.
+
+**Window:** 2021–2024, 63 weeks. Unit: the week.
+
+**The primary result.** FLEX capture@10 B − A **−0.0020 [−0.0141, +0.0099]**:
+
+- 28–28–7 weeks; sign-flip permutation p 0.76 (100,000 draws); Wilcoxon 0.88;
+- **the CI's upper end is below the pre-registered +0.011 bar**, so an effect of that size is
+  excluded;
+- seasons: +0.003, −0.009, +0.005, −0.009 (none significant);
+- LOSO: 1/4 folds positive, 0/4 significant;
+- against the null: +0.0026, not significant;
+- Half-PPR: −0.0010.
+
+**C1–C5 fail. C6 holds:**
+
+- WR capture@10 B − A −0.0014;
+- B − current Alpha +0.0220\*;
+- no guardrail breach at RB/WR/TE (capture@10, @5, Spearman) or FLEX (capture@5, @20, Spearman).
+
+**Why (exploratory mechanism):**
+
+- **Out players never appear among players who played, and Doubtful players once.** The feature
+  can only act through Questionable (4.6% of FLEX player-weeks) and practice status.
+- **B does push Questionable players out of the top 10** (17 out, 3 in). They score 14.1 against
+  16.6 for the average entrant. B also narrows W10's relative over-rating of Questionable players
+  by about a third (about 0.3 points).
+- **But B reshuffles undesignated players at a loss** (entrants 16.6 vs leavers 18.1), and the two
+  cancel.
+- **W12's +0.016 hint was refit noise.** W13's null, two shuffled columns, shifts mean FLEX
+  capture@5 by +0.014 and capture@10 by −0.005.
+
+**Exploratory, unadjusted, not pursued:** status without practice (arm S) improves FLEX Spearman
+by +0.0012\*. It does not improve the top 10.
+
+### Methodology
+
+- **Byte-for-byte reproduction first:** 13/13 W5–W12 artifacts.
+- **Twelve gates pass before any result is read:**
+  - an adversarial own-Out row 1 s after the cutoff moves nothing (0/40), and 1 s before counts
+    (40/40);
+  - deleting 3,734 post-cutoff rows moves nothing;
+  - 0/300 independent SQL mismatches;
+  - A = W10 and CF_A/ECR = W10's cells;
+  - two byte-identical runs;
+  - an inert null.
+- **Predictions:** 5 right, 1 partly right, 2 wrong, 1 not assessable.
+
+### Scope
+
+Research only. **Production diff EMPTY.** ECR is a benchmark only. No PR, no merge.
+
+- New module `evaluation/weekly/injuryflex.py` (decision rule, sign-flip p) with 10 tests,
+  including 3 leakage regressions. The test count goes from 1,884 to 1,894.
+- **2026 is untouched.** The repository holds no 2026 data. The 2026 protocol (§9) stays frozen;
+  no decision depends on running it. A 2026 gain could only justify a new pre-registration.
+
+### Next
+
+> **Does W10's historical-player-knowledge gain over current Alpha hold on untouched 2026 weeks,
+> under W10's frozen §9 protocol?** The rule: WR capture@10 and capture@5 B − A both positive, and
+> the WR capture@10 CI excludes 0.
+
+- Collect the 2026 season, production's 2026 weekly predictions and the Friday ECR boards as they
+  happen.
+- **Do not reopen injury features** (own or teammate) without a new, separately pre-registered
+  justification.
