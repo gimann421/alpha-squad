@@ -77,8 +77,10 @@ the league's Friday final-report release.
 
 - **a row last modified ≤ cutoff** holds content that existed by the cutoff and was never changed
   afterwards;
-- **a row modified after the cutoff** has lost its pre-cutoff state. It is treated as **unknown**,
-  never as healthy.
+- **a row modified after the cutoff** has lost its pre-cutoff state. It is treated **as if it did
+  not exist**, so deleting it can never change a feature (gate G2). A player whose only row was
+  edited later therefore counts as not listed: W1 §3.1's healthiness bias. Marking such a player
+  "unknown" instead would reveal that a post-cutoff edit happened (pre-registration amendment A1).
 
 **Retrospective edits.**
 

@@ -272,4 +272,25 @@ Ablations attribute; they never select.
 
 ## 12. Amendments
 
-*(None yet.)*
+### A1 (2026-09-29): a leak in the §4 own-status rule, caught by gate G2 before any result
+
+**What happened.** The first gate dry run (on a one-season crash-test file, reading gate output
+only) **failed G2(c)**. Deleting every injury row modified after its cutoff changed 276 feature
+values.
+
+**The cause.** §4 said `own_status` and `own_practice` are "missing if *i*'s row was modified after
+K". That rule reveals that a post-cutoff edit *exists*: for example, a player whose status changed
+on Saturday. That is post-Friday information.
+
+**The fix.** Every feature is computed **only from rows modified ≤ K**, exactly as if later rows
+did not exist. A player whose only row was edited after the cutoff therefore counts as **not
+listed** (0). This is the unavoidable bias of a last-modified source (W1 §3.1's "healthiness
+bias"), now documented instead of leaked.
+
+**Effect.**
+
+- Only the two own-status features change. The teammate features already ignored post-cutoff rows.
+- G2(c) now moves 0 values over 3,734 deleted rows.
+- A regression test (`test_deleting_post_cutoff_rows_never_changes_a_feature`) pins the invariance.
+
+**No outcome, board or model comparison had been read.**

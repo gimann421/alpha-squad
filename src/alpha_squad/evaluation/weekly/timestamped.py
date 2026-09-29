@@ -95,8 +95,9 @@ def features(
 
     `rows`: every report row of the player's team for the week, each with `player_id`,
     `position`, `status`, `practice` and `modified` (an aware datetime). Rows modified after
-    `cutoff` are unknown and never used; if no row is at or before `cutoff` the report is not
-    observable and every feature is missing. `tpg`: teammates' touches per game. `missed_last`:
+    `cutoff` are treated as if they did not exist, so deleting them can never change a feature
+    (gate G2). If no row is at or before `cutoff`, the report is not observable and every
+    feature is missing. `tpg`: teammates' touches per game. `missed_last`:
     players who appeared this season but not in the team's most recent game."""
     known = [r for r in rows if r["modified"] <= cutoff]
     if not known:
@@ -116,13 +117,12 @@ def features(
         if pid in missed_last:
             parts["tm_ret_opp"].append(load)
     out: dict[str, float | None] = {k: math.fsum(v) for k, v in parts.items()}
-    own = [r for r in rows if r["player_id"] == player_id]
-    if any(r["modified"] > cutoff for r in own):
-        out["own_status"] = None
-        out["own_practice"] = None
-    else:
-        out["own_status"] = max((STATUS_CODE.get(r["status"], 0.0) for r in own), default=0.0)
-        out["own_practice"] = max((PRACTICE_CODE.get(r["practice"], 0.0) for r in own), default=0.0)
+    # Only rows at or before the cutoff exist for this computation (amendment A1): a player whose
+    # only row was edited later counts as not listed. Marking such a player "unknown" instead
+    # would reveal that a post-cutoff edit happened -- post-Friday information.
+    own = [r for r in known if r["player_id"] == player_id]
+    out["own_status"] = max((STATUS_CODE.get(r["status"], 0.0) for r in own), default=0.0)
+    out["own_practice"] = max((PRACTICE_CODE.get(r["practice"], 0.0) for r in own), default=0.0)
     return out
 
 

@@ -72,13 +72,29 @@ def test_unobservable_report_is_missing_not_healthy():
     assert all(v is None for v in ts.features("me", "RB", [], K, {}, set()).values())
 
 
-def test_own_row_edited_after_the_cutoff_is_unknown():
+def test_own_row_edited_after_the_cutoff_is_invisible():
+    # Regression (W12 A1): calling it "unknown" revealed that a post-cutoff edit existed.
     rows = [_row("other"), _row("me", "Questionable", modified=K + SEC)]
     f = ts.features("me", "RB", rows, K, {}, set())
-    assert f["own_status"] is None and f["own_practice"] is None
+    assert f["own_status"] == 0.0 and f["own_practice"] == 0.0
     rows = [_row("other"), _row("me", "Questionable", "Limited Participation in Practice")]
     f = ts.features("me", "RB", rows, K, {}, set())
     assert f["own_status"] == 1.0 and f["own_practice"] == 1.0
+
+
+def test_deleting_post_cutoff_rows_never_changes_a_feature():
+    rows = [
+        _row("me", "Out", modified=K + SEC),
+        _row("star", "Out"),
+        _row("late", "Out", modified=K + SEC),
+        _row("q", "Questionable", modified=K + 3600 * SEC),
+    ]
+    tpg = {"star": 12.0, "late": 9.0, "q": 4.0}
+    pruned = [r for r in rows if r["modified"] <= K]
+    for pid in ("me", "star", "late", "q", "nobody"):
+        assert ts.features(pid, "RB", rows, K, tpg, {"q"}) == ts.features(
+            pid, "RB", pruned, K, tpg, {"q"}
+        )
 
 
 def test_questionable_and_returning_teammates():
