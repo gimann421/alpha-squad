@@ -3,7 +3,21 @@
 Living summary of what is implemented, validated, and outstanding. Updated at the end of every
 milestone. See `docs/TRACEABILITY.md` for the acceptance-criteria-level mapping.
 
-## Status: D122 complete — **NO CONTINUATION-AWARE MSV DEFECT A DECISION RULE COULD ACT ON; BRANCH CLOSED. The pre-registered leave-one-out continuation-aware MSV does not remove the RB advantage (target RB→QB: RB preferred 7/7 vs MSV's 6/7). Its whole-board re-rank moves no primary pick to the oracle, and costs dynasty −5.9 pts/state over R1–6 (CI [−11.4, −0.4]). The pairwise "otherwise" increment removes the advantage (1/7) but equals one-step value by construction. RB→QB is three 2022 decisions; in target 3/7 are sequencing, and the weekly objective prefers the RB in 5/7. Y1 remains production, unchanged.**
+## Status: D123 complete — **PHASE 1 (D103–D122) CLOSED. NO-GO — current evidence does not justify another experiment. Outcome information dominates Alpha's per-pick regret (perfect projections recover 87.0% / 87.2%), but no preseason information tested or stored recovers a measurable share. The decision-rule residual under perfect projections is ~13% with no identified mechanism. Y1 remains production, unchanged.**
+
+Closeout and handoff only. **No experiment, no production change, no PR, nothing merged.**
+`src/alpha_squad/` byte-identical (tree `55e763e8…`, equal to `origin/main`). Vintage `f0022601…`.
+**Start any new phase from `docs/D123_PHASE1_CLOSEOUT.md`.** It covers the objective, baseline,
+safety state, valid period, vintage caveat, findings, closed hypotheses with reopen criteria, open
+questions and what not to repeat.
+
+| next-phase candidate | label |
+|---|---|
+| point-in-time preseason role information | CONDITIONAL (data-provenance audit first; not an experiment) |
+| draft-state / lookahead architecture | DO NOT TEST YET |
+| player-level (heteroscedastic) uncertainty | DO NOT TEST YET |
+
+### Previously: D122 complete — **NO CONTINUATION-AWARE MSV DEFECT A DECISION RULE COULD ACT ON; BRANCH CLOSED. The pre-registered leave-one-out continuation-aware MSV does not remove the RB advantage (target RB→QB: RB preferred 7/7 vs MSV's 6/7). Its whole-board re-rank moves no primary pick to the oracle, and costs dynasty −5.9 pts/state over R1–6 (CI [−11.4, −0.4]). The pairwise "otherwise" increment removes the advantage (1/7) but equals one-step value by construction. RB→QB is three 2022 decisions; in target 3/7 are sequencing, and the weekly objective prefers the RB in 5/7. Y1 remains production, unchanged.**
 
 Diagnostic only. **No production change, no tuning, no PR.** `src/alpha_squad/` byte-identical.
 Vintage `f0022601…`. New: `scripts/research/d122_continuation_aware_msv.py`,

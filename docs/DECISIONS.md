@@ -9196,3 +9196,69 @@ Full report: `docs/D122_CONTINUATION_AWARE_MSV.md`.
 
 **Repository.** New: `scripts/research/d122_continuation_aware_msv.py`,
 `tests/unit/test_d122_continuation_aware_msv.py` (46 tests), `docs/D122_CONTINUATION_AWARE_MSV.md`.
+
+## D123 — Phase 1 research closeout (D103–D122). Outcome information dominates; no preseason information recovers it measurably; the decision-rule residual under perfect projections is ~13% with no mechanism. NO-GO — current evidence does not justify another experiment.
+
+**Scope.** Synthesis and handoff only.
+- **No experiment, no model, no feature, no rule, no arm, no production change, no PR, nothing
+  merged, no D124.**
+- `src/alpha_squad/` is byte-identical to D122 (tree `55e763e8…`), and that tree equals
+  `origin/main` (`e02fcf75`).
+- Board vintage re-verified: `f0022601…`.
+- Handoff document: `docs/D123_PHASE1_CLOSEOUT.md`. A new session should start there.
+
+**Record topology, stated because D113 recorded a gap.**
+- D109, D110 and D111 (risk multiplier) exist on unmerged `origin/claude/projection-early-draft-audit-jlv8ui`.
+- D111 (ECR incremental) and D112 exist on unmerged `origin/claude/ecr-incremental-draft-value-1zcj94`.
+- Both were read and are incorporated, labelled by branch and vintage.
+- The weekly-ranking program on `origin/claude/dreamy-albattani-efvroj` reuses IDs D109–D114 as
+  W1–W6 and is a separate program.
+- Five board vintages span D97–D122 (`ca3e2d8a`, `d2955868`, `63076e2e`, `0d525430`, `f0022601`).
+  Cross-phase figures are quoted with their vintage and never reconciled silently.
+
+**Diagnosis.**
+- **Information.** Perfect projections into the unchanged rule recover **87.0% / 87.2%** of
+  per-pick oracle regret (D120 ARM 4), worth +795.3 / +717.0 per draft (D103, `ca3e2d8a`). 92–96%
+  of divergences are the oracle's player scoring more (D103). That share cannot be split into
+  knowable information vs variance with any Phase 1 instrument.
+- **Preseason information.** Every preseason arm recovers −3.2% to +2.7% (D115). ≥ 95% of error
+  variance is unpredictable from stored inputs (D118).
+- **Residuals — three quantities, kept distinct:**
+  - the old ORACLE_Y1 instrument's residual: 27.3% / 25.6% (a correct measurement of that arm);
+  - of which, stale confidence: 14.4 / 12.8 pp;
+  - **genuine decision-rule residual: 13.0% / 12.8%** (17.8 [4.8, 30.9] / 16.8 [2.1, 31.6]
+    pts/pick).
+- **The rule residual has no mechanism.** D121 and D122 closed every single-component
+  explanation, and D122's one exact continuation-aware valuation hurt dynasty (−5.9 [−11.4, −0.4]
+  per R1–6 state). **MSV is not a confirmed production bug.**
+
+**Closed, with reopen criteria in the handoff §4:**
+- projection calibration, elite-RB shape and cross-position magnitude;
+- the risk multiplier;
+- ECR replacement and blending;
+- early feasibility and capacity;
+- survival and opportunity cost as primary explanations;
+- stored upside and the market-vs-model correction;
+- empty-slot MSV and continuation-aware MSV.
+
+**Open, and only these:**
+- the knowable-vs-variance split;
+- point-in-time role information, which is not stored and whose historical recoverability is
+  unproven;
+- reachability of the ~13% residual;
+- `board_vintage.py` not hashing the nflverse panel;
+- season-cluster resolution (k = 5).
+
+**Next-phase candidates** (handoff §10):
+- point-in-time preseason role information — **CONDITIONAL** on a data-provenance audit, which is
+  not an experiment;
+- draft-state / lookahead architecture — **DO NOT TEST YET**;
+- player-level uncertainty — **DO NOT TEST YET**.
+
+None is HIGH PRIORITY.
+
+**Decision.** **NO-GO — current evidence does not justify another experiment.** Y1 remains
+production, unchanged.
+
+**Repository.** New: `docs/D123_PHASE1_CLOSEOUT.md`. Updated: `docs/DECISIONS.md` (this entry),
+`docs/PROJECT_STATE.md`. No code or test changes.
