@@ -3,12 +3,46 @@
 Living summary of what is implemented, validated, and outstanding. Updated at the end of every
 milestone. See `docs/TRACEABILITY.md` for the acceptance-criteria-level mapping.
 
-## Status: W11 complete (D119) — **The role-change mechanism behind W10's RB tradeoff is real, but current-role information does not fix it. Pre-registered verdict NO EFFECT; W10 stays useful for WR. Nothing shipped.**
+## Status: W12 complete (D120) — **Verifiable pre-Friday information does not identify real RB breakouts (NO INCREMENTAL SIGNAL); that direction stops. News/beat-reporter information is untestable (no reconstructable timestamped source). Nothing shipped.**
+
+Research only. ECR is a benchmark only. Production diff EMPTY.
+**Entry point: `docs/weekly/W12_TIMESTAMPED_RESULTS.md`** (audit: `W12_DATA_AUDIT.md`).
+
+### CURRENT WEEKLY RESEARCH STATUS
+
+- **Data.**
+  - The only Class A weekly source is the NFL injury report (2015–2024, last-modified
+    timestamps, mostly the Friday ~4 pm report).
+  - Depth charts are Class A only in 2025.
+  - News, coach and beat-reporter information has no reconstructable history: DATA INSUFFICIENT.
+- **Question A.**
+  - A meaningful teammate out goes with a *lower* RB-riser breakout rate (12.5% vs 25.7%,
+    −0.13\*).
+  - A returning teammate also lowers it (−0.10\*).
+  - Before Friday, almost nothing is known (strict cutoff: n = 2).
+- **Question B.**
+  - W11's model + 5 injury features: RB capture@10 −0.002, capture@5 −0.009; not consistent;
+    does not beat the null.
+  - WR kept (+0.021\* vs current Alpha); no breach.
+- **Worth keeping.**
+  - RB whole-board ordering improves: Spearman +0.0067\*, 4/4 LOSO folds, beats the null.
+  - The FLEX top 10 may improve from players' own designations (+0.018\*, all seasons, folds and
+    Half-PPR), but only +0.009 (not significant) above the null. Suggestive.
+  - Class B current-week depth charts recover missed RB breakouts but add as many false ones.
+- **Methodology.**
+  - W5–W11 reproduced byte-for-byte first (12/12).
+  - 12 gates pass, including an adversarial 1-second cutoff test and 300 independent SQL checks.
+  - A pre-result leak fix (A1) was caught by a gate.
+  - Predictions: 5 right, 4 partly right, 3 wrong.
+- **Next.** A pre-registered confirmatory test of players' own Friday injury designations on the
+  FLEX top 10 (2026 held out), plus timestamped forward data collection. Do not reopen RB-breakout
+  detection without a new Class A source.
+
+### Earlier status: W11 complete (D119) — **The role-change mechanism behind W10's RB tradeoff is real, but current-role information does not fix it. Pre-registered verdict NO EFFECT; W10 stays useful for WR. Nothing shipped.**
 
 Research only. ECR is a benchmark only, never a feature. No external data. Production diff EMPTY.
 **Entry point: `docs/weekly/W11_ROLE_CHANGE_RESULTS.md`.**
 
-### CURRENT WEEKLY RESEARCH STATUS
 
 - **The mechanism is established at RB, WR and TE.**
   - A pre-Friday rule flags a sustained role change: 2 straight games ≥ 3 touches or ≥ 15

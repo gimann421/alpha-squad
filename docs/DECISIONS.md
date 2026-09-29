@@ -9866,3 +9866,91 @@ W12 should be pre-registered against the W11 population (sustained ROLE_UP playe
 - external timestamped injury, depth-chart and news data;
 - W5–W11's Friday cutoff and gates;
 - **no ECR as a feature.**
+
+## D120 — W12: verifiable pre-Friday information does not identify real RB breakouts; stop that direction
+
+**Date:** W12. **Status:** accepted. **Answers:** the question D119 §W12 set.
+**Authority:**
+
+- `docs/weekly/W12_DATA_AUDIT.md` and `docs/weekly/W12_PREREGISTRATION.md` (committed at
+  `aa21437` before any W12 outcome);
+- amendment A1 (`e12dd1a`), a leak fix caught by gate G2 before any result;
+- `docs/weekly/W12_TIMESTAMPED_RESULTS.md`;
+- `reports/weekly/w12_results.json`.
+
+### Decision
+
+**Pre-registered verdict: NO INCREMENTAL SIGNAL** (Full PPR and Half-PPR). **The RB-breakout
+direction stops.**
+
+**The data.** The only Class A source for the week's changing roles is the NFL injury report via
+nflverse:
+
+- last-modified timestamps, 2015–2024;
+- about 92% of rows fall by the Friday cutoff, mostly the ~4 pm ET final report.
+
+The rest is weaker:
+
+- depth charts are Class A only in 2025;
+- 2015–2024 depth charts, reserve status and the 2025 injury file are Class B;
+- news, coach and beat-reporter information has no reconstructable source (FantasyPros serves only
+  the latest items; the Wayback Machine is blocked), so that category is **DATA INSUFFICIENT**.
+
+**Question A** (2021–2024 RB risers, coverage gate passed: 666 risers, 40 with a vacancy, 166
+breakouts):
+
+- a meaningful teammate listed Out/Doubtful goes with a **lower** breakout rate: 12.5% vs 25.7%,
+  **−0.132 [−0.231, −0.026]**. The primary test's positive direction fails;
+- a returning teammate also lowers it (−0.100\*);
+- under a strict pre-Friday cutoff only 2 risers have a vacancy.
+
+**Question B** (D = W11 model + 5 injury features, vs C, 63 weeks):
+
+- RB capture@10 −0.002 (CI [−0.014, +0.010]); capture@5 −0.009;
+- 2/4 seasons positive, 0/4 LOSO folds significant; does not beat the null;
+- WR kept: D − A +0.021\*;
+- no breach.
+
+### Evidence worth keeping
+
+- **RB whole-board ordering improves:** Spearman +0.0067\*, significant in 4/4 LOSO folds, beats
+  the null (+0.0063\*). It comes mostly from teammate availability. The injury report helps order
+  the middle and bottom of the RB board, not find the top.
+- **The FLEX top 10 may improve from players' own designations:** +0.018\*, 4/4 seasons, 4/4 LOSO
+  folds, Half-PPR +0.017\*. But it is **only +0.009 (not significant) above the permuted null** in
+  the primary window. Suggestive, unadjusted.
+- **Current-week depth charts (Class B, exploratory)** recover about 70% of the RB breakouts W10
+  added as misses (0.238 → 0.159 per week). They add as many false top-10 risers and hurt the
+  WR/TE/FLEX top, so there is no net gain.
+
+### Methodology
+
+- **Byte-for-byte reproduction first:** 12/12 W5–W11 artifacts.
+- **Twelve gates pass**, including:
+  - an adversarial 1-second-after-cutoff injection (0/40 moved) and 1-second-before (40/40
+    counted);
+  - deleting all 3,734 post-cutoff rows (0 values moved);
+  - 300 independent SQL checks;
+  - B and C equal to W10 and W11 exactly;
+  - two byte-identical runs;
+  - a null that does nothing.
+- **A1 (before any result):** the pre-registered rule "own status unknown if edited after the
+  cutoff" leaked the existence of a post-cutoff edit. Features now use only rows at or before the
+  cutoff, with a regression test.
+- **Predictions:** 5 right, 4 partly right, 3 wrong.
+
+### Scope
+
+Research only. **Production diff EMPTY.** ECR is a benchmark only. No PR, no merge.
+
+- New module `evaluation/weekly/timestamped.py`, with 15 tests. The test count goes from 1,869 to
+  1,884.
+
+### Next
+
+> **Does a player's own Friday injury designation improve the FLEX top 10 beyond W10's model, in
+> a pre-registered confirmatory test with 2026 held out?**
+
+- **Start timestamped forward collection** of the injury report, daily depth charts and news. The
+  2025 injury file has no timestamps, and every untestable category stays untestable without it.
+- **Do not reopen RB-breakout detection** without a new Class A source.

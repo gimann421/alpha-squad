@@ -118,6 +118,10 @@ reports/**
 # against re-runs.
 !reports/weekly/w11_mechanism.json
 !reports/weekly/w11_results.json
+# W12/D120: timestamped pre-Friday information and RB breakouts (Question A tests, arms A-E
+# per-week cells, riser metrics, attribution, 2021-2024 and 79-week windows, Half-PPR).
+# docs/weekly/W12_TIMESTAMPED_RESULTS.md quotes it; the W12 gates diff it against a re-run.
+!reports/weekly/w12_results.json
 state/**
 !state/.gitkeep
 *.duckdb
