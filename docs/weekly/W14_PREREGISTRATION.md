@@ -366,3 +366,40 @@ no 2026 rows. Only row counts and the log's non-table lines were looked at.
 
 **Nothing else changes:** the hypothesis, arms, features, cutoff, eligibility, metrics, decision
 rule, gates and predictions are as written.
+
+### A2 (2026-10-05, before any 2026 result): restore the canonical row order
+
+**Caught by gates G1 and G3 on their first pass,** before any result was read.
+
+- **G1 failed:** the research control trained on the 2026 database reproduced **0 of 26,097**
+  stored 2021–2025 predictions (max difference 2.69 points). It still reproduced all 1,270 of
+  production's 2026 predictions exactly.
+- **But G3's content check passed:** the 2015–2025 training frames held identical rows and values.
+
+**Cause.**
+
+- Production's `features build` re-upserts **every** `player_week_features` (and
+  `team_week_features`) row, which rewrites their physical order. Every position's frame differs
+  from the canonical one from row 0.
+- Production's loader (`load_position_week_data`) reads without `ORDER BY`, so it returns rows in
+  physical order, and CatBoost's fit depends on row order.
+- **The same data in a new order therefore trains a different model.** This is a property of the
+  production stack, not of W10: every W5–W13 number is likewise conditional on the canonical
+  database's order.
+
+**Correction.** This keeps W10's exact environment; production code is untouched.
+
+1. After production's `features build`, the isolated database's ≤ 2025 rows of those two tables
+   are put back in the **canonical database's physical (rowid) order**. The 2026 rows follow in
+   production's own order. This is done by `scripts/research/w14_row_order.py`, which verifies
+   afterwards that production's loader returns the canonical sequence for 2015–2025 exactly.
+2. Production's `alpha-squad train established --season-start 2026 --season-end 2026` is then
+   **re-run**, so arm A is production's prediction in that environment.
+3. **G1 and G3 are unchanged and must pass as written.**
+4. **G6's redacted copies get the same restore** after their features are rebuilt. G6 then tests
+   leakage, not row order.
+
+**Reported as a finding.** Row order alone moves single-seed predictions by up to 2.69 points.
+The 2026 estimate, like W10's, is conditional on one training order.
+
+**Nothing else changes.**

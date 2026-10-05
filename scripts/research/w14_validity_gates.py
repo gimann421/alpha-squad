@@ -12,6 +12,7 @@ import argparse
 import ast
 import hashlib
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -35,6 +36,7 @@ from alpha_squad.models.established.data import load_position_week_data  # noqa:
 from alpha_squad.models.established.features import FULL_FEATURES  # noqa: E402
 from scripts.research import w9_mechanisms as w9  # noqa: E402
 from scripts.research import w14_2026_validation as w14  # noqa: E402
+from scripts.research import w14_row_order as ro  # noqa: E402
 
 CANONICAL_DB = "data/alpha_squad.duckdb"
 CANONICAL_SHA = "fa8e32dbbb8942d890d38f0fad5c88981dc7f171238826abf13eb09ddd2a73c7"
@@ -90,7 +92,8 @@ OUTCOME_TABLES = (
     "team_week_stats",
 )
 N_UPSTREAM = 14
-NGS_DECLARERS = {"src/alpha_squad/sources/nflverse.py"}
+NGS_DECLARERS = {"src/alpha_squad/sources/nflverse.py", "src/alpha_squad/cli.py"}
+NGS = re.compile(r"ngs_(passing|rushing|receiving)|nextgen_stats")
 
 
 def _frame_hash(df: pd.DataFrame) -> str:
@@ -117,6 +120,22 @@ def _cells_equal(mine: dict, theirs: dict, weeks: set[str]) -> tuple[int, int]:
     return n, bad
 
 
+def _wire(con) -> None:
+    """The W10 runner's own wiring (ECR, crosswalk and the snapshot views `build_panel` needs)."""
+    from alpha_squad.evaluation.weekly import context
+    from alpha_squad.identity.canonical import reader_expr, require_snapshot
+
+    for view, (source, table) in {
+        "ecr": ("dynastyprocess", "fp_ecr_history"),
+        "xwalk": ("dynastyprocess", "player_ids"),
+    }.items():
+        s = require_snapshot(con, source, table)
+        con.execute(
+            f"CREATE OR REPLACE TEMP VIEW {view} AS SELECT * FROM {reader_expr(s['local_path'])}"
+        )
+    context.wire_snapshot_views(con, tuple(range(2015, SEASON + 1)))
+
+
 def _redacted_predictions(db: str, week: int) -> dict:
     """Week-`week` features and A/B predictions from a copy with every later 2026 row deleted
     and the features rebuilt by production's own builders."""
@@ -135,6 +154,8 @@ def _redacted_predictions(db: str, week: int) -> dict:
         build_player_week_features(con)
         build_team_week_features(con)
         attach_team_features_to_player_panel(con)
+        ro.restore_all(con)  # amendment A2: the canonical order for <= 2025, as in the main copy
+        _wire(con)
         feats = con.execute(
             f"SELECT player_id, season, week, {', '.join(FULL_FEATURES)}, team "
             "FROM player_week_features WHERE season = ? AND week = ? ORDER BY player_id",
@@ -172,6 +193,7 @@ def main() -> int:
     res = json.loads(Path(args.results).read_text())
     con = duckdb.connect(args.db, read_only=True)
     canon = duckdb.connect(CANONICAL_DB, read_only=True)
+    _wire(con)
     failures: list[str] = []
     eligible = sorted(res["look"]["eligible_weeks"])
     weeks = {f"{SEASON}-{w}" for w in eligible}
@@ -257,18 +279,35 @@ def main() -> int:
         t: canon.execute(f"SELECT count(*) FROM {t} WHERE season >= ?", [SEASON]).fetchone()[0]
         for t in OUTCOME_TABLES
     }
-    # The adapter that only declares the NGS download is allowed; nothing on the path may read it.
+    # Every repository module the W14 runner loads (in a fresh process); only the adapter and the
+    # CLI that declare the NGS download may mention it, and nothing on the path may read it.
+    loaded = json.loads(
+        subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                "import json, sys; import scripts.research.w14_2026_validation; "
+                "print(json.dumps(sorted({getattr(m, '__file__', None) or '' "
+                "for m in list(sys.modules.values())})))",
+            ],
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout
+    )
     root = Path.cwd()
+    repo = [
+        str(Path(f).relative_to(root))
+        for f in loaded
+        if f.startswith(str(root / "src")) or f.startswith(str(root / "scripts"))
+    ]
     ngs = sorted(
-        rel
-        for m in list(sys.modules.values())
-        if getattr(m, "__file__", None) and str(m.__file__).startswith(str(root))
-        for rel in [str(Path(m.__file__).relative_to(root))]
-        if rel not in NGS_DECLARERS and "ngs_" in Path(m.__file__).read_text(errors="ignore")
+        rel for rel in repo if rel not in NGS_DECLARERS and NGS.search(Path(rel).read_text())
     )
     print(
         f"G4  anti-peek          : canonical sha {'unchanged' if sha == CANONICAL_SHA else 'CHANGED'}; "
-        f"canonical 2026 outcome rows {rows26}; loaded modules referencing NGS {ngs or 'none'}"
+        f"canonical 2026 outcome rows {rows26}; of {len(repo)} repository modules the runner loads, "
+        f"reading NGS: {ngs or 'none'}"
     )
     if sha != CANONICAL_SHA or any(rows26.values()) or ngs:
         failures.append("G4")
