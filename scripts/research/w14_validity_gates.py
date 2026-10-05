@@ -120,7 +120,7 @@ def _cells_equal(mine: dict, theirs: dict, weeks: set[str]) -> tuple[int, int]:
     return n, bad
 
 
-def _wire(con) -> None:
+def _wire(con, last: int = SEASON) -> None:
     """The W10 runner's own wiring (ECR, crosswalk and the snapshot views `build_panel` needs)."""
     from alpha_squad.evaluation.weekly import context
     from alpha_squad.identity.canonical import reader_expr, require_snapshot
@@ -133,7 +133,70 @@ def _wire(con) -> None:
         con.execute(
             f"CREATE OR REPLACE TEMP VIEW {view} AS SELECT * FROM {reader_expr(s['local_path'])}"
         )
-    context.wire_snapshot_views(con, tuple(range(2015, SEASON + 1)))
+    context.wire_snapshot_views(con, tuple(range(2015, last + 1)))
+
+
+def _xwalk_fp(con) -> dict:
+    from alpha_squad.identity.canonical import reader_expr, require_snapshot
+
+    s = require_snapshot(con, "dynastyprocess", "player_ids")
+    return dict(
+        con.execute(
+            f"SELECT gsis_id, fantasypros_id FROM {reader_expr(s['local_path'])} "
+            "WHERE gsis_id IS NOT NULL"
+        ).fetchall()
+    )
+
+
+def _history_explained(con, canon, ref: dict, hist: dict) -> dict:
+    """Amendment A4: every W10 cell reproduces, except in weeks whose evaluation universe moved,
+    and every moved player is one whose FantasyPros mapping differs between the two crosswalks."""
+    from alpha_squad.evaluation.weekly import audit
+    from alpha_squad.evaluation.weekly.scoring import FULL_PPR
+    from scripts.research.w7_opportunity import universes
+
+    total, diff = 0, {}
+    for tag in ("full_ppr", "half_ppr"):
+        for system, w in ref[tag]["cells"].items():
+            for k, row in w.items():
+                total += 1
+                if hist[tag]["cells"].get(system, {}).get(k) != row:
+                    diff[k] = diff.get(k, 0) + 1
+    old, new = _xwalk_fp(canon), _xwalk_fp(con)
+    revised = {g for g in set(old) | set(new) if old.get(g) != new.get(g)}
+    gsis_of: dict = {}
+    for c in (canon, con):
+        gsis_of.update(
+            {
+                pid: g
+                for g, pid in c.execute(
+                    "SELECT id_value, player_id FROM player_id_map WHERE id_type = 'gsis_id'"
+                ).fetchall()
+            }
+        )
+    unexplained, moved_all = [], set()
+    for key in sorted(diff):
+        season, week = (int(x) for x in key.split("-"))
+        sets = []
+        for c in (canon, con):
+            snaps = [x for x in audit.week_coverage(c, (season,)).snapshots if x.week == week]
+            u = universes(c, snaps, FULL_PPR)
+            sets.append(
+                {pos: {r.player_id for r in v["common"].rows} for (_k, pos), v in u.items()}
+            )
+        moved = set()
+        for pos in set(sets[0]) | set(sets[1]):
+            moved |= sets[0].get(pos, set()) ^ sets[1].get(pos, set())
+        moved_all |= moved
+        if not moved or any(gsis_of.get(p) not in revised for p in moved):
+            unexplained.append(key)
+    return {
+        "cells": total,
+        "weeks_differing": sorted(diff),
+        "players_moved": sorted(moved_all),
+        "revised_mappings": len(revised),
+        "unexplained": unexplained,
+    }
 
 
 def _redacted_predictions(db: str, week: int) -> dict:
@@ -260,16 +323,31 @@ def main() -> int:
     da = w9.durable_table(canon, through=SEASON - 1)
     db = w9.durable_table(con, through=SEASON - 1)
     dur_same = _frame_hash(da.assign(week=0)) == _frame_hash(db.assign(week=0))
-    hist_ok = None
+    hist_ok, detail = None, "NOT SUPPLIED"
     if args.w10_history:
-        hist_ok = (
+        same = (
             hashlib.sha256(Path(args.w10_history).read_bytes()).hexdigest()
             == hashlib.sha256(Path(args.w10).read_bytes()).hexdigest()
         )
+        if same:
+            hist_ok, detail = True, "byte-identical"
+        else:
+            _wire(canon, last=SEASON - 1)
+            ex = _history_explained(
+                con,
+                canon,
+                json.loads(Path(args.w10).read_text()),
+                json.loads(Path(args.w10_history).read_text()),
+            )
+            hist_ok = not ex["unexplained"]
+            detail = (
+                f"not byte-identical; {ex['cells']:,} cells, differing only in weeks "
+                f"{ex['weeks_differing']}; players moved {ex['players_moved']}; all explained by "
+                f"the {ex['revised_mappings']} revised crosswalk mappings: {hist_ok} (A4)"
+            )
     print(
         f"G3  history intact     : 2015-2025 training frames differing {mism or 'none'}; durable "
-        f"<= 2025 identical {dur_same}; W10 2021-2025 re-run on the 2026 database byte-identical "
-        f"{hist_ok if hist_ok is not None else 'NOT SUPPLIED'}"
+        f"<= 2025 identical {dur_same}; W10 2021-2025 re-run on the 2026 database: {detail}"
     )
     if mism or not dur_same or hist_ok is not True:
         failures.append("G3")

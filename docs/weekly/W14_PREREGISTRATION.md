@@ -426,3 +426,37 @@ and B prediction checks.
 
 **Reported as a production observation, not a W14 input:** the K/DST build-order quirk. Nothing
 else changes.
+
+### A4 (2026-10-05, before any 2026 result): G3's re-run allows only an enumerated crosswalk revision
+
+**Found by G3,** before any result was read.
+
+- **What did not match:** W10 re-run for 2021–2025 on the 2026 database is **not** byte-identical
+  to `reports/weekly/w10_results.json`.
+- **What did match:**
+  - every 2021–2024 cell;
+  - every model prediction (G1: 26,097 / 26,097);
+  - the training frames and the durable table.
+
+**Cause: an upstream data revision.**
+
+- The newer DynastyProcess `player_ids` crosswalk (captured 2026-10-05) dropped the FantasyPros id
+  of two 2025 depth players, a WR and a TE. Their ECR rows no longer join, so each leaves seven
+  2025 boards (2025 weeks 5, 9, 10, 11, 15, 16, 17), and the FLEX board with them.
+- Across the whole crosswalk, 5 FantasyPros mappings were lost, 4 gained and 0 changed, out of
+  about 4,776.
+- **W10's headline effects are unchanged** under the new crosswalk:
+  - WR capture@10 +0.0223 [+0.0068, +0.0384];
+  - WR capture@5 +0.0275;
+  - FLEX capture@10 +0.0190;
+  - the verdict is SUCCESS either way.
+- **2026 must use the current crosswalk.** The old one has no 2026 rookies.
+
+**Correction: G3's third check becomes an *explained-difference* check.**
+
+- Every W10 cell must reproduce exactly, except in a week whose evaluation universe differs.
+- Every universe difference must be a player whose FantasyPros mapping differs between the two
+  crosswalk vintages.
+- **Any other difference fails G3.**
+
+The canonical database's byte-identical W10 reproduction (G12) is unchanged.
