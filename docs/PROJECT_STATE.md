@@ -3,7 +3,34 @@
 Living summary of what is implemented, validated, and outstanding. Updated at the end of every
 milestone. See `docs/TRACEABILITY.md` for the acceptance-criteria-level mapping.
 
-## Status: W13 complete (D121) — **A player's own Friday injury designation does not improve W10's FLEX top 10 (NO CONFIRMED INCREMENTAL SIGNAL); the injury-feature direction stops. W10 remains the model of record for this research line. Nothing shipped.**
+## Status: W14 interim look 1 (D122) — **W10 on untouched 2026 weeks 1–3: INCONCLUSIVE — CONTINUE THE PRE-REGISTERED 2026 HOLDOUT. Same direction as W10 (WR capture@10 +0.078, inside W10's own 3-week predictive band); far too few weeks to confirm. Nothing shipped.**
+
+Research only. ECR is a benchmark only. Production diff EMPTY.
+**Entry point: `docs/weekly/W14_2026_VALIDATION_RESULTS.md`** (protocol: `W14_PREREGISTRATION.md`).
+
+### CURRENT WEEKLY RESEARCH STATUS
+
+- **The test.**
+  - W10's frozen model (code byte-identical to W10's commit) versus current Alpha, on 2026.
+  - Production's own pipeline ran in an isolated database; the canonical one was never written.
+  - Eligible weeks: 1–3. Week 4 is pending its Monday game; weeks 5–17 are still to come.
+- **The result.**
+  - WR capture@10 +0.078 (−0.052, +0.157, +0.128), exact p 0.50.
+  - WR capture@5 +0.088; FLEX capture@10 +0.064 (3 of 3 weeks, p 0.25).
+  - Half-PPR agrees. All at the 86th–91st percentile of W10's own 3-week predictive band.
+- **Caution.** The shuffled-feature null also gained +0.037 WR capture@10 in these weeks.
+- **Methodology.**
+  - W5–W13 reproduced 14/14 byte-for-byte; 12 gates pass, including an end-to-end
+    later-week deletion test.
+  - Four pre-result amendments: the command name; row-order restore; G6 at W10's positions; the
+    crosswalk revision.
+- **Findings beyond the verdict.** Single-seed estimates are conditional on the database's
+  physical row order (up to 2.69 points). Production writes K/DST feature rows before their points
+  are computed.
+- **Next.** Re-run the unchanged protocol as weeks complete. A direction is first readable at
+  ≥ 8 weeks; the decision comes after week 17 (W10 §9).
+
+### Earlier status: W13 complete (D121) — **A player's own Friday injury designation does not improve W10's FLEX top 10 (NO CONFIRMED INCREMENTAL SIGNAL); the injury-feature direction stops. W10 remains the model of record for this research line. Nothing shipped.**
 
 Research only. ECR is a benchmark only. Production diff EMPTY.
 **Entry point: `docs/weekly/W13_INJURY_FLEX_RESULTS.md`** (design: `W13_PREREGISTRATION.md`).

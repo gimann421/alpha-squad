@@ -10041,3 +10041,90 @@ Research only. **Production diff EMPTY.** ECR is a benchmark only. No PR, no mer
   happen.
 - **Do not reopen injury features** (own or teammate) without a new, separately pre-registered
   justification.
+
+## D122 — W14: W10 on untouched 2026 weeks, interim look 1 (weeks 1–3): INCONCLUSIVE — CONTINUE the holdout
+
+**Date:** W14, 2026-10-05. **Status:** accepted (interim). **Answers:** the question D121 §Next
+set.
+**Authority:**
+
+- `docs/weekly/W14_PREREGISTRATION.md` (committed at `de5efe0` before any 2026 outcome was
+  ingested; amendments A1–A4, all before any 2026 result was read);
+- `docs/weekly/W14_2026_VALIDATION_RESULTS.md`;
+- `reports/weekly/w14_results.json` (sha256 `3dbb7f12…`).
+
+### Decision
+
+**Pre-registered verdict at this look: INCONCLUSIVE — CONTINUE PRE-REGISTERED 2026 HOLDOUT**
+(category D: a valid test with too few weeks).
+
+- **W10 is unchanged.** Its code is byte-identical to `5de17c1` and run through W10's own
+  functions. Its cells equal the verbatim `w10_historical.py --seasons 2026` run.
+- **2026 weeks 1–3 are eligible.** Week 4 is pending, because its Monday game came after the data
+  capture.
+
+**Results:**
+
+| B − A, 3 weeks | value | weeks | p (exact sign-flip) | W10 3-week predictive band |
+|---|---:|---|---:|---|
+| WR capture@10 | **+0.078** | −0.052, +0.157, +0.128 | 0.50 | 91st percentile |
+| WR capture@5 | +0.088 | | | 86th percentile |
+| FLEX capture@10 | +0.064 | 3 of 3 weeks positive | 0.25, the smallest 3 weeks allow | 88th percentile |
+
+- **Half-PPR agrees.**
+- **Nothing contradicts W10.** The weekly SD (0.0725) implies ±0.082 at 95% for a 3-week mean,
+  and the pre-registered rule reads no direction before 8 weeks.
+
+**What this look shows:**
+
+- **Same direction as W10, inside the spread of W10's own early-season windows**
+  (+0.110 / +0.012 / +0.111 / +0.073 / +0.012).
+- **Current Alpha's WR cliff persists** (−0.074 vs −0.080 historically). W10's board shows little
+  cliff (−0.009 vs −0.062).
+- **Mechanism:** early-season "small sample" and quiet-star rescues, as W10's history predicted.
+- **Caution:** the shuffled-feature null also gained +0.037 WR capture@10 in these weeks, against
+  −0.007 historically. Refit noise is half the effect at this sample size.
+
+### Methodology
+
+- **Reproduction first:** W5–W13 reproduced byte-for-byte (14/14).
+- **Isolated database:** production's own CLI ran in an isolated 2026 copy; the canonical
+  database was never written.
+- **All 12 gates pass:**
+  - G1 parity 1,270/1,270 (2026) and 26,097/26,097 (2021–2025);
+  - G6: end-to-end deletion of later weeks moves no RB/WR/TE feature or prediction;
+  - anti-peek: 2026 NGS rows found and shown never to be read;
+  - two byte-identical runs.
+- **Amendments, all found by the gates before any result:**
+  - **A1:** the production command name.
+  - **A2:** production's `features build` rewrites physical row order; its loader has no
+    `ORDER BY`, and CatBoost is order-sensitive. Identical data trained models up to 2.69 points
+    apart. The canonical order was restored.
+  - **A3:** G6 compares features at W10's positions; K/DST differ only by build order.
+  - **A4:** an enumerated DynastyProcess crosswalk revision (5 mappings lost, 4 gained) moved two
+    2025 depth players. W10's headline is unchanged under it.
+- **Predictions:** 8 right, 2 partly right, 0 wrong.
+
+### Findings beyond the verdict
+
+- **Row-order sensitivity.** Every single-seed estimate in W5–W14 is conditional on the database's
+  physical row order. A full rebuild of production features changes it.
+- **Production K/DST quirk.** `features build` writes feature rows before computing K/DST points,
+  so a season's K/DST feature rows are incomplete until the next rebuild. Not a W10 input.
+
+### Scope
+
+Research only. **Production diff EMPTY.** No PR, no merge.
+
+- New module `evaluation/weekly/holdout.py` (11 tests) and `scripts/research/w14_row_order.py`
+  (2 tests). The test count goes from 1,894 to 1,907.
+
+### Next
+
+> **Does W10's WR top-10 gain over current Alpha hold through the rest of 2026, under the
+> unchanged protocol?**
+
+- Re-run the committed pipeline as each week completes, with week 4 first.
+- The first look able to read a direction has **≥ 8 weeks**. The decisive look comes **after
+  week 17**, with W10 §9 applied once.
+- **No change to the model, features or rules in between.**
