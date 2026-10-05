@@ -52,7 +52,7 @@ Decision record: D122.
 
 | item | frozen value |
 |---|---|
-| **A: current Alpha** | production's weekly CatBoost predictions for 2026, written by production's own `alpha-squad train established-season`. The research control trainer must reproduce them exactly (G1) |
+| **A: current Alpha** | production's weekly CatBoost predictions for 2026, written by production's own weekly command `alpha-squad train established` (amendment A1). The research control trainer must reproduce them exactly (G1) |
 | **B: W10** | `ALPHA_PLUS_HISTORICAL` = production's CatBoost (200 iterations, depth 4, lr 0.05, MAE, seed 42) on production's 11 weekly features **plus W10's 7 prior-season features** (`prior_ppg`, `prior_rank`, `prior_opp_pg`, `prior_tsh`, `prior_snap`, `prior_games`, `has_prior`) |
 | how B is built | by W10's own `trainings()`, i.e. `w9.durable_table` → `w9.durable_panel` → `arms.train_with_extra_features` |
 | training window | walk-forward by season: **`[2015, 2025]` for every 2026 week**, per position RB/WR/TE. No 2026 outcome ever enters training |
@@ -104,7 +104,9 @@ W5–W13 reproduction runs against it, and G4 re-checks its hash at the end.
    1. `alpha-squad sources ingest --season-start 2026 --season-end 2026`
    2. `alpha-squad identity build`
    3. `alpha-squad features build --season-start 2026 --season-end 2026`
-   4. `alpha-squad train established-season --season-start 2026 --season-end 2026`
+   4. `alpha-squad train established --season-start 2026 --season-end 2026` (the weekly
+      walk-forward; amendment A1. The pre-amendment text named the season-level
+      `train established-season`)
 3. Save the nflverse 2026 schedule (`schedules/games.parquet`) under `data/w14/` with sha256 and
    capture time. Only its schedule columns are read: season, game_type, week, gameday, gametime,
    home_team, away_team.
@@ -340,4 +342,27 @@ capture@5/@10.
 
 ## 12. Amendments
 
-*(None yet.)*
+### A1 (2026-10-05, before any 2026 result): the weekly production command
+
+**§3 step 4 named the wrong production command.**
+
+- `alpha-squad train established-season` is production's **season-level** model (`ml_season_*`).
+  It writes no weekly predictions.
+- **W10's arm A** (`weekly_projection_snapshot`, `ml_catboost`) is written by
+  `alpha-squad train established`. That is the weekly walk-forward command
+  (`models/established/train.py::run_established_ml`), the one that produced the stored 2021–2025
+  predictions (DECISIONS: "`train established` (the weekly command, distinct from `train
+  established-season`)").
+
+**How it was found:** a structural check after the first build. `weekly_projection_snapshot` had
+no 2026 rows. Only row counts and the log's non-table lines were looked at.
+
+**Correction:**
+
+- §3 step 4 reads `alpha-squad train established --season-start 2026 --season-end 2026`.
+- The first isolated database, which also held the season-level command's output, was
+  **deleted**. It was rebuilt from a fresh copy of the canonical database with the corrected
+  sequence.
+
+**Nothing else changes:** the hypothesis, arms, features, cutoff, eligibility, metrics, decision
+rule, gates and predictions are as written.
