@@ -126,6 +126,11 @@ reports/**
 # six-condition decision, LOSO, sign-flip p, mechanism attribution, Half-PPR).
 # docs/weekly/W13_INJURY_FLEX_RESULTS.md quotes it; the W13 gates diff it against a re-run.
 !reports/weekly/w13_results.json
+# W14/D122: W10 on untouched 2026 weeks (eligibility table, W10's own cells for the eligible
+# weeks, paired statistics, exact sign-flip p, the comparison with W10's 2021-2025 history,
+# mechanism, decision). docs/weekly/W14_2026_VALIDATION_RESULTS.md quotes it; the W14 gates
+# diff it against a re-run.
+!reports/weekly/w14_results.json
 state/**
 !state/.gitkeep
 *.duckdb
