@@ -158,7 +158,8 @@ def _redacted_predictions(db: str, week: int) -> dict:
         _wire(con)
         feats = con.execute(
             f"SELECT player_id, season, week, {', '.join(FULL_FEATURES)}, team "
-            "FROM player_week_features WHERE season = ? AND week = ? ORDER BY player_id",
+            "FROM player_week_features WHERE season = ? AND week = ? AND position IN ('RB', 'WR', 'TE') "
+            "ORDER BY player_id",
             [SEASON, week],
         ).fetchdf()
         panel = op.build_panel(con, POSITIONS)
@@ -327,7 +328,9 @@ def main() -> int:
     else:
         full_feats = con.execute(
             f"SELECT player_id, season, week, {', '.join(FULL_FEATURES)}, team "
-            "FROM player_week_features WHERE season = ? ORDER BY player_id",
+            # W10's positions only (amendment A3): K/DST rows differ by production's build order
+            "FROM player_week_features WHERE season = ? AND position IN ('RB', 'WR', 'TE') "
+            "ORDER BY player_id",
             [SEASON],
         ).fetchdf()
         panel = op.build_panel(con, POSITIONS)

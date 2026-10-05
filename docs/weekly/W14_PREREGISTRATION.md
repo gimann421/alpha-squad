@@ -403,3 +403,26 @@ rule, gates and predictions are as written.
 The 2026 estimate, like W10's, is conditional on one training order.
 
 **Nothing else changes.**
+
+### A3 (2026-10-05, before any 2026 result): G6 compares features at W10's positions
+
+**Found on G6's second pass,** before any result was read.
+
+- **What passed:** with every later 2026 week deleted, A's and B's week-*w* predictions were
+  bit-identical for all three weeks (320 / 320 / 326 player-weeks).
+- **What differed:** the stored week-*w* feature rows. Every difference is a K or DST row, caused
+  by production's build order, not by later weeks:
+  - `features build` writes the feature rows **before** its K/DST step adds team-defense rows to
+    `player_week_stats` and computes kicker points (nflverse scores only passing, rushing and
+    receiving). The 2026 database therefore has no 2026 DST feature rows, and its 2026 kicker
+    features were built from zero points.
+  - The gate's rebuild runs after that step, so it creates 32 DST rows a week and gives kickers
+    their computed points.
+- **No RB, WR or TE row differs.**
+
+**Correction:** G6's feature comparison is restricted to **RB, WR and TE**, the positions W10
+ranks. It requires identical row sets and bit-identical values there, alongside the unchanged A
+and B prediction checks.
+
+**Reported as a production observation, not a W14 input:** the K/DST build-order quirk. Nothing
+else changes.
