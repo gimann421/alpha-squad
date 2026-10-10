@@ -460,3 +460,21 @@ else changes.
 - **Any other difference fails G3.**
 
 The canonical database's byte-identical W10 reproduction (G12) is unchanged.
+
+### A5 (2026-10-10, look 2, before any new 2026 data was ingested): tooling only
+
+**Why it was needed:**
+
+- Look 2 (W15) runs on a **fresh** isolated database, `data/w15/`, so that look 1's database,
+  and with it the W14 artifact, stays reproducible.
+- The committed runner already takes `--db`, `--schedule` and `--out`.
+- The gate script read look 1's schedule manifest from a hard-coded path (G8), and its G11
+  determinism re-run did not pass a schedule through.
+
+**What changed:** the gates gained a `--schedule` argument, defaulting to look 1's manifest. G8
+reads it, and G11's re-run passes it on.
+
+**No check's logic, threshold or rule changes.** §2–§7 are untouched.
+
+**Look 2 data path:** §3 steps 1–5 exactly (A1, A2) in `data/w15/alpha_squad_2026.duckdb`, with
+`ALPHA_SQUAD_DATA_DIR=data/w15`, and a fresh schedule snapshot under `data/w15/schedule/`.

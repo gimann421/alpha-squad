@@ -252,6 +252,8 @@ def main() -> int:
     ap.add_argument("--repro-summary", default=None)
     ap.add_argument("--skip-determinism", action="store_true")
     ap.add_argument("--skip-redaction", action="store_true")
+    # A5: the look's schedule manifest (W14's by default), used by G8 and G11's re-run
+    ap.add_argument("--schedule", default="data/w14/schedule/manifest.json")
     args = ap.parse_args()
 
     res = json.loads(Path(args.results).read_text())
@@ -456,7 +458,7 @@ def main() -> int:
     # --- G8 eligibility -------------------------------------------------------------------------
     table = {r["week"]: r for r in res["weeks"]}
     evaluated = sorted(w for w, r in table.items() if r["status"] == "EVALUATED")
-    sched = json.loads(Path("data/w14/schedule/manifest.json").read_text())
+    sched = json.loads(Path(args.schedule).read_text())
     sched_ok = hashlib.sha256(Path(sched["path"]).read_bytes()).hexdigest() == sched["sha256"]
     cells_weeks = sorted(
         {int(k.split("-")[1]) for w in res["full_ppr"]["cells"].values() for k in w}
@@ -531,7 +533,16 @@ def main() -> int:
         with tempfile.TemporaryDirectory() as tmp:
             out = Path(tmp) / "w14.json"
             subprocess.run(
-                [sys.executable, str(RUNNER), "--db", args.db, "--out", str(out)],
+                [
+                    sys.executable,
+                    str(RUNNER),
+                    "--db",
+                    args.db,
+                    "--schedule",
+                    args.schedule,
+                    "--out",
+                    str(out),
+                ],
                 check=True,
                 capture_output=True,
             )
