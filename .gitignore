@@ -131,6 +131,8 @@ reports/**
 # mechanism, decision). docs/weekly/W14_2026_VALIDATION_RESULTS.md quotes it; the W14 gates
 # diff it against a re-run.
 !reports/weekly/w14_results.json
+# W15/D123: the W14 protocol's look 2 (2026 weeks 1-4), same runner and gates.
+!reports/weekly/w15_results.json
 state/**
 !state/.gitkeep
 *.duckdb
