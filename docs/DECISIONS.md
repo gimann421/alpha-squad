@@ -10184,3 +10184,60 @@ Research only. **Production diff EMPTY.** No PR, no merge. 1,907 tests pass.
 - Continue the unchanged protocol as weeks complete.
 - **The first look able to read a direction has ≥ 8 weeks.** The final look, after week 17,
   applies W10 §9 once.
+
+## D124 — W16: an experimental prospective weekly beta, separate from the frozen 2026 holdout
+
+**Date:** W16, 2026-10-11. **Status:** accepted (beta; experimental). **Answers:** the user's
+request to start using weekly rankings before the holdout concludes.
+**Authority:** `docs/weekly/W16_BETA_READINESS_AND_HOLDOUT.md`; the W14 protocol (unchanged).
+
+### Decision
+
+1. **Product use and validation are separated.** W10 may be *used* as a labelled experimental
+   board now. It is not called validated, and nothing the beta produces enters the holdout.
+2. **The live weekly path is not prospective.** `/rankings/weekly` serves only players with a
+   played row for the week (the W3 defect, still present), so it cannot rank anyone before
+   kickoff. It has no K/DST, no FLEX and no Half-PPR.
+3. **The minimum fix is an eligibility adapter, not a model change.**
+   - The universe comes from the weekly roster × the schedule.
+   - Feature rows come from production's unmodified builders over games before the week,
+     appended as NULL-stat placeholder rows.
+   - Both arms are fit by W10's own `arms.train_with_extra_features`: `[]` for current Alpha and
+     W10's frozen 7 for W10.
+   - It lives in `src/alpha_squad/beta/` and `scripts/beta/`, additive and unexposed. **No existing production file changed.**
+4. **Product rules:**
+   - FLEX = RB/WR/TE pooled.
+   - Availability (roster INA, injury designation) is shown, never multiplied in.
+   - Bye teams come from the schedule.
+   - Started games are flagged.
+   - K/DST use D57's season baseline ÷ 17, labelled.
+   - Half-PPR = Full − 0.5 × `receptions_avg_last3`, labelled an approximation: no Half-PPR
+     model exists.
+   - W10 QB falls back to current Alpha, labelled.
+   - No ECR input.
+
+### Evidence
+
+On completed 2026 week 4, inside the beta run:
+
+- prospective features equal production's stored features, 3,938/3,938 cells. Also
+  15,092/15,092 on 2025 weeks 1, 2, 10, 17;
+- current Alpha equals production's stored predictions, 358/358;
+- W10 equals its frozen arm-B training line, 324/324;
+- the regenerated board is byte-identical.
+
+**Week-5 board:** 540 eligible, including 80 with no 2026 game yet. Snapshot `3731658a…`,
+committed.
+
+### Holdout
+
+- No new week is eligible: week 5's last kickoff is Mon 2026-10-12 20:15 ET. Nothing was run.
+- The verdict stays **INCONCLUSIVE — CONTINUE (4 < 8)**.
+- **The canonical database (`fa8e32db…`) no longer exists.** The rebuilt base (`8b6cca85…`)
+  cannot satisfy G4's hash. The next look needs a dated pre-ingest amendment A6, which changes
+  no rule.
+
+### Next
+
+- Week-6 board after Monday's game.
+- Holdout look 3: A6 first, then the unchanged runner and gates.

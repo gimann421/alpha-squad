@@ -3,7 +3,12 @@
 Living summary of what is implemented, validated, and outstanding. Updated at the end of every
 milestone. See `docs/TRACEABILITY.md` for the acceptance-criteria-level mapping.
 
-## Status: W15, 2026 holdout look 2 (D123) — **W10 on untouched 2026 weeks 1–4: INCONCLUSIVE — CONTINUE (4 < 8 eligible weeks). WR capture@10 +0.103 (3–1), FLEX capture@10 +0.048; same direction as W10, larger than its history predicts. Nothing shipped.**
+## Status: W16 (D124) — **EXPERIMENTAL weekly beta usable: a prospective 2026 week-5 board (W10 vs current Alpha, Full/Half PPR, positions + FLEX, K/DST baseline), beta-only additive code, no existing production file changed. Holdout unchanged: no new eligible week (week 5 ends Mon 10-12); still INCONCLUSIVE — CONTINUE at 4 weeks. Next look needs amendment A6 (canonical DB lost; rebuilt base `8b6cca85…`).**
+
+**Entry point: `docs/weekly/W16_BETA_READINESS_AND_HOLDOUT.md`.** Beta code: `src/alpha_squad/beta/`,
+`scripts/beta/`, `tests/beta/`. The W15 status below is unchanged and still current for the holdout.
+
+## Previous status: W15, 2026 holdout look 2 (D123) — **W10 on untouched 2026 weeks 1–4: INCONCLUSIVE — CONTINUE (4 < 8 eligible weeks). WR capture@10 +0.103 (3–1), FLEX capture@10 +0.048; same direction as W10, larger than its history predicts. Nothing shipped.**
 
 Research only. ECR is a benchmark only. Production diff EMPTY.
 **Entry point: `docs/weekly/W15_2026_HOLDOUT_UPDATE.md`** (protocol: `W14_PREREGISTRATION.md`;
