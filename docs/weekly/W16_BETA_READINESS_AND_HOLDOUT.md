@@ -230,8 +230,9 @@ schedule snapshot were read (captured 2026-10-11 11:49 UTC, sha256 `5f1484b2…`
    snapshots go to `reports/beta/` and are never holdout inputs. Only the W14 runner on a §3
    isolated ingest produces holdout observations.
 
-**The beta serves the same models the holdout evaluates.** On the completed week 4, inside the
-beta run:
+**The beta runs exactly the code and specifications the holdout evaluates, on this session's
+data.** On the completed week 4, inside the beta run (see the next subsection for the limit: the
+rebuilt history reproduces production exactly, but not W10's committed fits):
 
 | check | result |
 |---|---|
@@ -251,17 +252,55 @@ beta run:
 - A DuckDB file's bytes are not reproducible, so **G4's hash check cannot pass as written at the
   next look.** The substantive question is whether the rebuild is *equivalent*.
 
-**Measured:** W10's committed runner re-run on the rebuilt database, compared with the committed
-`reports/weekly/w10_results.json`: **pending at this commit** (the run takes ~30 minutes; the result is recorded in the next W16 commit).
+**Measured:** W10's committed runner (`w10_historical.py`, 2021–2025) was re-run on the rebuilt
+database and compared with the committed `reports/weekly/w10_results.json`. **It is NOT
+byte-identical.**
 
-**What the next look needs:** a dated, pre-data amendment (A6) to W14 §3/G4. It must name the
-rebuilt database and its hash as the new canonical base, conditional on the reproduction above.
+| | committed (canonical DB) | rebuilt DB |
+|---|---:|---:|
+| W10 verdict, Full and Half PPR | SUCCESS (WR c@10, WR c@5) | SUCCESS (WR c@10, WR c@5), no breach |
+| WR capture@10, B − A | +0.0223 | **+0.0291** |
+| WR capture@5, B − A | +0.0275 | +0.0302 |
+| RB capture@10, B − A | +0.0004 | −0.0024 |
+| arm A (current Alpha) and ECR cells | — | **identical in every week** |
+| W10-family arms (B, null, three ablations) | — | differ in essentially every week, 2021–2025 |
+| snapshot provenance (injuries, depth, ep sha256s) | — | identical |
 
-- A6 must be committed **before** any week-5+ data is ingested.
-- **No rule, metric, model, feature or eligibility rule changes.**
+**What this establishes:**
 
-This session does not write A6, because no look is due. It must not be written after the next
-look's data is seen.
+- **The rebuild reproduces production exactly** (arm A), including the training-frame order that
+  A2 showed moves CatBoost fits.
+- **It does not reproduce W10's fitted arms.** Something only the W10 arms read differs between the
+  canonical and rebuilt histories. The candidates are the durable table's prior-season inputs or
+  the W10 panel's key set. Most likely it is an upstream nflverse revision of 2015–2025 stats
+  columns that production's 11 features do not use the same way.
+- **It cannot be root-caused here.** The canonical database no longer exists to diff against.
+- **W10's historical conclusion is unchanged in direction and verdict;** its size moves within its
+  own CI.
+
+**Consequences:**
+
+1. **For the beta.** The beta's W10 board is W10's exact code and specification, trained on this
+   rebuilt history: 324/324 matches W10's own training line on the *same* database. It is **not
+   shown to be bit-identical to the W10 model fitted inside W15's environment.** That is
+   acceptable for an experimental board. It is recorded here and in D124; the week-5 snapshot's
+   metadata predates this finding and does not carry the caveat.
+2. **For the holdout.** The next look cannot pass G12 (W5–W13 byte-identical) or G4 (canonical
+   hash) on this base as written. Before any week-5+ data is ingested, it needs one of:
+   - **(a)** recover the canonical database. No copy is known to exist.
+   - **(b)** a dated pre-data amendment A6. It would:
+     - adopt a rebuilt base;
+     - replace G12's byte-identity with an explained-difference check like A4's, which requires a
+       root cause of the W10-arm difference, named before any new 2026 result;
+     - **re-score weeks 1–4 on the new base** and report them beside looks 1–2.
+
+     No rule, metric, model, feature or eligibility change.
+   - **(c)** a written decision that the holdout's W10 arm is "W10's specification refit on the
+     current upstream history". This is defensible, since a real 2026 deployment would refit
+     anyway, but it is a protocol change and must be pre-registered.
+
+   **This is a decision for the user. It does not block the beta.** This session writes no
+   amendment, because no look is due and the choice is not technical.
 
 ---
 
@@ -314,16 +353,19 @@ look's data is seen.
 
 **Before calling anything production:**
 
-1. **W10 is unproven on 2026.** It has 4 of the 8 weeks needed for any directional reading, and the
+1. **The holdout's base database is lost (§3).** The rebuild reproduces production exactly but
+   not W10's committed fits (WR capture@10 +0.029 vs +0.022, same verdict). The next look needs a
+   pre-data decision from the user.
+2. **W10 is unproven on 2026.** It has 4 of the 8 weeks needed for any directional reading, and the
    final rule applies after week 17. Nothing in this beta changes that.
-2. **Half-PPR is an approximation.**
+3. **Half-PPR is an approximation.**
    - A real Half-PPR board needs either a Half-PPR-target model or a validated receptions
      estimate. That is a new modelling question and would need its own pre-registration.
    - The W10 FLEX top 10 differs between Full PPR and the approximation in 3 of 10 places this
      week.
-3. **K/DST are season baselines ÷ 17.** They have no matchup or in-season information, and every
+4. **K/DST are season baselines ÷ 17.** They have no matchup or in-season information, and every
    week's K/DST order is nearly static.
-4. **No automatic weekly refresh.** Each board is a manual run:
+5. **No automatic weekly refresh.** Each board is a manual run:
    - a §3-style ingest into `data/beta/`;
    - A2's restore;
    - `train established`;
@@ -332,11 +374,11 @@ look's data is seen.
 
    A week-6 board should be generated **after** Monday's week-5 game and before Thursday 10-15's
    kickoff.
-5. **Rebuilding the base costs one full ingest** (~10 minutes) in a fresh container, because no
+6. **Rebuilding the base costs one full ingest** (~10 minutes) in a fresh container, because no
    database persists between sessions.
-6. **The local web app does not show the beta.** Adding a beta route and view would be a
+7. **The local web app does not show the beta.** Adding a beta route and view would be a
    production-path change, deliberately left out of this scope.
-7. **Roster timing.** The board uses the latest published weekly roster. Early in a week that is
+8. **Roster timing.** The board uses the latest published weekly roster. Early in a week that is
    the previous week's, and the snapshot records which. Trades after it are missed.
 
 ---
@@ -347,8 +389,10 @@ look's data is seen.
   Decide whether to ask for a week-6 board after Monday night.
 - **For the holdout:** at the next look (week 5 eligible after Monday's game plus the nflverse
   publication lag):
-  1. commit amendment A6 for the rebuilt base before ingest;
-  2. then run the unchanged W14 runner and gates on a fresh isolated ingest.
+  1. the user chooses (a), (b) or (c) from §3, because the canonical database is lost and the
+     rebuild does not reproduce W10's committed fits;
+  2. the chosen amendment is committed before any week-5+ ingest;
+  3. then the unchanged W14 runner and gates run on a fresh isolated ingest.
 
   The first look able to read a direction has ≥ 8 weeks. The final look comes after week 17.
 
@@ -362,7 +406,7 @@ look's data is seen.
   played, so it could never give you a board before kickoff.
 - Built a separate, clearly labelled experimental board for this week that ranks every rostered
   player before games start. It lets you flip between the new W10 model and today's model, Full or
-  Half PPR, any position or FLEX. It proved both models are exactly the ones being tested.
+  Half PPR, any position or FLEX. It checked that both models run exactly the code being tested.
 - Confirmed no new week has finished yet (week 5 ends Monday night), so the official 2026 test was
   left untouched.
 
@@ -370,6 +414,9 @@ look's data is seen.
 
 - You can use Alpha's week 5 rankings today, as an experiment. W10 still isn't proven, and the
   official test keeps running separately, unaffected.
+- The old test database was lost with the previous session. A rebuild matches today's model
+  exactly but nudges W10's historical numbers (same conclusion), so you'll need to pick how the
+  official test continues before its next check.
 
 **Next step:**
 

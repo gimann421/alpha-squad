@@ -3,7 +3,7 @@
 Living summary of what is implemented, validated, and outstanding. Updated at the end of every
 milestone. See `docs/TRACEABILITY.md` for the acceptance-criteria-level mapping.
 
-## Status: W16 (D124) — **EXPERIMENTAL weekly beta usable: a prospective 2026 week-5 board (W10 vs current Alpha, Full/Half PPR, positions + FLEX, K/DST baseline), beta-only additive code, no existing production file changed. Holdout unchanged: no new eligible week (week 5 ends Mon 10-12); still INCONCLUSIVE — CONTINUE at 4 weeks. Next look needs amendment A6 (canonical DB lost; rebuilt base `8b6cca85…`).**
+## Status: W16 (D124) — **EXPERIMENTAL weekly beta usable: a prospective 2026 week-5 board (W10 vs current Alpha, Full/Half PPR, positions + FLEX, K/DST baseline), beta-only additive code, no existing production file changed. Holdout unchanged: no new eligible week (week 5 ends Mon 10-12); still INCONCLUSIVE — CONTINUE at 4 weeks. Next look blocked on a user decision: the canonical DB is lost, and the rebuilt base `8b6cca85…` reproduces production but not W10's committed fits (WR c@10 +0.029 vs +0.022, same SUCCESS).**
 
 **Entry point: `docs/weekly/W16_BETA_READINESS_AND_HOLDOUT.md`.** Beta code: `src/alpha_squad/beta/`,
 `scripts/beta/`, `tests/beta/`. The W15 status below is unchanged and still current for the holdout.

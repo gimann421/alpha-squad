@@ -10234,8 +10234,21 @@ committed.
 - No new week is eligible: week 5's last kickoff is Mon 2026-10-12 20:15 ET. Nothing was run.
 - The verdict stays **INCONCLUSIVE — CONTINUE (4 < 8)**.
 - **The canonical database (`fa8e32db…`) no longer exists.** The rebuilt base (`8b6cca85…`)
-  cannot satisfy G4's hash. The next look needs a dated pre-ingest amendment A6, which changes
-  no rule.
+  cannot satisfy G4's hash.
+- **Re-running W10's committed runner on the rebuilt base:**
+  - production (arm A) and the ECR cells reproduce exactly;
+  - **W10's fitted arms do not.** WR capture@10 is +0.0291 against the committed +0.0223, still
+    SUCCESS with no breach.
+  - The cause is unidentified (most likely an upstream revision of a stats input only the W10
+    arms read), and the canonical database is not available to diff against.
+- **Before look 3 the user must choose**, and the choice is pre-registered before any week-5+
+  ingest:
+  - (a) recover the canonical database;
+  - (b) an A4-style amendment A6: a root-caused, explained-difference G12 on a rebuilt base, with
+    weeks 1–4 re-scored;
+  - (c) redefine arm B as W10's specification refit on the current upstream history.
+- The beta's W10 board is W10's exact code on the rebuilt history: 324/324 against W10's own
+  training line on that database. It is not shown bit-identical to W15's fit.
 
 ### Next
 
