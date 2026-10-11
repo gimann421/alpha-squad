@@ -3,7 +3,29 @@
 Living summary of what is implemented, validated, and outstanding. Updated at the end of every
 milestone. See `docs/TRACEABILITY.md` for the acceptance-criteria-level mapping.
 
-## Status: W14 interim look 1 (D122) — **W10 on untouched 2026 weeks 1–3: INCONCLUSIVE — CONTINUE THE PRE-REGISTERED 2026 HOLDOUT. Same direction as W10 (WR capture@10 +0.078, inside W10's own 3-week predictive band); far too few weeks to confirm. Nothing shipped.**
+## Status: W15, 2026 holdout look 2 (D123) — **W10 on untouched 2026 weeks 1–4: INCONCLUSIVE — CONTINUE (4 < 8 eligible weeks). WR capture@10 +0.103 (3–1), FLEX capture@10 +0.048; same direction as W10, larger than its history predicts. Nothing shipped.**
+
+Research only. ECR is a benchmark only. Production diff EMPTY.
+**Entry point: `docs/weekly/W15_2026_HOLDOUT_UPDATE.md`** (protocol: `W14_PREREGISTRATION.md`;
+look 1: `W14_2026_VALIDATION_RESULTS.md`).
+
+### CURRENT WEEKLY RESEARCH STATUS
+
+- **The look.** Look 2 of the frozen W14 holdout.
+  - Week 4 was added; weeks 1–4 are eligible. Week 5 is pending; weeks 6–17 are to come.
+  - The eligible list was frozen and committed before scoring.
+- **The result, B − A, weeks 1–4:**
+  - WR capture@10 +0.103, exact p 0.25, at the 98th percentile of W10's own 4-week band;
+  - WR capture@5 +0.066;
+  - FLEX capture@10 +0.048, FLEX capture@20 +0.055 (4–0);
+  - Half-PPR agrees.
+- **Null arm.** Shrank to +0.028 at WR (zero in week 4).
+- **Methodology.** W5–W14 reproduced byte-for-byte; 12 gates pass on a fresh isolated ingest with
+  A2's row-order restore.
+- **Next.** Continue weekly under the unchanged protocol. A direction is first readable at
+  ≥ 8 weeks; the decision comes after week 17.
+
+### Earlier status: W14 interim look 1 (D122) — **W10 on untouched 2026 weeks 1–3: INCONCLUSIVE — CONTINUE THE PRE-REGISTERED 2026 HOLDOUT. Same direction as W10 (WR capture@10 +0.078, inside W10's own 3-week predictive band); far too few weeks to confirm. Nothing shipped.**
 
 Research only. ECR is a benchmark only. Production diff EMPTY.
 **Entry point: `docs/weekly/W14_2026_VALIDATION_RESULTS.md`** (protocol: `W14_PREREGISTRATION.md`).

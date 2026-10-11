@@ -10128,3 +10128,59 @@ Research only. **Production diff EMPTY.** No PR, no merge.
 - The first look able to read a direction has **≥ 8 weeks**. The decisive look comes **after
   week 17**, with W10 §9 applied once.
 - **No change to the model, features or rules in between.**
+
+## D123 — W15: 2026 holdout look 2 (weeks 1–4): INCONCLUSIVE — CONTINUE
+
+**Date:** W15, 2026-10-10/11. **Status:** accepted (interim). **Answers:** D122 §Next.
+**Authority:**
+
+- `docs/weekly/W14_PREREGISTRATION.md` (unchanged in substance; A5 is tooling only, `47b81f6`,
+  before ingest);
+- the look-2 freeze record `bda7186`, committed before scoring;
+- `docs/weekly/W15_2026_HOLDOUT_UPDATE.md`;
+- `reports/weekly/w15_results.json` (sha256 `2a423650…`).
+
+### Decision
+
+**Protocol-permitted verdict: INCONCLUSIVE — CONTINUE PRE-REGISTERED 2026 HOLDOUT.** There are
+4 eligible weeks, below the 8 the frozen rule needs to read a direction.
+
+**Data:**
+
+- Look 2 is a fresh isolated ingest with A2's row-order restore.
+- Week 4 is newly eligible (16/16 games); week 5 is pending; weeks 6–17 are not yet played.
+- Weeks 1–3 re-scored identically at WR capture@10. Every other change was explained by an
+  upstream crosswalk revision.
+
+**Results, B − A, weeks 1–4:**
+
+| | value | by week | W–L–T | exact p | W10 4-week band |
+|---|---:|---|---|---:|---|
+| WR capture@10 | **+0.103** | −0.052 / +0.157 / +0.128 / +0.178 | 3–1–0 | 0.25 | 98th percentile, **above** the 97.5% edge |
+| WR capture@5 | +0.066 | | | | |
+| FLEX capture@10 | +0.048 | | 3–0–1 | | 80th percentile |
+| FLEX capture@20 | +0.055 | | 4–0–0 | | |
+
+- **Half-PPR agrees.** No guardrail breach.
+- **The shuffled-feature null shrank to +0.028** at WR (zero in week 4); B − N is +0.075.
+- **Same direction as W10**, and larger than W10's history predicts for 4 weeks. Not a
+  contradiction under the frozen rule, and not replication.
+
+### Methodology
+
+- **Reproduction first:** W5–W13 14/14 (plus W14 look 1) byte-identical.
+- **All 12 gates pass:**
+  - G1 1,310/1,310 and 26,097/26,097;
+  - G6: later-week deletion moves nothing in weeks 1–4;
+  - G10: 4,920 values equal to the verbatim W10 run;
+  - two byte-identical runs.
+
+### Scope
+
+Research only. **Production diff EMPTY.** No PR, no merge. 1,907 tests pass.
+
+### Next
+
+- Continue the unchanged protocol as weeks complete.
+- **The first look able to read a direction has ≥ 8 weeks.** The final look, after week 17,
+  applies W10 §9 once.
