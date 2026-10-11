@@ -1,0 +1,243 @@
+<title>Alpha Squad Weekly Board</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a stat-sheet tool. Status strip, control bar, one dense ranked table; details expand inline. */
+:root {
+  --bg: #f3f5f2; --surface: #ffffff; --fg: #18211c; --muted: #5b6760; --line: #d5dcd6;
+  --accent: #1d6b4f; --accent-soft: #e2efe8;
+  --exp: #9a5b00; --exp-soft: #fbefd9;
+  --up: #1d6b4f; --down: #b3361f; --warn: #a1620a;
+  --display: "Barlow Condensed", "Arial Narrow", sans-serif;
+  --body: "IBM Plex Sans", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #111613; --surface: #18201b; --fg: #e4ebe6; --muted: #98a59d; --line: #2d3832;
+  --accent: #5fc39a; --accent-soft: #1d3329; --exp: #f0b25a; --exp-soft: #3a2b13;
+  --up: #5fc39a; --down: #f08a72; --warn: #f0b25a; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #111613; --surface: #18201b; --fg: #e4ebe6; --muted: #98a59d; --line: #2d3832;
+  --accent: #5fc39a; --accent-soft: #1d3329; --exp: #f0b25a; --exp-soft: #3a2b13;
+  --up: #5fc39a; --down: #f08a72; --warn: #f0b25a; color-scheme: dark }
+body { background: var(--bg); color: var(--fg); font-family: var(--body); font-size: 14px; line-height: 1.45; }
+.wrap { max-width: 1100px; margin: 0 auto; padding-inline: 16px; padding-block: 20px 48px; display: grid; gap: 16px; }
+h1 { font-family: var(--display); font-weight: 700; font-size: 2rem; letter-spacing: .01em; margin: 0; text-wrap: balance; }
+.head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 16px; }
+.head .wk { font-family: var(--mono); color: var(--muted); }
+.banner { background: var(--exp-soft); color: var(--fg); border-left: 4px solid var(--exp); padding: 10px 14px; border-radius: 4px; }
+.banner b { color: var(--exp); }
+.controls { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; background: var(--surface); }
+.seg button { font: inherit; border: 0; background: transparent; color: var(--fg); padding: 6px 12px; cursor: pointer; }
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--surface); }
+.seg button.exp[aria-pressed="true"] { background: var(--exp); color: var(--surface); }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.lbl { font-size: .72rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin-right: 6px; }
+.tabs { display: flex; flex-wrap: wrap; gap: 6px; }
+.tabs button { font-family: var(--display); font-weight: 600; font-size: 1rem; letter-spacing: .04em; border: 1px solid var(--line); background: var(--surface); color: var(--fg); padding: 3px 12px; border-radius: 4px; cursor: pointer; }
+.tabs button[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+.checks { display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center; }
+.checks label { display: inline-flex; gap: 6px; align-items: center; cursor: pointer; }
+input[type="search"] { font: inherit; padding: 6px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--fg); min-width: 0; width: 13rem; max-width: 100%; }
+.small { font-size: .8rem; color: var(--muted); }
+.tbl { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; }
+table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+th, td { padding: 6px 10px; text-align: left; white-space: nowrap; border-bottom: 1px solid var(--line); }
+th { font-size: .72rem; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); font-weight: 600; position: sticky; top: 0; background: var(--surface); }
+td.num, th.num { text-align: right; font-family: var(--mono); }
+td.rk { font-family: var(--mono); color: var(--muted); width: 3rem; }
+tbody tr { cursor: pointer; }
+tbody tr:hover td { background: var(--accent-soft); }
+tr.locked td { color: var(--muted); }
+.pos { font-family: var(--display); font-weight: 600; letter-spacing: .04em; }
+.pill { display: inline-block; font-size: .72rem; padding: 1px 7px; border-radius: 10px; border: 1px solid var(--line); color: var(--muted); }
+.pill.out { color: var(--down); border-color: var(--down); }
+.pill.q { color: var(--warn); border-color: var(--warn); }
+.pill.lock { color: var(--muted); }
+.up { color: var(--up); } .down { color: var(--down); }
+tr.detail td { background: var(--bg); white-space: normal; cursor: default; }
+.kv { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 4px 18px; font-size: .82rem; }
+.kv span:first-child { color: var(--muted); }
+.kv div { display: flex; justify-content: space-between; gap: 8px; border-bottom: 1px dotted var(--line); }
+.kv div span:last-child { font-family: var(--mono); }
+details { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 10px 14px; }
+details summary { cursor: pointer; font-weight: 600; }
+.meta { display: grid; gap: 8px; margin-top: 10px; font-size: .85rem; }
+.meta code { font-family: var(--mono); font-size: .8rem; word-break: break-all; }
+.toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; }
+.btn { font: inherit; border: 1px solid var(--line); background: var(--surface); color: var(--fg); padding: 5px 12px; border-radius: 6px; cursor: pointer; }
+textarea { width: 100%; height: 8rem; font-family: var(--mono); font-size: .75rem; background: var(--surface); color: var(--fg); border: 1px solid var(--line); }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="wrap">
+  <div class="head">
+    <h1>Alpha Squad Weekly Board</h1>
+    <span class="wk" id="wk"></span>
+  </div>
+  <div class="banner" id="banner"></div>
+
+  <div class="controls">
+    <div><span class="lbl">Board</span><span class="seg" id="modelSeg">
+      <button id="m-w10" class="exp" data-v="w10_experimental">W10 experimental</button>
+      <button id="m-ctl" data-v="alpha_control">Current Alpha</button>
+      <button id="m-cmp" data-v="compare">Compare</button>
+    </span></div>
+    <div><span class="lbl">Scoring</span><span class="seg" id="scoreSeg">
+      <button id="s-full" data-v="full_ppr">Full PPR</button>
+      <button id="s-half" data-v="half_ppr">Half PPR</button>
+    </span></div>
+  </div>
+  <div class="tabs" id="tabs"></div>
+  <div class="toolbar">
+    <div class="checks">
+      <label><input type="checkbox" id="hideStarted"> Hide games already started</label>
+      <label><input type="checkbox" id="hideOut"> Hide Out / inactive</label>
+      <input type="search" id="q" placeholder="Find a player or team" aria-label="Find a player or team">
+    </div>
+    <button class="btn" id="copyCsv">Copy view as CSV</button>
+  </div>
+  <textarea id="csvFallback" hidden aria-label="CSV of the current view"></textarea>
+  <div class="small" id="note"></div>
+  <div class="tbl"><table><thead id="thead"></thead><tbody id="tbody"></tbody></table></div>
+
+  <details>
+    <summary>About this board: models, cutoff, data and checks</summary>
+    <div class="meta" id="meta"></div>
+  </details>
+</div>
+
+<script>
+const DATA = /*__DATA__*/null;
+const M = DATA.meta, P = DATA.players, B = DATA.boards;
+const VIEWS = ["OVERALL","QB","RB","WR","TE","FLEX","K","DST"];
+const INPUT_LABELS = {
+  games_played_prior: "2026 games before this week", fp_ppr_avg_last3: "PPR pts, last 3 games",
+  fp_ppr_avg_season_to_date: "PPR pts, 2026 avg", targets_avg_last3: "Targets, last 3",
+  carries_avg_last3: "Carries, last 3", receptions_avg_last3: "Receptions, last 3",
+  target_share_avg_last3: "Target share, last 3", snap_pct_avg_last3: "Snap share, last 3",
+  team_plays_avg_last3: "Team plays, last 3", team_pass_rate_avg_last3: "Team pass rate, last 3",
+  team_epa_avg_last3: "Team EPA per game, last 3", prior_ppg: "2025 PPR pts/game",
+  prior_rank: "2025 position rank", prior_opp_pg: "2025 opportunities/game",
+  prior_tsh: "2025 target share", prior_snap: "2025 snap share", prior_games: "2025 games",
+  has_prior: "Has a 2025 season"
+};
+let st = { model: "w10_experimental", scoring: "full_ppr", view: "OVERALL", open: null };
+try { Object.assign(st, JSON.parse(localStorage.getItem("asq-board") || "{}"), { open: null }); } catch (e) {}
+const save = () => { try { localStorage.setItem("asq-board", JSON.stringify({ model: st.model, scoring: st.scoring, view: st.view })); } catch (e) {} };
+
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const f2 = v => v == null ? "—" : Number(v).toFixed(2);
+const fIn = (k, v) => v == null ? "—" : (/share|tsh|snap|pass_rate/.test(k) ? (100 * v).toFixed(0) + "%" : k === "has_prior" ? (v ? "yes" : "no") : Number(v).toFixed(k === "team_epa_avg_last3" ? 3 : 1));
+const proj = (p, m) => (m === "alpha_control" ? p.pc : p.pw)?.[st.scoring];
+const isOut = p => p.rs === "INA" || /^(Out|Doubtful)$/i.test(p.inj || "");
+const kickoff = p => new Date(p.ko).toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" });
+
+function avail(p) {
+  const out = [];
+  if (p.started) out.push('<span class="pill lock">started</span>');
+  if (p.rs === "INA") out.push('<span class="pill out">inactive</span>');
+  if (p.inj) out.push(`<span class="pill ${/out|doubt/i.test(p.inj) ? "out" : "q"}">${esc(p.inj)}</span>`);
+  return out.join(" ") || '<span class="small">no designation</span>';
+}
+
+function rows() {
+  const base = st.model === "compare" ? "w10_experimental" : st.model;
+  const order = B[base][st.scoring][st.view];
+  const rankC = new Map(B.alpha_control[st.scoring][st.view].map((i, n) => [i, n + 1]));
+  const q = document.getElementById("q").value.trim().toLowerCase();
+  const hs = document.getElementById("hideStarted").checked, ho = document.getElementById("hideOut").checked;
+  return order.map((i, n) => ({ p: P[i], i, rank: n + 1, rankC: rankC.get(i) }))
+    .filter(r => !(hs && r.p.started) && !(ho && isOut(r.p)) &&
+      (!q || r.p.n.toLowerCase().includes(q) || r.p.tm.toLowerCase() === q));
+}
+
+function render() {
+  document.querySelectorAll("#modelSeg button").forEach(b => b.setAttribute("aria-pressed", b.dataset.v === st.model));
+  document.querySelectorAll("#scoreSeg button").forEach(b => b.setAttribute("aria-pressed", b.dataset.v === st.scoring));
+  document.querySelectorAll("#tabs button").forEach(b => b.setAttribute("aria-pressed", b.dataset.v === st.view));
+  const cmp = st.model === "compare";
+  document.getElementById("thead").innerHTML = cmp
+    ? `<tr><th>W10</th><th>Player</th><th>Pos</th><th>Matchup</th><th class="num">W10 pts</th><th class="num">Alpha pts</th><th class="num">Δ pts</th><th class="num">Alpha rank</th><th class="num">Moved</th><th>Availability</th></tr>`
+    : `<tr><th>Rank</th><th>Player</th><th>Pos</th><th>Matchup</th><th class="num">Proj pts</th><th>Availability</th></tr>`;
+  const rs = rows();
+  const cols = cmp ? 10 : 6;
+  document.getElementById("tbody").innerHTML = rs.map(r => {
+    const p = r.p, mu = `${p.home ? "vs" : "@"} ${esc(p.opp)} · ${esc(kickoff(p))}`;
+    let tds;
+    if (cmp) {
+      const a = proj(p, "alpha_control"), w = proj(p, "w10_experimental");
+      const d = (w != null && a != null) ? w - a : null, mv = r.rankC != null ? r.rankC - r.rank : null;
+      tds = `<td class="rk">${r.rank}</td><td>${esc(p.n)}</td><td class="pos">${p.pos}</td><td>${mu}</td>
+        <td class="num">${f2(w)}</td><td class="num">${f2(a)}</td>
+        <td class="num ${d > 0 ? "up" : d < 0 ? "down" : ""}">${d == null ? "—" : (d > 0 ? "+" : "") + d.toFixed(2)}</td>
+        <td class="num">${r.rankC ?? "—"}</td>
+        <td class="num ${mv > 0 ? "up" : mv < 0 ? "down" : ""}">${mv == null ? "—" : mv > 0 ? "▲" + mv : mv < 0 ? "▼" + (-mv) : "·"}</td><td>${avail(p)}</td>`;
+    } else {
+      tds = `<td class="rk">${r.rank}</td><td>${esc(p.n)} <span class="small">${esc(p.tm)}</span></td><td class="pos">${p.pos}</td><td>${mu}</td><td class="num">${f2(proj(p, st.model))}</td><td>${avail(p)}</td>`;
+    }
+    let html = `<tr data-i="${r.i}" class="${p.started ? "locked" : ""}" aria-expanded="${st.open === r.i}">${tds}</tr>`;
+    if (st.open === r.i) html += `<tr class="detail"><td colspan="${cols}">${detail(p)}</td></tr>`;
+    return html;
+  }).join("") || `<tr><td colspan="${cols}" class="small">No players match these filters.</td></tr>`;
+  const scoreNote = st.scoring === "half_ppr" ? " Half-PPR points are an approximation: the Full-PPR projection minus half a point per recent average reception." : "";
+  document.getElementById("note").textContent =
+    `${rs.length} shown. Ranks are fixed for the whole board; filters only hide rows. Tap a row to see the model's inputs.${scoreNote}`;
+  save();
+}
+
+function detail(p) {
+  const kv = Object.entries(p.in || {}).map(([k, v]) => `<div><span>${esc(INPUT_LABELS[k] || k)}</span><span>${fIn(k, v)}</span></div>`).join("");
+  return `<div class="small" style="margin-bottom:6px">Model inputs for ${esc(p.n)}. These are what the models were given, not an explanation of how each model weighed them.
+    Source: current Alpha = ${esc(p.sc)}; W10 board = ${esc(p.sw)}.</div>
+    ${kv ? `<div class="kv">${kv}</div>` : '<div class="small">No player-level model inputs: this position uses the season baseline.</div>'}`;
+}
+
+function csv() {
+  const cmp = st.model === "compare";
+  const head = cmp ? ["w10_rank","alpha_rank","player","pos","team","opp","w10_pts","alpha_pts","started","roster_status","injury"]
+    : ["rank","player","pos","team","opp","proj_pts","started","roster_status","injury"];
+  const q = v => `"${String(v ?? "").replace(/"/g, '""')}"`;
+  const lines = rows().map(r => { const p = r.p; return (cmp
+    ? [r.rank, r.rankC, p.n, p.pos, p.tm, p.opp, f2(proj(p, "w10_experimental")), f2(proj(p, "alpha_control")), p.started, p.rs, p.inj]
+    : [r.rank, p.n, p.pos, p.tm, p.opp, f2(proj(p, st.model)), p.started, p.rs, p.inj]).map(q).join(","); });
+  return [`# snapshot ${M.snapshot_id} | ${st.model} | ${st.scoring} | ${st.view} | cutoff ${M.cutoff}`, head.join(","), ...lines].join("\n");
+}
+
+function meta() {
+  const c = M.checks, ex = M.exclusions;
+  const eq = c.feature_equivalence, cp = c.control_vs_production, wf = c.w10_vs_frozen_path;
+  const models = Object.entries(M.models).map(([k, m]) => `<div><b>${esc(m.label)}</b>: ${esc(m.status)}. ${esc(m.model)}, trained on ${m.training_seasons.join("–")}, positions ${m.positions.join("/")}${m.qb ? " (QB " + esc(m.qb) + ")" : ""}. ${m.features.length} inputs.</div>`).join("");
+  const ds = M.data_sources.map(d => `<div>${esc(d.source)}/${esc(d.dataset)}${d.captured_at ? " · captured " + esc(d.captured_at) : ""} · <code>${esc((d.sha256 || "").slice(0, 16))}…</code></div>`).join("");
+  document.getElementById("meta").innerHTML = `
+    <div>Snapshot <code>${esc(M.snapshot_id)}</code> · ${esc(M.beta_version)}</div>
+    <div>Generated and cut off at <b>${esc(M.cutoff)}</b>. Features use only games from weeks before week ${M.week} (latest used: week ${esc(c.stats_weeks_used_max)}). Roster from week ${esc(M.roster_week_used)}.</div>
+    ${models}
+    <div>K and DST: neither model projects them weekly. Both boards use the existing D57 season baseline divided by 17, with no matchup adjustment.</div>
+    <div><b>Not on the board:</b> bye teams ${esc(ex.bye_teams.join(", ") || "none")}; roster statuses excluded ${esc(Object.entries(ex.roster_status).map(([k, v]) => k + " " + v).join(", "))}; unresolved identities ${ex.unresolved_identity.length}; players without any projection ${M.unprojected.alpha_control.length} (kickers with no prior NFL season).</div>
+    <div><b>Checks on the completed week ${esc(eq?.week)}:</b> prospective features equal production's stored features in ${esc(eq?.cells_compared - eq?.cells_mismatched)} of ${esc(eq?.cells_compared)} cells;
+      current Alpha matches production's stored predictions for ${esc(cp?.exact)} of ${esc(cp?.compared)} players; W10 matches its frozen training path for ${esc(wf?.exact)} of ${esc(wf?.compared)}.</div>
+    <div><b>Data</b>${ds}</div>`;
+}
+
+document.getElementById("wk").textContent = `${M.season} · Week ${M.week} · cutoff ${new Date(M.cutoff).toLocaleString()}`;
+document.getElementById("banner").innerHTML = esc(M.disclaimer).replace("EXPERIMENTAL BETA.", "<b>Experimental beta.</b>");
+document.getElementById("tabs").innerHTML = VIEWS.map(v => `<button id="v-${v}" data-v="${v}">${v === "OVERALL" ? "All" : v}</button>`).join("");
+document.getElementById("modelSeg").onclick = e => { const v = e.target.dataset?.v; if (v) { st.model = v; render(); } };
+document.getElementById("scoreSeg").onclick = e => { const v = e.target.dataset?.v; if (v) { st.scoring = v; render(); } };
+document.getElementById("tabs").onclick = e => { const v = e.target.dataset?.v; if (v) { st.view = v; st.open = null; render(); } };
+["hideStarted", "hideOut"].forEach(id => document.getElementById(id).onchange = render);
+document.getElementById("q").oninput = render;
+document.getElementById("tbody").onclick = e => { const tr = e.target.closest("tr[data-i]"); if (!tr) return; const i = +tr.dataset.i; st.open = st.open === i ? null : i; render(); };
+document.getElementById("copyCsv").onclick = async () => {
+  const text = csv(), btn = document.getElementById("copyCsv"), ta = document.getElementById("csvFallback");
+  try { await navigator.clipboard.writeText(text); btn.textContent = "Copied"; ta.hidden = true; }
+  catch (e) { ta.value = text; ta.hidden = false; ta.select(); btn.textContent = "Select and copy the text below"; }
+  setTimeout(() => { btn.textContent = "Copy view as CSV"; }, 2500);
+};
+meta();
+render();
+</script>
