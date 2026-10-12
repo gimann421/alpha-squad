@@ -3,7 +3,9 @@
 Living summary of what is implemented, validated, and outstanding. Updated at the end of every
 milestone. See `docs/TRACEABILITY.md` for the acceptance-criteria-level mapping.
 
-## Status: W15, 2026 holdout look 2 (D123) — **W10 on untouched 2026 weeks 1–4: INCONCLUSIVE — CONTINUE (4 < 8 eligible weeks). WR capture@10 +0.103 (3–1), FLEX capture@10 +0.048; same direction as W10, larger than its history predicts. Nothing shipped.**
+## Status: W16 (D124) — **holdout base database verified as the original W10 base (sha `fa8e32db…`); W10/W14/W15 artifacts reproduce byte-for-byte. Durable off-container preservation is BLOCKED (see `docs/weekly/W16_DATABASE_RECOVERY.md` §5).**
+
+### Earlier status: W15, 2026 holdout look 2 (D123) — **W10 on untouched 2026 weeks 1–4: INCONCLUSIVE — CONTINUE (4 < 8 eligible weeks). WR capture@10 +0.103 (3–1), FLEX capture@10 +0.048; same direction as W10, larger than its history predicts. Nothing shipped.**
 
 Research only. ECR is a benchmark only. Production diff EMPTY.
 **Entry point: `docs/weekly/W15_2026_HOLDOUT_UPDATE.md`** (protocol: `W14_PREREGISTRATION.md`;

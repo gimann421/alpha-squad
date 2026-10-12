@@ -10184,3 +10184,43 @@ Research only. **Production diff EMPTY.** No PR, no merge. 1,907 tests pass.
 - Continue the unchanged protocol as weeks complete.
 - **The first look able to read a direction has ≥ 8 weeks.** The final look, after week 17,
   applies W10 §9 once.
+
+## D124 — W16: the holdout base database is the original W10 base; durable preservation blocked
+
+**Date:** W16, 2026-10-12. **Status:** accepted. **Answers:** the W16 follow-up ("verify the
+original holdout database").
+**Authority:**
+
+- `docs/weekly/W16_DATABASE_RECOVERY.md`;
+- `docs/weekly/manifests/w14_snapshot_manifest.json` and `w15_snapshot_manifest.json`.
+
+### Decision
+
+**ORIGINAL DATABASE VERIFIED.** `data/alpha_squad.duckdb`, sha-256
+`fa8e32dbbb8942d890d38f0fad5c88981dc7f171238826abf13eb09ddd2a73c7`, is the W10 base:
+
+- W10's historical run on it is byte-identical to `w10_results.json`.
+- The W14 runner on the w14 copy (`569d74b9…`) is byte-identical to `w14_results.json`.
+- The W14 runner on the w15 copy (`e745603d…`) is byte-identical to `w15_results.json`.
+- Both copies contain every canonical snapshot. They differ from the base through 2025 only in
+  K/DST feature rows and `built_at`; zero QB/RB/WR/TE model-input differences.
+
+**Every future holdout look starts from a fresh copy whose hash is checked against `fa8e32db…`
+before use.**
+
+### Preservation
+
+**Not durably preserved.** The only copies live in the ephemeral session container. Each
+private route was tried and failed:
+
+- private repository creation: 403;
+- private artifact asset upload: denied by the permission policy.
+
+A release asset on the public repository was not used without the owner's approval. The
+recorded hashes keep the identity checkable if the file is lost; a rebuilt base must match them
+before it can serve the holdout.
+
+### Scope
+
+Documentation and hash manifests only. No model, protocol or production change. No PR, no
+merge.
