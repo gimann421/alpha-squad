@@ -365,7 +365,11 @@ byte-identical.**
      week.
 4. **K/DST are season baselines ÷ 17.** They have no matchup or in-season information, and every
    week's K/DST order is nearly static.
-5. **No automatic weekly refresh.** Each board is a manual run:
+5. **Weekly refresh is one command (D125):**
+   `uv run python scripts/beta/refresh.py --season 2026 --week <N> [--html]`. It verifies the
+   base hash `fa8e32db…`, works on a fresh hash-checked copy under `data/beta/`, runs A2 between
+   `features build` and `train`, refuses holdout paths, and re-checks the base hash at the end
+   (`tests/beta/test_refresh.py`). It wraps the manual steps it replaced:
    - a §3-style ingest into `data/beta/`;
    - A2's restore;
    - `train established`;
