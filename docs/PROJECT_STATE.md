@@ -3,9 +3,14 @@
 Living summary of what is implemented, validated, and outstanding. Updated at the end of every
 milestone. See `docs/TRACEABILITY.md` for the acceptance-criteria-level mapping.
 
-## Status: W16 (D124) — **holdout base database verified as the original W10 base (sha `fa8e32db…`); W10/W14/W15 artifacts reproduce byte-for-byte. Durable off-container preservation is BLOCKED (see `docs/weekly/W16_DATABASE_RECOVERY.md` §5).**
+## Status: W16 recovery (D125) — **the original W10 base database `fa8e32db…` survives in this session's container and is VERIFIED: W10, W14 and W15 artifacts reproduce byte-for-byte on it. This resolves D124's look-3 blocker (option a). Durable off-container preservation is still BLOCKED (`docs/weekly/W16_DATABASE_RECOVERY.md` §5).**
 
-### Earlier status: W15, 2026 holdout look 2 (D123) — **W10 on untouched 2026 weeks 1–4: INCONCLUSIVE — CONTINUE (4 < 8 eligible weeks). WR capture@10 +0.103 (3–1), FLEX capture@10 +0.048; same direction as W10, larger than its history predicts. Nothing shipped.**
+### Earlier status: W16 (D124) — **EXPERIMENTAL weekly beta usable: a prospective 2026 week-5 board (W10 vs current Alpha, Full/Half PPR, positions + FLEX, K/DST baseline), beta-only additive code, no existing production file changed. Holdout unchanged: no new eligible week (week 5 ends Mon 10-12); still INCONCLUSIVE — CONTINUE at 4 weeks. Next look blocked on a user decision: the canonical DB is lost, and the rebuilt base `8b6cca85…` reproduces production but not W10's committed fits (WR c@10 +0.029 vs +0.022, same SUCCESS).**
+
+**Entry point: `docs/weekly/W16_BETA_READINESS_AND_HOLDOUT.md`.** Beta code: `src/alpha_squad/beta/`,
+`scripts/beta/`, `tests/beta/`. The W15 status below is unchanged and still current for the holdout.
+
+## Previous status: W15, 2026 holdout look 2 (D123) — **W10 on untouched 2026 weeks 1–4: INCONCLUSIVE — CONTINUE (4 < 8 eligible weeks). WR capture@10 +0.103 (3–1), FLEX capture@10 +0.048; same direction as W10, larger than its history predicts. Nothing shipped.**
 
 Research only. ECR is a benchmark only. Production diff EMPTY.
 **Entry point: `docs/weekly/W15_2026_HOLDOUT_UPDATE.md`** (protocol: `W14_PREREGISTRATION.md`;

@@ -1,7 +1,7 @@
 # W16 — Holdout database recovery and verification
 
 **Date:** 2026-10-12. **Scope:** read-only verification plus a preservation attempt. No model,
-protocol or production change. Decision record: `docs/DECISIONS.md` D124.
+protocol or production change. Decision record: `docs/DECISIONS.md` D125 (resolves D124 option a).
 
 ## 1. Question
 
@@ -58,6 +58,12 @@ All three hashes were the same before and after the reproductions below. No file
 
 **Conclusion: ORIGINAL DATABASE VERIFIED.** `fa8e32db…` is the W10 base, and both holdout
 copies descend from it.
+
+**Relation to D124.** A parallel W16 session found no canonical file in its container and
+worked on a rebuilt base (`8b6cca85…`). On that base W10's arms gave WR capture@10 +0.0291
+instead of the committed +0.0223. That rebuilt base is a different database. The original
+reproduces +0.0223 exactly, so D124's option (a), recovering the canonical database, is met.
+Holdout look 3 uses a fresh copy of `fa8e32db…`.
 
 ## 5. Durable preservation — status: NOT PRESERVED (blocked)
 

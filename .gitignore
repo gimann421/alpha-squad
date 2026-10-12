@@ -133,6 +133,11 @@ reports/**
 !reports/weekly/w14_results.json
 # W15/D123: the W14 protocol's look 2 (2026 weeks 1-4), same runner and gates.
 !reports/weekly/w15_results.json
+# W16/D124: saved EXPERIMENTAL beta weekly boards (snapshot JSON only; CSV/HTML are regenerated
+# from it). Kept because a board saved at its cutoff cannot be reconstructed later. These are
+# product snapshots, never holdout inputs (docs/weekly/W16_BETA_READINESS_AND_HOLDOUT.md).
+!reports/beta/
+!reports/beta/weekly_board_*.json
 state/**
 !state/.gitkeep
 *.duckdb
