@@ -123,3 +123,26 @@ Research only. **Production diff EMPTY**; no model, feature or protocol change. 
 - The final look after week 17 applies W10 §9 once.
 - **Separately:** fix the `build_rookie_features` NOT NULL defect in production. It is not on the
   holdout path.
+
+---
+
+## Separate: Week-6 EXPERIMENTAL beta board (not a holdout observation)
+
+**Snapshot:** `reports/beta/weekly_board_2026_w06_78b3a6ba0a92.json` (sha
+`78b3a6ba0a925c0d…`). 472 eligible players; bye teams CIN, DET, MIA, MIN.
+
+**How it was built:**
+
+- `scripts/beta/refresh.py --season 2026 --week 6 --html`, on a fresh hash-checked copy of
+  `fa8e32db…` in `data/beta/2026_w06_20261013T134631Z/`.
+- The wrapper stopped at `features build` on the same `build_rookie_features` defect.
+  `rookie_features` is not read by the beta.
+- Its remaining steps (A2, `train established`, board, HTML) were then run unchanged from its own
+  plan. The resume is noted in `refresh_manifest.json`.
+- The base hash was unchanged before and after.
+
+**Fidelity on completed week 5:**
+
+- current Alpha equals production's stored predictions, 342/342;
+- W10 equals its frozen path, 306/306;
+- A2 loader order matches for QB, RB, WR and TE.
