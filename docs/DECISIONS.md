@@ -10300,3 +10300,45 @@ amendment A6 is needed. The rebuilt base `8b6cca85…` is not used by the holdou
 
 Documentation and hash manifests only. No model, protocol or production change. No PR, no
 merge.
+
+## D126 — W17: 2026 holdout look 3 (weeks 1–5): INCONCLUSIVE — CONTINUE
+
+**Date:** W17, 2026-10-13. **Status:** accepted (interim). **Answers:** D123 §Next, D125.
+**Authority:**
+
+- `docs/weekly/W17_2026_HOLDOUT_LOOK3.md`;
+- freeze record `eeb95c3`, committed before scoring;
+- `reports/weekly/w17_results.json` (sha256 `daf46b76…`, committed unread in `b00e973`).
+
+### Decision
+
+**INCONCLUSIVE — CONTINUE PRE-REGISTERED 2026 HOLDOUT.** n = 5 < 8. No breach. No C condition.
+
+**Data path:**
+
+- A fresh copy of the verified base `fa8e32db…` (D125), so no rebuilt base and no amendment.
+- Week 5 is newly eligible: 15/15 games, board 10-09.
+- `features build` failed only in `build_rookie_features`, which no holdout-path module reads.
+  This was recorded in the freeze before scoring.
+
+**Results, B − A, Full PPR:**
+
+| cell | value | by week | W10 5-week band |
+|---|---:|---|---|
+| WR capture@10 | **+0.075** | −0.052 / +0.157 / +0.128 / +0.178 / −0.035 | 94.6th percentile, inside the band |
+| FLEX capture@10 | +0.038 | +0.050 / +0.027 / +0.114 / 0 / 0 | 73.9th percentile |
+
+- Weeks 1–4 re-score identically. Week 5 went against B at WR.
+- Half-PPR agrees.
+
+**All 12 gates pass.** G12 reuses W15's W5–W13 record, which is valid because the base and the
+research code are unchanged.
+
+### Scope
+
+Research only. Production diff empty. No PR, no merge.
+
+### Next
+
+- Continue as weeks complete; a direction can be read from week 8.
+- Fix the `build_rookie_features` defect separately.

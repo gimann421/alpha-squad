@@ -3,7 +3,9 @@
 Living summary of what is implemented, validated, and outstanding. Updated at the end of every
 milestone. See `docs/TRACEABILITY.md` for the acceptance-criteria-level mapping.
 
-## Status: W16 recovery (D125) — **the original W10 base database `fa8e32db…` survives in this session's container and is VERIFIED: W10, W14 and W15 artifacts reproduce byte-for-byte on it. This resolves D124's look-3 blocker (option a). Durable off-container preservation is still BLOCKED (`docs/weekly/W16_DATABASE_RECOVERY.md` §5).**
+## Status: W17, 2026 holdout look 3 (D126) — **W10 on untouched 2026 weeks 1–5: INCONCLUSIVE — CONTINUE (5 < 8). WR capture@10 +0.075 (3–2; week 5 −0.035), now inside W10's 5-week band (94.6th percentile); FLEX capture@10 +0.038. All 12 gates pass on a fresh copy of the verified base `fa8e32db…`. Nothing shipped.** Entry point: `docs/weekly/W17_2026_HOLDOUT_LOOK3.md`.
+
+### Earlier status: W16 recovery (D125) — **the original W10 base database `fa8e32db…` survives in this session's container and is VERIFIED: W10, W14 and W15 artifacts reproduce byte-for-byte on it. This resolves D124's look-3 blocker (option a). Durable off-container preservation is still BLOCKED (`docs/weekly/W16_DATABASE_RECOVERY.md` §5).**
 
 ### Earlier status: W16 (D124) — **EXPERIMENTAL weekly beta usable: a prospective 2026 week-5 board (W10 vs current Alpha, Full/Half PPR, positions + FLEX, K/DST baseline), beta-only additive code, no existing production file changed. Holdout unchanged: no new eligible week (week 5 ends Mon 10-12); still INCONCLUSIVE — CONTINUE at 4 weeks. Next look blocked on a user decision: the canonical DB is lost, and the rebuilt base `8b6cca85…` reproduces production but not W10's committed fits (WR c@10 +0.029 vs +0.022, same SUCCESS).**
 
