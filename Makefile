@@ -1,4 +1,4 @@
-.PHONY: install test test-network test-cov lint fmt check-secrets ingest identity college-usage features team-scores market train project-current-season capture-live-market evaluate edge simulate orchestrate serve serve-web clean
+.PHONY: install test test-network test-cov lint fmt check-secrets ingest identity college-usage features team-scores market train project-current-season capture-live-market evaluate edge simulate orchestrate serve serve-web clean ros-backtest ros-board
 
 install:
 	uv sync --extra dev
@@ -128,3 +128,11 @@ serve-web:
 clean:
 	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
 	rm -rf .pytest_cache .ruff_cache htmlcov .coverage
+
+# D116: midseason ROS QB trade model (docs/ROS_QB_TRADE_MODEL.md). Independent of the draft
+# pipeline above: reads raw files under data/raw, writes only data/ros and reports/ros.
+ros-backtest:
+	uv run alpha-squad ros backtest --rebuild-panel
+
+ros-board:
+	uv run alpha-squad ros board

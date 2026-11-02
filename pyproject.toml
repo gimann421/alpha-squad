@@ -71,6 +71,8 @@ ignore = ["E501"]
 # bug the rule exists to catch. FastAPI inspects these at route-declaration time, not per-call.
 [tool.ruff.lint.per-file-ignores]
 "src/alpha_squad/api/**/*.py" = ["B008"]
+# typer's own idiom (typer.Option(...)/typer.Argument(...) defaults) for the D116 ROS command group.
+"src/alpha_squad/ros/cli.py" = ["B008"]
 
 [tool.coverage.run]
 source = ["src/alpha_squad"]

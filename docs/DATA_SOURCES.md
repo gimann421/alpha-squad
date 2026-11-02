@@ -124,3 +124,42 @@ repository scope, not a network-policy or GitHub-API error — this session's Gi
 scoped to specific attached repos, and nflverse-data was never one of them (nor does it need to
 be: the project only ever reads `raw.githubusercontent.com` release-asset URLs directly, which
 has worked throughout). Do not depend on the GitHub REST API for dataset discovery either way.
+
+
+## D116 addendum — midseason ROS QB trade model (verified 2026-11-02)
+
+Measured directly by `alpha-squad ros ingest` / `ros backtest`; every figure below is from the
+files actually downloaded (sha256 recorded in `data/ros/inputs_manifest.json`).
+
+**Historical ROS ECR exists and is genuinely weekly.** `dynastyprocess/data` `db_fpecr.parquet`
+(the file `nflreadr::load_ff_rankings` reads) holds FantasyPros `/nfl/rankings/ros-qb.php`
+(`ecr_type='rp'`, `page_type='redraft-qb'`; the same page is mirrored as `ros-qb` before
+2020-10-16). Coverage: scrape dates 2019-12-27, then weekly from 2020-09-10 through 2026-10-30
+(~16 scrapes per season, 2021-2025 complete). Scrapes are **dated, not timestamped**, and are
+**Fridays** from 2021 (2020: mostly Thursdays, which are NFL game days, so only one 2020 week-6
+snapshot is usable). Rows are preserved as scraped (the file is an append-only history, not
+overwritten by later rankings: each `scrape_date` carries its own full board). The same file also
+carries `/nfl/rankings/ros-ppr-overall.php` (all positions on one board) used for market prices.
+`ecr`, `sd`, `best`, `worst` are the only fields: **no ROS point projections, no per-expert ranks,
+no scrape time**. 2015-2019 ROS QB history does not exist in this archive.
+
+**No historical ROS point projections exist anywhere reachable.** FantasyPros' API (free tier,
+key present) now serves `type=ROS` consensus ranks (correcting D38, which observed `Draft` only)
+and weekly point projections, but **only the top 10 players per request and with no pagination**
+(`limit`/`offset`/`page` ignored), and there is no historical endpoint. They are shown on the live
+board for reference only and are never in a backtest. Model B (published ROS projections) is
+therefore **untested, not failed**.
+
+**nfldata schedule.** `raw.githubusercontent.com/nflverse/nfldata/master/data/games.csv` carries
+every game including the unplayed remainder of the current season (`gameday`, `gametime`, scores
+once played). Adapter: `sources/nfldata.py` (deliberately not registered in `all_adapters`).
+It also carries closing betting lines; the ROS panel never reads them (future-week lines would
+leak).
+
+**nflverse weekly stats / pbp / injuries** 2019-2026 are used as-of the scrape date only.
+`injuries.date_modified` exists for recent seasons and not for all; where absent only
+prior-week reports are used.
+
+Licensing: all of the above are public GitHub-hosted community datasets (nflverse, DynastyProcess
+-- both note FantasyPros-derived data is for personal/research use) and the FantasyPros free API
+under this account's key. Nothing in `data/` is committed.

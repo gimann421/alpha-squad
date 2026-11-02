@@ -177,6 +177,21 @@ state at the time each milestone was first built.
 | Recommendation explanations show relevant evidence/provenance | ✅ | reasons rendered alongside every recommendation; `PlayerDetailView.tsx`'s "why did this change" evidence timeline (D53) |
 | UI does not duplicate or bypass core model/decision logic | ✅ | D27; every API field traces to a persisted table or a direct M10 function call — verified literally by killing the API process and confirming the UI breaks rather than serving stale data. D53 kept this true through productization: the one client-side computation added (`DraftView.tsx`'s `available_player_ids`) is pure set-subtraction over already-ranked/already-drafted ids, not a decision |
 
+## Midseason ROS QB trade decisions (D116)
+
+| Criterion (D116 brief) | Status | Where |
+|---|---|---|
+| Historical ROS ECR located, audited, ingested with provenance | ✅ | `ros/ingest.py`, `ros/snapshots.py`; `docs/DATA_SOURCES.md` D116 addendum; `data/ros/inputs_manifest.json` |
+| Historical ROS **point projections** / independent projections | ❌ BLOCKED (do not exist in any reachable archive; FP free API = top-10, no history) | reported, nothing substituted; `docs/ROS_QB_TRADE_MODEL.md` §2 |
+| Leak-safe snapshot panel, stable ids, provenance | ✅ | `ros/snapshots.py`; `tests/unit/test_ros_snapshots.py`, `tests/leakage/test_ros_leakage.py`, `tests/integration/test_ros_panel_real.py` |
+| Configurable scoring | ✅ | `ros/scoring.py` (bit-identical to nflverse columns); `tests/unit/test_ros_scoring.py` |
+| Models A, C, D, E + walk-forward by season, no random splits | ✅ (B untestable) | `ros/models.py`, `ros/backtest.py` |
+| Point / rank / pairwise / probability / regret / block-bootstrap metrics | ✅ | `ros/metrics.py`; `tests/unit/test_ros_metrics.py`; `reports/ros/RESULTS.md` |
+| Replacement-aware roster-level decision value (Model F) | ⚠️ LIMITED: synthetic leagues, market-priced swaps, 4 test seasons | `ros/lineup.py`, `ros/rosterbench.py`; `tests/unit/test_ros_lineup.py`, `test_ros_rosterbench.py` |
+| Monte Carlo trade simulation validated against history | ⚠️ LIMITED: QB totals under-cover at kappa=1 (calibrated to 1.25); trade P(improves) conservative | `ros/trade.py`, `ros/noise.py`, `ros/tradeval.py`; `tests/unit/test_ros_trade.py` |
+| Playoff / championship probability | ⚠️ LIMITED: scenario-based unless standings supplied; unvalidated | `ros/trade.py::simulate_outcomes` |
+| Live decision tool with timestamps, no silent stale data | ✅ | `ros/live.py`, `ros/cli.py` (`ros board`, `ros trade`) |
+
 ## Empirical validation (M16, D54)
 
 M15's "does the feature exist and run" rows above are necessary but not sufficient — this

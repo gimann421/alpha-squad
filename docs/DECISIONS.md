@@ -8778,3 +8778,70 @@ table, QB +65.2 / WR +35.3 / TE +35.2).
 tests` clean; `check-secrets` clean. New: `scripts/research/d115_regret_attribution.py`,
 `tests/unit/test_d115_regret_attribution.py`, `docs/D115_REGRET_ATTRIBUTION.md`; fixed
 `tests/unit/test_d114_matched_state.py`. D116 not started.
+
+## D116 — Midseason ROS QB trade model: ECR is a coin flip between similar QBs; a production-based, availability-aware forecast makes better swaps; Model B is untestable. New `ros` package; nothing in production changed.
+
+**Question.** How accurate is FantasyPros' midseason ROS QB consensus (ECR) at predicting realized
+rest-of-season points; does any alternative (ROS projections, production, usage/context, a
+combination) make better *acquisition decisions*; what does a QB trade actually do to a lineup?
+Full report: `docs/ROS_QB_TRADE_MODEL.md`. Reproduce: `alpha-squad ros backtest`.
+
+**Data (all measured, none assumed).** DynastyProcess `db_fpecr` carries genuine weekly FantasyPros
+ROS-QB boards (`/nfl/rankings/ros-qb.php`, `ecr_type=rp`) 2019-12 -> 2026-10-30, Friday scrapes,
+date-stamped only. It carries **no ROS point projections, no per-expert ranks**, and nothing before
+2019-12. No historical ROS projections exist in any reachable archive; FantasyPros' free API (D37)
+now serves `type=ROS` (correcting D38) and weekly projections but only the top 10 per request, no
+pagination, no history. => **Model B untestable, not failed; nothing was substituted.** Schedule
+including unplayed games: `nflverse/nfldata games.csv` (new unregistered adapter `sources/nfldata.py`).
+Usable evaluation: 4 test seasons (2022-25) x weeks 6-10 = 20 snapshots, 720 QB-snapshots/model; 2020
+contributes one training snapshot only (Thursday scrapes are game days).
+
+**Method.** Leak-safe panel (`gameday < scrape_date` -> features, `>` -> target through week 17,
+`==` excluded from both; missed games score 0; byes respected), configurable scoring (bit-identical to
+nflverse's columns), season-level walk-forward (train `< T`, test `T`; every fitted object inside
+that fence; leakage tests corrupt the test season and the future), season-and-snapshot block
+bootstrap. Models: A (ECR curve), S2D (parameter-free season-to-date baseline), C, D (two-part
+ridge: points/game played x availability), E (stack/blend), GBM sensitivity. Model F: weekly
+optimal-lineup value with waiver replacement (`ros/lineup.py`, tested against an exact solver),
+market-priced one-for-one swaps in synthetic 10-team leagues drafted from the ROS overall board,
+scored on realized weekly points with lineups picked by forecast (hindsight-lineup variant reported
+as a flattering sensitivity).
+
+**Findings (4 seasons — directional, not proven).**
+1. ECR: Spearman 0.605 [0.534, 0.674]; RMSE 51 points on ~9-game totals (best of all models);
+   top-6 pairs 0.68; **QB4-15 / QB8-20 pairs 0.50 / 0.52 = coin flip**; right 74% at gaps of 12+ ranks,
+   50-54% within 3 ranks.
+2. `S2D` beats the published order in the middle of the board (+0.12 [+0.07, +0.17] QB4-15,
+   +0.13 [+0.07, +0.19] QB8-20, all four seasons) but is mis-scaled (+14.5-point bias). A truncated 2026
+   forward check disagreed (tiny, overlapping snapshots).
+3. **Primary criterion (roster-level realized lineup value): `D_usage` +25.9 [-2.0, +55.1] pts per
+   team-snapshot; +25.0 [+7.8, +45.7] vs an ECR-valued manager, +26.2 [+8.1, +45.3] vs S2D; positive vs
+   ECR in 4/4 seasons; 71% of executed trades improved; predicted 23.9 vs realized 26.9.** ECR-valued:
+   predicted +17.5, realized +0.8. Hindsight-lineup bracket: +10.0 [-7.2, +27.0], still best.
+4. Probabilities from any model's score gap are not calibrated above ~0.6. The Monte Carlo engine
+   under-covers at kappa=1 (80% interval covers 73.5%); kappa=1.25 (fixed on 2022-23) covers 80.0% /
+   77.8% (2022-23 / 2024-25). Its stated trade gain (+8.2) and P(improves) (0.53) are *conservative*
+   vs realized (+28.3, 71.6%) over 183 re-simulated trades.
+5. Ablations (exploratory): ECR is the most valuable level signal; usage/prior-season blocks reduce
+   pairwise accuracy when added; schedule and recency add nothing reliable.
+
+**Decision.** Method recommendation: `D_usage` for ranking/pricing (live default
+`ros.live.LIVE_MODEL`), ECR as a sanity check, engine P(improves) as a floor. Magnitudes are
+optimistic (winner of ~17 on the same four seasons; first-cut list fixed before results, `*` models,
+ablations and strata added after). **No production behaviour changed** — no draft logic, no `models/`,
+no `league/`, no table; two lines in `cli.py`, one `pyproject.toml` per-file ignore, new files only.
+
+**Defects found and fixed during the work (each has a regression test):** `ScoringRules.from_league`
+ignored a league-shaped dict; `pair_frame` dropped a column on empty bands; the noise model counted
+only attempts+carries as "played" (no WR/TE sd or team correlation); MC lineups were picked with
+hindsight (overstated depth/waiver value — now forecast-chosen, hindsight kept as a bound); the
+synthetic draft let rosters hoard five QBs and could emit illegal rosters (positional ceilings from
+`positional_capacity`; draft now raises on an illegal roster); Sleeper-free roster input relies on
+GSIS ids (names are lookup-only).
+
+**Not done / next:** score the live logs at season end (the only untouched hold-out); obtain
+historical ROS projections to test Model B; real league rosters/trade logs; Sleeper standings import
+to validate playoff/championship probabilities; value outgoing assets with the production model.
+
+**Repository.** See `docs/PROJECT_STATE.md`. Baseline 1533 passed at `e02fcf7`; after: all prior
+tests still pass plus the new ones listed in `docs/TRACEABILITY.md`.

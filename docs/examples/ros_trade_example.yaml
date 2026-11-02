@@ -1,0 +1,36 @@
+# ILLUSTRATIVE roster -- NOT the user's. Replace ids with your own (`alpha-squad ros find "name"`).
+league: configs/none  # falls back to the default target league (10-team 1QB PPR)
+roster:
+  - 00-0036264   # Jordan Love (QB)
+  - 00-0032764   # Derrick Henry (RB)
+  - 00-0034844   # Saquon Barkley (RB)
+  - 00-0040236   # Kyle Monangai (RB)
+  - 00-0037238   # Drake London (WR)
+  - 00-0040124   # Tetairoa McMillan (WR)
+  - 00-0031408   # Mike Evans (WR)
+  - 00-0041037   # Denzel Boston (WR)
+  - 00-0038996   # Tucker Kraft (TE)
+  - 00-0036040   # Juwan Johnson (TE)
+targets:
+  - 00-0037834   # Brock Purdy
+  - 00-0033106   # Jared Goff
+  - 00-0033077   # Dak Prescott
+  - 00-0036971   # Trevor Lawrence
+  - 00-0036442   # Joe Burrow
+# outgoing packages evaluated against every target ([] = acquire for nothing, the price ceiling)
+give:
+  - [] 
+  - [00-0032764]   # Derrick Henry (RB)
+  - [00-0034844]   # Saquon Barkley (RB)
+  - [00-0040236]   # Kyle Monangai (RB)
+  - [00-0037238]   # Drake London (WR)
+  - [00-0040124]   # Tetairoa McMillan (WR)
+  - [00-0031408]   # Mike Evans (WR)
+  - [00-0041037]   # Denzel Boston (WR)
+  - [00-0038996]   # Tucker Kraft (TE)
+  - [00-0036040]   # Juwan Johnson (TE)
+standings:   # optional: without these, playoff/championship deltas are labelled scenario numbers
+  my_wins: 4
+  other_wins: [5, 5, 4, 4, 4, 3, 3, 2, 2]
+playoffs:
+  playoff_teams: 6

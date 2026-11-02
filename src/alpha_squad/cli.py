@@ -142,6 +142,7 @@ from alpha_squad.models.uncertainty.run import (
     run_uncertainty,
     score_with_persisted_model,
 )
+from alpha_squad.ros.cli import ros_app
 from alpha_squad.sources.base import SourceError, SourceHealth, SourceStatus, utcnow
 from alpha_squad.sources.registry import all_adapters
 from alpha_squad.storage.db import get_connection, init_db
@@ -172,6 +173,7 @@ app.add_typer(league_app, name="league")
 app.add_typer(orchestrate_app, name="orchestrate")
 app.add_typer(simulate_app, name="simulate")
 app.add_typer(models_app, name="models")
+app.add_typer(ros_app, name="ros")  # D116: midseason ROS QB trade model
 console = Console()
 
 # Datasets that vary by NFL season vs. ones that are a single current/whole-history file.

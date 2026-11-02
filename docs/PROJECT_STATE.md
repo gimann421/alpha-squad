@@ -3,7 +3,16 @@
 Living summary of what is implemented, validated, and outstanding. Updated at the end of every
 milestone. See `docs/TRACEABILITY.md` for the acceptance-criteria-level mapping.
 
-## Status: D115 complete — **HALF THE PER-PICK ORACLE REGRET IS SEQUENCING, AND WHAT REMAINS IS INFORMATION, NOT THE DECISION RULE. On picks carrying 47.3% of all measured regret Alpha could have had BOTH its own player and the oracle's, in either order. Perfect information recovers 73.5%; every preseason-available arm recovers −3.2% to +2.7% with every interval spanning zero. Y1 remains production, unchanged by every phase from D85 to D115.**
+## Status: D116 complete — **MIDSEASON ROS QB TRADE MODEL: a reproducible, leak-tested backtest of FantasyPros ROS-QB ECR and five model families on 2022-2025, plus a Monte Carlo trade engine and live board. ECR is a poor tie-breaker among mid-tier QBs (coin-flip pairwise); a production-based, availability-aware ridge (`D_usage`) won the roster-level swap test (+25.9 lineup pts/team-snapshot; +25.0 [+7.8, +45.7] over ECR-valued, 4/4 seasons) — directionally supported, magnitude optimistic (4 seasons, winner picked from ~17). Model B (ROS point projections) is untestable: no historical archive exists.** Production draft/projection code is untouched.
+
+New package `src/alpha_squad/ros/` (scoring, snapshots, models, metrics, backtest, lineup, trade,
+rosterbench, tradeval, live, noise, skill, report, cli), `sources/nfldata.py` (unregistered),
+`alpha-squad ros ...` command group, `docs/ROS_QB_TRADE_MODEL.md` (the report),
+`docs/examples/ros_trade_example.yaml`, 72+ new tests (unit, leakage, integration), D116 in
+`docs/DECISIONS.md`. Existing suite: 1533 passed before, all still pass after. **Entry point:
+`docs/ROS_QB_TRADE_MODEL.md`.** Reproduce: `make ros-backtest` (~15 min), `make ros-board`.
+
+### Previously: D115 complete — **HALF THE PER-PICK ORACLE REGRET IS SEQUENCING, AND WHAT REMAINS IS INFORMATION, NOT THE DECISION RULE. On picks carrying 47.3% of all measured regret Alpha could have had BOTH its own player and the oracle's, in either order. Perfect information recovers 73.5%; every preseason-available arm recovers −3.2% to +2.7% with every interval spanning zero. Y1 remains production, unchanged by every phase from D85 to D115.**
 
 Attribution only. **No production change, no new model/feature/weight/arm, no tuning, no PR,
 nothing merged.** `src/alpha_squad/` is byte-identical to D108. New this phase:
