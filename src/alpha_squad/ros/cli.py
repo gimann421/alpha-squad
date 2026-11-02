@@ -197,7 +197,6 @@ def ros_trade(
 ) -> None:
     """Evaluate concrete QB trades for a concrete roster, with simulation and sensitivity."""
     from alpha_squad.ros import live
-
     from alpha_squad.ros.scoring import ScoringRules
 
     league, ti = live.load_trade_yaml(config)
