@@ -49,3 +49,17 @@ def test_trade_yaml_roundtrip(tmp_path):
     assert (
         ti.scenario.my_wins == 4 and ti.scenario.assumption_based
     )  # opp mean not supplied -> still scenario
+
+
+def test_trade_yaml_accepts_an_inline_league_definition(tmp_path):
+    p = tmp_path / "t.yaml"
+    p.write_text(
+        "league: {league_id: x, format: redraft, teams: 12, scoring: {ppr: true, pass_int: -1},"
+        " lineup: {QB: 1, RB: 2, WR: 2, TE: 1, FLEX: 2}, roster: {bench: 5, roster_size: 15}}\n"
+        "roster: [a]\ntargets: [b]\n"
+    )
+    lg, _ = live.load_trade_yaml(p)
+    assert lg.teams == 12 and lg.scoring["pass_int"] == -1
+    from alpha_squad.ros.scoring import ScoringRules
+
+    assert ScoringRules.from_league(lg).pass_int == -1.0

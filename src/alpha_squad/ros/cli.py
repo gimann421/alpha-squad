@@ -198,8 +198,33 @@ def ros_trade(
     """Evaluate concrete QB trades for a concrete roster, with simulation and sensitivity."""
     from alpha_squad.ros import live
 
+    from alpha_squad.ros.scoring import ScoringRules
+
     league, ti = live.load_trade_yaml(config)
-    data = live.load_live(refresh=refresh)
+    rules = ScoringRules.from_league(league)
+    panel_dir = Path("data/ros")
+    if rules != ScoringRules.nflverse_ppr():
+        # the league scores differently from the validated default (e.g. a different INT penalty):
+        # rebuild the training panels under THIS league's scoring so forecasts are in its units
+        import hashlib
+
+        tag = hashlib.sha256(json.dumps(rules.describe(), sort_keys=True).encode()).hexdigest()[:8]
+        panel_dir = Path(f"data/ros_{tag}")
+        if not (panel_dir / "qb_ros_panel.parquet").exists():
+            from alpha_squad.ros.pipeline import build_default_panel, build_skill_panel
+
+            console.print(
+                f"[yellow]league scoring differs from the default; building panels in {panel_dir}[/yellow]"
+            )
+            _, inp = build_default_panel(list(range(2020, 2027)), rules=rules, out_dir=panel_dir)
+            build_skill_panel(
+                inp,
+                [x for x in inp.provenance["_specs"] if x.season <= 2025],
+                inp.provenance["_files"],
+                out_dir=panel_dir,
+            )
+        console.print(f"scoring: {rules.describe()}")
+    data = live.load_live(refresh=refresh, panel_dir=panel_dir, rules=rules)
     board, cal = live.forecast_qbs(data, model or live.LIVE_MODEL)
     fpd = (
         live.fp_live_projections(sorted({w for ws in data.fut_weeks.values() for w in ws}))

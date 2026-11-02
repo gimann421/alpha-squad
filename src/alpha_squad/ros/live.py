@@ -69,6 +69,7 @@ def _read_ids(path) -> pd.DataFrame:
 def load_live(
     today: date | None = None,
     panel_dir: Path = Path("data/ros"),
+    rules: ScoringRules | None = None,
     refresh: bool = True,
     settings=None,
 ) -> LiveData:
@@ -101,7 +102,7 @@ def load_live(
         pbp_player=pbp_player,
         pbp_team=pbp_team,
         injuries=sn.load_injuries({season: paths("injuries")[season]}),
-        rules=ScoringRules.nflverse_ppr(),
+        rules=rules or ScoringRules.nflverse_ppr(),
     )
     qb = sn.build_snapshot_rows(inp, spec, live_today=today)
     overall = skill.load_ecr_overall(files["ecr"].path)
@@ -411,13 +412,13 @@ class TradeInput:
 
 def load_trade_yaml(path: Path) -> tuple[LeagueContext, TradeInput]:
     cfg = yaml.safe_load(Path(path).read_text())
-    league = (
-        load_league_context(cfg["league"])
-        if cfg.get("league") and Path(cfg["league"]).exists()
-        else load_league_context()
-    )
-    if isinstance(cfg.get("league"), dict):
-        league = LeagueContext.model_validate(cfg["league"])
+    spec = cfg.get("league")
+    if isinstance(spec, dict):  # inline league definition (e.g. imported from Sleeper)
+        league = LeagueContext.model_validate(spec)
+    elif isinstance(spec, str) and Path(spec).exists():
+        league = load_league_context(spec)
+    else:
+        league = load_league_context()
     scen = None
     if cfg.get("standings") or cfg.get("playoffs"):
         s = {**(cfg.get("standings") or {}), **(cfg.get("playoffs") or {})}
