@@ -63,3 +63,10 @@ def test_trade_yaml_accepts_an_inline_league_definition(tmp_path):
     from alpha_squad.ros.scoring import ScoringRules
 
     assert ScoringRules.from_league(lg).pass_int == -1.0
+
+
+def test_out_games_key_is_parsed(tmp_path):
+    p = tmp_path / "t.yaml"
+    p.write_text("roster: [a]\ntargets: [b]\nout_games: {a: 4}\n")
+    _, ti = live.load_trade_yaml(p)
+    assert ti.out_games == {"a": 4}

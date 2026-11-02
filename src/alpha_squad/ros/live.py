@@ -407,6 +407,7 @@ class TradeInput:
     targets: list[str]
     give_packages: list[list[str]]
     waiver_qbs: list[str] | None = None
+    out_games: dict[str, int] | None = None  # gsis -> team games he is known to miss from now
     scenario: T.LeagueScenario | None = None
 
 
@@ -431,6 +432,7 @@ def load_trade_yaml(path: Path) -> tuple[LeagueContext, TradeInput]:
         targets=[str(x) for x in cfg.get("targets", [])],
         give_packages=[[str(g) for g in pkg] for pkg in cfg.get("give", [])],
         waiver_qbs=[str(x) for x in cfg["waiver_qbs"]] if cfg.get("waiver_qbs") else None,
+        out_games={str(k): int(v) for k, v in (cfg.get("out_games") or {}).items()} or None,
         scenario=scen,
     )
 
@@ -451,6 +453,14 @@ def evaluate_candidates(
     pool = {**sk, **qa}
     unknown = [p for p in ti.roster if p not in pool]
     roster = [pool[p] for p in ti.roster if p in pool]
+    if ti.out_games:  # known absences: he misses his next N team games, then returns healthy-ish
+        from dataclasses import replace
+
+        for i, a in enumerate(roster):
+            n = ti.out_games.get(a.pid)
+            if n:
+                roster[i] = replace(a, weeks=a.weeks[n:], notes={**a.notes, "out_games": n})
+                pool[a.pid] = roster[i]
     wl = waiver_levels(league, board, sk, tau)
     all_weeks = cal["weeks"]
     waiver = T.waiver_assets(league, wl, tuple(all_weeks))
