@@ -70,3 +70,22 @@ def test_out_games_key_is_parsed(tmp_path):
     p.write_text("roster: [a]\ntargets: [b]\nout_games: {a: 4}\n")
     _, ti = live.load_trade_yaml(p)
     assert ti.out_games == {"a": 4}
+
+
+def test_horizon_week_key_and_threshold_scaling(tmp_path):
+    from alpha_squad.ros import trade as T
+
+    p = tmp_path / "t.yaml"
+    p.write_text("roster: [a]\ntargets: [b]\nhorizon_week: 12\n")
+    _, ti = live.load_trade_yaml(p)
+    assert ti.horizon_week == 12
+    base = {"mean": 9.0, "prob_improves": 0.7}
+    assert T.classify(base, {})[0] == "Favorable"
+    # a 4-game horizon scales the +8 'favorable' bar down, so +4 now qualifies and +9 is 'strong'
+    assert (
+        T.classify({"mean": 4.0, "prob_improves": 0.7}, {}, horizon_scale=4 / 9)[0] == "Favorable"
+    )
+    assert (
+        T.classify({"mean": 9.5, "prob_improves": 0.9}, {}, horizon_scale=4 / 9)[0]
+        == "Strongly favorable"
+    )

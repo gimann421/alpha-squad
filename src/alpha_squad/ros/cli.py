@@ -223,7 +223,9 @@ def ros_trade(
                 out_dir=panel_dir,
             )
         console.print(f"scoring: {rules.describe()}")
-    data = live.load_live(refresh=refresh, panel_dir=panel_dir, rules=rules)
+    data = live.load_live(
+        refresh=refresh, panel_dir=panel_dir, rules=rules, horizon_week=ti.horizon_week
+    )
     board, cal = live.forecast_qbs(data, model or live.LIVE_MODEL)
     fpd = (
         live.fp_live_projections(sorted({w for ws in data.fut_weeks.values() for w in ws}))

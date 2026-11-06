@@ -428,25 +428,29 @@ def classify(
     sensitivities: dict[str, dict[str, float]],
     *,
     evidence_ok: bool = True,
+    horizon_scale: float = 1.0,
 ) -> tuple[str, list[str]]:
     """Label a trade from its base simulation and its sensitivity scenarios.
 
     A positive label requires the base case AND the worst sensitivity scenario to agree on sign;
     a base-case 'strong' that flips sign in a sensitivity run is downgraded one step, never
-    promoted. ``evidence_ok=False`` (missing/stale inputs) returns 'Insufficient evidence'."""
+    promoted. ``evidence_ok=False`` (missing/stale inputs) returns 'Insufficient evidence'.
+    ``horizon_scale`` rescales the point thresholds (calibrated for ~9 remaining games) to a shorter
+    or longer horizon, e.g. 4/9 when only four games are left."""
     notes: list[str] = []
     if not evidence_ok:
         return "Insufficient evidence", ["required inputs missing or stale"]
     m, p = base["mean"], base["prob_improves"]
     worst = min((s["mean"] for s in sensitivities.values()), default=m)
     best = max((s["mean"] for s in sensitivities.values()), default=m)
-    if m >= STRONG_MEAN and p >= STRONG_PROB:
+    strong, fav = STRONG_MEAN * horizon_scale, FAV_MEAN * horizon_scale
+    if m >= strong and p >= STRONG_PROB:
         label = "Strongly favorable"
-    elif m >= FAV_MEAN and p >= FAV_PROB:
+    elif m >= fav and p >= FAV_PROB:
         label = "Favorable"
-    elif m <= -STRONG_MEAN and p <= 1 - STRONG_PROB:
+    elif m <= -strong and p <= 1 - STRONG_PROB:
         label = "Strongly unfavorable"
-    elif m <= -FAV_MEAN and p <= 1 - FAV_PROB:
+    elif m <= -fav and p <= 1 - FAV_PROB:
         label = "Unfavorable"
     else:
         label = "Approximately neutral"

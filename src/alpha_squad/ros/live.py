@@ -70,6 +70,7 @@ def load_live(
     today: date | None = None,
     panel_dir: Path = Path("data/ros"),
     rules: ScoringRules | None = None,
+    horizon_week: int = sn.DEFAULT_HORIZON_WEEK,
     refresh: bool = True,
     settings=None,
 ) -> LiveData:
@@ -104,10 +105,12 @@ def load_live(
         injuries=sn.load_injuries({season: paths("injuries")[season]}),
         rules=rules or ScoringRules.nflverse_ppr(),
     )
-    qb = sn.build_snapshot_rows(inp, spec, live_today=today)
+    qb = sn.build_snapshot_rows(inp, spec, live_today=today, horizon_week=horizon_week)
     overall = skill.load_ecr_overall(files["ecr"].path)
-    sp, sw = skill.build_skill_snapshot(inp, overall, spec, live_today=today)
-    fut = cur[cur.pts_for.isna() & (cur.week <= sn.DEFAULT_HORIZON_WEEK)]
+    sp, sw = skill.build_skill_snapshot(
+        inp, overall, spec, live_today=today, horizon_week=horizon_week
+    )
+    fut = cur[cur.pts_for.isna() & (cur.week <= horizon_week)]
     fut_weeks = {t: sorted(g["week"].tolist()) for t, g in fut.groupby("team")}
     train = pd.read_parquet(panel_dir / "qb_ros_panel.parquet")
     train = train[train["target_complete"]]
@@ -407,6 +410,9 @@ class TradeInput:
     targets: list[str]
     give_packages: list[list[str]]
     waiver_qbs: list[str] | None = None
+    horizon_week: int = (
+        sn.DEFAULT_HORIZON_WEEK
+    )  # last fantasy week (e.g. 12 if the league dissolves)
     out_games: dict[str, int] | None = None  # gsis -> team games he is known to miss from now
     scenario: T.LeagueScenario | None = None
 
@@ -432,6 +438,7 @@ def load_trade_yaml(path: Path) -> tuple[LeagueContext, TradeInput]:
         targets=[str(x) for x in cfg.get("targets", [])],
         give_packages=[[str(g) for g in pkg] for pkg in cfg.get("give", [])],
         waiver_qbs=[str(x) for x in cfg["waiver_qbs"]] if cfg.get("waiver_qbs") else None,
+        horizon_week=int(cfg.get("horizon_week", sn.DEFAULT_HORIZON_WEEK)),
         out_games={str(k): int(v) for k, v in (cfg.get("out_games") or {}).items()} or None,
         scenario=scen,
     )
@@ -549,7 +556,10 @@ def evaluate_candidates(
             r_ = board[board.gsis_id == tgt].iloc[0]
             ok = (r_.ecr_age_days <= MAX_ECR_AGE_DAYS) and r_.n_remaining > 0
             label, notes = T.classify(
-                s, {k: v for k, v in sens.items() if "optimistic" not in k}, evidence_ok=bool(ok)
+                s,
+                {k: v for k, v in sens.items() if "optimistic" not in k},
+                evidence_ok=bool(ok),
+                horizon_scale=len(cal["weeks"]) / 9.0,
             )
             # max acceptable cost: lineup points the manager can afford to give up
             acq = T.evaluate_trade(
